@@ -271,12 +271,13 @@ src/graph_store/
   schema/             Zod schemas for mutation and query v1, JSON Schema generation
   parse.ts, limits.ts parseMutation / parseQuery, configurable limits
   endpoints.ts        write, query, createGraphClient
+  write-plan.ts       pure write planning (graph resolution) and its I/O shell
   adapter.ts          StorageAdapter / AdapterTx contract
   adapters/memory/    memory adapter (M2)
   testing/            runAdapterConformance (M3)
 ```
 
-Test map as of T-015 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-016 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -292,6 +293,7 @@ Test map as of T-015 (each test file sits next to the module it covers). Update 
 | `purity.test.ts` | NFR-02: lint rule against module-level mutable state |
 | `adapters/memory/memory-adapter.test.ts` | Memory adapter nodes and graphs (FR-04, FR-08 groundwork, AC-01 and AC-12 at adapter level): copy-on-write rollback, serialised transactions, keyset paging (FR-14, AC-09 groundwork), no aliasing |
 | `adapters/memory/memory-edges.test.ts` | Memory adapter edges: lookup from both ends, idempotent upsert (AC-06 groundwork), rollback, graph isolation, keyset paging (FR-14), and a cascade delete built from the primitives (FR-07, AC-05 groundwork) |
+| `write-plan.test.ts` | FR-02, AC-02: pure graph-resolution plan, plus the shell against a spied adapter (nothing written on `GRAPH_NOT_FOUND`, `STORAGE_ERROR` instead of throwing) |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |
 
