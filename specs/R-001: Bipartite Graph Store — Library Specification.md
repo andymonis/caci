@@ -281,7 +281,7 @@ src/graph_store/
   endpoints.ts        write, query, createGraphClient
   write-plan.ts       pure write planning (graph resolution) and its I/O shell
   apply-mutation.ts   runs a whole mutation atomically inside one adapter transaction
-  graphs.ts           graph lifecycle: createGraph, dropGraph (listGraphs, describeGraph to follow)
+  graphs.ts           graph lifecycle: createGraph, dropGraph, listGraphs, describeGraph
   node-ops.ts         upsertNode / deleteNode: pure planning plus transactional shell
   link-ops.ts         link / unlink: pure planning plus transactional shell
   adapter.ts          StorageAdapter / AdapterTx contract
@@ -289,7 +289,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3)
 ```
 
-Test map as of T-024 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-025 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -310,6 +310,7 @@ Test map as of T-024 (each test file sits next to the module it covers). Update 
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
 | `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation, `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
+| `graph-info.test.ts` | FR-01 (list and describe), FR-14, AC-09 groundwork: `listGraphs` keyset paging (120 graphs over 3 pages), page validation, `describeGraph` counts across page boundaries and after cascade deletes |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |
 

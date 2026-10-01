@@ -17,6 +17,10 @@ export const DEFAULT_LIMITS: Limits = Object.freeze({
   maxIdLength: 256,
 });
 
+/** Page size used when a caller does not give one, and the most a caller may ask for (FR-14). */
+export const DEFAULT_PAGE_LIMIT = 50;
+export const MAX_PAGE_LIMIT = 1000;
+
 export interface ParseOptions {
   readonly limits?: Partial<Limits>;
 }

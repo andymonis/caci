@@ -93,3 +93,11 @@ export interface WriteOutput {
 export interface GraphRef {
   graphId: string;
 }
+
+/** What `describeGraph` reports about a graph. */
+export interface GraphInfo {
+  graphId: string;
+  itemCount: number;
+  categoryCount: number;
+  edgeCount: number;
+}

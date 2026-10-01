@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryAdapter } from './adapters/memory/index.js';
 import type { StorageAdapter } from './adapter.js';
 import { write } from './endpoints.js';
-import { createGraph, dropGraph, planCreateGraph, planDropGraph, validateGraphId } from './graphs.js';
+import { createGraph, dropGraph, planCreateGraph, requireGraph, validateGraphId } from './graphs.js';
 
 describe('validateGraphId (pure)', () => {
   it('accepts ordinary ids, including the maximum length and unusual characters', () => {
@@ -29,15 +29,15 @@ describe('validateGraphId (pure)', () => {
   });
 });
 
-describe('planCreateGraph / planDropGraph (pure)', () => {
+describe('planCreateGraph / requireGraph (pure)', () => {
   it('create: CONFLICT only when the graph exists', () => {
     expect(planCreateGraph('g', false)).toEqual({ ok: true, value: undefined });
     expect(planCreateGraph('g', true)).toMatchObject({ ok: false, error: { code: 'CONFLICT', path: ['graphId'] } });
   });
 
   it('drop: GRAPH_NOT_FOUND only when the graph is missing', () => {
-    expect(planDropGraph('g', true)).toEqual({ ok: true, value: undefined });
-    expect(planDropGraph('g', false)).toMatchObject({ ok: false, error: { code: 'GRAPH_NOT_FOUND', path: ['graphId'] } });
+    expect(requireGraph('g', true)).toEqual({ ok: true, value: undefined });
+    expect(requireGraph('g', false)).toMatchObject({ ok: false, error: { code: 'GRAPH_NOT_FOUND', path: ['graphId'] } });
   });
 });
 

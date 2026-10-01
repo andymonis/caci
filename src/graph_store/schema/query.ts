@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '../limits.js';
 
 const id = z.string().min(1);
 const partition = z.enum(['item', 'category']);
@@ -44,7 +45,7 @@ const returnSpec = z.strictObject({
 });
 
 const page = z.strictObject({
-  limit: z.number().int().min(1).max(1000).default(50),
+  limit: z.number().int().min(1).max(MAX_PAGE_LIMIT).default(DEFAULT_PAGE_LIMIT),
   cursor: z.string().min(1).nullable().default(null),
 });
 
@@ -55,7 +56,7 @@ export const querySchema = z.strictObject({
   traverse: traverse.default({ depth: 1 }),
   filter: filter.optional(),
   return: returnSpec,
-  page: page.default({ limit: 50, cursor: null }),
+  page: page.default({ limit: DEFAULT_PAGE_LIMIT, cursor: null }),
 });
 
 export type ParsedQuery = z.infer<typeof querySchema>;
