@@ -88,3 +88,8 @@ export interface WriteOutput {
   /** True when this call created the graph (`createIfMissing`). */
   graphCreated: boolean;
 }
+
+/** Identifies a graph; returned by `createGraph` and `dropGraph`. */
+export interface GraphRef {
+  graphId: string;
+}
