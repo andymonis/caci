@@ -1,2 +1,1 @@
-// Memory adapter entry point (implemented in M2).
-export {};
+export { createMemoryAdapter } from './memory-adapter.js';

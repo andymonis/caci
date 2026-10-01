@@ -9,7 +9,6 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
 
 ## M2 Write endpoint + memory adapter (spec phase 2; covers AC-03 to AC-06)
-- [ ] T-014 (R-001, FR-04/08) Memory adapter: graphs and nodes with copy-on-write transactions — acceptance: node CRUD per partition (same id allowed as item and category); a thrown error inside `transaction` leaves state unchanged; two instances share nothing
 - [ ] T-015 (R-001, FR-05/07) Memory adapter: edges and cascade primitives — acceptance: `putEdges`, `deleteEdges`, `edgesOf` with keyset paging; edges lookup works in both directions
 - [ ] T-016 (R-001, FR-02, AC-02) Write planner: graph resolution — acceptance: pure function; missing graph without `createIfMissing` gives `GRAPH_NOT_FOUND` and writes nothing; with it, the graph is created
 - [ ] T-017 (R-001, FR-03/04, AC-05) `upsertNode` and `deleteNode` ops with cascade — acceptance: `replace` and `merge` modes; deleting a category linked to 3 items leaves no orphan edges (AC-05)
@@ -29,6 +28,7 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - From M5 onward, "conformance suite passes on all adapters" is a standing gate item.
 
 ## Backlog
+- API Extractor only reports the main entry point. Add reports for `./adapters/memory` and `./testing` (AC-16 covers the package's whole public API) once they have real exports, e.g. after T-020.
 - When `write`/`query` are implemented (M2/M4): replace the `STORAGE_ERROR` not-implemented stubs, widen `WriteOutput`/`QueryOutput`, re-baseline the API report, and decide how `ParseOptions` (limits) reach the endpoints and `createGraphClient`.
 - Placeholder `$id` base URL in `src/graph_store/schema/json-schema.ts` (`https://github.com/andymonis/caci/schema/graph_store`); revisit at packaging (M7).
 - M4 decision: whether `return.includeData` defaults to true or false (spec silent; schema leaves it optional with no default).
@@ -50,4 +50,5 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-011 (R-001) Define `StorageAdapter` / `AdapterTx` and supporting types (`Page`, `Paged`, `NodeRecord`, `EdgeRecord`, `EdgeKey`, `SetClause`) — acceptance: types compile exactly as in the spec's adapter contract; type-level test confirms a stub adapter satisfies it
 - [x] T-012 (R-001, AC-10, AC-14, AC-20) Add `write`, `query` and `createGraphClient` stubs — acceptance: they parse then return `{ ok: false }` "not implemented" (no adapter call); never throw for `null`, string, malformed; wrong-endpoint input gives `VALIDATION_ERROR`; client is frozen
 - [x] T-013 (R-001, AC-16, NFR-02) Lock the public API and purity — acceptance: API Extractor report committed and CI/script fails on diff; a lint rule or test fails on module-level mutable state; `package.json` exports map has `.`, `./adapters/memory`, `./testing` entries (adapters may be empty)
+- [x] T-014 (R-001, FR-04/08) Memory adapter: graphs and nodes with copy-on-write transactions — acceptance: node CRUD per partition (same id allowed as item and category); a thrown error inside `transaction` leaves state unchanged; two instances share nothing
 - [x] T-023 (R-001, architecture) Isolate the graph store under `src/graph_store/` — acceptance: all library code, tests, entry points, generated JSON Schema and tooling paths live under or point at `graph_store`; gate green with the same 120 tests as before; spec and docs describe the layout
