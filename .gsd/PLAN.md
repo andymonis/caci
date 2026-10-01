@@ -7,7 +7,6 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 ## Current milestone: M0 Foundations
 
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
-- [ ] T-007 (R-001, FR-17/18/19/20, AC-21) Zod schema for query v1 — acceptance: the three spec query examples parse; `depth: 4` is rejected; `where` accepts only `eq, ne, in, contains, startsWith, exists`; defaults `depth` 1, `limit` 50, max 1000
 - [ ] T-008 (R-001, AC-14, AC-20) Implement `parseMutation` and `parseQuery` — acceptance: return `Result`, never throw on `null`/string/garbage; unknown `version` gives `UNSUPPORTED_VERSION`; a query passed to `parseMutation` (and vice versa) gives `VALIDATION_ERROR`
 - [ ] T-009 (R-001) Generate JSON Schema from the Zod schemas — acceptance: committed generated files (or build script) for mutation and query; a test validates the spec examples against the JSON Schema with a JSON Schema validator in devDependencies
 - [ ] T-010 (R-001, NFR-06) Enforce configurable limits in parsing — acceptance: ops per mutation (1,000), `data` size (64 KB) and id length (256) are rejected over the cap and overridable via an options argument
@@ -36,6 +35,7 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - From M5 onward, "conformance suite passes on all adapters" is a standing gate item.
 
 ## Backlog
+- M4 decision: whether `return.includeData` defaults to true or false (spec silent; schema leaves it optional with no default).
 - Needs decision: FR-01 (create/list/describe/delete graphs) has no home in the public API. `write` is mutations only and `query` is reads only, yet graph lifecycle is only on `adapter.graphs`. Options: graph-level mutation ops plus a graph-list query shape, or expose `createGraph`/`dropGraph`/`listGraphs`/`describeGraph` as extra top-level functions. Decide before M2 ends.
 - Consider an operation log (spec "Thoughts"); leave room in the adapter interface, do not build in v1.
 - `specs/` file name contains `:` and an em dash, which breaks on Windows and in some tooling; consider renaming to `R-001-bipartite-graph-store.md`.
@@ -47,3 +47,4 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-004 (R-001) Sync docs with decisions — acceptance: spec.md links resolve to the real file (`specs/R-001: …`), §6 records the decisions in STATE.md, §4 has 2–3 scenarios, and the answered open questions in the R-001 spec are ticked with the chosen answer
 - [x] T-005 (R-001, FR-15) Define `Result`, `GraphError` and the closed error-code enum — acceptance: types compile; unit test asserts the six codes (`VALIDATION_ERROR`, `GRAPH_NOT_FOUND`, `NODE_NOT_FOUND`, `CONFLICT`, `UNSUPPORTED_VERSION`, `STORAGE_ERROR`) and `ok`/`err` helpers
 - [x] T-006 (R-001, FR-03/05/17) Zod schema for mutation v1 — acceptance: spec's mutation example parses; unknown op, missing field, and `kind: query` are rejected with a `path`; `mode` defaults to `replace`, `ensureNodes` to false
+- [x] T-007 (R-001, FR-17/18/19/20, AC-21) Zod schema for query v1 — acceptance: the three spec query examples parse; `depth: 4` is rejected; `where` accepts only `eq, ne, in, contains, startsWith, exists`; defaults `depth` 1, `limit` 50, max 1000
