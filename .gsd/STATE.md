@@ -1,11 +1,11 @@
 # State
 
 **Milestone:** M1 Contracts
-**Current task:** none (next: T-011)
+**Current task:** none (next: T-012)
 **Last updated:** 2026-10-01
 
 ## Position
-R-001 (Bipartite Graph Store library) is specified in `specs/` and planned through M3 in PLAN.md. Package scaffolded and verification gate live (`npm run gate`: tsc, eslint, vitest); M0 complete; spec, decisions and architecture docs are in sync. `Result`/`GraphError` types exist (T-005); mutation v1 Zod schema exists (T-006, strict objects, internal until T-013); query v1 Zod schema exists (T-007); `parseMutation`/`parseQuery` exist and are exported (T-008); JSON Schema generated from Zod into `schema/` (T-009, `npm run schema`); configurable limits enforced in the parsers (T-010); `write`/`query` endpoints not yet. M4–M7 are outlined, not yet broken into tasks.
+R-001 (Bipartite Graph Store library) is specified in `specs/` and planned through M3 in PLAN.md. Package scaffolded and verification gate live (`npm run gate`: tsc, eslint, vitest); M0 complete; spec, decisions and architecture docs are in sync. `Result`/`GraphError` types exist (T-005); mutation v1 Zod schema exists (T-006, strict objects, internal until T-013); query v1 Zod schema exists (T-007); `parseMutation`/`parseQuery` exist and are exported (T-008); JSON Schema generated from Zod into `schema/` (T-009, `npm run schema`); configurable limits enforced in the parsers (T-010); `StorageAdapter`/`AdapterTx` contract types defined and exported (T-011); `write`/`query` endpoints not yet. M4–M7 are outlined, not yet broken into tasks.
 
 ## Decisions
 - 2026-10-01 — Schema validator is **Zod** — largest ecosystem, one runtime dep per NFR-03, JSON Schema derivable.
@@ -18,6 +18,7 @@ R-001 (Bipartite Graph Store library) is specified in `specs/` and planned throu
 - 2026-10-01 — Parsers check wrong-endpoint input before `version`, and report only the first Zod issue (one `path` per `GraphError`). All parse paths run inside a `guarded()` wrapper so hostile input cannot throw.
 - 2026-10-01 — JSON Schema uses Zod 4 built-in `z.toJSONSchema` (draft 2020-12, `io: 'input'` so defaults are optional); generated files are committed and a drift test fails if they are stale. `ajv` is a dev-only dependency for tests.
 - 2026-10-01 — Limits (NFR-06) are enforced in the parsers via an optional `{ limits }` argument, not in the static schema; `data` size is measured in UTF-8 bytes; op count is checked on raw input before the schema parse; limits also apply to query ids.
+- 2026-10-01 — Supporting adapter types are our own definitions (spec leaves them open): `Paged<T>` = `{ items, nextCursor }`, `NodeRecord` = `{ partition, id, data? }`, `EdgeRecord` = `{ item, category, weight?, data? }`, `SetClause` = `{ all?, any?, none? }`. `AdapterTx` is scoped to one graph by `transaction(graphId, …)`.
 - 2026-10-01 — Build order follows spec: contracts, memory adapter and write, conformance suite, then query, file, SQLite.
 
 ## Blockers / open questions

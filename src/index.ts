@@ -5,3 +5,18 @@ export type { Mutation, Op } from './schema/mutation.js';
 export type { Query } from './schema/query.js';
 export { DEFAULT_LIMITS } from './limits.js';
 export type { Limits, ParseOptions } from './limits.js';
+export type {
+  AdapterCapabilities,
+  AdapterTx,
+  EdgeKey,
+  EdgeRecord,
+  GraphId,
+  JsonObject,
+  JsonValue,
+  NodeRecord,
+  Page,
+  Paged,
+  Partition,
+  SetClause,
+  StorageAdapter,
+} from './adapter.js';
