@@ -7,20 +7,28 @@ It combines two ideas:
 - **Spec Kit-style alignment:** write down the rules (Constitution) and the intent (Spec) before any code.
 - **GSD-style execution:** a tight loop of small tasks, each verified and committed on its own.
 
-> Status: scaffold only. The spec is an empty skeleton, the stack is not chosen, and the verification gate commands are `TBD`.
+> Status: M1 (contracts) is complete: schemas, parsers, limits, adapter interface and API lock. The `write` and `query` endpoints are stubs until M2 and M4. Stack: TypeScript, Zod, Vitest, ESLint.
 
 ## Project layout
 
 ```
 system_prompt.md        Constitution: how the agent works here (rules, loop, gate, git, boundaries)
 spec.md                 Core Spec: what we're building and why
+specs/                  Detailed specs (R-001: Bipartite Graph Store library)
+architecture/           C4 context and container diagrams (Mermaid)
 CLAUDE.md               Loads system_prompt.md and .gsd/STATE.md into every Claude Code session
 .gsd/
-  PLAN.md               Atomic task queue: current milestone, Backlog, Done
+  PLAN.md               Atomic task queue: milestones, Backlog, Done
   STATE.md              Current position, decisions, blockers
 .claude/commands/       Slash commands that drive the loop: /plan /next /verify /ship
-.gitignore
+src/graph_store/        The Bipartite Graph Store, isolated as one feature (code, tests, adapters)
+schema/graph_store/     Generated JSON Schema for the mutation and query formats
+api/                    Committed public API report (API Extractor)
 ```
+
+### Where the code lives
+
+All graph store functionality sits under `src/graph_store/`, with each test file beside the module it covers. Nothing in that folder imports from elsewhere in the repo. Other platform components get their own sibling folders under `src/`. The folder-by-folder breakdown and the test map are in the R-001 spec ("Code layout and test map").
 
 ### Order of authority
 
@@ -58,15 +66,15 @@ Task format in `PLAN.md`:
 ## Getting started
 
 1. Open the repo in Claude Code from the project root.
-2. Fill in `spec.md`, working through it with Claude (this is task T-001).
-3. Choose a stack and replace the `TBD` test, lint and typecheck commands in `system_prompt.md` (task T-002).
-4. Run `/plan` to turn spec sections into tasks.
+2. Read `.gsd/STATE.md` and `.gsd/PLAN.md` to see where the project is.
+3. Run `npm install`, then `npm run gate` (typecheck, lint, tests, API check) to confirm a clean start.
+4. Run `/plan` when a milestone needs breaking into tasks.
 5. Loop: `/next`, then `/verify`, then `/ship`, until the milestone is done.
 
 ## Conventions
 
 - **One task, one commit.** Conventional prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, plus the task id.
-- **Gate per task.** Tests, lint and typecheck must pass for each task. Until the commands exist, the task's acceptance check stands in.
+- **Gate per task.** `npm run gate` (typecheck, lint, tests, API check) must pass for each task, plus the task's own acceptance check.
 - **No scope creep.** If a task is bigger than expected, split it in `PLAN.md`. New ideas go to the Backlog.
 - **Record decisions.** Non-obvious choices and their reasons go in `.gsd/STATE.md`.
 

@@ -30,7 +30,7 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 
 ## Backlog
 - When `write`/`query` are implemented (M2/M4): replace the `STORAGE_ERROR` not-implemented stubs, widen `WriteOutput`/`QueryOutput`, re-baseline the API report, and decide how `ParseOptions` (limits) reach the endpoints and `createGraphClient`.
-- Placeholder `$id` base URL in `src/schema/json-schema.ts` (`https://github.com/andymonis/caci/schema`); revisit at packaging (M7).
+- Placeholder `$id` base URL in `src/graph_store/schema/json-schema.ts` (`https://github.com/andymonis/caci/schema/graph_store`); revisit at packaging (M7).
 - M4 decision: whether `return.includeData` defaults to true or false (spec silent; schema leaves it optional with no default).
 - Needs decision: FR-01 (create/list/describe/delete graphs) has no home in the public API. `write` is mutations only and `query` is reads only, yet graph lifecycle is only on `adapter.graphs`. Options: graph-level mutation ops plus a graph-list query shape, or expose `createGraph`/`dropGraph`/`listGraphs`/`describeGraph` as extra top-level functions. Decide before M2 ends.
 - Consider an operation log (spec "Thoughts"); leave room in the adapter interface, do not build in v1.
@@ -50,3 +50,4 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-011 (R-001) Define `StorageAdapter` / `AdapterTx` and supporting types (`Page`, `Paged`, `NodeRecord`, `EdgeRecord`, `EdgeKey`, `SetClause`) — acceptance: types compile exactly as in the spec's adapter contract; type-level test confirms a stub adapter satisfies it
 - [x] T-012 (R-001, AC-10, AC-14, AC-20) Add `write`, `query` and `createGraphClient` stubs — acceptance: they parse then return `{ ok: false }` "not implemented" (no adapter call); never throw for `null`, string, malformed; wrong-endpoint input gives `VALIDATION_ERROR`; client is frozen
 - [x] T-013 (R-001, AC-16, NFR-02) Lock the public API and purity — acceptance: API Extractor report committed and CI/script fails on diff; a lint rule or test fails on module-level mutable state; `package.json` exports map has `.`, `./adapters/memory`, `./testing` entries (adapters may be empty)
+- [x] T-023 (R-001, architecture) Isolate the graph store under `src/graph_store/` — acceptance: all library code, tests, entry points, generated JSON Schema and tooling paths live under or point at `graph_store`; gate green with the same 120 tests as before; spec and docs describe the layout

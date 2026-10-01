@@ -201,6 +201,6 @@
       ]
     }
   },
-  "$id": "https://github.com/andymonis/caci/schema/mutation.v1.schema.json",
+  "$id": "https://github.com/andymonis/caci/schema/graph_store/mutation.v1.schema.json",
   "title": "Bipartite Graph Store mutation (v1)"
 }

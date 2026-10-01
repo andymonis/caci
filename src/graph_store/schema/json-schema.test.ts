@@ -3,7 +3,7 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
 import { mutationJsonSchema, queryJsonSchema } from './json-schema.js';
 
-const read = (path: string): unknown => JSON.parse(readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8'));
+const read = (path: string): unknown => JSON.parse(readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8'));
 
 const mutationExample = {
   version: 1,
@@ -41,13 +41,13 @@ const queryExamples = [
 ];
 
 const ajv = new Ajv2020({ strict: false });
-const validateMutation = ajv.compile(read('schema/mutation.v1.schema.json') as object);
-const validateQuery = ajv.compile(read('schema/query.v1.schema.json') as object);
+const validateMutation = ajv.compile(read('schema/graph_store/mutation.v1.schema.json') as object);
+const validateQuery = ajv.compile(read('schema/graph_store/query.v1.schema.json') as object);
 
 describe('committed JSON Schema files', () => {
   it('match the generator output (run `npm run schema` if this fails)', () => {
-    expect(read('schema/mutation.v1.schema.json')).toEqual(mutationJsonSchema());
-    expect(read('schema/query.v1.schema.json')).toEqual(queryJsonSchema());
+    expect(read('schema/graph_store/mutation.v1.schema.json')).toEqual(mutationJsonSchema());
+    expect(read('schema/graph_store/query.v1.schema.json')).toEqual(queryJsonSchema());
   });
 });
 

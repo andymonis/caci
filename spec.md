@@ -52,11 +52,24 @@ _Each requirement gets an id and a testable acceptance criterion._
 - **`link` default:** fails on missing endpoints; `ensureNodes: true` opts in. Strict and explicit.
 - **v1 scope:** `requestId` accepted in the schema but not implemented; caller-supplied ids only; strict bipartite with no category hierarchy.
 - **Build order:** contracts, memory adapter and write, conformance suite, query, file adapter, SQLite adapter, export/import and packaging.
+- **Code layout:** all graph store functionality (library code, tests, adapters, conformance suite) lives under `src/graph_store/`. It is an isolated feature: nothing outside that folder may be imported by it. Other platform containers get their own sibling folders under `src/` when they exist. Reason: the architecture treats the graph store as a self-contained container.
 - Dated decision log lives in `.gsd/STATE.md`.
 
 ## 7. Architecture sketch
 Reference ./architecture/context.mmd 
 Reference ./architecture/container.mmd
+
+Mapping from the container diagram to the code base:
+
+| Container | Location |
+|-----------|----------|
+| Bipartite Graph Store (TypeScript library) | `src/graph_store/` |
+| Storage Adapter | `src/graph_store/adapters/<name>/` (adapters ship as entry points of the library, per the R-001 spec, so they sit inside the graph store folder) |
+| Adapter conformance suite | `src/graph_store/testing/` |
+| CaCi Operational Store (SQLite) | provided by the SQLite adapter (M6); no code outside the adapter |
+| CaCi Application | not started; will be a sibling of `src/graph_store/` |
+
+Generated JSON Schema for the instruction formats is published under `schema/graph_store/`.
 
 ## 8. Milestones
 - M1:

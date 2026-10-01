@@ -7,20 +7,20 @@
   "engines": {
     "node": ">=22"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/graph_store/index.js",
+  "types": "./dist/graph_store/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/graph_store/index.d.ts",
+      "import": "./dist/graph_store/index.js"
     },
     "./adapters/memory": {
-      "types": "./dist/adapters/memory/index.d.ts",
-      "import": "./dist/adapters/memory/index.js"
+      "types": "./dist/graph_store/adapters/memory/index.d.ts",
+      "import": "./dist/graph_store/adapters/memory/index.js"
     },
     "./testing": {
-      "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.js"
+      "types": "./dist/graph_store/testing/index.d.ts",
+      "import": "./dist/graph_store/testing/index.js"
     }
   },
   "files": [

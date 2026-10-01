@@ -259,6 +259,42 @@ Adapter expectations:
 
 The core must not import any adapter. Adapters depend on the core's types, never the other way round.
 
+## Code layout and test map
+
+All graph store functionality is isolated under `src/graph_store/`. Nothing in that folder imports from elsewhere in the repo, and the package entry points (`bipartite-graph`, `/adapters/memory`, `/testing`) are built from it into `dist/graph_store/`. Generated JSON Schema is published under `schema/graph_store/`.
+
+```
+src/graph_store/
+  index.ts            public entry point (the only module the API report reads)
+  result.ts           Result, GraphError, error codes
+  types.ts            public Mutation / Query / Op types (kept in sync with the schemas by a test)
+  schema/             Zod schemas for mutation and query v1, JSON Schema generation
+  parse.ts, limits.ts parseMutation / parseQuery, configurable limits
+  endpoints.ts        write, query, createGraphClient
+  adapter.ts          StorageAdapter / AdapterTx contract
+  adapters/memory/    memory adapter (M2)
+  testing/            runAdapterConformance (M3)
+```
+
+Test map as of M1 (each test file sits next to the module it covers). Update this table when tasks land.
+
+| Test file | Covers |
+| --- | --- |
+| `result.test.ts` | FR-15 (closed error-code enum, `Result` helpers) |
+| `schema/mutation.test.ts` | FR-03, FR-05, FR-17: mutation v1 format, defaults, strictness |
+| `schema/query.test.ts` | FR-17 to FR-20, AC-21 at schema level: query v1 format, depth cap, operator set |
+| `schema/json-schema.test.ts` | Published JSON Schema accepts the spec examples, rejects bad input, and matches the committed files |
+| `parse.test.ts` | AC-10, AC-14, AC-20 at parser level |
+| `limits.test.ts` | NFR-06: ops, id length and data size caps, overridable |
+| `endpoints.test.ts` | AC-10, AC-14, AC-20 at endpoint level; adapter never touched on invalid input; frozen client |
+| `adapter.test.ts` | Adapter contract shape (type-level) |
+| `types.test.ts` | Public types stay identical to the Zod-inferred types |
+| `purity.test.ts` | NFR-02: lint rule against module-level mutable state |
+| `smoke.test.ts` | Package entry point loads |
+| `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |
+
+Not yet covered (arrive with later milestones): AC-01 to AC-09, AC-11 to AC-13, AC-15 (full), AC-17 to AC-19, AC-22, and the behaviour behind FR-01, FR-02, FR-04 to FR-14, FR-16 and FR-18 to FR-21.
+
 ## Non-functional requirements
 
 | ID | Area | Requirement |

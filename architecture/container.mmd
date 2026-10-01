@@ -6,8 +6,8 @@ C4Container
 
     Enterprise_Boundary(caci_platform, "CaCi Platform") {
         Container(caci_app, "CaCi Application", "Node.js", "Serves customer workflows and asks questions using graph context.")
-        Container(graph_store, "Bipartite Graph Store", "TypeScript library", "Stateless core that validates and plans graph reads and mutations.")
-        Container(storage_adapter, "Storage Adapter", "TypeScript", "Executes storage primitives behind the graph-store adapter interface.")
+        Container(graph_store, "Bipartite Graph Store", "TypeScript library", "Stateless core that validates and plans graph reads and mutations. Code: src/graph_store.")
+        Container(storage_adapter, "Storage Adapter", "TypeScript", "Executes storage primitives behind the graph-store adapter interface. Code: src/graph_store/adapters.")
         ContainerDb(caci_db, "CaCi Operational Store", "SQLite", "Persists isolated bipartite graphs, nodes and edges.")
     }
 

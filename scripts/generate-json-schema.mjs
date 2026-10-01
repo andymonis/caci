@@ -1,10 +1,10 @@
-// Writes schema/*.json from the Zod schemas. Run via `npm run schema` (builds first).
+// Writes schema/graph_store/*.json from the Zod schemas. Run via `npm run schema` (builds first).
 import { writeFileSync } from 'node:fs';
-import { mutationJsonSchema, queryJsonSchema } from '../dist/schema/json-schema.js';
+import { mutationJsonSchema, queryJsonSchema } from '../dist/graph_store/schema/json-schema.js';
 
 const files = {
-  'schema/mutation.v1.schema.json': mutationJsonSchema(),
-  'schema/query.v1.schema.json': queryJsonSchema(),
+  'schema/graph_store/mutation.v1.schema.json': mutationJsonSchema(),
+  'schema/graph_store/query.v1.schema.json': queryJsonSchema(),
 };
 
 for (const [path, doc] of Object.entries(files)) {
