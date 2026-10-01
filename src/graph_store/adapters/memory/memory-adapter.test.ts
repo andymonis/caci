@@ -244,9 +244,4 @@ describe('memory adapter: contract', () => {
     expect(adapter.name).toBe('memory');
     expect(adapter.capabilities).toEqual({ transactions: true, idempotency: false, nativeSetQueries: false });
   });
-
-  it('leaves edge primitives to T-015', async () => {
-    const adapter = await adapterWithGraph();
-    await expect(adapter.transaction('g', (tx) => tx.putEdges([]))).rejects.toThrow('T-015');
-  });
 });

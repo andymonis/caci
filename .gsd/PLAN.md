@@ -9,7 +9,6 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
 
 ## M2 Write endpoint + memory adapter (spec phase 2; covers AC-03 to AC-06)
-- [ ] T-015 (R-001, FR-05/07) Memory adapter: edges and cascade primitives — acceptance: `putEdges`, `deleteEdges`, `edgesOf` with keyset paging; edges lookup works in both directions
 - [ ] T-016 (R-001, FR-02, AC-02) Write planner: graph resolution — acceptance: pure function; missing graph without `createIfMissing` gives `GRAPH_NOT_FOUND` and writes nothing; with it, the graph is created
 - [ ] T-017 (R-001, FR-03/04, AC-05) `upsertNode` and `deleteNode` ops with cascade — acceptance: `replace` and `merge` modes; deleting a category linked to 3 items leaves no orphan edges (AC-05)
 - [ ] T-018 (R-001, FR-05/06, AC-03, AC-06) `link` and `unlink` ops — acceptance: link is idempotent with latest weight winning (AC-06); missing endpoint gives `NODE_NOT_FOUND` unless `ensureNodes: true`; item–item / category–category link gives `VALIDATION_ERROR` with `path` and no adapter call (AC-03)
@@ -51,4 +50,5 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-012 (R-001, AC-10, AC-14, AC-20) Add `write`, `query` and `createGraphClient` stubs — acceptance: they parse then return `{ ok: false }` "not implemented" (no adapter call); never throw for `null`, string, malformed; wrong-endpoint input gives `VALIDATION_ERROR`; client is frozen
 - [x] T-013 (R-001, AC-16, NFR-02) Lock the public API and purity — acceptance: API Extractor report committed and CI/script fails on diff; a lint rule or test fails on module-level mutable state; `package.json` exports map has `.`, `./adapters/memory`, `./testing` entries (adapters may be empty)
 - [x] T-014 (R-001, FR-04/08) Memory adapter: graphs and nodes with copy-on-write transactions — acceptance: node CRUD per partition (same id allowed as item and category); a thrown error inside `transaction` leaves state unchanged; two instances share nothing
+- [x] T-015 (R-001, FR-05/07) Memory adapter: edges and cascade primitives — acceptance: `putEdges`, `deleteEdges`, `edgesOf` with keyset paging; edges lookup works in both directions
 - [x] T-023 (R-001, architecture) Isolate the graph store under `src/graph_store/` — acceptance: all library code, tests, entry points, generated JSON Schema and tooling paths live under or point at `graph_store`; gate green with the same 120 tests as before; spec and docs describe the layout

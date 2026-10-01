@@ -276,7 +276,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3)
 ```
 
-Test map as of T-014 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-015 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -291,6 +291,7 @@ Test map as of T-014 (each test file sits next to the module it covers). Update 
 | `types.test.ts` | Public types stay identical to the Zod-inferred types |
 | `purity.test.ts` | NFR-02: lint rule against module-level mutable state |
 | `adapters/memory/memory-adapter.test.ts` | Memory adapter nodes and graphs (FR-04, FR-08 groundwork, AC-01 and AC-12 at adapter level): copy-on-write rollback, serialised transactions, keyset paging (FR-14, AC-09 groundwork), no aliasing |
+| `adapters/memory/memory-edges.test.ts` | Memory adapter edges: lookup from both ends, idempotent upsert (AC-06 groundwork), rollback, graph isolation, keyset paging (FR-14), and a cascade delete built from the primitives (FR-07, AC-05 groundwork) |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |
 

@@ -1,11 +1,11 @@
 # State
 
 **Milestone:** M2 Write endpoint + memory adapter
-**Current task:** none (next: T-015)
+**Current task:** none (next: T-016)
 **Last updated:** 2026-10-01
 
 ## Position
-R-001 (Bipartite Graph Store library) is specified in `specs/` and planned through M3 in PLAN.md. Package scaffolded and verification gate live (`npm run gate`: tsc, eslint, vitest); M0 complete; spec, decisions and architecture docs are in sync. `Result`/`GraphError` types exist (T-005); mutation v1 Zod schema exists (T-006, strict objects, internal until T-013); query v1 Zod schema exists (T-007); `parseMutation`/`parseQuery` exist and are exported (T-008); JSON Schema generated from Zod into `schema/` (T-009, `npm run schema`); configurable limits enforced in the parsers (T-010); `StorageAdapter`/`AdapterTx` contract types defined and exported (T-011); `write`/`query`/`createGraphClient` exist as parse-then-not-implemented stubs (T-012); public API locked by API Extractor report in `api/` and purity enforced by lint (T-013). M1 Contracts complete. All graph store code now lives under `src/graph_store/` (T-023). Memory adapter has graphs and nodes with copy-on-write transactions (T-014); its edge primitives are stubs until T-015. M4–M7 are outlined, not yet broken into tasks.
+R-001 (Bipartite Graph Store library) is specified in `specs/` and planned through M3 in PLAN.md. Package scaffolded and verification gate live (`npm run gate`: tsc, eslint, vitest); M0 complete; spec, decisions and architecture docs are in sync. `Result`/`GraphError` types exist (T-005); mutation v1 Zod schema exists (T-006, strict objects, internal until T-013); query v1 Zod schema exists (T-007); `parseMutation`/`parseQuery` exist and are exported (T-008); JSON Schema generated from Zod into `schema/` (T-009, `npm run schema`); configurable limits enforced in the parsers (T-010); `StorageAdapter`/`AdapterTx` contract types defined and exported (T-011); `write`/`query`/`createGraphClient` exist as parse-then-not-implemented stubs (T-012); public API locked by API Extractor report in `api/` and purity enforced by lint (T-013). M1 Contracts complete. All graph store code now lives under `src/graph_store/` (T-023). Memory adapter has graphs and nodes with copy-on-write transactions (T-014); edges are indexed from both ends with idempotent upsert and keyset paging (T-015). M4–M7 are outlined, not yet broken into tasks.
 
 ## Decisions
 - 2026-10-01 — Schema validator is **Zod** — largest ecosystem, one runtime dep per NFR-03, JSON Schema derivable.
@@ -24,6 +24,7 @@ R-001 (Bipartite Graph Store library) is specified in `specs/` and planned throu
 - 2026-10-01 — API Extractor (`npm run api` to update the report, `api:check` is part of the gate) bundles TS 5.9 and warns about TS 6.0; output is still correct. Purity (NFR-02) is a lint rule on `src/**` non-test files plus a test that proves the rule fires.
 - 2026-10-01 — **Graph store isolation**: everything lives in `src/graph_store/` (user decision, matches the container diagram); package entry points build to `dist/graph_store/`; generated JSON Schema moved to `schema/graph_store/` and `$id` now ends `/schema/graph_store/<name>.v1.schema.json`. Public API report unchanged by the move. Test map is in the R-001 spec.
 - 2026-10-01 — Memory adapter: transactions work on a shallow copy of one graph and swap on success; a per-graph promise queue serialises transactions, `create` and `drop` (no lost updates); node data is deep-copied in and out; `graphs.create` and `graphs.drop` are idempotent (spec silent; conformance suite in M3 should state this); keyset cursor is the base64url of the last key, ordering is UTF-16 code-unit order.
+- 2026-10-01 — Adapters are deliberately dumb about integrity: the memory adapter does not check that edge endpoints exist and `deleteNodes` does not remove edges; the core must cascade using `edgesOf` + `deleteEdges` + `deleteNodes` in one transaction (FR-07). `putEdges` replaces the whole edge record. Conformance suite (M3) must encode this.
 - 2026-10-01 — Build order follows spec: contracts, memory adapter and write, conformance suite, then query, file, SQLite.
 
 ## Blockers / open questions
