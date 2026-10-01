@@ -7,7 +7,6 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 ## Current milestone: M0 Foundations
 
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
-- [ ] T-012 (R-001, AC-10, AC-14, AC-20) Add `write`, `query` and `createGraphClient` stubs — acceptance: they parse then return `{ ok: false }` "not implemented" (no adapter call); never throw for `null`, string, malformed; wrong-endpoint input gives `VALIDATION_ERROR`; client is frozen
 - [ ] T-013 (R-001, AC-16, NFR-02) Lock the public API and purity — acceptance: API Extractor report committed and CI/script fails on diff; a lint rule or test fails on module-level mutable state; `package.json` exports map has `.`, `./adapters/memory`, `./testing` entries (adapters may be empty)
 
 ## M2 Write endpoint + memory adapter (spec phase 2; covers AC-03 to AC-06)
@@ -31,6 +30,7 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - From M5 onward, "conformance suite passes on all adapters" is a standing gate item.
 
 ## Backlog
+- When `write`/`query` are implemented (M2/M4): replace the `STORAGE_ERROR` not-implemented stubs, widen `WriteOutput`/`QueryOutput`, re-baseline the API report, and decide how `ParseOptions` (limits) reach the endpoints and `createGraphClient`.
 - Placeholder `$id` base URL in `src/schema/json-schema.ts` (`https://github.com/andymonis/caci/schema`); revisit at packaging (M7).
 - M4 decision: whether `return.includeData` defaults to true or false (spec silent; schema leaves it optional with no default).
 - Needs decision: FR-01 (create/list/describe/delete graphs) has no home in the public API. `write` is mutations only and `query` is reads only, yet graph lifecycle is only on `adapter.graphs`. Options: graph-level mutation ops plus a graph-list query shape, or expose `createGraph`/`dropGraph`/`listGraphs`/`describeGraph` as extra top-level functions. Decide before M2 ends.
@@ -49,3 +49,4 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-009 (R-001) Generate JSON Schema from the Zod schemas — acceptance: committed generated files (or build script) for mutation and query; a test validates the spec examples against the JSON Schema with a JSON Schema validator in devDependencies
 - [x] T-010 (R-001, NFR-06) Enforce configurable limits in parsing — acceptance: ops per mutation (1,000), `data` size (64 KB) and id length (256) are rejected over the cap and overridable via an options argument
 - [x] T-011 (R-001) Define `StorageAdapter` / `AdapterTx` and supporting types (`Page`, `Paged`, `NodeRecord`, `EdgeRecord`, `EdgeKey`, `SetClause`) — acceptance: types compile exactly as in the spec's adapter contract; type-level test confirms a stub adapter satisfies it
+- [x] T-012 (R-001, AC-10, AC-14, AC-20) Add `write`, `query` and `createGraphClient` stubs — acceptance: they parse then return `{ ok: false }` "not implemented" (no adapter call); never throw for `null`, string, malformed; wrong-endpoint input gives `VALIDATION_ERROR`; client is frozen

@@ -20,3 +20,5 @@ export type {
   SetClause,
   StorageAdapter,
 } from './adapter.js';
+export { createGraphClient, query, write } from './endpoints.js';
+export type { GraphClient, QueryOutput, WriteOutput } from './endpoints.js';
