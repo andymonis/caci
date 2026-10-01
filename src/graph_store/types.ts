@@ -79,3 +79,12 @@ export interface Query {
   return: QueryReturn;
   page: QueryPage;
 }
+
+export interface WriteOutput {
+  /** The graph the mutation was applied to. */
+  graphId: string;
+  /** Ops applied. A mutation is all-or-nothing, so this is every op or the call fails (FR-08). */
+  applied: number;
+  /** True when this call created the graph (`createIfMissing`). */
+  graphCreated: boolean;
+}

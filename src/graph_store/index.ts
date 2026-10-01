@@ -12,6 +12,7 @@ export type {
   QueryTraverse,
   Where,
   WhereCondition,
+  WriteOutput,
 } from './types.js';
 export { DEFAULT_LIMITS } from './limits.js';
 export type { Limits, ParseOptions } from './limits.js';
@@ -31,4 +32,4 @@ export type {
   StorageAdapter,
 } from './adapter.js';
 export { createGraphClient, query, write } from './endpoints.js';
-export type { GraphClient, QueryOutput, WriteOutput } from './endpoints.js';
+export type { GraphClient, QueryOutput } from './endpoints.js';

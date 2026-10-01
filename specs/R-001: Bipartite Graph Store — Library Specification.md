@@ -272,6 +272,7 @@ src/graph_store/
   parse.ts, limits.ts parseMutation / parseQuery, configurable limits
   endpoints.ts        write, query, createGraphClient
   write-plan.ts       pure write planning (graph resolution) and its I/O shell
+  apply-mutation.ts   runs a whole mutation atomically inside one adapter transaction
   node-ops.ts         upsertNode / deleteNode: pure planning plus transactional shell
   link-ops.ts         link / unlink: pure planning plus transactional shell
   adapter.ts          StorageAdapter / AdapterTx contract
@@ -279,7 +280,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3)
 ```
 
-Test map as of T-018 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-019 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -289,7 +290,7 @@ Test map as of T-018 (each test file sits next to the module it covers). Update 
 | `schema/json-schema.test.ts` | Published JSON Schema accepts the spec examples, rejects bad input, and matches the committed files |
 | `parse.test.ts` | AC-10, AC-14, AC-20 at parser level |
 | `limits.test.ts` | NFR-06: ops, id length and data size caps, overridable |
-| `endpoints.test.ts` | AC-10, AC-14, AC-20 at endpoint level; adapter never touched on invalid input; frozen client |
+| `endpoints.test.ts` | AC-10, AC-14, AC-20 at endpoint level; adapter never touched on invalid input; frozen client; `query` still a stub |
 | `adapter.test.ts` | Adapter contract shape (type-level) |
 | `types.test.ts` | Public types stay identical to the Zod-inferred types |
 | `purity.test.ts` | NFR-02: lint rule against module-level mutable state |
@@ -298,10 +299,11 @@ Test map as of T-018 (each test file sits next to the module it covers). Update 
 | `write-plan.test.ts` | FR-02, AC-02: pure graph-resolution plan, plus the shell against a spied adapter (nothing written on `GRAPH_NOT_FOUND`, `STORAGE_ERROR` instead of throwing) |
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
+| `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |
 
-Not yet covered (arrive with later milestones): AC-01 to AC-09, AC-11 to AC-13, AC-15 (full), AC-17 to AC-19, AC-22, and the behaviour behind FR-01, FR-02, FR-04 to FR-14, FR-16 and FR-18 to FR-21.
+Not yet covered (arrive with later milestones): AC-01 and AC-12 through the public endpoints, AC-07 to AC-09, AC-11, AC-13, AC-15 (full), AC-17 to AC-19, AC-22, and the behaviour behind FR-01, FR-09 to FR-14, FR-16 and FR-18 to FR-21. AC-02 to AC-06 pass on the memory adapter only; M3 moves them into the shared conformance suite.
 
 ## Non-functional requirements
 

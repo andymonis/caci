@@ -247,7 +247,7 @@ export type QueryFrom = {
     where: Where;
 };
 
-// @public (undocumented)
+// @public
 export interface QueryOutput {
     // (undocumented)
     readonly nextCursor: string | null;
@@ -326,10 +326,11 @@ export type WhereCondition = {
 // @public
 export function write(adapter: StorageAdapter, instruction: unknown): Promise<Result<WriteOutput, GraphError>>;
 
-// @public
+// @public (undocumented)
 export interface WriteOutput {
-    // (undocumented)
-    readonly applied: number;
+    applied: number;
+    graphCreated: boolean;
+    graphId: string;
 }
 
 // (No @packageDocumentation comment for this package)

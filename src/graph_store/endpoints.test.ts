@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageAdapter } from './adapter.js';
+import { createMemoryAdapter } from './adapters/memory/index.js';
 import { createGraphClient, query, write } from './endpoints.js';
 
 /** Any use of the adapter fails the test. */
@@ -43,10 +44,25 @@ describe.each([
     const r = await endpoint(untouchable, { ...valid, version: 2 });
     expect(r).toMatchObject({ ok: false, error: { code: 'UNSUPPORTED_VERSION' } });
   });
+});
 
+describe('query stub', () => {
   it('returns not-implemented for valid input without touching the adapter', async () => {
-    const r = await endpoint(untouchable, valid);
-    expect(r).toMatchObject({ ok: false, error: { message: `${name}() is not implemented yet` } });
+    const r = await query(untouchable, readQuery);
+    expect(r).toMatchObject({ ok: false, error: { message: 'query() is not implemented yet' } });
+  });
+});
+
+describe('write with a real adapter', () => {
+  it('applies a valid mutation (full behaviour is covered in apply-mutation.test.ts)', async () => {
+    const adapter = createMemoryAdapter();
+    const r = await write(adapter, { ...mutation, createIfMissing: true });
+    expect(r).toEqual({ ok: true, value: { graphId: 'g', applied: 1, graphCreated: true } });
+  });
+
+  it('returns STORAGE_ERROR instead of throwing when the adapter blows up', async () => {
+    const r = await write(untouchable, mutation);
+    expect(r).toMatchObject({ ok: false, error: { code: 'STORAGE_ERROR' } });
   });
 });
 

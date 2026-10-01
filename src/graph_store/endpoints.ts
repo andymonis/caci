@@ -1,12 +1,10 @@
 import type { StorageAdapter } from './adapter.js';
 import { parseMutation, parseQuery } from './parse.js';
+import { applyMutation } from './apply-mutation.js';
 import { err, graphError, type GraphError, type Result } from './result.js';
+import type { WriteOutput } from './types.js';
 
-/** Placeholder shapes; widened when the endpoints are implemented (write in M2, query in M4). */
-export interface WriteOutput {
-  readonly applied: number;
-}
-
+/** Placeholder shape; widened when the query endpoint is implemented (M4). */
 export interface QueryOutput {
   readonly nextCursor: string | null;
 }
@@ -16,18 +14,21 @@ export interface GraphClient {
   readonly query: (query: unknown) => Promise<Result<QueryOutput, GraphError>>;
 }
 
-// The error-code enum is closed (spec), so STORAGE_ERROR stands in until the endpoints are implemented.
+// The error-code enum is closed (spec), so STORAGE_ERROR stands in until query is implemented.
 const notImplemented = (endpoint: string) =>
   err(graphError('STORAGE_ERROR', `${endpoint}() is not implemented yet`));
 
-/** Endpoint 1: writes. Accepts mutation instructions only. */
+/**
+ * Endpoint 1: writes. Accepts mutation instructions only. Ops apply in order and atomically:
+ * all succeed or none persist (FR-08).
+ */
 export async function write(
   adapter: StorageAdapter,
   instruction: unknown,
 ): Promise<Result<WriteOutput, GraphError>> {
   const parsed = parseMutation(instruction);
   if (!parsed.ok) return parsed;
-  return notImplemented('write');
+  return applyMutation(adapter, parsed.value);
 }
 
 /** Endpoint 2: reads. Accepts queries only; never changes the store. */

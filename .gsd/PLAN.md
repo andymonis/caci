@@ -4,12 +4,11 @@ Format: `- [ ] T-001 (R-xxx) Imperative task title — acceptance: <how we know 
 Tasks must be atomic: one commit, one context window.
 Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipartite Graph Store — Library Specification.md`.
 
-## Current milestone: M0 Foundations
+## Current milestone: M0 Foundations (complete; see milestones below)
 
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
 
 ## M2 Write endpoint + memory adapter (spec phase 2; covers AC-03 to AC-06)
-- [ ] T-019 (R-001, FR-08, AC-04) Atomic multi-op apply in `write` — acceptance: 5-op mutation with failing op 4 leaves store unchanged; storage throws map to `STORAGE_ERROR`, never rethrown
 
 ## M3 Conformance suite (spec phase 3; covers AC-15 on memory)
 - [ ] T-020 (R-001, NFR-07) `runAdapterConformance(makeAdapter)` harness at `./testing` — acceptance: harness runs under Vitest with fresh adapter per test; memory adapter passes an initial smoke group
@@ -24,11 +23,11 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - From M5 onward, "conformance suite passes on all adapters" is a standing gate item.
 
 ## Backlog
-- For T-019: op shells (`applyLink` etc.) return errors with paths relative to the op (e.g. `['item']`); the runner must prefix `['ops', index]`. Also add the endpoint-level AC-03 test: a mutation with a malformed link sent through `write()` gives `VALIDATION_ERROR` with an `['ops', i, …]` path and a spied adapter records no calls (T-018 proved the parser half).
+- Known limitation of `createIfMissing`: the graph is created before the transaction, so a concurrent writer that sees it and then loses the race when a failed call removes it gets a `STORAGE_ERROR`. A cleaner fix is an adapter-level "create graph and run transaction" primitive; raise it when designing the file and SQLite adapters (M5/M6) and in the conformance suite (M3).
+- Decide how `ParseOptions` (limits) reach `write`, `query` and `createGraphClient`; they currently use the defaults.
 - Consider rewording AC-03 in the R-001 spec: in the v1 format a link has one `item` and one `category` field, so item–item and category–category edges are unrepresentable; the AC is satisfied by the format plus strict validation rather than by a dedicated check.
-- For T-019: AC-04 says the store is unchanged after a failed mutation. `resolveGraph` reports `created: true` when `createIfMissing` made the graph, so if the ops then fail, `write` must `graphs.drop` it again (the memory adapter needs the graph to exist before a transaction). Add a test: failed mutation with `createIfMissing` on a new graph leaves no graph behind.
 - API Extractor only reports the main entry point. Add reports for `./adapters/memory` and `./testing` (AC-16 covers the package's whole public API) once they have real exports, e.g. after T-020.
-- When `write`/`query` are implemented (M2/M4): replace the `STORAGE_ERROR` not-implemented stubs, widen `WriteOutput`/`QueryOutput`, re-baseline the API report, and decide how `ParseOptions` (limits) reach the endpoints and `createGraphClient`.
+- When `query` is implemented (M4): replace its `STORAGE_ERROR` not-implemented stub, widen the placeholder `QueryOutput`, and re-baseline the API report.
 - Placeholder `$id` base URL in `src/graph_store/schema/json-schema.ts` (`https://github.com/andymonis/caci/schema/graph_store`); revisit at packaging (M7).
 - M4 decision: whether `return.includeData` defaults to true or false (spec silent; schema leaves it optional with no default).
 - Needs decision: FR-01 (create/list/describe/delete graphs) has no home in the public API. `write` is mutations only and `query` is reads only, yet graph lifecycle is only on `adapter.graphs`. Options: graph-level mutation ops plus a graph-list query shape, or expose `createGraph`/`dropGraph`/`listGraphs`/`describeGraph` as extra top-level functions. Decide before M2 ends.
@@ -54,4 +53,5 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-016 (R-001, FR-02, AC-02) Write planner: graph resolution — acceptance: pure function; missing graph without `createIfMissing` gives `GRAPH_NOT_FOUND` and writes nothing; with it, the graph is created
 - [x] T-017 (R-001, FR-03/04, AC-05) `upsertNode` and `deleteNode` ops with cascade — acceptance: `replace` and `merge` modes; deleting a category linked to 3 items leaves no orphan edges (AC-05)
 - [x] T-018 (R-001, FR-05/06, AC-03, AC-06) `link` and `unlink` ops — acceptance: link is idempotent with latest weight winning (AC-06); missing endpoint gives `NODE_NOT_FOUND` unless `ensureNodes: true`; item–item / category–category link gives `VALIDATION_ERROR` with `path` and no adapter call (AC-03)
+- [x] T-019 (R-001, FR-08, AC-04) Atomic multi-op apply in `write` — acceptance: 5-op mutation with failing op 4 leaves store unchanged; storage throws map to `STORAGE_ERROR`, never rethrown
 - [x] T-023 (R-001, architecture) Isolate the graph store under `src/graph_store/` — acceptance: all library code, tests, entry points, generated JSON Schema and tooling paths live under or point at `graph_store`; gate green with the same 120 tests as before; spec and docs describe the layout
