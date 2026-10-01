@@ -5,7 +5,6 @@ Tasks must be atomic: one commit, one context window.
 Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipartite Graph Store — Library Specification.md`.
 
 ## Current milestone: M0 Foundations
-- [ ] T-004 (R-001) Sync docs with decisions — acceptance: spec.md links resolve to the real file (`specs/R-001: …`), §6 records the decisions in STATE.md, §4 has 2–3 scenarios, and the answered open questions in the R-001 spec are ticked with the chosen answer
 
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
 - [ ] T-005 (R-001, FR-15) Define `Result`, `GraphError` and the closed error-code enum — acceptance: types compile; unit test asserts the six codes (`VALIDATION_ERROR`, `GRAPH_NOT_FOUND`, `NODE_NOT_FOUND`, `CONFLICT`, `UNSUPPORTED_VERSION`, `STORAGE_ERROR`) and `ok`/`err` helpers
@@ -47,3 +46,4 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-001 Fill in spec.md sections 1–5 — purpose, goals, non-goals and R-001 now exist (spec.md rewritten, §4 still to fill, tracked in T-004)
 - [x] T-002 (R-001, NFR-01/03) Scaffold TypeScript package — acceptance: `package.json` (ESM, Node >=22, `zod` as the only runtime dep), strict `tsconfig`, `src/index.ts` exporting nothing yet; `npx tsc --noEmit` passes
 - [x] T-003 (R-001, NFR-07) Add Vitest, ESLint (flat config) and gate scripts — acceptance: `npm test`, `npm run lint`, `npm run typecheck` all pass on a trivial test; the `TBD` commands in system_prompt.md are replaced with them
+- [x] T-004 (R-001) Sync docs with decisions — acceptance: spec.md links resolve to the real file (`specs/R-001: …`), §6 records the decisions in STATE.md, §4 has 2–3 scenarios, and the answered open questions in the R-001 spec are ticked with the chosen answer

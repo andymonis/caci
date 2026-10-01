@@ -1,11 +1,11 @@
 # State
 
-**Milestone:** M0 Foundations
-**Current task:** none (next: T-004)
+**Milestone:** M1 Contracts
+**Current task:** none (next: T-005)
 **Last updated:** 2026-10-01
 
 ## Position
-R-001 (Bipartite Graph Store library) is specified in `specs/` and planned through M3 in PLAN.md. Package scaffolded and verification gate live (`npm run gate`: tsc, eslint, vitest); no library code yet. M4–M7 are outlined, not yet broken into tasks.
+R-001 (Bipartite Graph Store library) is specified in `specs/` and planned through M3 in PLAN.md. Package scaffolded and verification gate live (`npm run gate`: tsc, eslint, vitest); M0 complete; spec, decisions and architecture docs are in sync. No library code yet. M4–M7 are outlined, not yet broken into tasks.
 
 ## Decisions
 - 2026-10-01 — Schema validator is **Zod** — largest ecosystem, one runtime dep per NFR-03, JSON Schema derivable.

@@ -1,0 +1,20 @@
+C4Container
+    title Container Diagram for CaCi
+
+    Person(customerA, "Banking Customer A", "A customer of the bank with personal accounts.")
+    System_Ext(System_llm, "LLM", "Answers questions and categorises information using CaCi context.")
+
+    Enterprise_Boundary(caci_platform, "CaCi Platform") {
+        Container(caci_app, "CaCi Application", "Node.js", "Serves customer workflows and asks questions using graph context.")
+        Container(graph_store, "Bipartite Graph Store", "TypeScript library", "Stateless core that validates and plans graph reads and mutations.")
+        Container(storage_adapter, "Storage Adapter", "TypeScript", "Executes storage primitives behind the graph-store adapter interface.")
+        ContainerDb(caci_db, "CaCi Operational Store", "SQLite", "Persists isolated bipartite graphs, nodes and edges.")
+    }
+
+    Rel(customerA, caci_app, "Uses")
+    Rel(caci_app, graph_store, "Calls write and query")
+    Rel(caci_app, System_llm, "Requests answers with graph context")
+    Rel(graph_store, storage_adapter, "Executes validated storage plans")
+    Rel(storage_adapter, caci_db, "Reads and writes graph data")
+
+    UpdateLayoutConfig($c4ShapeInRow="2", $c4BoundaryInRow="1")
