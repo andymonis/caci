@@ -4,14 +4,13 @@ Format: `- [ ] T-001 (R-xxx) Imperative task title — acceptance: <how we know 
 Tasks must be atomic: one commit, one context window.
 Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipartite Graph Store — Library Specification.md`.
 
-## Current milestone: M2b Graph lifecycle API (decided 2026-10-01; M0 to M2 complete)
+## Current milestone: M3 Conformance suite (M0 to M2b complete)
 
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
 
 ## M2 Write endpoint + memory adapter (spec phase 2; covers AC-03 to AC-06)
 
 ## M2b Graph lifecycle API (FR-01; decision: top-level functions beside write/query, not extra ops)
-- [ ] T-026 (R-001, FR-01, AC-16) Expose the lifecycle functions publicly — acceptance: `createGraphClient` returns a frozen `{ write, query, createGraph, dropGraph, listGraphs, describeGraph }`; all four are exported from the entry point with their output types; API report re-baselined on purpose and `api:check` passes; test map in the R-001 spec updated
 
 ## M3 Conformance suite (spec phase 3; covers AC-15 on memory)
 - [ ] T-020 (R-001, NFR-07) `runAdapterConformance(makeAdapter)` harness at `./testing` — acceptance: harness runs under Vitest with fresh adapter per test; memory adapter passes an initial smoke group
@@ -61,4 +60,5 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-019 (R-001, FR-08, AC-04) Atomic multi-op apply in `write` — acceptance: 5-op mutation with failing op 4 leaves store unchanged; storage throws map to `STORAGE_ERROR`, never rethrown
 - [x] T-024 (R-001, FR-01) `createGraph` and `dropGraph` — acceptance: both take `(adapter, graphId)`, return a `Result`, never throw; an empty, over-length or non-string `graphId` gives `VALIDATION_ERROR` with the adapter untouched; `createGraph` on an existing graph gives `CONFLICT` and changes nothing; `dropGraph` on a missing graph gives `GRAPH_NOT_FOUND`; dropping removes all nodes and edges (a recreated graph is empty) and leaves other graphs intact; adapter throws give `STORAGE_ERROR`
 - [x] T-025 (R-001, FR-01, FR-14) `listGraphs` and `describeGraph` — acceptance: `listGraphs(adapter, page?)` pages graph ids with default limit 50, max 1000, deterministic order and a keyset cursor (120 graphs over 3 pages are unique and stable); a bad page gives `VALIDATION_ERROR`; `describeGraph` returns `{ graphId, itemCount, categoryCount, edgeCount }` (counted by paging in v1), `GRAPH_NOT_FOUND` for a missing graph, and counts follow writes and cascade deletes
+- [x] T-026 (R-001, FR-01, AC-16) Expose the lifecycle functions publicly — acceptance: `createGraphClient` returns a frozen `{ write, query, createGraph, dropGraph, listGraphs, describeGraph }`; all four are exported from the entry point with their output types; API report re-baselined on purpose and `api:check` passes; test map in the R-001 spec updated
 - [x] T-023 (R-001, architecture) Isolate the graph store under `src/graph_store/` — acceptance: all library code, tests, entry points, generated JSON Schema and tooling paths live under or point at `graph_store`; gate green with the same 120 tests as before; spec and docs describe the layout

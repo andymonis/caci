@@ -7,7 +7,7 @@ It combines two ideas:
 - **Spec Kit-style alignment:** write down the rules (Constitution) and the intent (Spec) before any code.
 - **GSD-style execution:** a tight loop of small tasks, each verified and committed on its own.
 
-> Status: M1 (contracts) is complete: schemas, parsers, limits, adapter interface and API lock. The `write` and `query` endpoints are stubs until M2 and M4. Stack: TypeScript, Zod, Vitest, ESLint.
+> Status: M0 to M2 and the graph lifecycle API are complete: schemas, parsers, limits, the adapter contract, a memory adapter, an atomic `write`, and `createGraph` / `dropGraph` / `listGraphs` / `describeGraph`. `query` is still a stub until M4, and the shared adapter conformance suite (M3) is next. Stack: TypeScript, Zod, Vitest, ESLint.
 
 ## Project layout
 

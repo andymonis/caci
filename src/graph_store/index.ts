@@ -10,6 +10,8 @@ export type {
   QueryReturn,
   QueryPage,
   QueryTraverse,
+  GraphInfo,
+  GraphRef,
   Where,
   WhereCondition,
   WriteOutput,
@@ -31,5 +33,6 @@ export type {
   SetClause,
   StorageAdapter,
 } from './adapter.js';
+export { createGraph, describeGraph, dropGraph, listGraphs } from './graphs.js';
 export { createGraphClient, query, write } from './endpoints.js';
 export type { GraphClient, QueryOutput } from './endpoints.js';

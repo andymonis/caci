@@ -77,11 +77,46 @@ describe('wrong endpoint (AC-20)', () => {
 });
 
 describe('createGraphClient', () => {
-  it('returns a frozen { write, query } bound to the adapter', async () => {
+  it('returns a frozen client with the two endpoints and the four graph functions', async () => {
     const client = createGraphClient(untouchable);
     expect(Object.isFrozen(client)).toBe(true);
-    expect(Object.keys(client).sort()).toEqual(['query', 'write']);
+    expect(Object.keys(client).sort()).toEqual([
+      'createGraph',
+      'describeGraph',
+      'dropGraph',
+      'listGraphs',
+      'query',
+      'write',
+    ]);
     expect((await client.write(null)).ok).toBe(false);
     expect((await client.query(readQuery)).ok).toBe(false);
+  });
+
+  it('runs a whole lifecycle through the client', async () => {
+    const client = createGraphClient(createMemoryAdapter());
+    expect(await client.createGraph('g')).toEqual({ ok: true, value: { graphId: 'g' } });
+    expect(await client.createGraph('g')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    expect((await client.write(mutation)).ok).toBe(true);
+    expect(await client.describeGraph('g')).toEqual({
+      ok: true,
+      value: { graphId: 'g', itemCount: 1, categoryCount: 0, edgeCount: 0 },
+    });
+    expect(await client.listGraphs()).toEqual({ ok: true, value: { items: ['g'], nextCursor: null } });
+    expect(await client.dropGraph('g')).toEqual({ ok: true, value: { graphId: 'g' } });
+    expect(await client.listGraphs({ limit: 10 })).toEqual({ ok: true, value: { items: [], nextCursor: null } });
+    expect(await client.describeGraph('g')).toMatchObject({ ok: false, error: { code: 'GRAPH_NOT_FOUND' } });
+  });
+
+  it('keeps clients on different adapters apart (AC-12 groundwork)', async () => {
+    const one = createGraphClient(createMemoryAdapter());
+    const two = createGraphClient(createMemoryAdapter());
+    await one.createGraph('only-in-one');
+    expect(await two.listGraphs()).toEqual({ ok: true, value: { items: [], nextCursor: null } });
+  });
+
+  it('returns errors, never exceptions, for bad arguments', async () => {
+    const client = createGraphClient(untouchable);
+    expect(await client.createGraph('')).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
+    expect(await client.listGraphs({ limit: 0 })).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
   });
 });

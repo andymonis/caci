@@ -34,10 +34,19 @@ export interface AdapterTx {
 }
 
 // @public
+export function createGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphRef>>;
+
+// @public
 export function createGraphClient(adapter: StorageAdapter): GraphClient;
 
 // @public (undocumented)
 export const DEFAULT_LIMITS: Limits;
+
+// @public
+export function describeGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphInfo>>;
+
+// @public
+export function dropGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphRef>>;
 
 // @public (undocumented)
 export interface EdgeKey {
@@ -70,8 +79,19 @@ export const ERROR_CODES: readonly ["VALIDATION_ERROR", "GRAPH_NOT_FOUND", "NODE
 // @public (undocumented)
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
-// @public (undocumented)
+// @public
 export interface GraphClient {
+    // (undocumented)
+    readonly createGraph: (graphId: string) => Promise<Result<GraphRef, GraphError>>;
+    // (undocumented)
+    readonly describeGraph: (graphId: string) => Promise<Result<GraphInfo, GraphError>>;
+    // (undocumented)
+    readonly dropGraph: (graphId: string) => Promise<Result<GraphRef, GraphError>>;
+    // (undocumented)
+    readonly listGraphs: (page?: {
+        limit?: number;
+        cursor?: string | null;
+    }) => Promise<Result<Paged<string>, GraphError>>;
     // (undocumented)
     readonly query: (query: unknown) => Promise<Result<QueryOutput, GraphError>>;
     // (undocumented)
@@ -93,6 +113,24 @@ export function graphError(code: ErrorCode, message: string, path?: readonly (st
 // @public (undocumented)
 export type GraphId = string;
 
+// @public
+export interface GraphInfo {
+    // (undocumented)
+    categoryCount: number;
+    // (undocumented)
+    edgeCount: number;
+    // (undocumented)
+    graphId: string;
+    // (undocumented)
+    itemCount: number;
+}
+
+// @public
+export interface GraphRef {
+    // (undocumented)
+    graphId: string;
+}
+
 // @public (undocumented)
 export type JsonObject = {
     [key: string]: JsonValue;
@@ -109,6 +147,12 @@ export interface Limits {
     readonly maxIdLength: number;
     readonly maxOps: number;
 }
+
+// @public
+export function listGraphs(adapter: StorageAdapter, page?: {
+    limit?: number;
+    cursor?: string | null;
+}): Promise<Result<Paged<string>>>;
 
 // @public (undocumented)
 export interface Mutation {

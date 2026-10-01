@@ -1,17 +1,24 @@
 import type { StorageAdapter } from './adapter.js';
 import { parseMutation, parseQuery } from './parse.js';
 import { applyMutation } from './apply-mutation.js';
+import { createGraph, describeGraph, dropGraph, listGraphs } from './graphs.js';
+import type { Paged } from './adapter.js';
 import { err, graphError, type GraphError, type Result } from './result.js';
-import type { WriteOutput } from './types.js';
+import type { GraphInfo, GraphRef, WriteOutput } from './types.js';
 
 /** Placeholder shape; widened when the query endpoint is implemented (M4). */
 export interface QueryOutput {
   readonly nextCursor: string | null;
 }
 
+/** An adapter bound once at creation. `write` and `query` carry graph data; the rest manage graphs (FR-01). */
 export interface GraphClient {
   readonly write: (instruction: unknown) => Promise<Result<WriteOutput, GraphError>>;
   readonly query: (query: unknown) => Promise<Result<QueryOutput, GraphError>>;
+  readonly createGraph: (graphId: string) => Promise<Result<GraphRef, GraphError>>;
+  readonly dropGraph: (graphId: string) => Promise<Result<GraphRef, GraphError>>;
+  readonly listGraphs: (page?: { limit?: number; cursor?: string | null }) => Promise<Result<Paged<string>, GraphError>>;
+  readonly describeGraph: (graphId: string) => Promise<Result<GraphInfo, GraphError>>;
 }
 
 // The error-code enum is closed (spec), so STORAGE_ERROR stands in until query is implemented.
@@ -46,5 +53,9 @@ export function createGraphClient(adapter: StorageAdapter): GraphClient {
   return Object.freeze({
     write: (instruction: unknown) => write(adapter, instruction),
     query: (input: unknown) => query(adapter, input),
+    createGraph: (graphId: string) => createGraph(adapter, graphId),
+    dropGraph: (graphId: string) => dropGraph(adapter, graphId),
+    listGraphs: (page?: { limit?: number; cursor?: string | null }) => listGraphs(adapter, page),
+    describeGraph: (graphId: string) => describeGraph(adapter, graphId),
   });
 }

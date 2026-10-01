@@ -289,7 +289,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3)
 ```
 
-Test map as of T-025 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-026 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -299,7 +299,7 @@ Test map as of T-025 (each test file sits next to the module it covers). Update 
 | `schema/json-schema.test.ts` | Published JSON Schema accepts the spec examples, rejects bad input, and matches the committed files |
 | `parse.test.ts` | AC-10, AC-14, AC-20 at parser level |
 | `limits.test.ts` | NFR-06: ops, id length and data size caps, overridable |
-| `endpoints.test.ts` | AC-10, AC-14, AC-20 at endpoint level; adapter never touched on invalid input; frozen client; `query` still a stub |
+| `endpoints.test.ts` | AC-10, AC-14, AC-20 at endpoint level; adapter never touched on invalid input; frozen client exposing `write`, `query` and the four graph functions, a full lifecycle through it, clients on different adapters kept apart (AC-12 groundwork); `query` still a stub |
 | `adapter.test.ts` | Adapter contract shape (type-level) |
 | `types.test.ts` | Public types stay identical to the Zod-inferred types |
 | `purity.test.ts` | NFR-02: lint rule against module-level mutable state |
