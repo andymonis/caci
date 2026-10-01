@@ -273,12 +273,13 @@ src/graph_store/
   endpoints.ts        write, query, createGraphClient
   write-plan.ts       pure write planning (graph resolution) and its I/O shell
   node-ops.ts         upsertNode / deleteNode: pure planning plus transactional shell
+  link-ops.ts         link / unlink: pure planning plus transactional shell
   adapter.ts          StorageAdapter / AdapterTx contract
   adapters/memory/    memory adapter (M2)
   testing/            runAdapterConformance (M3)
 ```
 
-Test map as of T-017 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-018 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -296,6 +297,7 @@ Test map as of T-017 (each test file sits next to the module it covers). Update 
 | `adapters/memory/memory-edges.test.ts` | Memory adapter edges: lookup from both ends, idempotent upsert (AC-06 groundwork), rollback, graph isolation, keyset paging (FR-14), and a cascade delete built from the primitives (FR-07, AC-05 groundwork) |
 | `write-plan.test.ts` | FR-02, AC-02: pure graph-resolution plan, plus the shell against a spied adapter (nothing written on `GRAPH_NOT_FOUND`, `STORAGE_ERROR` instead of throwing) |
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
+| `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |
 
