@@ -1,4 +1,11 @@
 import type { ZodType } from 'zod';
+import {
+  checkMutationLimits,
+  checkOpCount,
+  checkQueryLimits,
+  resolveLimits,
+  type ParseOptions,
+} from './limits.js';
 import { err, graphError, ok, type GraphError, type Result } from './result.js';
 import { mutationSchema, type Mutation } from './schema/mutation.js';
 import { querySchema, type Query } from './schema/query.js';
@@ -36,8 +43,9 @@ function guarded<T>(body: () => Result<T>): Result<T> {
 }
 
 /** Validates a mutation instruction. Pure; never throws. */
-export function parseMutation(input: unknown): Result<Mutation> {
+export function parseMutation(input: unknown, options?: ParseOptions): Result<Mutation> {
   return guarded(() => {
+    const limits = resolveLimits(options);
     if (!isObject(input)) {
       return err(graphError('VALIDATION_ERROR', 'Expected a mutation object'));
     }
@@ -46,13 +54,19 @@ export function parseMutation(input: unknown): Result<Mutation> {
     }
     const versionError = checkVersion(input);
     if (versionError) return err(versionError);
-    return validate(mutationSchema, input);
+    const tooManyOps = checkOpCount(input.ops, limits);
+    if (tooManyOps) return err(tooManyOps);
+    const parsed = validate(mutationSchema, input);
+    if (!parsed.ok) return parsed;
+    const overLimit = checkMutationLimits(parsed.value, limits);
+    return overLimit ? err(overLimit) : parsed;
   });
 }
 
 /** Validates a read query. Pure; never throws. */
-export function parseQuery(input: unknown): Result<Query> {
+export function parseQuery(input: unknown, options?: ParseOptions): Result<Query> {
   return guarded(() => {
+    const limits = resolveLimits(options);
     if (!isObject(input)) {
       return err(graphError('VALIDATION_ERROR', 'Expected a query object'));
     }
@@ -61,6 +75,9 @@ export function parseQuery(input: unknown): Result<Query> {
     }
     const versionError = checkVersion(input);
     if (versionError) return err(versionError);
-    return validate(querySchema, input);
+    const parsed = validate(querySchema, input);
+    if (!parsed.ok) return parsed;
+    const overLimit = checkQueryLimits(parsed.value, limits);
+    return overLimit ? err(overLimit) : parsed;
   });
 }
