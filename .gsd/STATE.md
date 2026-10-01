@@ -1,7 +1,7 @@
 # State
 
-**Milestone:** M3 Conformance suite (M2 tasks complete; FR-01 graph-lifecycle decision still open)
-**Current task:** none (next: T-020)
+**Milestone:** M2b Graph lifecycle API (M0 to M2 complete)
+**Current task:** none (next: T-024)
 **Last updated:** 2026-10-01
 
 ## Position
@@ -29,9 +29,9 @@ R-001 (Bipartite Graph Store library) is specified in `specs/` and planned throu
 - 2026-10-01 — Node ops (T-017): `upsertNode` `replace` sets data to exactly the op data (omitted data clears it, PUT semantics) — PROVISIONAL, see Blockers; `merge` is shallow (op keys win, `null` overwrites, nested objects replaced); `deleteNode` removes the node's edges page by page (1000 per page) then the node, and is a no-op for a missing node (idempotent, no `NODE_NOT_FOUND`).
 - 2026-10-01 — Link ops (T-018): `link` replaces the whole edge (an omitted weight/data clears the old one; same PUT semantics as upsertNode `replace`, follows that provisional decision); `unlink` of a missing edge or nodes is a no-op; `NODE_NOT_FOUND` reports the item first and its path is relative to the op (runner prefixes `['ops', i]`). AC-03 holds by construction (the format has one `item` and one `category` field) and is proven by parser tests rather than a runtime check.
 - 2026-10-01 — Atomic write (T-019): a failing op throws inside the transaction so the adapter rolls back; errors get an `['ops', i]` path prefix. A graph created by a failed call is dropped only if still empty (protects a concurrent writer; a small race remains, see PLAN Backlog). Adapters reporting `transactions: false` are refused with `STORAGE_ERROR`. `WriteOutput` = `{ graphId, applied, graphCreated }`; API report re-baselined for it.
+- 2026-10-01 — **FR-01 graph lifecycle (user decision, option 2)**: graphs are managed by four top-level functions beside the two endpoints — `createGraph`, `dropGraph`, `listGraphs`, `describeGraph` — not by extra ops in the mutation/query formats. This widens the public API deliberately; the v1 mutation and query schemas stay unchanged. Planned as M2b (T-024 to T-026), scheduled before the conformance suite so M3 can include lifecycle behaviour. Proposed semantics, to confirm: `createGraph` on an existing graph gives `CONFLICT` (whereas `createIfMissing` in `write` stays idempotent); `dropGraph`/`describeGraph` on a missing graph give `GRAPH_NOT_FOUND`; `describeGraph` returns `{ graphId, itemCount, categoryCount, edgeCount }`, counted by paging (O(n) in v1).
 - 2026-10-01 — Build order follows spec: contracts, memory adapter and write, conformance suite, then query, file, SQLite.
 
 ## Blockers / open questions
 - Confirm `upsertNode` `replace` semantics: with no `data` it currently clears existing data. Alternative: omitted `data` leaves existing data untouched in `replace` mode. Spec says the default must never change within a major version, so settle before 1.0.0. Not blocking T-018 to T-022.
-- FR-01 graph lifecycle has no public API home (see PLAN.md Backlog); decide before M2 ends.
 - Remaining open question from R-001 spec: expected scale per graph and number of graphs (confirms NFR-05 targets); not blocking until M6.

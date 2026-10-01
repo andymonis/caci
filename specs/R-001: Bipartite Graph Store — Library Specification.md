@@ -50,7 +50,7 @@ Requirements are numbered so ACs and GSD tasks can trace back to them.
 
 | ID | Area | Requirement |
 | --- | --- | --- |
-| FR-01 | Graphs | Create, list, describe and delete graphs. Deleting a graph removes all its nodes and edges. |
+| FR-01 | Graphs | Create, list, describe and delete graphs, through four top-level functions (`createGraph`, `listGraphs`, `describeGraph`, `dropGraph`) beside the two endpoints. Deleting a graph removes all its nodes and edges. |
 | FR-02 | Graphs | Every instruction and query names exactly one `graphId`. Mutations against a missing graph fail unless `createIfMissing: true`. |
 | FR-03 | Nodes | Upsert and delete items and categories. Each node has a caller-supplied string `id`, a `partition` (`item` or `category`) and an optional JSON `data` payload. |
 | FR-04 | Nodes | Node ids are unique per partition per graph. The same id may exist as an item and a category without conflict. |
@@ -177,7 +177,7 @@ Rules:
 
 ## Public API surface
 
-Keep the surface tiny: two endpoint functions (write and query), their parsers, typed builders, and the adapter interface. Everything else is internal.
+Keep the surface tiny: two endpoint functions (write and query) for graph data, four graph-lifecycle functions (FR-01), their parsers, typed builders, and the adapter interface. Everything else is internal.
 
 ```ts
 // Endpoint 1: writes. Accepts mutation instructions only.
@@ -196,7 +196,15 @@ export function query(
 export function parseMutation(input: unknown): Result<Mutation, GraphError>;
 export function parseQuery(input: unknown): Result<Query, GraphError>;
 
-// Optional convenience: binds an adapter, returns a frozen { write, query }.
+// Graph lifecycle (FR-01). write and query carry graph data only, so graphs are managed here.
+// All return a Result and never throw; graphId is validated like any other id.
+export function createGraph(adapter: StorageAdapter, graphId: string): Promise<Result<{ graphId: string }, GraphError>>; // CONFLICT if it exists
+export function dropGraph(adapter: StorageAdapter, graphId: string): Promise<Result<{ graphId: string }, GraphError>>; // GRAPH_NOT_FOUND if missing; removes all nodes and edges
+export function listGraphs(adapter: StorageAdapter, page?: { limit?: number; cursor?: string | null }): Promise<Result<Paged<string>, GraphError>>; // keyset paging, default 50, max 1000
+export function describeGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphInfo, GraphError>>; // GRAPH_NOT_FOUND if missing
+// GraphInfo = { graphId: string; itemCount: number; categoryCount: number; edgeCount: number }
+
+// Optional convenience: binds an adapter, returns a frozen { write, query, createGraph, dropGraph, listGraphs, describeGraph }.
 export function createGraphClient(adapter: StorageAdapter): GraphClient;
 
 // Typed builders so callers need not hand-write JSON.

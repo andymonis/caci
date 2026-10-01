@@ -4,11 +4,16 @@ Format: `- [ ] T-001 (R-xxx) Imperative task title — acceptance: <how we know 
 Tasks must be atomic: one commit, one context window.
 Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipartite Graph Store — Library Specification.md`.
 
-## Current milestone: M0 Foundations (complete; see milestones below)
+## Current milestone: M2b Graph lifecycle API (decided 2026-10-01; M0 to M2 complete)
 
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
 
 ## M2 Write endpoint + memory adapter (spec phase 2; covers AC-03 to AC-06)
+
+## M2b Graph lifecycle API (FR-01; decision: top-level functions beside write/query, not extra ops)
+- [ ] T-024 (R-001, FR-01) `createGraph` and `dropGraph` — acceptance: both take `(adapter, graphId)`, return a `Result`, never throw; an empty, over-length or non-string `graphId` gives `VALIDATION_ERROR` with the adapter untouched; `createGraph` on an existing graph gives `CONFLICT` and changes nothing; `dropGraph` on a missing graph gives `GRAPH_NOT_FOUND`; dropping removes all nodes and edges (a recreated graph is empty) and leaves other graphs intact; adapter throws give `STORAGE_ERROR`
+- [ ] T-025 (R-001, FR-01, FR-14) `listGraphs` and `describeGraph` — acceptance: `listGraphs(adapter, page?)` pages graph ids with default limit 50, max 1000, deterministic order and a keyset cursor (120 graphs over 3 pages are unique and stable); a bad page gives `VALIDATION_ERROR`; `describeGraph` returns `{ graphId, itemCount, categoryCount, edgeCount }` (counted by paging in v1), `GRAPH_NOT_FOUND` for a missing graph, and counts follow writes and cascade deletes
+- [ ] T-026 (R-001, FR-01, AC-16) Expose the lifecycle functions publicly — acceptance: `createGraphClient` returns a frozen `{ write, query, createGraph, dropGraph, listGraphs, describeGraph }`; all four are exported from the entry point with their output types; API report re-baselined on purpose and `api:check` passes; test map in the R-001 spec updated
 
 ## M3 Conformance suite (spec phase 3; covers AC-15 on memory)
 - [ ] T-020 (R-001, NFR-07) `runAdapterConformance(makeAdapter)` harness at `./testing` — acceptance: harness runs under Vitest with fresh adapter per test; memory adapter passes an initial smoke group
@@ -24,13 +29,13 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 
 ## Backlog
 - Known limitation of `createIfMissing`: the graph is created before the transaction, so a concurrent writer that sees it and then loses the race when a failed call removes it gets a `STORAGE_ERROR`. A cleaner fix is an adapter-level "create graph and run transaction" primitive; raise it when designing the file and SQLite adapters (M5/M6) and in the conformance suite (M3).
+- For M3 conformance: include the graph-lifecycle behaviours from M2b (CONFLICT on duplicate create, drop removes everything, isolation between graphs) so every adapter proves them.
 - Decide how `ParseOptions` (limits) reach `write`, `query` and `createGraphClient`; they currently use the defaults.
 - Consider rewording AC-03 in the R-001 spec: in the v1 format a link has one `item` and one `category` field, so item–item and category–category edges are unrepresentable; the AC is satisfied by the format plus strict validation rather than by a dedicated check.
 - API Extractor only reports the main entry point. Add reports for `./adapters/memory` and `./testing` (AC-16 covers the package's whole public API) once they have real exports, e.g. after T-020.
 - When `query` is implemented (M4): replace its `STORAGE_ERROR` not-implemented stub, widen the placeholder `QueryOutput`, and re-baseline the API report.
 - Placeholder `$id` base URL in `src/graph_store/schema/json-schema.ts` (`https://github.com/andymonis/caci/schema/graph_store`); revisit at packaging (M7).
 - M4 decision: whether `return.includeData` defaults to true or false (spec silent; schema leaves it optional with no default).
-- Needs decision: FR-01 (create/list/describe/delete graphs) has no home in the public API. `write` is mutations only and `query` is reads only, yet graph lifecycle is only on `adapter.graphs`. Options: graph-level mutation ops plus a graph-list query shape, or expose `createGraph`/`dropGraph`/`listGraphs`/`describeGraph` as extra top-level functions. Decide before M2 ends.
 - Consider an operation log (spec "Thoughts"); leave room in the adapter interface, do not build in v1.
 - `specs/` file name contains `:` and an em dash, which breaks on Windows and in some tooling; consider renaming to `R-001-bipartite-graph-store.md`.
 
