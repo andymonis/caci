@@ -36,11 +36,13 @@ Rules:
 
 ## Verification gate
 A task is done only when all pass, per task:
-- Tests: `TBD`
-- Lint: `TBD`
-- Typecheck: `TBD`
+- Tests: `npm test`
+- Lint: `npm run lint`
+- Typecheck: `npm run typecheck`
 
-Replace the `TBD` commands once the stack is chosen (first plan task). Until then, the gate is: the task's acceptance check passes and is shown.
+Run all three with `npm run gate`.
+
+Plus the task's own acceptance check from `.gsd/PLAN.md`. Add the conformance suite to the gate once adapters exist (M5 onward).
 
 ## Git
 - Repo initialized; work on feature branches off `main` when a change spans multiple tasks, otherwise commit to `main`.
