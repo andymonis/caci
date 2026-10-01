@@ -7,7 +7,6 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 ## Current milestone: M0 Foundations
 
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
-- [ ] T-009 (R-001) Generate JSON Schema from the Zod schemas — acceptance: committed generated files (or build script) for mutation and query; a test validates the spec examples against the JSON Schema with a JSON Schema validator in devDependencies
 - [ ] T-010 (R-001, NFR-06) Enforce configurable limits in parsing — acceptance: ops per mutation (1,000), `data` size (64 KB) and id length (256) are rejected over the cap and overridable via an options argument
 - [ ] T-011 (R-001) Define `StorageAdapter` / `AdapterTx` and supporting types (`Page`, `Paged`, `NodeRecord`, `EdgeRecord`, `EdgeKey`, `SetClause`) — acceptance: types compile exactly as in the spec's adapter contract; type-level test confirms a stub adapter satisfies it
 - [ ] T-012 (R-001, AC-10, AC-14, AC-20) Add `write`, `query` and `createGraphClient` stubs — acceptance: they parse then return `{ ok: false }` "not implemented" (no adapter call); never throw for `null`, string, malformed; wrong-endpoint input gives `VALIDATION_ERROR`; client is frozen
@@ -34,6 +33,7 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - From M5 onward, "conformance suite passes on all adapters" is a standing gate item.
 
 ## Backlog
+- Placeholder `$id` base URL in `src/schema/json-schema.ts` (`https://github.com/andymonis/caci/schema`); revisit at packaging (M7).
 - M4 decision: whether `return.includeData` defaults to true or false (spec silent; schema leaves it optional with no default).
 - Needs decision: FR-01 (create/list/describe/delete graphs) has no home in the public API. `write` is mutations only and `query` is reads only, yet graph lifecycle is only on `adapter.graphs`. Options: graph-level mutation ops plus a graph-list query shape, or expose `createGraph`/`dropGraph`/`listGraphs`/`describeGraph` as extra top-level functions. Decide before M2 ends.
 - Consider an operation log (spec "Thoughts"); leave room in the adapter interface, do not build in v1.
@@ -48,3 +48,4 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-006 (R-001, FR-03/05/17) Zod schema for mutation v1 — acceptance: spec's mutation example parses; unknown op, missing field, and `kind: query` are rejected with a `path`; `mode` defaults to `replace`, `ensureNodes` to false
 - [x] T-007 (R-001, FR-17/18/19/20, AC-21) Zod schema for query v1 — acceptance: the three spec query examples parse; `depth: 4` is rejected; `where` accepts only `eq, ne, in, contains, startsWith, exists`; defaults `depth` 1, `limit` 50, max 1000
 - [x] T-008 (R-001, AC-14, AC-20) Implement `parseMutation` and `parseQuery` — acceptance: return `Result`, never throw on `null`/string/garbage; unknown `version` gives `UNSUPPORTED_VERSION`; a query passed to `parseMutation` (and vice versa) gives `VALIDATION_ERROR`
+- [x] T-009 (R-001) Generate JSON Schema from the Zod schemas — acceptance: committed generated files (or build script) for mutation and query; a test validates the spec examples against the JSON Schema with a JSON Schema validator in devDependencies

@@ -16,7 +16,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "schema"
   ],
   "dependencies": {
     "zod": "^4.6.5"
@@ -25,6 +26,7 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^5.0.3",
+    "ajv": "^8.20.0",
     "eslint": "^10.11.0",
     "typescript": "~6.0",
     "typescript-eslint": "^8.71.0",
@@ -36,6 +38,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "gate": "npm run typecheck && npm run lint && npm test"
+    "gate": "npm run typecheck && npm run lint && npm test",
+    "schema": "tsc && node scripts/generate-json-schema.mjs"
   }
 }
