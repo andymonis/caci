@@ -44,5 +44,5 @@ export const mutationSchema = z.strictObject({
   ops: z.array(opSchema),
 });
 
-export type Op = z.infer<typeof opSchema>;
-export type Mutation = z.infer<typeof mutationSchema>;
+export type ParsedOp = z.infer<typeof opSchema>;
+export type ParsedMutation = z.infer<typeof mutationSchema>;

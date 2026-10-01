@@ -1,11 +1,11 @@
 # State
 
-**Milestone:** M1 Contracts
-**Current task:** none (next: T-013)
+**Milestone:** M2 Write endpoint + memory adapter
+**Current task:** none (next: T-014)
 **Last updated:** 2026-10-01
 
 ## Position
-R-001 (Bipartite Graph Store library) is specified in `specs/` and planned through M3 in PLAN.md. Package scaffolded and verification gate live (`npm run gate`: tsc, eslint, vitest); M0 complete; spec, decisions and architecture docs are in sync. `Result`/`GraphError` types exist (T-005); mutation v1 Zod schema exists (T-006, strict objects, internal until T-013); query v1 Zod schema exists (T-007); `parseMutation`/`parseQuery` exist and are exported (T-008); JSON Schema generated from Zod into `schema/` (T-009, `npm run schema`); configurable limits enforced in the parsers (T-010); `StorageAdapter`/`AdapterTx` contract types defined and exported (T-011); `write`/`query`/`createGraphClient` exist as parse-then-not-implemented stubs (T-012). M4–M7 are outlined, not yet broken into tasks.
+R-001 (Bipartite Graph Store library) is specified in `specs/` and planned through M3 in PLAN.md. Package scaffolded and verification gate live (`npm run gate`: tsc, eslint, vitest); M0 complete; spec, decisions and architecture docs are in sync. `Result`/`GraphError` types exist (T-005); mutation v1 Zod schema exists (T-006, strict objects, internal until T-013); query v1 Zod schema exists (T-007); `parseMutation`/`parseQuery` exist and are exported (T-008); JSON Schema generated from Zod into `schema/` (T-009, `npm run schema`); configurable limits enforced in the parsers (T-010); `StorageAdapter`/`AdapterTx` contract types defined and exported (T-011); `write`/`query`/`createGraphClient` exist as parse-then-not-implemented stubs (T-012); public API locked by API Extractor report in `api/` and purity enforced by lint (T-013). M1 Contracts complete. M4–M7 are outlined, not yet broken into tasks.
 
 ## Decisions
 - 2026-10-01 — Schema validator is **Zod** — largest ecosystem, one runtime dep per NFR-03, JSON Schema derivable.
@@ -20,6 +20,8 @@ R-001 (Bipartite Graph Store library) is specified in `specs/` and planned throu
 - 2026-10-01 — Limits (NFR-06) are enforced in the parsers via an optional `{ limits }` argument, not in the static schema; `data` size is measured in UTF-8 bytes; op count is checked on raw input before the schema parse; limits also apply to query ids.
 - 2026-10-01 — Supporting adapter types are our own definitions (spec leaves them open): `Paged<T>` = `{ items, nextCursor }`, `NodeRecord` = `{ partition, id, data? }`, `EdgeRecord` = `{ item, category, weight?, data? }`, `SetClause` = `{ all?, any?, none? }`. `AdapterTx` is scoped to one graph by `transaction(graphId, …)`.
 - 2026-10-01 — Endpoint stubs return `STORAGE_ERROR` "not implemented" for valid input (error enum is closed, nothing fits better); `WriteOutput`/`QueryOutput` are placeholders until M2/M4.
+- 2026-10-01 — Public instruction types (`Mutation`, `Op`, `Query`, …) are hand-written in `src/types.ts` so the API report records their shape; `types.test.ts` asserts mutual assignability with the Zod-inferred `Parsed*` types. Changing a schema means updating both.
+- 2026-10-01 — API Extractor (`npm run api` to update the report, `api:check` is part of the gate) bundles TS 5.9 and warns about TS 6.0; output is still correct. Purity (NFR-02) is a lint rule on `src/**` non-test files plus a test that proves the rule fires.
 - 2026-10-01 — Build order follows spec: contracts, memory adapter and write, conformance suite, then query, file, SQLite.
 
 ## Blockers / open questions

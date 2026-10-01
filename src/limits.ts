@@ -1,6 +1,6 @@
 import { graphError, type GraphError } from './result.js';
-import type { Mutation } from './schema/mutation.js';
-import type { Query } from './schema/query.js';
+import type { ParsedMutation } from './schema/mutation.js';
+import type { ParsedQuery } from './schema/query.js';
 
 export interface Limits {
   /** Maximum ops in one mutation. */
@@ -45,7 +45,7 @@ export function checkOpCount(ops: unknown, limits: Limits): GraphError | undefin
   return graphError('VALIDATION_ERROR', `A mutation may contain at most ${limits.maxOps} ops`, ['ops']);
 }
 
-export function checkMutationLimits(m: Mutation, limits: Limits): GraphError | undefined {
+export function checkMutationLimits(m: ParsedMutation, limits: Limits): GraphError | undefined {
   const graphIdError = checkId(m.graphId, ['graphId'], limits);
   if (graphIdError) return graphIdError;
   for (const [i, op] of m.ops.entries()) {
@@ -65,7 +65,7 @@ export function checkMutationLimits(m: Mutation, limits: Limits): GraphError | u
   return undefined;
 }
 
-export function checkQueryLimits(q: Query, limits: Limits): GraphError | undefined {
+export function checkQueryLimits(q: ParsedQuery, limits: Limits): GraphError | undefined {
   const graphIdError = checkId(q.graphId, ['graphId'], limits);
   if (graphIdError) return graphIdError;
   if ('ids' in q.from) {

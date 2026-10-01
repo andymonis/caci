@@ -7,8 +7,9 @@ import {
   type ParseOptions,
 } from './limits.js';
 import { err, graphError, ok, type GraphError, type Result } from './result.js';
-import { mutationSchema, type Mutation } from './schema/mutation.js';
-import { querySchema, type Query } from './schema/query.js';
+import { mutationSchema } from './schema/mutation.js';
+import { querySchema } from './schema/query.js';
+import type { Mutation, Query } from './types.js';
 
 const SUPPORTED_VERSION = 1;
 

@@ -58,4 +58,4 @@ export const querySchema = z.strictObject({
   page: page.default({ limit: 50, cursor: null }),
 });
 
-export type Query = z.infer<typeof querySchema>;
+export type ParsedQuery = z.infer<typeof querySchema>;
