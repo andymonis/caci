@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Graph Explorer (local only)</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Graph Explorer</h1>
+    <span class="badge-local" title="Runs on 127.0.0.1 only and is never part of the published package">local development only</span>
+    <label class="inline">Graph
+      <select id="graph-select" aria-label="Current graph"></select>
+    </label>
+    <span id="counts" class="counts" aria-live="polite"></span>
+    <span id="change" class="change" aria-live="polite"></span>
+    <span class="spacer"></span>
+    <label class="inline"><input type="checkbox" id="auto-refresh"> auto-refresh</label>
+    <button id="reset" class="danger" title="Forget every graph and start again">Reset everything</button>
+  </header>
+
+  <main class="layout">
+    <aside class="panel controls">
+      <section>
+        <h2>Graphs</h2>
+        <form id="form-graph" class="row">
+          <input id="new-graph" aria-label="New graph id" placeholder="new-graph-id" autocomplete="off" spellcheck="false">
+          <button type="submit">Create</button>
+          <button type="button" id="drop-graph" class="danger">Drop current</button>
+        </form>
+        <p class="hint">Graph ids: lowercase letters, digits, <code>_</code> or <code>-</code>.</p>
+      </section>
+
+      <section>
+        <h2>Add or update a node</h2>
+        <form id="form-node">
+          <div class="row">
+            <select id="node-partition" aria-label="Node kind"><option value="item">item</option><option value="category">category</option></select>
+            <input id="node-id" aria-label="Node id" placeholder="id" required autocomplete="off" spellcheck="false">
+          </div>
+          <input id="node-data" aria-label="Node data as JSON" placeholder='data, e.g. {"title":"Q3 plan"}' autocomplete="off" spellcheck="false">
+          <div class="row">
+            <select id="node-mode" aria-label="Update mode"><option value="replace">replace data</option><option value="merge">merge data</option></select>
+            <button type="submit">Upsert</button>
+          </div>
+        </form>
+      </section>
+
+      <section>
+        <h2>Link items to categories</h2>
+        <form id="form-link">
+          <div class="row">
+            <input id="link-item" list="items-list" aria-label="Item id" placeholder="item" required autocomplete="off" spellcheck="false">
+            <input id="link-category" list="categories-list" aria-label="Category id" placeholder="category" required autocomplete="off" spellcheck="false">
+          </div>
+          <div class="row">
+            <input id="link-weight" type="number" step="any" aria-label="Weight" placeholder="weight">
+            <label class="inline"><input type="checkbox" id="link-ensure"> create missing</label>
+          </div>
+          <div class="row">
+            <button type="submit">Link</button>
+            <button type="button" id="unlink">Unlink</button>
+          </div>
+        </form>
+        <datalist id="items-list"></datalist>
+        <datalist id="categories-list"></datalist>
+      </section>
+
+      <section>
+        <h2>Delete a node</h2>
+        <form id="form-delete" class="row">
+          <select id="delete-partition" aria-label="Node kind"><option value="item">item</option><option value="category">category</option></select>
+          <input id="delete-id" aria-label="Node id" placeholder="id" required autocomplete="off" spellcheck="false">
+          <button type="submit" class="danger">Delete</button>
+        </form>
+        <p class="hint">Deleting a node removes its links in the same step.</p>
+      </section>
+
+      <section>
+        <h2>Scenarios</h2>
+        <select id="scenario" aria-label="Scenario"></select>
+        <p id="scenario-summary" class="hint"></p>
+        <div class="row">
+          <button id="play">Play</button>
+          <button id="step">Step</button>
+          <button id="restart">Restart</button>
+        </div>
+        <label class="inline">pause <input id="delay" type="number" min="100" max="5000" step="100" value="900"> ms</label>
+        <p id="scenario-status" class="hint" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <h2>Raw mutation</h2>
+        <textarea id="raw" rows="8" spellcheck="false" aria-label="Mutation JSON"></textarea>
+        <button id="send-raw">Send to write()</button>
+        <h3>What gets rejected</h3>
+        <div id="rejected" class="stack"></div>
+      </section>
+    </aside>
+
+    <section class="stage panel">
+      <div class="legend"><span class="key item">items</span><span class="key category">categories</span><span class="hint">click a node or a link</span></div>
+      <svg id="canvas" role="img" aria-label="Bipartite graph: items on the left, categories on the right" preserveAspectRatio="xMidYMin meet"></svg>
+      <p id="empty" class="empty" hidden>This graph is empty. Add a node, or play a scenario.</p>
+    </section>
+
+    <aside class="panel side">
+      <section>
+        <h2>Selected</h2>
+        <div id="selection" class="hint">Nothing selected.</div>
+      </section>
+      <section>
+        <h2>Log</h2>
+        <ol id="log" class="log" aria-live="polite"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

@@ -24,6 +24,7 @@ CLAUDE.md               Loads system_prompt.md and .gsd/STATE.md into every Clau
 src/graph_store/        The Bipartite Graph Store, isolated as one feature (code, tests, adapters)
 schema/graph_store/     Generated JSON Schema for the mutation and query formats
 api/                    Committed public API report (API Extractor)
+dev/graph-explorer/     Local-only visual tester for the graph store (never published)
 ```
 
 ### Where the code lives
@@ -70,6 +71,10 @@ Task format in `PLAN.md`:
 3. Run `npm install`, then `npm run gate` (typecheck, lint, tests, API check) to confirm a clean start.
 4. Run `/plan` when a milestone needs breaking into tasks.
 5. Loop: `/next`, then `/verify`, then `/ship`, until the milestone is done.
+
+## Seeing the graph
+
+`npm run dev:explorer` starts a local-only page (http://127.0.0.1:4317) that draws a graph and animates it as entries are added and removed, with scenarios, a log of every request and result, and one-click examples of what the library rejects. It lives in `dev/graph-explorer/` and is never part of a release. See its README.
 
 ## Writing a storage adapter
 

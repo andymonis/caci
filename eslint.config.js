@@ -34,6 +34,25 @@ export default tseslint.config(
     },
   },
   {
+    // Local development tooling (never published): the explorer's Node server and its tests.
+    files: ['dev/**/*.mjs'],
+    languageOptions: {
+      globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly', URL: 'readonly', fetch: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', structuredClone: 'readonly' },
+    },
+  },
+  {
+    // The explorer's browser code.
+    files: ['dev/**/public/*.js'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: {
+        document: 'readonly', window: 'readonly', fetch: 'readonly', console: 'readonly',
+        setTimeout: 'readonly', clearTimeout: 'readonly', setInterval: 'readonly', clearInterval: 'readonly',
+        requestAnimationFrame: 'readonly', cancelAnimationFrame: 'readonly',
+      },
+    },
+  },
+  {
     files: ['scripts/**/*.mjs'],
     languageOptions: { globals: { URL: 'readonly', console: 'readonly' } },
   },
