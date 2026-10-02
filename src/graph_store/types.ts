@@ -101,3 +101,60 @@ export interface GraphInfo {
   categoryCount: number;
   edgeCount: number;
 }
+
+// ---- query results (see "Query results" in the R-001 spec) ----
+
+/** Names a node without carrying its contents. */
+export interface NodeRef {
+  partition: Partition;
+  id: string;
+}
+
+/** A node in a result. `data` is present only when the query asked for it with `includeData`. */
+export interface QueryNode extends NodeRef {
+  data?: JsonObject | undefined;
+}
+
+/**
+ * An edge in a result. `weight` is always present (an edge stored without one reports 1); `data`
+ * is present only when the query asked for it with `includeData`.
+ */
+export interface QueryEdge {
+  item: string;
+  category: string;
+  weight: number;
+  data?: JsonObject | undefined;
+}
+
+/**
+ * Paging fields shared by listing results. `nextCursor` is `null` on the last page. `truncated` is
+ * true when a size cap cut the result short, so more matched than was reached.
+ */
+export interface PageInfo {
+  nextCursor: string | null;
+  truncated: boolean;
+}
+
+/** `return.shape: "nodes"`. */
+export interface NodesOutput extends PageInfo {
+  nodes: QueryNode[];
+}
+
+/** `return.shape: "subgraph"`: the nodes of the page and the edges that go with them. */
+export interface SubgraphOutput extends NodesOutput {
+  edges: QueryEdge[];
+}
+
+/** `return.shape: "ids"`. */
+export interface IdsOutput extends PageInfo {
+  ids: NodeRef[];
+}
+
+/** `return.shape: "count"`. Not paged; when `truncated` the count is a lower bound. */
+export interface CountOutput {
+  count: number;
+  truncated: boolean;
+}
+
+/** What `query` returns. Tell the shapes apart by their keys: `edges`, `nodes`, `ids` or `count`. */
+export type QueryOutput = SubgraphOutput | NodesOutput | IdsOutput | CountOutput;

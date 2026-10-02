@@ -4,12 +4,7 @@ import { applyMutation } from './apply-mutation.js';
 import { createGraph, describeGraph, dropGraph, listGraphs } from './graphs.js';
 import type { Paged } from './adapter.js';
 import { err, graphError, type GraphError, type Result } from './result.js';
-import type { GraphInfo, GraphRef, WriteOutput } from './types.js';
-
-/** Placeholder shape; widened when the query endpoint is implemented (M4). */
-export interface QueryOutput {
-  readonly nextCursor: string | null;
-}
+import type { GraphInfo, GraphRef, QueryOutput, WriteOutput } from './types.js';
 
 /** An adapter bound once at creation. `write` and `query` carry graph data; the rest manage graphs (FR-01). */
 export interface GraphClient {

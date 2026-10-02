@@ -5,13 +5,22 @@ export type {
   Mutation,
   Op,
   Query,
+  QueryEdge,
   QueryFrom,
   QueryFilter,
+  QueryNode,
+  QueryOutput,
   QueryReturn,
   QueryPage,
   QueryTraverse,
+  SubgraphOutput,
+  CountOutput,
   GraphInfo,
   GraphRef,
+  IdsOutput,
+  NodeRef,
+  NodesOutput,
+  PageInfo,
   Where,
   WhereCondition,
   WriteOutput,
@@ -35,4 +44,4 @@ export type {
 } from './adapter.js';
 export { createGraph, describeGraph, dropGraph, listGraphs } from './graphs.js';
 export { createGraphClient, query, write } from './endpoints.js';
-export type { GraphClient, QueryOutput } from './endpoints.js';
+export type { GraphClient } from './endpoints.js';

@@ -175,6 +175,27 @@ Rules:
 - The named queries in the requirements (items by categories, related items, co-occurrence) ship as typed presets that compile into this one format, so there is a single execution path to test.
 - Matching on `data` scans in the core by default; adapters that can (SQLite via `json_extract`) push it down. Indexed fields per graph are a later option.
 
+### Query results
+
+A query returns one of four result shapes, told apart by their keys. All are wrapped in the usual `{ ok: true, value }` envelope.
+
+| `return.shape` | `value` | Notes |
+| --- | --- | --- |
+| `nodes` | `{ nodes, nextCursor, truncated }` | Each node is `{ partition, id }`, plus `data` when `includeData` is true. |
+| `ids` | `{ ids, nextCursor, truncated }` | Each entry is `{ partition, id }`. Never carries data. |
+| `count` | `{ count, truncated }` | Not paged. When `truncated` is true the count is a lower bound. |
+| `subgraph` | `{ nodes, edges, nextCursor, truncated }` | The `nodes` shape plus edges. Each edge is `{ item, category, weight }`, plus `data` when `includeData` is true. |
+
+Rules:
+
+- **One fixed order.** Every result lists nodes with all items first, then all categories, and within each partition by id in UTF-16 code-unit order. One order means one cursor works for any shape, and the same query on the same store gives the same answer (NFR-04).
+- **Paging.** `page.limit` counts nodes. A cursor means "continue after this node in that order", so adding or removing nodes between pages never skips or repeats one. The last page has `nextCursor: null`, including when it exactly fills the limit.
+- **Edges in a `subgraph`.** An edge appears exactly once across all pages, on the page that holds its item end, and only if its category end is somewhere in the whole result (an edge is never returned to a node outside the result). A page therefore holds at most `limit` nodes but can carry more than `limit` edges, because an item's edges are never split across pages. A consumer merges pages to get the whole subgraph.
+- **`truncated`.** True when a cap on how many nodes a query may reach (default 10,000) cut the result short, so more matched than was returned. It is about size caps, not paging.
+- **`includeData` defaults to false.** Without it, nodes and edges carry no `data`. The first example above sets it to true explicitly. (Provisional: see the decision log.)
+- **`weight` is always reported.** An edge stored without a weight reports 1, as in the example result above, so consumers never have to handle a missing weight. Ranking queries treat a missing weight as 1 as well.
+- **Cursors are opaque and tied to their query.** A cursor works only with the query that produced it, whatever its `page.limit`: change the graph, seeds, traversal, filter or `return` and it is refused with `VALIDATION_ERROR` and a path to `page.cursor`, as is a cursor that is corrupted, edited or not a cursor at all. Callers must not build or read cursors.
+
 ## Public API surface
 
 Keep the surface tiny: two endpoint functions (write and query) for graph data, four graph-lifecycle functions (FR-01), their parsers, typed builders, and the adapter interface. Everything else is internal.
@@ -279,6 +300,7 @@ src/graph_store/
   types.ts            public Mutation / Query / Op types (kept in sync with the schemas by a test)
   schema/             Zod schemas for mutation and query v1, JSON Schema generation
   parse.ts, limits.ts parseMutation / parseQuery, configurable limits
+  query-order.ts, query-cursor.ts  the fixed result order and the cursors that page it
   endpoints.ts        write, query, createGraphClient
   write-plan.ts       pure write planning (graph resolution) and its I/O shell
   apply-mutation.ts   runs a whole mutation atomically inside one adapter transaction
@@ -290,7 +312,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle, primitives), types
 ```
 
-Test map as of T-028 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-031 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -309,6 +331,7 @@ Test map as of T-028 (each test file sits next to the module it covers). Update 
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
+| `query-order.test.ts`, `query-cursor.test.ts` | FR-14, NFR-04: the fixed result order, and query cursors (round trip, bound to their query, corrupted, edited, foreign and garbage cursors all refused, never throwing) |
 | `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation against the restricted character set (also tested in both schemas, the published JSON Schema and at the endpoints), `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
 | `graph-info.test.ts` | FR-01 (list and describe), FR-14, AC-09 groundwork: `listGraphs` keyset paging (120 graphs over 3 pages), page validation, `describeGraph` counts across page boundaries and after cascade deletes |
 | `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (`write`), **AC-01 and AC-12** (`isolation`), **FR-01** (`lifecycle`: create, drop, list, describe, id rules) and **FR-02 to FR-08, FR-14** (`primitives`: the storage contract the core relies on, namely node and edge round trips, replace-on-write, no aliasing, atomic and serialised transactions, cascade from primitives, keyset paging) plus a smoke group; also tests the harness itself and that twenty-nine deliberately broken adapters are caught, each by the case that targets its bug |

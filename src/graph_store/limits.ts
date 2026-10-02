@@ -21,6 +21,9 @@ export const DEFAULT_LIMITS: Limits = Object.freeze({
 export const DEFAULT_PAGE_LIMIT = 50;
 export const MAX_PAGE_LIMIT = 1000;
 
+/** Whether results carry node and edge `data` when the query does not say (provisional; see STATE). */
+export const DEFAULT_INCLUDE_DATA = false;
+
 export interface ParseOptions {
   readonly limits?: Partial<Limits>;
 }

@@ -34,6 +34,14 @@ export interface AdapterTx {
 }
 
 // @public
+export interface CountOutput {
+    // (undocumented)
+    count: number;
+    // (undocumented)
+    truncated: boolean;
+}
+
+// @public
 export function createGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphRef>>;
 
 // @public
@@ -131,6 +139,12 @@ export interface GraphRef {
     graphId: string;
 }
 
+// @public
+export interface IdsOutput extends PageInfo {
+    // (undocumented)
+    ids: NodeRef[];
+}
+
 // @public (undocumented)
 export type JsonObject = {
     [key: string]: JsonValue;
@@ -178,6 +192,20 @@ export interface NodeRecord {
     readonly id: string;
     // (undocumented)
     readonly partition: Partition;
+}
+
+// @public
+export interface NodeRef {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    partition: Partition;
+}
+
+// @public
+export interface NodesOutput extends PageInfo {
+    // (undocumented)
+    nodes: QueryNode[];
 }
 
 // @public (undocumented)
@@ -229,6 +257,14 @@ export interface Paged<T> {
 }
 
 // @public
+export interface PageInfo {
+    // (undocumented)
+    nextCursor: string | null;
+    // (undocumented)
+    truncated: boolean;
+}
+
+// @public
 export function parseMutation(input: unknown, options?: ParseOptions): Result<Mutation>;
 
 // @public (undocumented)
@@ -264,6 +300,18 @@ export interface Query {
 // @public
 export function query(adapter: StorageAdapter, input: unknown): Promise<Result<QueryOutput, GraphError>>;
 
+// @public
+export interface QueryEdge {
+    // (undocumented)
+    category: string;
+    // (undocumented)
+    data?: JsonObject | undefined;
+    // (undocumented)
+    item: string;
+    // (undocumented)
+    weight: number;
+}
+
 // @public (undocumented)
 export interface QueryFilter {
     // (undocumented)
@@ -292,10 +340,13 @@ export type QueryFrom = {
 };
 
 // @public
-export interface QueryOutput {
+export interface QueryNode extends NodeRef {
     // (undocumented)
-    readonly nextCursor: string | null;
+    data?: JsonObject | undefined;
 }
+
+// @public
+export type QueryOutput = SubgraphOutput | NodesOutput | IdsOutput | CountOutput;
 
 // @public (undocumented)
 export interface QueryPage {
@@ -347,6 +398,12 @@ export interface StorageAdapter {
     readonly name: string;
     // (undocumented)
     transaction<T>(graphId: GraphId, fn: (tx: AdapterTx) => Promise<T>): Promise<T>;
+}
+
+// @public
+export interface SubgraphOutput extends NodesOutput {
+    // (undocumented)
+    edges: QueryEdge[];
 }
 
 // @public
