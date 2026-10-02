@@ -1,4 +1,4 @@
-import type { AdapterTx, NodeRecord, Partition, StorageAdapter } from './adapter.js';
+import type { AdapterTx, NodeRecord, Page, Paged, Partition, StorageAdapter } from './adapter.js';
 import { DEFAULT_LIMITS } from './limits.js';
 import { encodeQueryCursor } from './query-cursor.js';
 import { isAfter, sortNodeRefs } from './query-order.js';
@@ -27,18 +27,20 @@ const READ_PAGE = 1000;
 const notYet = (feature: string, path: (string | number)[]) =>
   err(graphError('VALIDATION_ERROR', `${feature} is not supported yet`, path));
 
-/** Walks a partition page by page, failing loudly if the adapter's cursor does not advance. */
-async function* pagesOf(tx: ReadTx, partition: Partition): AsyncGenerator<readonly NodeRecord[]> {
+/** Walks any listing page by page, failing loudly if the adapter's cursor does not advance. */
+async function* pages<T>(fetch: (page: Page) => Promise<Paged<T>>, what: string): AsyncGenerator<readonly T[]> {
   let cursor: string | null = null;
   do {
-    const page: Awaited<ReturnType<ReadTx['listNodes']>> = await tx.listNodes(partition, { limit: READ_PAGE, cursor });
+    const page: Paged<T> = await fetch({ limit: READ_PAGE, cursor });
     yield page.items;
     if (page.nextCursor !== null && page.nextCursor === cursor) {
-      throw new Error(`the adapter's paging cursor did not advance while listing ${partition} nodes`);
+      throw new Error(`the adapter's paging cursor did not advance while listing ${what}`);
     }
     cursor = page.nextCursor;
   } while (cursor !== null);
 }
+
+const pagesOf = (tx: ReadTx, partition: Partition) => pages((page) => tx.listNodes(partition, page), `${partition} nodes`);
 
 const partitionsOf = (plan: QueryPlan): Partition[] => (plan.partition === undefined ? ['item', 'category'] : [plan.partition]);
 
@@ -80,6 +82,64 @@ async function seedNodes(tx: ReadTx, seeds: { partition: Partition; ids: string[
   return sortNodeRefs(found);
 }
 
+const keyOf = (partition: Partition, id: string): string => `${partition}:${id}`;
+const otherPartition = (p: Partition): Partition => (p === 'item' ? 'category' : 'item');
+
+/**
+ * Walks the graph breadth first from the named seeds, `depth` hops out. Each hop crosses to the
+ * other partition (item to category, category to item). Everything within `depth` hops is reached,
+ * once: a visited set means a node reached by two paths counts once and a cycle cannot loop.
+ * Seeds that do not exist are ignored. Work is bounded by `cap`: when it would be exceeded, the walk
+ * stops (including partway through a node's edges) and the result is marked truncated.
+ */
+async function reachNodes(
+  tx: ReadTx,
+  seeds: { partition: Partition; ids: string[] },
+  depth: number,
+  cap: number,
+): Promise<{ nodes: NodeRecord[]; seedKeys: Set<string>; truncated: boolean }> {
+  const reached = new Map<string, NodeRecord>();
+  let truncated = false;
+  for (const seed of await seedNodes(tx, seeds)) {
+    if (reached.size >= cap) {
+      truncated = true;
+      break;
+    }
+    reached.set(keyOf(seed.partition, seed.id), seed);
+  }
+  const seedKeys = new Set(reached.keys());
+
+  let frontier = [...reached.values()];
+  for (let hop = 1; hop <= depth && frontier.length > 0 && !truncated; hop++) {
+    const first = frontier[0];
+    if (first === undefined) break;
+    const to = otherPartition(first.partition); // every node in a ring is in the same partition
+    const room = cap - reached.size;
+    const discovered = new Set<string>();
+
+    search: for (const node of frontier) {
+      for await (const edges of pages((page) => tx.edgesOf(node.partition, node.id, page), `edges of ${node.partition} "${node.id}"`)) {
+        for (const edge of edges) {
+          const id = node.partition === 'item' ? edge.category : edge.item;
+          if (reached.has(keyOf(to, id)) || discovered.has(id)) continue;
+          if (discovered.size >= room) {
+            truncated = true;
+            break search;
+          }
+          discovered.add(id);
+        }
+      }
+    }
+
+    const next: NodeRecord[] = [];
+    const ids = [...discovered];
+    for (let i = 0; i < ids.length; i += READ_PAGE) next.push(...(await tx.getNodes(to, ids.slice(i, i + READ_PAGE))));
+    frontier = sortNodeRefs(next); // an edge to a node that is gone is skipped
+    for (const node of frontier) reached.set(keyOf(node.partition, node.id), node);
+  }
+  return { nodes: [...reached.values()], seedKeys, truncated };
+}
+
 const toNode = (node: NodeRecord, includeData: boolean): QueryNode =>
   includeData && node.data !== undefined ? { partition: node.partition, id: node.id, data: node.data } : { partition: node.partition, id: node.id };
 
@@ -94,11 +154,10 @@ function shapeNodes(plan: QueryPlan, nodes: NodeRecord[], more: boolean, truncat
 }
 
 /**
- * Functional core of `query`, for seeds without traversal: reads through a read-only handle and
- * shapes the answer. Parts not built yet (walking edges, the `subgraph` shape) are refused by name.
+ * Functional core of `query`: reads through a read-only handle and shapes the answer. The
+ * `subgraph` shape is not built yet and is refused by name.
  */
 export async function executePlan(tx: ReadTx, plan: QueryPlan, maxReachedNodes: number): Promise<Result<QueryOutput>> {
-  if (plan.depth > 0) return notYet('traversal (depth above 0)', ['traverse', 'depth']);
   if (plan.shape === 'subgraph') return notYet('the subgraph shape', ['return', 'shape']);
 
   if (plan.seeds.kind === 'all') {
@@ -108,15 +167,15 @@ export async function executePlan(tx: ReadTx, plan: QueryPlan, maxReachedNodes: 
     return ok(shapeNodes(plan, nodes, more, false));
   }
 
-  // Named seeds at depth 0: the result is the seeds that exist, narrowed by the partition filter.
-  const { partition, ids } = plan.seeds;
-  const excluded = plan.excludeSeeds || (plan.partition !== undefined && plan.partition !== partition);
-  const found = excluded ? [] : await seedNodes(tx, { partition, ids });
-  const reached = found.slice(0, maxReachedNodes);
-  const truncated = found.length > reached.length;
-  if (plan.shape === 'count') return ok({ count: reached.length, truncated });
-  const remaining = reached.filter((n) => plan.after === null || isAfter(n, plan.after));
-  return ok(shapeNodes(plan, remaining.slice(0, plan.limit), remaining.length > plan.limit, truncated));
+  // Named seeds: walk out `plan.depth` hops (0 means just the seeds), then narrow and page the reached set.
+  const reachedSet = await reachNodes(tx, plan.seeds, plan.depth, maxReachedNodes);
+  let nodes = reachedSet.nodes;
+  if (plan.excludeSeeds) nodes = nodes.filter((n) => !reachedSet.seedKeys.has(keyOf(n.partition, n.id)));
+  if (plan.partition !== undefined) nodes = nodes.filter((n) => n.partition === plan.partition);
+  nodes = sortNodeRefs(nodes);
+  if (plan.shape === 'count') return ok({ count: nodes.length, truncated: reachedSet.truncated });
+  const remaining = nodes.filter((n) => plan.after === null || isAfter(n, plan.after));
+  return ok(shapeNodes(plan, remaining.slice(0, plan.limit), remaining.length > plan.limit, reachedSet.truncated));
 }
 
 /**

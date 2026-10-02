@@ -163,7 +163,7 @@ Result for a `subgraph` shape:
 | Part | Options | Notes |
 | --- | --- | --- |
 | `from` | `all`; `ids` in a partition; `where` match on `data` in a partition | Seeds the result. `all` means the whole graph and ignores `traverse`. |
-| `traverse` | `depth` 0 to 3 (default 1) | Walks edges from the seeds. In a bipartite graph each hop flips partition: depth 1 from a category gives its items; depth 2 gives items sharing a category with them. |
+| `traverse` | `depth` 0 to 3 (default 1) | Walks edges from the seeds. In a bipartite graph each hop flips partition, and the result holds everything within `depth` hops (the seeds included). From a category: depth 1 adds its items, depth 2 adds the other categories those items belong to, depth 3 adds the items of those categories. From an item: depth 1 adds its categories and depth 2 adds the items that share a category with it, which is the basis of "related items". Each node appears once however many paths reach it. |
 | `filter` | `partition`, `where`, and set clauses `all` / `any` / `none` over category ids | Applied to reached nodes. Seeds are always kept unless `excludeSeeds: true`. |
 | `return` | `subgraph` (nodes + edges), `nodes`, `ids`, `count`; `includeData` | `subgraph` returns only edges whose both ends are in the result. |
 | `page` | `limit` (default 50, max 1000), `cursor` | Keyset cursor; `truncated: true` when a size cap cut the result. |
@@ -302,7 +302,7 @@ src/graph_store/
   parse.ts, limits.ts parseMutation / parseQuery, configurable limits
   query-order.ts, query-cursor.ts  the fixed result order and the cursors that page it
   query-plan.ts       pure planner: a parsed query becomes the plan the executor runs
-  query-exec.ts       read-only executor (a handle with no write methods) and its transaction shell
+  query-exec.ts       read-only executor (a handle with no write methods): seeds, breadth-first traversal, paging; and its transaction shell
   endpoints.ts        write, query, createGraphClient
   write-plan.ts       pure write planning (graph resolution) and its I/O shell
   apply-mutation.ts   runs a whole mutation atomically inside one adapter transaction
@@ -314,7 +314,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle, primitives), types
 ```
 
-Test map as of T-033 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-034 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -333,6 +333,7 @@ Test map as of T-033 (each test file sits next to the module it covers). Update 
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
+| `query-traverse.test.ts` | FR-18, AC-17, AC-21: breadth-first walks to depth 3 from categories and items (cumulative, each node once, cycles safe), several seeds, missing seeds ignored, `excludeSeeds`, the partition filter, dangling edges skipped, paging a walked result, graph isolation, and the reached-node cap (including not reading a huge hub to the end) |
 | `query-exec.test.ts` | FR-09, FR-14, FR-18, FR-20, FR-21, AC-09, AC-13, AC-22: the executor for seeds without traversal: `from: all` and named seeds at depth 0, the partition filter, `nodes`/`ids`/`count`, `includeData`, 120 matches over 3 pages and paging stable under inserts and deletes, the reached-node cap, a store identical after every query, isolation between graphs, and refusal (by name) of what is not built yet |
 | `query-plan.test.ts` | FR-17, FR-18, FR-19 groundwork: the planner turns each of the spec's query examples into a plan; seeds are de-duplicated and ordered; `all` ignores traverse; `where` matching and the set clauses are refused by name instead of ignored; a cursor on a count is refused; the plan is pure |
 | `query-order.test.ts`, `query-cursor.test.ts` | FR-14, NFR-04: the fixed result order, and query cursors (round trip, bound to their query, corrupted, edited, foreign and garbage cursors all refused, never throwing) |

@@ -221,13 +221,7 @@ describe('caps', () => {
   });
 });
 
-describe('what is not built yet is refused by name', () => {
-  it('walking edges (depth above 0)', async () => {
-    const r = await run(await populated(), { from: { partition: 'category', ids: ['c1'] }, traverse: { depth: 1 } });
-    expect(r).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR', path: ['traverse', 'depth'] } });
-    if (!r.ok) expect(r.error.message).toContain('not supported yet');
-  });
-
+describe('what is not built yet is refused by name (traversal is covered in query-traverse.test.ts)', () => {
   it('the subgraph shape', async () => {
     expect(await run(await populated(), { return: { shape: 'subgraph' } })).toMatchObject({ ok: false, error: { path: ['return', 'shape'] } });
   });
