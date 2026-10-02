@@ -257,6 +257,131 @@ describe('the isolation group catches adapters that leak', () => {
   });
 });
 
+/** Adapters that pass the smoke group but get graph lifecycle wrong. Each must be caught by the lifecycle group. */
+function brokenForLifecycle(): Array<[string, () => StorageAdapter]> {
+  return [
+    ['drop only hides the graph, so a recreated graph has the old data back', () => {
+      const real = createMemoryAdapter();
+      const hidden = new Set<string>();
+      return {
+        ...real,
+        graphs: {
+          create: async (id) => { hidden.delete(id); await real.graphs.create(id); },
+          exists: async (id) => !hidden.has(id) && real.graphs.exists(id),
+          drop: async (id) => void hidden.add(id),
+          list: async (page) => {
+            const r = await real.graphs.list(page);
+            return { items: r.items.filter((id) => !hidden.has(id)), nextCursor: r.nextCursor };
+          },
+        },
+      };
+    }],
+    ['list returns only the first page', () => {
+      const real = createMemoryAdapter();
+      return {
+        ...real,
+        graphs: {
+          ...real.graphs,
+          list: async (page) => ({ items: (await real.graphs.list({ limit: page.limit, cursor: null })).items, nextCursor: null }),
+        },
+      };
+    }],
+    ['list is in insertion order, not sorted by id', () => {
+      const real = createMemoryAdapter();
+      const order: string[] = [];
+      return {
+        ...real,
+        graphs: {
+          create: async (id) => { if (!order.includes(id)) order.push(id); await real.graphs.create(id); },
+          exists: real.graphs.exists,
+          drop: async (id) => { order.splice(order.indexOf(id) >>> 0, order.includes(id) ? 1 : 0); await real.graphs.drop(id); },
+          list: async (page) => {
+            const start = page.cursor === null ? 0 : Number(page.cursor);
+            const next = start + page.limit;
+            return { items: order.slice(start, next), nextCursor: next < order.length ? String(next) : null };
+          },
+        },
+      };
+    }],
+    ['graphs.create throws when the graph already exists', () => {
+      const real = createMemoryAdapter();
+      return {
+        ...real,
+        graphs: {
+          ...real.graphs,
+          create: async (id) => {
+            if (await real.graphs.exists(id)) throw new Error('already exists');
+            await real.graphs.create(id);
+          },
+        },
+      };
+    }],
+    ['graph ids are case-insensitive', () => {
+      const real = createMemoryAdapter();
+      const fold = (id: string) => id.toLowerCase();
+      return {
+        ...real,
+        graphs: {
+          create: (id) => real.graphs.create(fold(id)),
+          exists: (id) => real.graphs.exists(fold(id)),
+          drop: (id) => real.graphs.drop(fold(id)),
+          list: (page) => real.graphs.list(page),
+        },
+        transaction: (graphId, fn) => real.transaction(fold(graphId), fn),
+      };
+    }],
+    ['graph ids are mangled into file-name-safe names', () => {
+      const real = createMemoryAdapter();
+      const safe = (id: string) => id.replace(/[/\\.]/g, '_');
+      return {
+        ...real,
+        graphs: {
+          create: (id) => real.graphs.create(safe(id)),
+          exists: (id) => real.graphs.exists(safe(id)),
+          drop: (id) => real.graphs.drop(safe(id)),
+          list: (page) => real.graphs.list(page),
+        },
+        transaction: (graphId, fn) => real.transaction(safe(graphId), fn),
+      };
+    }],
+  ];
+}
+
+describe('the lifecycle group catches adapters that get graph lifecycle wrong', () => {
+  const lifecycle = () => conformanceGroups().find((g) => g.name === 'lifecycle')?.cases ?? [];
+
+  it.each(brokenForLifecycle())('%s', async (_name, makeBroken) => {
+    const failed: string[] = [];
+    for (const testCase of lifecycle()) {
+      try {
+        await runCase(testCase, makeBroken);
+      } catch {
+        failed.push(testCase.name);
+      }
+    }
+    expect(failed.length).toBeGreaterThan(0);
+  });
+
+  it('passes every lifecycle case on the memory adapter', async () => {
+    for (const testCase of lifecycle()) await expect(runCase(testCase, createMemoryAdapter)).resolves.toBeUndefined();
+  });
+
+  it('the smoke group alone would miss all of them', async () => {
+    const smoke = conformanceGroups().find((g) => g.name === 'smoke')?.cases ?? [];
+    for (const [, makeBroken] of brokenForLifecycle()) {
+      let failures = 0;
+      for (const testCase of smoke) {
+        try {
+          await runCase(testCase, makeBroken);
+        } catch {
+          failures += 1;
+        }
+      }
+      expect(failures).toBe(0);
+    }
+  });
+});
+
 describe('the suite catches broken adapters', () => {
   it.each(brokenAdapters())('%s', async (_name, makeBroken) => {
     const failures: string[] = [];

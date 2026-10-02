@@ -82,6 +82,7 @@ What every adapter must guarantee, and what the conformance suite checks:
 - **Idempotent `graphs.create` and `graphs.drop`.** Creating an existing graph or dropping a missing one is a no-op; the core decides when those are errors.
 - **Replace on write.** `putNodes` and `putEdges` store the record as given, replacing any earlier one for the same key.
 - **Deterministic keyset paging.** Listings are ordered by id and use an opaque cursor that stays valid when rows are added or removed between pages.
+- **Ids are opaque and case-sensitive.** A graph or node id is any string up to 256 characters, including `/`, `..`, spaces, backslashes and non-ASCII text, and `Graph` and `graph` are different graphs. An adapter that uses ids as file names or keys must encode them so every id round-trips unchanged and none collide.
 - **No aliasing.** Data handed in or out is copied, so callers cannot change stored state by mutating what they passed or received.
 
 To check your adapter, call `runAdapterConformance` from your own test file and pass your test runner's `describe` and `it`:
