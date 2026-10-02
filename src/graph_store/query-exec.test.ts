@@ -221,12 +221,6 @@ describe('caps', () => {
   });
 });
 
-describe('what is not built yet is refused by name (traversal is covered in query-traverse.test.ts)', () => {
-  it('the subgraph shape', async () => {
-    expect(await run(await populated(), { return: { shape: 'subgraph' } })).toMatchObject({ ok: false, error: { path: ['return', 'shape'] } });
-  });
-});
-
 describe('graphs and isolation', () => {
   it('a missing graph is GRAPH_NOT_FOUND', async () => {
     expect(await run(await populated(), { graphId: 'nope' })).toMatchObject({ ok: false, error: { code: 'GRAPH_NOT_FOUND', path: ['graphId'] } });

@@ -1,10 +1,10 @@
-import type { AdapterTx, NodeRecord, Page, Paged, Partition, StorageAdapter } from './adapter.js';
+import type { AdapterTx, EdgeRecord, NodeRecord, Page, Paged, Partition, StorageAdapter } from './adapter.js';
 import { DEFAULT_LIMITS } from './limits.js';
 import { encodeQueryCursor } from './query-cursor.js';
 import { isAfter, sortNodeRefs } from './query-order.js';
 import type { QueryPlan } from './query-plan.js';
 import { err, graphError, ok, type Result } from './result.js';
-import type { NodeRef, QueryNode, QueryOutput } from './types.js';
+import type { NodeRef, QueryEdge, QueryNode, QueryOutput } from './types.js';
 import { storageError } from './write-plan.js';
 
 /**
@@ -23,9 +23,6 @@ export function readOnly(tx: AdapterTx): ReadTx {
 
 /** Rows asked of the adapter at a time. */
 const READ_PAGE = 1000;
-
-const notYet = (feature: string, path: (string | number)[]) =>
-  err(graphError('VALIDATION_ERROR', `${feature} is not supported yet`, path));
 
 /** Walks any listing page by page, failing loudly if the adapter's cursor does not advance. */
 async function* pages<T>(fetch: (page: Page) => Promise<Paged<T>>, what: string): AsyncGenerator<readonly T[]> {
@@ -145,26 +142,85 @@ const toNode = (node: NodeRecord, includeData: boolean): QueryNode =>
 
 const toRef = (node: NodeRecord): NodeRef => ({ partition: node.partition, id: node.id });
 
-function shapeNodes(plan: QueryPlan, nodes: NodeRecord[], more: boolean, truncated: boolean): QueryOutput {
-  const last = nodes.at(-1);
-  const nextCursor = more && last !== undefined ? encodeQueryCursor(plan.fingerprint, toRef(last)) : null;
-  return plan.shape === 'ids'
-    ? { ids: nodes.map(toRef), nextCursor, truncated }
-    : { nodes: nodes.map((n) => toNode(n, plan.includeData)), nextCursor, truncated };
-}
+/** An edge as results report it: a missing weight reads as 1, and `data` only when asked for. */
+const toEdge = (edge: EdgeRecord, includeData: boolean): QueryEdge => ({
+  item: edge.item,
+  category: edge.category,
+  weight: edge.weight ?? 1,
+  ...(includeData && edge.data !== undefined ? { data: edge.data } : {}),
+});
+
+/** Tells which of these category ids are part of the whole result. */
+type InResult = (categoryIds: string[]) => Promise<Set<string>>;
 
 /**
- * Functional core of `query`: reads through a read-only handle and shapes the answer. The
- * `subgraph` shape is not built yet and is refused by name.
+ * The edges that travel with a page of a `subgraph` result: those of the page's items whose
+ * category end is also somewhere in the whole result. Because an edge goes with its item, every
+ * edge appears exactly once across all pages. At most `cap` edges are returned per page.
+ */
+async function edgesForPage(
+  tx: ReadTx,
+  pageNodes: readonly NodeRecord[],
+  inResult: InResult,
+  includeData: boolean,
+  cap: number,
+): Promise<{ edges: QueryEdge[]; truncated: boolean }> {
+  const edges: QueryEdge[] = [];
+  for (const node of pageNodes) {
+    if (node.partition !== 'item') continue;
+    for await (const batch of pages((page) => tx.edgesOf('item', node.id, page), `edges of item "${node.id}"`)) {
+      const present = await inResult([...new Set(batch.map((e) => e.category))]);
+      for (const edge of batch) {
+        if (!present.has(edge.category)) continue;
+        if (edges.length >= cap) return { edges, truncated: true };
+        edges.push(toEdge(edge, includeData));
+      }
+    }
+  }
+  return { edges, truncated: false };
+}
+
+async function shapeNodes(
+  tx: ReadTx,
+  plan: QueryPlan,
+  nodes: NodeRecord[],
+  more: boolean,
+  truncated: boolean,
+  inResult: InResult,
+  cap: number,
+): Promise<QueryOutput> {
+  const last = nodes.at(-1);
+  const nextCursor = more && last !== undefined ? encodeQueryCursor(plan.fingerprint, toRef(last)) : null;
+  if (plan.shape === 'ids') return { ids: nodes.map(toRef), nextCursor, truncated };
+  const shown = nodes.map((n) => toNode(n, plan.includeData));
+  if (plan.shape !== 'subgraph') return { nodes: shown, nextCursor, truncated };
+  const gathered = await edgesForPage(tx, nodes, inResult, plan.includeData, cap);
+  return { nodes: shown, edges: gathered.edges, nextCursor, truncated: truncated || gathered.truncated };
+}
+
+const nobody: InResult = async () => new Set();
+
+/**
+ * Functional core of `query`: reads through a read-only handle and shapes the answer: seeds,
+ * traversal, the partition filter, and the nodes, ids, count and subgraph shapes.
  */
 export async function executePlan(tx: ReadTx, plan: QueryPlan, maxReachedNodes: number): Promise<Result<QueryOutput>> {
-  if (plan.shape === 'subgraph') return notYet('the subgraph shape', ['return', 'shape']);
-
   if (plan.seeds.kind === 'all') {
-    if (plan.excludeSeeds) return ok(plan.shape === 'count' ? { count: 0, truncated: false } : shapeNodes(plan, [], false, false));
+    if (plan.excludeSeeds) {
+      return ok(plan.shape === 'count' ? { count: 0, truncated: false } : await shapeNodes(tx, plan, [], false, false, nobody, maxReachedNodes));
+    }
     if (plan.shape === 'count') return ok(await countNodes(tx, plan, maxReachedNodes));
     const { nodes, more } = await firstNodes(tx, plan, plan.limit);
-    return ok(shapeNodes(plan, nodes, more, false));
+    // The whole graph is the result, so a category end is in it exactly when that category exists.
+    // With a partition filter only one kind of node is in the result, so there are no edges.
+    const existing: InResult = async (ids) => {
+      const found = new Set<string>();
+      for (let i = 0; i < ids.length; i += READ_PAGE) {
+        for (const c of await tx.getNodes('category', ids.slice(i, i + READ_PAGE))) found.add(c.id);
+      }
+      return found;
+    };
+    return ok(await shapeNodes(tx, plan, nodes, more, false, plan.partition === undefined ? existing : nobody, maxReachedNodes));
   }
 
   // Named seeds: walk out `plan.depth` hops (0 means just the seeds), then narrow and page the reached set.
@@ -175,7 +231,9 @@ export async function executePlan(tx: ReadTx, plan: QueryPlan, maxReachedNodes: 
   nodes = sortNodeRefs(nodes);
   if (plan.shape === 'count') return ok({ count: nodes.length, truncated: reachedSet.truncated });
   const remaining = nodes.filter((n) => plan.after === null || isAfter(n, plan.after));
-  return ok(shapeNodes(plan, remaining.slice(0, plan.limit), remaining.length > plan.limit, reachedSet.truncated));
+  const inResult = new Set(nodes.filter((n) => n.partition === 'category').map((n) => n.id));
+  const members: InResult = async (ids) => new Set(ids.filter((id) => inResult.has(id)));
+  return ok(await shapeNodes(tx, plan, remaining.slice(0, plan.limit), remaining.length > plan.limit, reachedSet.truncated, members, maxReachedNodes));
 }
 
 /**

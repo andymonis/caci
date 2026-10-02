@@ -191,7 +191,7 @@ Rules:
 - **One fixed order.** Every result lists nodes with all items first, then all categories, and within each partition by id in UTF-16 code-unit order. One order means one cursor works for any shape, and the same query on the same store gives the same answer (NFR-04).
 - **Paging.** `page.limit` counts nodes. A cursor means "continue after this node in that order", so adding or removing nodes between pages never skips or repeats one. The last page has `nextCursor: null`, including when it exactly fills the limit.
 - **Edges in a `subgraph`.** An edge appears exactly once across all pages, on the page that holds its item end, and only if its category end is somewhere in the whole result (an edge is never returned to a node outside the result). A page therefore holds at most `limit` nodes but can carry more than `limit` edges, because an item's edges are never split across pages. A consumer merges pages to get the whole subgraph.
-- **`truncated`.** True when a cap on how many nodes a query may reach (default 10,000) cut the result short, so more matched than was returned. It is about size caps, not paging.
+- **`truncated`.** True when a size cap cut the result short, so more matched than was returned: the cap on how many nodes a query may reach (default 10,000), or, for a `subgraph`, the same number as a cap on the edges carried by one page. It is about size caps, not paging.
 - **`includeData` defaults to false.** Without it, nodes and edges carry no `data`. The first example above sets it to true explicitly. (Provisional: see the decision log.)
 - **`weight` is always reported.** An edge stored without a weight reports 1, as in the example result above, so consumers never have to handle a missing weight. Ranking queries treat a missing weight as 1 as well.
 - **Cursors are opaque and tied to their query.** A cursor works only with the query that produced it, whatever its `page.limit`: change the graph, seeds, traversal, filter or `return` and it is refused with `VALIDATION_ERROR` and a path to `page.cursor`, as is a cursor that is corrupted, edited or not a cursor at all. Callers must not build or read cursors.
@@ -314,7 +314,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle, primitives), types
 ```
 
-Test map as of T-034 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-035 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -333,6 +333,7 @@ Test map as of T-034 (each test file sits next to the module it covers). Update 
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
+| `query-subgraph.test.ts` | FR-20, AC-17, AC-19: the `subgraph` shape: only edges with both ends in the result, each edge once across pages (120 items over 3 pages, another graph alongside), weight always reported (1 when none stored, 0 kept), edge data following `includeData`, filters and `excludeSeeds`, an item and a category sharing an id, and the per-page edge cap |
 | `query-traverse.test.ts` | FR-18, AC-17, AC-21: breadth-first walks to depth 3 from categories and items (cumulative, each node once, cycles safe), several seeds, missing seeds ignored, `excludeSeeds`, the partition filter, dangling edges skipped, paging a walked result, graph isolation, and the reached-node cap (including not reading a huge hub to the end) |
 | `query-exec.test.ts` | FR-09, FR-14, FR-18, FR-20, FR-21, AC-09, AC-13, AC-22: the executor for seeds without traversal: `from: all` and named seeds at depth 0, the partition filter, `nodes`/`ids`/`count`, `includeData`, 120 matches over 3 pages and paging stable under inserts and deletes, the reached-node cap, a store identical after every query, isolation between graphs, and refusal (by name) of what is not built yet |
 | `query-plan.test.ts` | FR-17, FR-18, FR-19 groundwork: the planner turns each of the spec's query examples into a plan; seeds are de-duplicated and ordered; `all` ignores traverse; `where` matching and the set clauses are refused by name instead of ignored; a cursor on a count is refused; the plan is pure |
