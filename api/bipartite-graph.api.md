@@ -160,6 +160,7 @@ export interface Limits {
     readonly maxDataBytes: number;
     readonly maxIdLength: number;
     readonly maxOps: number;
+    readonly maxReachedNodes: number;
 }
 
 // @public

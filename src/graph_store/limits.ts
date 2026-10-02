@@ -9,12 +9,15 @@ export interface Limits {
   readonly maxDataBytes: number;
   /** Maximum length of any id, in characters. */
   readonly maxIdLength: number;
+  /** Most nodes one query may reach before it stops and reports `truncated` (bounds work and memory). */
+  readonly maxReachedNodes: number;
 }
 
 export const DEFAULT_LIMITS: Limits = Object.freeze({
   maxOps: 1_000,
   maxDataBytes: 64 * 1024,
   maxIdLength: 256,
+  maxReachedNodes: 10_000,
 });
 
 /** Page size used when a caller does not give one, and the most a caller may ask for (FR-14). */

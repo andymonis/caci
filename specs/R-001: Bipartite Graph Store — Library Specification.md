@@ -302,6 +302,7 @@ src/graph_store/
   parse.ts, limits.ts parseMutation / parseQuery, configurable limits
   query-order.ts, query-cursor.ts  the fixed result order and the cursors that page it
   query-plan.ts       pure planner: a parsed query becomes the plan the executor runs
+  query-exec.ts       read-only executor (a handle with no write methods) and its transaction shell
   endpoints.ts        write, query, createGraphClient
   write-plan.ts       pure write planning (graph resolution) and its I/O shell
   apply-mutation.ts   runs a whole mutation atomically inside one adapter transaction
@@ -313,7 +314,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle, primitives), types
 ```
 
-Test map as of T-032 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-033 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -332,6 +333,7 @@ Test map as of T-032 (each test file sits next to the module it covers). Update 
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
+| `query-exec.test.ts` | FR-09, FR-14, FR-18, FR-20, FR-21, AC-09, AC-13, AC-22: the executor for seeds without traversal: `from: all` and named seeds at depth 0, the partition filter, `nodes`/`ids`/`count`, `includeData`, 120 matches over 3 pages and paging stable under inserts and deletes, the reached-node cap, a store identical after every query, isolation between graphs, and refusal (by name) of what is not built yet |
 | `query-plan.test.ts` | FR-17, FR-18, FR-19 groundwork: the planner turns each of the spec's query examples into a plan; seeds are de-duplicated and ordered; `all` ignores traverse; `where` matching and the set clauses are refused by name instead of ignored; a cursor on a count is refused; the plan is pure |
 | `query-order.test.ts`, `query-cursor.test.ts` | FR-14, NFR-04: the fixed result order, and query cursors (round trip, bound to their query, corrupted, edited, foreign and garbage cursors all refused, never throwing) |
 | `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation against the restricted character set (also tested in both schemas, the published JSON Schema and at the endpoints), `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
@@ -352,7 +354,7 @@ Not yet covered (arrive with later milestones): AC-07 to AC-09, AC-11, AC-13, AC
 | NFR-03 | Dependencies | Core: one runtime dependency at most (the schema validator). Drivers live only in adapter entry points. |
 | NFR-04 | Determinism | Same instruction on same store contents returns byte-identical results, including ordering and cursors. |
 | NFR-05 | Performance | SQLite adapter, 10k items, 1k categories, 100k edges: single-category lookup under 20 ms, three-clause set query under 100 ms (p95, dev laptop). Treat as a baseline to measure, not a hard promise. |
-| NFR-06 | Limits | Configurable caps: ops per mutation (default 1,000), `data` payload size (default 64 KB), node id length (default 256 chars; graph ids are fixed at 1 to 128 characters of a restricted set). |
+| NFR-06 | Limits | Configurable caps: ops per mutation (default 1,000), `data` payload size (default 64 KB), node id length (default 256 chars; graph ids are fixed at 1 to 128 characters of a restricted set), nodes one query may reach (default 10,000, after which the result is marked `truncated`). |
 | NFR-07 | Quality | 90%+ line coverage on core; every adapter passes the conformance suite in CI. |
 | NFR-08 | Docs | Generated API reference, a README quick start, and an adapter-authoring guide. |
 | NFR-09 | Observability | Optional `logger` / hook injected via the client, never global. Off by default. |

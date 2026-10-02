@@ -15,8 +15,8 @@ const query = (over: object = {}) => ({
 const failure = (r: ReturnType<typeof parseMutation>) => (r.ok ? undefined : r.error);
 
 describe('defaults', () => {
-  it('are 1000 ops, 64 KB data, 256-char ids', () => {
-    expect(DEFAULT_LIMITS).toEqual({ maxOps: 1000, maxDataBytes: 65536, maxIdLength: 256 });
+  it('are 1000 ops, 64 KB data, 256-char ids, 10,000 reached nodes', () => {
+    expect(DEFAULT_LIMITS).toEqual({ maxOps: 1000, maxDataBytes: 65536, maxIdLength: 256, maxReachedNodes: 10000 });
   });
 });
 
