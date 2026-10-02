@@ -1,7 +1,7 @@
 # State
 
 **Milestone:** M3 Conformance suite (M0 to M2b complete)
-**Current task:** none (next: T-028)
+**Current task:** T-030 Local graph explorer (T-029 shipped; T-028 follows)
 **Last updated:** 2026-10-01
 
 ## Position
@@ -38,6 +38,7 @@ R-001 (Bipartite Graph Store library) is specified in `specs/` and planned throu
 - 2026-10-02 — Suite scope (T-021): suite cases use only the public API (`write`, graph functions) plus observable adapter state, so file and SQLite adapters can run them unchanged. The 16 duplicated AC-02..06 tests were removed from the core test files; pure-logic unit tests and the memory adapter's own primitive tests stay (retitled as adapter primitives). Each moved behaviour was mutation-checked against the core and caught by the shared suite. Primitive-level cases to be promoted into the suite before M5 (PLAN Backlog).
 - 2026-10-02 — Isolation and adapter-swap (T-022): cases receive `makeAnother` from the harness (it tracks and disposes every adapter it hands out), so cases can use two independent adapters; `MakeAdapter` must return adapters that share nothing. AC-15 is evidenced by `testing/alternative-adapter.test.ts`, a fixture adapter built with a different strategy that passes the same suite with no core changes; it is a test fixture and does not serialise concurrent transactions (concurrency is covered only by the memory adapter's own tests until T-028). Two follow-up suite groups were planned as T-027 (lifecycle) and T-028 (primitives, before M5).
 - 2026-10-02 — Lifecycle group (T-027): beyond create/drop/list/describe it requires that graph and node ids are opaque and case-sensitive — any string up to 256 characters including `/`, `..`, spaces, backslashes and non-ASCII must round-trip unchanged, and `Graph` and `graph` are different graphs. This is our reading of "ids are strings" (spec silent); it exists so the file and SQLite adapters (M5/M6) must encode ids instead of using them raw as file names. Six deliberately broken adapters are caught, each by the targeted case.
+- 2026-10-02 — **Graph ids restricted (user decision, T-029)**: a `graphId` is 1 to 128 characters of `[a-z0-9_-]`, starting with a letter or digit, enforced in both schemas (and so in the published JSON Schema, which now carries the pattern), `createGraph`, `dropGraph` and `describeGraph`, always before any adapter call. Reason: graph ids become file names and keys; lowercase-only also removes case-collision on case-insensitive file systems (macOS, Windows). Strict first on purpose: loosening later is non-breaking, tightening is not. This SUPERSEDES the T-027 note that graph ids may be any string and are case-sensitive; **node ids remain opaque and case-sensitive** and the suite still requires them to round-trip. The lifecycle group now tests legal graph-id extremes and awkward node ids; two broken-adapter fixtures were replaced to match.
 - 2026-10-01 — Build order follows spec: contracts, memory adapter and write, conformance suite, then query, file, SQLite.
 
 ## Blockers / open questions

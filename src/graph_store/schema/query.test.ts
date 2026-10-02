@@ -96,4 +96,31 @@ describe('querySchema', () => {
     delete noReturn.return;
     expect(querySchema.safeParse(noReturn).success).toBe(false);
   });
+
+  describe('graphId character set (safe for file names)', () => {
+    const withGraphId = (graphId: unknown) => ({ ...wholeGraph, graphId });
+
+    it.each(['a', '0', 'user_42', 'a-b_c-9', 'x'.repeat(128)])('accepts %s', (id) => {
+      expect(querySchema.safeParse(withGraphId(id)).success).toBe(true);
+    });
+
+    it.each([
+      ['empty', ''],
+      ['upper case', 'Graph'],
+      ['a slash', 'a/b'],
+      ['a parent path', '../x'],
+      ['a dot', 'a.b'],
+      ['a space', 'a b'],
+      ['non-ASCII text', 'ünï'],
+      ['a leading dash', '-a'],
+      ['a leading underscore', '_a'],
+      ['129 characters', 'x'.repeat(129)],
+      ['a number', 7],
+    ])('rejects %s with a path to graphId', (_name, bad) => {
+      const r = querySchema.safeParse(withGraphId(bad));
+      expect(r.success).toBe(false);
+      expect(r.error?.issues[0]?.path).toEqual(['graphId']);
+    });
+  });
+
 });

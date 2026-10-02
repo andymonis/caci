@@ -202,18 +202,18 @@ describe('write: atomicity (FR-08; AC-04 is in the conformance suite)', () => {
 describe('write: graph resolution (FR-02; AC-02 is in the conformance suite)', () => {
   it('creates the graph when createIfMissing is set', async () => {
     const adapter = createMemoryAdapter();
-    const r = await write(adapter, mutation([upsert('item', 'a')], { graphId: 'C', createIfMissing: true }));
-    expect(r).toEqual({ ok: true, value: { graphId: 'C', applied: 1, graphCreated: true } });
-    expect(await adapter.graphs.exists('C')).toBe(true);
+    const r = await write(adapter, mutation([upsert('item', 'a')], { graphId: 'new-graph', createIfMissing: true }));
+    expect(r).toEqual({ ok: true, value: { graphId: 'new-graph', applied: 1, graphCreated: true } });
+    expect(await adapter.graphs.exists('new-graph')).toBe(true);
   });
 
   it('removes a graph it created when the mutation fails', async () => {
     const { adapter, calls } = spied();
-    const r = await write(adapter, mutation([upsert('item', 'a'), link('a', 'missing')], { graphId: 'C', createIfMissing: true }));
+    const r = await write(adapter, mutation([upsert('item', 'a'), link('a', 'missing')], { graphId: 'new-graph', createIfMissing: true }));
     expect(r).toMatchObject({ ok: false, error: { code: 'NODE_NOT_FOUND', path: ['ops', 1, 'category'] } });
-    expect(calls.create).toEqual(['C']);
-    expect(calls.drop).toEqual(['C']);
-    expect(await adapter.graphs.exists('C')).toBe(false);
+    expect(calls.create).toEqual(['new-graph']);
+    expect(calls.drop).toEqual(['new-graph']);
+    expect(await adapter.graphs.exists('new-graph')).toBe(false);
     expect((await adapter.graphs.list({ limit: 10, cursor: null })).items).toEqual([]);
   });
 
@@ -239,10 +239,10 @@ describe('write: graph resolution (FR-02; AC-02 is in the conformance suite)', (
         },
       },
     };
-    const r = await write(racy, mutation([link('a', 'missing')], { graphId: 'C', createIfMissing: true }));
+    const r = await write(racy, mutation([link('a', 'missing')], { graphId: 'new-graph', createIfMissing: true }));
     expect(r.ok).toBe(false);
     expect(calls.drop).toEqual([]);
-    expect((await snapshot(real, 'C')).items.map((n) => n.id)).toEqual(['from-other-writer']);
+    expect((await snapshot(real, 'new-graph')).items.map((n) => n.id)).toEqual(['from-other-writer']);
   });
 
   it('reports both problems when the cleanup of a created graph also fails', async () => {
@@ -251,7 +251,7 @@ describe('write: graph resolution (FR-02; AC-02 is in the conformance suite)', (
       ...adapter,
       graphs: { ...adapter.graphs, drop: async () => { throw new Error('cannot drop'); } },
     };
-    const r = await write(brokenDrop, mutation([link('a', 'missing')], { graphId: 'C', createIfMissing: true }));
+    const r = await write(brokenDrop, mutation([link('a', 'missing')], { graphId: 'new-graph', createIfMissing: true }));
     expect(r).toMatchObject({
       ok: false,
       error: { code: 'STORAGE_ERROR', message: expect.stringMatching(/does not exist.*cannot drop/s) },

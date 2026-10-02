@@ -316,32 +316,36 @@ function brokenForLifecycle(): Array<[string, () => StorageAdapter]> {
         },
       };
     }],
-    ['graph ids are case-insensitive', () => {
+    ['long graph ids are truncated, so two long ids collide', () => {
       const real = createMemoryAdapter();
-      const fold = (id: string) => id.toLowerCase();
+      const cut = (id: string) => id.slice(0, 32);
       return {
         ...real,
         graphs: {
-          create: (id) => real.graphs.create(fold(id)),
-          exists: (id) => real.graphs.exists(fold(id)),
-          drop: (id) => real.graphs.drop(fold(id)),
+          create: (id) => real.graphs.create(cut(id)),
+          exists: (id) => real.graphs.exists(cut(id)),
+          drop: (id) => real.graphs.drop(cut(id)),
           list: (page) => real.graphs.list(page),
         },
-        transaction: (graphId, fn) => real.transaction(fold(graphId), fn),
+        transaction: (graphId, fn) => real.transaction(cut(graphId), fn),
       };
     }],
-    ['graph ids are mangled into file-name-safe names', () => {
+    ['node ids are mangled into file-name-safe names', () => {
       const real = createMemoryAdapter();
-      const safe = (id: string) => id.replace(/[/\\.]/g, '_');
+      const safe = (id: string) => id.replace(/[/\\.]/g, '_').toLowerCase();
       return {
         ...real,
-        graphs: {
-          create: (id) => real.graphs.create(safe(id)),
-          exists: (id) => real.graphs.exists(safe(id)),
-          drop: (id) => real.graphs.drop(safe(id)),
-          list: (page) => real.graphs.list(page),
-        },
-        transaction: (graphId, fn) => real.transaction(safe(graphId), fn),
+        transaction: (graphId, fn) =>
+          real.transaction(graphId, (tx) =>
+            fn({
+              ...tx,
+              getNodes: (p, ids) => tx.getNodes(p, ids.map(safe)),
+              putNodes: (nodes) => tx.putNodes(nodes.map((n) => ({ ...n, id: safe(n.id) }))),
+              deleteNodes: (p, ids) => tx.deleteNodes(p, ids.map(safe)),
+              putEdges: (edges) => tx.putEdges(edges.map((e) => ({ ...e, item: safe(e.item), category: safe(e.category) }))),
+              edgesOf: (p, id, page) => tx.edgesOf(p, safe(id), page),
+            }),
+          ),
       };
     }],
   ];

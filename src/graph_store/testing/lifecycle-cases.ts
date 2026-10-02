@@ -42,7 +42,11 @@ async function allGraphIds(adapter: StorageAdapter, limit: number): Promise<{ id
   return { ids, pages };
 }
 
-const awkwardIds = (): string[] => [
+/** The edges of what a graph id may be: shortest, longest, digits only, every allowed symbol. */
+const legalGraphIds = (): string[] => ['a', '0', '42', 'a-b_c-9', 'user_42', 'x'.repeat(128)];
+
+/** Node ids are opaque, so adapters must store anything: separators, dots, spaces, non-ASCII, case. */
+const awkwardNodeIds = (): string[] => [
   'a/b',
   '../escape',
   'with space',
@@ -51,6 +55,8 @@ const awkwardIds = (): string[] => [
   'dots..',
   '.hidden',
   'back\\slash',
+  'UPPER',
+  'upper',
   'x'.repeat(256),
 ];
 
@@ -209,34 +215,34 @@ const describing = (): ConformanceCase[] => [
 
 const identifiers = (): ConformanceCase[] => [
   {
-    name: 'FR-01: graph and node ids with awkward characters round-trip unchanged',
+    name: 'FR-01: every allowed graph id works end to end, from one character to the 128-character maximum',
     run: async (adapter) => {
-      const ids = awkwardIds();
+      const ids = legalGraphIds();
       for (const id of ids) {
-        const r = await write(adapter, mutation([upsert('item', id, { id }), upsert('category', id), link(id, id)], { graphId: id, createIfMissing: true }));
-        assert.equal(r.ok, true, `writing to graph ${JSON.stringify(id)}`);
+        const r = await write(adapter, mutation([upsert('item', 'n', { id })], { graphId: id, createIfMissing: true }));
+        assert.equal(r.ok, true, `writing to graph ${id.slice(0, 20)}`);
       }
       assert.deepEqual((await allGraphIds(adapter, 1000)).ids.sort(), [...ids].sort());
       for (const id of ids) {
-        const s = await snapshot(adapter, id);
-        assert.deepEqual(s.items, [{ partition: 'item', id, data: { id } }]);
-        assert.deepEqual(s.edgesFromItems, [{ item: id, category: id }]);
+        assert.deepEqual((await snapshot(adapter, id)).items, [{ partition: 'item', id: 'n', data: { id } }]);
         assert.equal((await dropGraph(adapter, id)).ok, true);
       }
       assert.deepEqual((await allGraphIds(adapter, 1000)).ids, []);
     },
   },
   {
-    name: 'FR-01: graph ids that differ only by case are different graphs',
+    name: 'FR-01: node ids with awkward characters round-trip unchanged, and ids differing by case stay distinct',
     run: async (adapter) => {
-      assert.equal((await createGraph(adapter, 'Graph')).ok, true);
-      assert.equal((await createGraph(adapter, 'graph')).ok, true);
-      await write(adapter, mutation([upsert('item', 'only-upper')], { graphId: 'Graph' }));
-      assert.deepEqual(await describeGraph(adapter, 'Graph'), info('Graph', 1, 0, 0));
-      assert.deepEqual(await describeGraph(adapter, 'graph'), info('graph', 0, 0, 0));
-      assert.deepEqual((await allGraphIds(adapter, 10)).ids.sort(), ['Graph', 'graph']);
-      await dropGraph(adapter, 'graph');
-      assert.deepEqual(await describeGraph(adapter, 'Graph'), info('Graph', 1, 0, 0));
+      const ids = awkwardNodeIds();
+      const ops = ids.flatMap((id) => [upsert('item', id, { id }), upsert('category', id), link(id, id)]);
+      assert.equal((await write(adapter, mutation(ops, { createIfMissing: true }))).ok, true);
+      const s = await snapshot(adapter);
+      assert.deepEqual(s.items.map((n) => n.id).sort(), [...ids].sort());
+      assert.deepEqual(s.categories.map((n) => n.id).sort(), [...ids].sort());
+      assert.deepEqual(s.items.find((n) => n.id === 'ünï côdé')?.data, { id: 'ünï côdé' });
+      assert.equal(s.edgesFromItems.length, ids.length);
+      assert.deepEqual(s.edgesFromItems, s.edgesFromCategories);
+      assert.deepEqual(await describeGraph(adapter, 'g'), info('g', ids.length, ids.length, ids.length));
     },
   },
 ];

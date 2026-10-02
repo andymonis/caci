@@ -14,6 +14,7 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 
 ## M3 Conformance suite (spec phase 3; covers AC-15 on memory)
 
+- [ ] T-030 (dev tooling) Local graph explorer in `dev/graph-explorer/` — acceptance: a localhost-only web UI that shows the bipartite graph being built up and torn down as entries are added and removed (animated), lets you drive `write` and the graph functions, shows each request and result, and plays sample scenarios step by step; lives outside `src/` and the published package (`npm pack` contains nothing from `dev/`); has its own tests in the gate
 - [ ] T-028 (R-001, FR-04, FR-07, FR-14) Add a `primitives` group to the conformance suite — acceptance: idempotent `putEdges` upsert, rollback of edge writes, cascade built from `edgesOf` + `deleteEdges` + `deleteNodes`, keyset paging of nodes and edges (stable under inserts), and no aliasing of stored data are asserted for every adapter; the memory adapter's duplicate primitive tests are removed; must land before M5
 
 ## Later milestones (plan with `/plan` when M3 is done)
@@ -65,4 +66,5 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-021 (R-001, AC-02..06) Move write-behaviour tests into the suite — acceptance: AC-02 to AC-06 run via the suite against memory; no duplicate adapter-specific copies remain
 - [x] T-022 (R-001, AC-01, AC-12, AC-15) Isolation and adapter-swap tests — acceptance: graph isolation (AC-01) and two-clients-two-adapters (AC-12) pass; README section drafts how a new adapter runs the suite (AC-15)
 - [x] T-027 (R-001, FR-01) Add a `lifecycle` group to the conformance suite — acceptance: every adapter must give `CONFLICT` on a duplicate `createGraph`, have `dropGraph` remove all nodes and edges, page `listGraphs` deterministically (120 graphs over 3 pages), and report `describeGraph` counts that follow writes and cascade deletes; deliberately broken adapters are caught
+- [x] T-029 (R-001, FR-01/02) Restrict graph ids to a safe character set — acceptance: a `graphId` must be 1 to 128 characters from lowercase letters, digits, `_` and `-`, starting with a letter or digit; mutation and query schemas, `createGraph`/`dropGraph`/`describeGraph` all reject anything else with `VALIDATION_ERROR` and a `graphId` path before any adapter call; JSON Schema regenerated; node ids stay opaque; tests, suite and docs updated
 - [x] T-023 (R-001, architecture) Isolate the graph store under `src/graph_store/` — acceptance: all library code, tests, entry points, generated JSON Schema and tooling paths live under or point at `graph_store`; gate green with the same 120 tests as before; spec and docs describe the layout

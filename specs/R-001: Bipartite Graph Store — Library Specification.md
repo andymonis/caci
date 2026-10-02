@@ -39,7 +39,7 @@ Four nouns cover the whole model: graph, item, category, edge. A pure core sits 
 
 The caller never touches storage directly, and the core never keeps anything between calls. Each `graphId` is a sealed namespace inside the store.
 
-- **Graph**: a namespace keyed by `graphId`, typically one per user. Nothing crosses graphs.
+- **Graph**: a namespace keyed by `graphId`, typically one per user. Nothing crosses graphs. A `graphId` is 1 to 128 characters: lowercase letters, digits, `_` or `-`, starting with a letter or digit. Backends use it as a file name or key, so it is deliberately plain (no separators, dots, spaces, non-ASCII or upper case). Node ids stay opaque.
 - **Item**: a unit of stored information (note, document, record), with an id and an opaque JSON `data` payload.
 - **Category**: a label or concept items are filed under, with an id and optional `data`.
 - **Edge**: an item-to-category link with optional `weight` and `data`. Never item-item or category-category.
@@ -51,7 +51,7 @@ Requirements are numbered so ACs and GSD tasks can trace back to them.
 | ID | Area | Requirement |
 | --- | --- | --- |
 | FR-01 | Graphs | Create, list, describe and delete graphs, through four top-level functions (`createGraph`, `listGraphs`, `describeGraph`, `dropGraph`) beside the two endpoints. Deleting a graph removes all its nodes and edges. |
-| FR-02 | Graphs | Every instruction and query names exactly one `graphId`. Mutations against a missing graph fail unless `createIfMissing: true`. |
+| FR-02 | Graphs | Every instruction and query names exactly one `graphId` (see Core concepts for the allowed characters). Mutations against a missing graph fail unless `createIfMissing: true`. |
 | FR-03 | Nodes | Upsert and delete items and categories. Each node has a caller-supplied string `id`, a `partition` (`item` or `category`) and an optional JSON `data` payload. |
 | FR-04 | Nodes | Node ids are unique per partition per graph. The same id may exist as an item and a category without conflict. |
 | FR-05 | Edges | Link and unlink an item to a category, with optional numeric `weight` and JSON `data`. Linking is idempotent. |
@@ -310,7 +310,7 @@ Test map as of T-027 (each test file sits next to the module it covers). Update 
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
-| `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation, `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
+| `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation against the restricted character set (also tested in both schemas, the published JSON Schema and at the endpoints), `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
 | `graph-info.test.ts` | FR-01 (list and describe), FR-14, AC-09 groundwork: `listGraphs` keyset paging (120 graphs over 3 pages), page validation, `describeGraph` counts across page boundaries and after cascade deletes |
 | `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (`write` group), **AC-01 and AC-12** (`isolation` group), **FR-01** (`lifecycle` group: create, drop, list, describe, awkward and case-differing ids) and a smoke group; also tests the harness itself (fresh adapter per test, extra adapters on request, dispose) and that twenty-one deliberately broken adapters are caught, each by the case that targets its bug |
 | `testing/alternative-adapter.test.ts` | **AC-15**: an independently written adapter (snapshot and restore, its own cursor format) passes the same suite and works end to end through the client, with no core changes |
@@ -328,7 +328,7 @@ Not yet covered (arrive with later milestones): AC-07 to AC-09, AC-11, AC-13, AC
 | NFR-03 | Dependencies | Core: one runtime dependency at most (the schema validator). Drivers live only in adapter entry points. |
 | NFR-04 | Determinism | Same instruction on same store contents returns byte-identical results, including ordering and cursors. |
 | NFR-05 | Performance | SQLite adapter, 10k items, 1k categories, 100k edges: single-category lookup under 20 ms, three-clause set query under 100 ms (p95, dev laptop). Treat as a baseline to measure, not a hard promise. |
-| NFR-06 | Limits | Configurable caps: ops per mutation (default 1,000), `data` payload size (default 64 KB), id length (default 256 chars). |
+| NFR-06 | Limits | Configurable caps: ops per mutation (default 1,000), `data` payload size (default 64 KB), node id length (default 256 chars; graph ids are fixed at 1 to 128 characters of a restricted set). |
 | NFR-07 | Quality | 90%+ line coverage on core; every adapter passes the conformance suite in CI. |
 | NFR-08 | Docs | Generated API reference, a README quick start, and an adapter-authoring guide. |
 | NFR-09 | Observability | Optional `logger` / hook injected via the client, never global. Off by default. |

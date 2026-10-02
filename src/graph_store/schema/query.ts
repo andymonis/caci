@@ -1,7 +1,13 @@
 import { z } from 'zod';
+import { GRAPH_ID_PATTERN, GRAPH_ID_RULE, MAX_GRAPH_ID_LENGTH } from '../graph-id.js';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '../limits.js';
 
 const id = z.string().min(1);
+const graphId = z
+  .string()
+  .min(1)
+  .max(MAX_GRAPH_ID_LENGTH)
+  .regex(GRAPH_ID_PATTERN, `graphId must be ${GRAPH_ID_RULE}`);
 const partition = z.enum(['item', 'category']);
 const json = z.json();
 
@@ -51,7 +57,7 @@ const page = z.strictObject({
 
 export const querySchema = z.strictObject({
   version: z.literal(1),
-  graphId: id,
+  graphId,
   from,
   traverse: traverse.default({ depth: 1 }),
   filter: filter.optional(),

@@ -5,15 +5,34 @@ import { write } from './endpoints.js';
 import { createGraph, dropGraph, planCreateGraph, requireGraph, validateGraphId } from './graphs.js';
 
 describe('validateGraphId (pure)', () => {
-  it('accepts ordinary ids, including the maximum length and unusual characters', () => {
-    expect(validateGraphId('user_42')).toEqual({ ok: true, value: 'user_42' });
-    expect(validateGraphId('x'.repeat(256)).ok).toBe(true);
-    expect(validateGraphId('ünï côdé / with spaces').ok).toBe(true);
+  it.each([
+    ['a'],
+    ['0'],
+    ['user_42'],
+    ['a-b_c-9'],
+    ['9starts-with-digit'],
+    ['x'.repeat(128)],
+  ])('accepts %s', (id) => {
+    expect(validateGraphId(id)).toEqual({ ok: true, value: id });
   });
 
   it.each([
-    ['empty string', ''],
-    ['too long', 'x'.repeat(257)],
+    ['empty', ''],
+    ['upper case', 'Graph'],
+    ['a slash', 'a/b'],
+    ['a parent path', '../x'],
+    ['a dot', 'a.b'],
+    ['only dots', '..'],
+    ['a space', 'a b'],
+    ['a trailing space', 'a '],
+    ['a backslash', 'a\\b'],
+    ['non-ASCII text', 'ünï'],
+    ['an emoji', 'a😀'],
+    ['a leading dash', '-a'],
+    ['a leading underscore', '_a'],
+    ['a newline', 'a\nb'],
+    ['a NUL character', 'a\u0000b'],
+    ['129 characters', 'x'.repeat(129)],
     ['a number', 123],
     ['null', null],
     ['undefined', undefined],
@@ -23,7 +42,12 @@ describe('validateGraphId (pure)', () => {
     expect(validateGraphId(bad)).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR', path: ['graphId'] } });
   });
 
-  it('honours a custom length limit', () => {
+  it('says what is allowed in the message', () => {
+    const r = validateGraphId('Bad Id');
+    expect(r).toMatchObject({ ok: false, error: { message: expect.stringContaining('lowercase letters, digits') } });
+  });
+
+  it('still honours a smaller custom length limit', () => {
     expect(validateGraphId('abcd', { maxIdLength: 3 }).ok).toBe(false);
     expect(validateGraphId('abc', { maxIdLength: 3 }).ok).toBe(true);
   });
@@ -101,7 +125,7 @@ describe('createGraph', () => {
     expect((await contents(adapter, 'b')).items).toEqual([]);
   });
 
-  it.each([['empty', ''], ['too long', 'x'.repeat(257)], ['a number', 7], ['null', null]])(
+  it.each([['empty', ''], ['upper case', 'Graph'], ['a slash', 'a/b'], ['too long', 'x'.repeat(129)], ['a number', 7], ['null', null]])(
     'rejects %s with VALIDATION_ERROR and never touches the adapter',
     async (_name, bad) => {
       expect(await createGraph(untouchable, bad as string)).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
@@ -156,7 +180,7 @@ describe('dropGraph', () => {
     expect(await adapter.graphs.exists('other')).toBe(true);
   });
 
-  it.each([['empty', ''], ['too long', 'x'.repeat(257)], ['undefined', undefined]])(
+  it.each([['empty', ''], ['upper case', 'Graph'], ['a dot', 'a.b'], ['too long', 'x'.repeat(129)], ['undefined', undefined]])(
     'rejects %s with VALIDATION_ERROR and never touches the adapter',
     async (_name, bad) => {
       expect(await dropGraph(untouchable, bad as unknown as string)).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });

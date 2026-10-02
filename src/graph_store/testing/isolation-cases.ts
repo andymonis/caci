@@ -13,8 +13,8 @@ const sameIds = (graphId: string, tag: string, extraOps: unknown[] = []) =>
 
 const both = async (adapter: Parameters<ConformanceCase['run']>[0], withLink: boolean): Promise<void> => {
   const ops = withLink ? [link('note', 'topic', { weight: 1 })] : [];
-  assert.equal((await write(adapter, sameIds('A', 'a', ops))).ok, true);
-  assert.equal((await write(adapter, sameIds('B', 'b', ops))).ok, true);
+  assert.equal((await write(adapter, sameIds('graph-a', 'a', ops))).ok, true);
+  assert.equal((await write(adapter, sameIds('graph-b', 'b', ops))).ok, true);
 };
 
 const ac01 = (): ConformanceCase[] => [
@@ -22,8 +22,8 @@ const ac01 = (): ConformanceCase[] => [
     name: 'AC-01: linking in graph A is invisible in graph B, even with identical node ids',
     run: async (adapter) => {
       await both(adapter, false);
-      await write(adapter, mutation([link('note', 'topic', { weight: 1 })], { graphId: 'A' }));
-      const [a, b] = [await snapshot(adapter, 'A'), await snapshot(adapter, 'B')];
+      await write(adapter, mutation([link('note', 'topic', { weight: 1 })], { graphId: 'graph-a' }));
+      const [a, b] = [await snapshot(adapter, 'graph-a'), await snapshot(adapter, 'graph-b')];
       assert.deepEqual(a.edgesFromItems, [{ item: 'note', category: 'topic', weight: 1 }]);
       assert.deepEqual(b.edgesFromItems, []);
       assert.deepEqual(b.edgesFromCategories, []);
@@ -35,19 +35,19 @@ const ac01 = (): ConformanceCase[] => [
     name: 'AC-01: writing to one graph does not change what another graph holds',
     run: async (adapter) => {
       await both(adapter, true);
-      const before = await describeGraph(adapter, 'B');
-      await write(adapter, mutation([upsert('item', 'extra'), upsert('category', 'more'), link('extra', 'more')], { graphId: 'A' }));
-      await write(adapter, mutation([{ op: 'unlink', item: 'note', category: 'topic' }], { graphId: 'A' }));
-      assert.deepEqual(await describeGraph(adapter, 'B'), before);
-      assert.deepEqual(before, { ok: true, value: { graphId: 'B', itemCount: 2, categoryCount: 1, edgeCount: 1 } });
+      const before = await describeGraph(adapter, 'graph-b');
+      await write(adapter, mutation([upsert('item', 'extra'), upsert('category', 'more'), link('extra', 'more')], { graphId: 'graph-a' }));
+      await write(adapter, mutation([{ op: 'unlink', item: 'note', category: 'topic' }], { graphId: 'graph-a' }));
+      assert.deepEqual(await describeGraph(adapter, 'graph-b'), before);
+      assert.deepEqual(before, { ok: true, value: { graphId: 'graph-b', itemCount: 2, categoryCount: 1, edgeCount: 1 } });
     },
   },
   {
     name: 'AC-01: deleting a node in graph A (with its edges) leaves the same-id node and edges in B',
     run: async (adapter) => {
       await both(adapter, true);
-      await write(adapter, mutation([{ op: 'deleteNode', partition: 'category', id: 'topic' }], { graphId: 'A' }));
-      const [a, b] = [await snapshot(adapter, 'A'), await snapshot(adapter, 'B')];
+      await write(adapter, mutation([{ op: 'deleteNode', partition: 'category', id: 'topic' }], { graphId: 'graph-a' }));
+      const [a, b] = [await snapshot(adapter, 'graph-a'), await snapshot(adapter, 'graph-b')];
       assert.deepEqual(a.categories, []);
       assert.deepEqual(a.edgesFromItems, []);
       assert.deepEqual(b.categories.map((n) => n.id), ['topic']);
@@ -59,9 +59,9 @@ const ac01 = (): ConformanceCase[] => [
     name: 'AC-01: dropping graph A leaves graph B intact',
     run: async (adapter) => {
       await both(adapter, true);
-      assert.equal((await dropGraph(adapter, 'A')).ok, true);
-      assert.deepEqual(await listGraphs(adapter), { ok: true, value: { items: ['B'], nextCursor: null } });
-      const b = await snapshot(adapter, 'B');
+      assert.equal((await dropGraph(adapter, 'graph-a')).ok, true);
+      assert.deepEqual(await listGraphs(adapter), { ok: true, value: { items: ['graph-b'], nextCursor: null } });
+      const b = await snapshot(adapter, 'graph-b');
       assert.deepEqual(b.edgesFromItems, [{ item: 'note', category: 'topic', weight: 1 }]);
       assert.deepEqual(b.items.map((n) => n.data), [{ tag: 'b' }, { tag: 'b' }]);
     },
@@ -70,10 +70,10 @@ const ac01 = (): ConformanceCase[] => [
     name: 'AC-01: a failed mutation in graph A leaves graph B untouched',
     run: async (adapter) => {
       await both(adapter, true);
-      const before = await snapshot(adapter, 'B');
-      const r = await write(adapter, mutation([upsert('item', 'note', { tag: 'changed' }), link('note', 'missing')], { graphId: 'A' }));
+      const before = await snapshot(adapter, 'graph-b');
+      const r = await write(adapter, mutation([upsert('item', 'note', { tag: 'changed' }), link('note', 'missing')], { graphId: 'graph-a' }));
       assert.equal(r.ok, false);
-      assert.deepEqual(await snapshot(adapter, 'B'), before);
+      assert.deepEqual(await snapshot(adapter, 'graph-b'), before);
     },
   },
 ];

@@ -84,3 +84,15 @@ describe('query JSON Schema', () => {
     expect(validateQuery(input)).toBe(false);
   });
 });
+
+describe('graphId rule in the published JSON Schema', () => {
+  it.each(['Graph', 'a/b', '../x', 'a.b', 'a b', 'ünï', '-a', 'x'.repeat(129), ''])('rejects %j in both formats', (graphId) => {
+    expect(validateMutation({ ...mutationExample, graphId })).toBe(false);
+    expect(validateQuery({ ...queryExamples[2], graphId })).toBe(false);
+  });
+
+  it.each(['a', 'user_42', 'a-b_c-9', 'x'.repeat(128)])('accepts %s in both formats', (graphId) => {
+    expect(validateMutation({ ...mutationExample, graphId })).toBe(true);
+    expect(validateQuery({ ...queryExamples[2], graphId })).toBe(true);
+  });
+});

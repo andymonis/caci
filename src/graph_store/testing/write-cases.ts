@@ -17,19 +17,19 @@ const ac02 = (): ConformanceCase[] => [
   {
     name: 'AC-02: a mutation on a missing graph fails with GRAPH_NOT_FOUND and writes nothing',
     run: async (adapter) => {
-      const r = await write(adapter, mutation([upsert('item', 'a')], { graphId: 'C' }));
+      const r = await write(adapter, mutation([upsert('item', 'a')], { graphId: 'new-graph' }));
       assert.ok(!r.ok);
       assert.equal(r.error.code, 'GRAPH_NOT_FOUND');
-      assert.equal(await adapter.graphs.exists('C'), false);
+      assert.equal(await adapter.graphs.exists('new-graph'), false);
       assert.deepEqual((await adapter.graphs.list(page)).items, []);
     },
   },
   {
     name: 'AC-02: createIfMissing creates the graph and applies the ops',
     run: async (adapter) => {
-      const r = await write(adapter, mutation([upsert('item', 'a', { v: 1 })], { graphId: 'C', createIfMissing: true }));
-      assert.deepEqual(r, { ok: true, value: { graphId: 'C', applied: 1, graphCreated: true } });
-      assert.deepEqual((await snapshot(adapter, 'C')).items, [{ partition: 'item', id: 'a', data: { v: 1 } }]);
+      const r = await write(adapter, mutation([upsert('item', 'a', { v: 1 })], { graphId: 'new-graph', createIfMissing: true }));
+      assert.deepEqual(r, { ok: true, value: { graphId: 'new-graph', applied: 1, graphCreated: true } });
+      assert.deepEqual((await snapshot(adapter, 'new-graph')).items, [{ partition: 'item', id: 'a', data: { v: 1 } }]);
     },
   },
 ];
@@ -73,10 +73,10 @@ const ac04 = (): ConformanceCase[] => [
   {
     name: 'AC-04: a failed mutation does not leave behind a graph it would have created',
     run: async (adapter) => {
-      const r = await write(adapter, mutation([upsert('item', 'a'), link('a', 'missing')], { graphId: 'C', createIfMissing: true }));
+      const r = await write(adapter, mutation([upsert('item', 'a'), link('a', 'missing')], { graphId: 'new-graph', createIfMissing: true }));
       assert.ok(!r.ok);
       assert.equal(r.error.code, 'NODE_NOT_FOUND');
-      assert.equal(await adapter.graphs.exists('C'), false);
+      assert.equal(await adapter.graphs.exists('new-graph'), false);
       assert.deepEqual((await adapter.graphs.list(page)).items, []);
     },
   },

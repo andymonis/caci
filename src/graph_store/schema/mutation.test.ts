@@ -72,4 +72,31 @@ describe('mutationSchema', () => {
       mutationSchema.safeParse(ops({ op: 'link', item: 'a', category: 'c', weight: Infinity })).success,
     ).toBe(false);
   });
+
+  describe('graphId character set (safe for file names)', () => {
+    const withGraphId = (graphId: unknown) => ({ ...specExample, graphId });
+
+    it.each(['a', '0', 'user_42', 'a-b_c-9', 'x'.repeat(128)])('accepts %s', (id) => {
+      expect(mutationSchema.safeParse(withGraphId(id)).success).toBe(true);
+    });
+
+    it.each([
+      ['empty', ''],
+      ['upper case', 'Graph'],
+      ['a slash', 'a/b'],
+      ['a parent path', '../x'],
+      ['a dot', 'a.b'],
+      ['a space', 'a b'],
+      ['non-ASCII text', 'ünï'],
+      ['a leading dash', '-a'],
+      ['a leading underscore', '_a'],
+      ['129 characters', 'x'.repeat(129)],
+      ['a number', 7],
+    ])('rejects %s with a path to graphId', (_name, bad) => {
+      const r = mutationSchema.safeParse(withGraphId(bad));
+      expect(r.success).toBe(false);
+      expect(r.error?.issues[0]?.path).toEqual(['graphId']);
+    });
+  });
+
 });

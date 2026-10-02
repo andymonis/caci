@@ -66,6 +66,36 @@ describe('write with a real adapter', () => {
   });
 });
 
+describe('graph id rule at the endpoints', () => {
+  it.each(['Graph', 'a/b', '../x', 'a b', 'ünï', ''])('write rejects graphId %j before touching the adapter', async (graphId) => {
+    expect(await write(untouchable, { ...mutation, graphId })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR', path: ['graphId'] },
+    });
+  });
+
+  it.each(['Graph', 'a/b', '../x', 'a b', 'ünï', ''])('query rejects graphId %j before touching the adapter', async (graphId) => {
+    expect(await query(untouchable, { ...readQuery, graphId })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR', path: ['graphId'] },
+    });
+  });
+
+  it('the client rejects bad graph ids for every graph function', async () => {
+    const client = createGraphClient(untouchable);
+    for (const call of [client.createGraph, client.dropGraph, client.describeGraph]) {
+      expect(await call('Bad Id')).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR', path: ['graphId'] } });
+    }
+  });
+
+  it('nothing is created when the graph id is not allowed, even with createIfMissing', async () => {
+    const adapter = createMemoryAdapter();
+    const r = await write(adapter, { ...mutation, graphId: 'Not Allowed', createIfMissing: true });
+    expect(r.ok).toBe(false);
+    expect((await adapter.graphs.list({ limit: 10, cursor: null })).items).toEqual([]);
+  });
+});
+
 describe('wrong endpoint (AC-20)', () => {
   it('write rejects a query with VALIDATION_ERROR', async () => {
     expect(await write(untouchable, readQuery)).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });

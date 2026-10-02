@@ -1,16 +1,23 @@
 import type { AdapterTx, Page, Paged, StorageAdapter } from './adapter.js';
+import { GRAPH_ID_PATTERN, GRAPH_ID_RULE, MAX_GRAPH_ID_LENGTH } from './graph-id.js';
 import { DEFAULT_LIMITS, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, type Limits } from './limits.js';
 import { err, graphError, ok, type GraphError, type Result } from './result.js';
 import type { GraphInfo, GraphRef } from './types.js';
 import { storageError } from './write-plan.js';
 
-/** Functional core: a graph id must be a non-empty string within the id length limit. Pure. */
+/**
+ * Functional core: a graph id must match the safe character set and stay within the length limit.
+ * Pure. See `graph-id.ts` for why graph ids are restricted.
+ */
 export function validateGraphId(graphId: unknown, limits: Pick<Limits, 'maxIdLength'> = DEFAULT_LIMITS): Result<string> {
-  if (typeof graphId !== 'string' || graphId.length === 0) {
-    return err(graphError('VALIDATION_ERROR', 'graphId must be a non-empty string', ['graphId']));
+  if (typeof graphId !== 'string') {
+    return err(graphError('VALIDATION_ERROR', `graphId must be a string: ${GRAPH_ID_RULE}`, ['graphId']));
   }
-  if (graphId.length > limits.maxIdLength) {
-    return err(graphError('VALIDATION_ERROR', `graphId exceeds ${limits.maxIdLength} characters`, ['graphId']));
+  if (graphId.length > Math.min(MAX_GRAPH_ID_LENGTH, limits.maxIdLength)) {
+    return err(graphError('VALIDATION_ERROR', `graphId is too long: ${GRAPH_ID_RULE}`, ['graphId']));
+  }
+  if (!GRAPH_ID_PATTERN.test(graphId)) {
+    return err(graphError('VALIDATION_ERROR', `graphId has characters that are not allowed: ${GRAPH_ID_RULE}`, ['graphId']));
   }
   return ok(graphId);
 }
