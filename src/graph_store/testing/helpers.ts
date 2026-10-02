@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import type { EdgeRecord, NodeRecord, StorageAdapter } from '../adapter.js';
+import type { EdgeRecord, NodeRecord, Page, Paged, StorageAdapter } from '../adapter.js';
 import { write } from '../endpoints.js';
 
 export const mutation = (ops: unknown[], extra: object = {}) => ({ version: 1, kind: 'mutation', graphId: 'g', ops, ...extra });
@@ -81,3 +81,25 @@ export function watch(adapter: StorageAdapter): { adapter: StorageAdapter; touch
   return { adapter: proxy, touched };
 }
 
+
+/**
+ * Follows keyset cursors to the end. An adapter whose cursor never advances would otherwise loop
+ * forever, so this fails the test instead of hanging the suite.
+ */
+export async function walk<T>(
+  fetchPage: (page: Page) => Promise<Paged<T>>,
+  limit: number,
+  maxPages = 5000,
+): Promise<{ items: T[]; pages: number }> {
+  const items: T[] = [];
+  let cursor: string | null = null;
+  let pages = 0;
+  do {
+    assert.ok(pages < maxPages, 'paging never finished: the cursor does not advance');
+    const result: Paged<T> = await fetchPage({ limit, cursor });
+    items.push(...result.items);
+    cursor = result.nextCursor;
+    pages += 1;
+  } while (cursor !== null);
+  return { items, pages };
+}

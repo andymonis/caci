@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import type { StorageAdapter } from '../adapter.js';
 import { write } from '../endpoints.js';
 import { createGraph, describeGraph, dropGraph, listGraphs } from '../graphs.js';
-import { link, mutation, snapshot, upsert } from './helpers.js';
+import { link, mutation, snapshot, upsert, walk } from './helpers.js';
 import type { ConformanceCase, ConformanceGroup } from './types.js';
 
 const pad = (n: number, width = 3): string => String(n).padStart(width, '0');
@@ -29,17 +29,12 @@ const populate = (graphId: string) =>
 
 /** Reads every graph id by following cursors, and how many pages that took. */
 async function allGraphIds(adapter: StorageAdapter, limit: number): Promise<{ ids: string[]; pages: number }> {
-  const ids: string[] = [];
-  let cursor: string | null = null;
-  let pages = 0;
-  do {
-    const result = await listGraphs(adapter, { limit, cursor });
+  const { items, pages } = await walk(async (page) => {
+    const result = await listGraphs(adapter, page);
     assert.ok(result.ok);
-    ids.push(...result.value.items);
-    cursor = result.value.nextCursor;
-    pages += 1;
-  } while (cursor !== null);
-  return { ids, pages };
+    return result.value;
+  }, limit);
+  return { ids: items, pages };
 }
 
 /** The edges of what a graph id may be: shortest, longest, digits only, every allowed symbol. */

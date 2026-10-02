@@ -82,11 +82,11 @@ An adapter is an object implementing `StorageAdapter` (exported from `bipartite-
 
 What every adapter must guarantee, and what the conformance suite checks:
 
-- **Atomic transactions.** If the callback passed to `transaction` throws, nothing it did persists. The core refuses to write through an adapter that reports `transactions: false`.
+- **Atomic, serialised transactions.** If the callback passed to `transaction` throws, nothing it did persists, and the adapter keeps working afterwards. Transactions on one graph run one at a time, so concurrent writers never lose each other's updates, and a transaction sees its own earlier writes. A transaction on a graph that does not exist rejects instead of creating it. The core refuses to write through an adapter that reports `transactions: false`.
 - **Isolation.** Graphs never see each other's data, even with identical node ids. Two adapters made by the same factory share nothing.
 - **Idempotent `graphs.create` and `graphs.drop`.** Creating an existing graph or dropping a missing one is a no-op; the core decides when those are errors.
 - **Replace on write.** `putNodes` and `putEdges` store the record as given, replacing any earlier one for the same key.
-- **Deterministic keyset paging.** Listings are ordered by id and use an opaque cursor that stays valid when rows are added or removed between pages.
+- **Deterministic keyset paging.** Listings are ordered by id and use an opaque cursor that stays valid when rows are added or removed between pages. A page that exactly fills the limit, with nothing after it, has no next cursor. Cursors must advance: the suite stops a listing that never ends instead of hanging.
 - **Graph ids are plain, node ids are opaque.** The core only accepts graph ids of 1 to 128 characters from lowercase letters, digits, `_` and `-`, starting with a letter or digit, so an adapter may use a graph id directly as a file name or key on any platform. Node ids may be any string up to 256 characters, including `/`, `..`, spaces and non-ASCII text, and `Item` and `item` are different nodes, so an adapter must store node ids without altering or colliding them.
 - **No aliasing.** Data handed in or out is copied, so callers cannot change stored state by mutating what they passed or received.
 

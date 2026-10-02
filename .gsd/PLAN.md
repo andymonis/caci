@@ -4,7 +4,7 @@ Format: `- [ ] T-001 (R-xxx) Imperative task title — acceptance: <how we know 
 Tasks must be atomic: one commit, one context window.
 Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipartite Graph Store — Library Specification.md`.
 
-## Current milestone: M3 Conformance suite (M0 to M2b complete)
+## Current milestone: M4 Query endpoint (M0 to M3 complete; plan it with /plan)
 
 ## M1 Contracts (spec phase 1; covers FR-15, FR-17, AC-10, AC-14, AC-16, AC-20)
 
@@ -14,7 +14,6 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 
 ## M3 Conformance suite (spec phase 3; covers AC-15 on memory)
 
-- [ ] T-028 (R-001, FR-04, FR-07, FR-14) Add a `primitives` group to the conformance suite — acceptance: idempotent `putEdges` upsert, rollback of edge writes, cascade built from `edgesOf` + `deleteEdges` + `deleteNodes`, keyset paging of nodes and edges (stable under inserts), and no aliasing of stored data are asserted for every adapter; the memory adapter's duplicate primitive tests are removed; must land before M5
 
 ## Later milestones (plan with `/plan` when M3 is done)
 - M4 Query endpoint: seeds, traversal, filters, shapes, keyset cursors, presets (AC-07..09, 13, 17..19, 21, 22)
@@ -24,13 +23,12 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - From M5 onward, "conformance suite passes on all adapters" is a standing gate item.
 
 ## Backlog
+- Hardening: the core's own paging loops (`describeGraph` counting, the `deleteNode` edge cascade, `listGraphs` callers) trust the adapter's cursor to advance. An adapter with a broken cursor would make them loop forever. The conformance suite now catches that in tests; consider also a page cap or a non-advancing-cursor check in the core so a buggy adapter fails with `STORAGE_ERROR` instead of hanging.
+- Conformance suite follow-up for M5/M6: add a case that `graphs.create` is atomic (create-if-absent reporting whether it created) once that adapter primitive is decided; see the two race items below.
 - Explorer follow-ups (optional): show a query result overlay once `query` exists (M4), and a step-back/undo for scenarios. The page has no browser-level automated test; the server, layout logic and release guards are tested and the UI was checked by hand in Chrome (build-up, removal, rejections, rollback, selection).
-- Primitive-level conformance cases: the memory adapter's own tests still cover adapter primitives that every adapter must honour (idempotent `putEdges` upsert, rollback of edge writes, cascade built from `edgesOf` + `deleteEdges` + `deleteNodes`, keyset paging, no aliasing of stored data). Promote them into the suite as a `primitives` group before the file adapter (M5), so M5 and M6 inherit them.
-- Conformance suite follow-ups: T-021 and T-022 add the write-behaviour, isolation and lifecycle groups (graph create idempotency, CONFLICT, drop removes everything). The sub-entry API reports note `StorageAdapter` as not exported from `./testing` and `./adapters/memory`; adapter authors import it from the main entry. Revisit if that proves awkward.
 - `describeGraph` counts by walking the graph inside one transaction (O(items + edges), writers to that graph wait). If it matters at scale, add an optional adapter fast path (e.g. `count()` in `AdapterTx`, SQLite `COUNT(*)`) under `capabilities`; measure in the M6 benchmark.
 - `createGraph` checks existence and then creates as two adapter calls, so two simultaneous creates of one id can both succeed instead of one getting `CONFLICT`. Same family as the `createIfMissing` item below: both want an atomic adapter primitive (create-if-absent that reports whether it created). Decide when designing the file and SQLite adapters, and make the conformance suite cover it.
 - Known limitation of `createIfMissing`: the graph is created before the transaction, so a concurrent writer that sees it and then loses the race when a failed call removes it gets a `STORAGE_ERROR`. A cleaner fix is an adapter-level "create graph and run transaction" primitive; raise it when designing the file and SQLite adapters (M5/M6) and in the conformance suite (M3).
-- For M3 conformance: include the graph-lifecycle behaviours from M2b (CONFLICT on duplicate create, drop removes everything, isolation between graphs) so every adapter proves them.
 - Decide how `ParseOptions` (limits) reach `write`, `query` and `createGraphClient`; they currently use the defaults.
 - Consider rewording AC-03 in the R-001 spec: in the v1 format a link has one `item` and one `category` field, so item–item and category–category edges are unrepresentable; the AC is satisfied by the format plus strict validation rather than by a dedicated check.
 - When `query` is implemented (M4): replace its `STORAGE_ERROR` not-implemented stub, widen the placeholder `QueryOutput`, and re-baseline the API report.
@@ -68,4 +66,5 @@ Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipar
 - [x] T-027 (R-001, FR-01) Add a `lifecycle` group to the conformance suite — acceptance: every adapter must give `CONFLICT` on a duplicate `createGraph`, have `dropGraph` remove all nodes and edges, page `listGraphs` deterministically (120 graphs over 3 pages), and report `describeGraph` counts that follow writes and cascade deletes; deliberately broken adapters are caught
 - [x] T-029 (R-001, FR-01/02) Restrict graph ids to a safe character set — acceptance: a `graphId` must be 1 to 128 characters from lowercase letters, digits, `_` and `-`, starting with a letter or digit; mutation and query schemas, `createGraph`/`dropGraph`/`describeGraph` all reject anything else with `VALIDATION_ERROR` and a `graphId` path before any adapter call; JSON Schema regenerated; node ids stay opaque; tests, suite and docs updated
 - [x] T-030 (dev tooling) Local graph explorer in `dev/graph-explorer/` — acceptance: a localhost-only web UI that shows the bipartite graph being built up and torn down as entries are added and removed (animated), lets you drive `write` and the graph functions, shows each request and result, and plays sample scenarios step by step; lives outside `src/` and the published package (`npm pack` contains nothing from `dev/`); has its own tests in the gate
+- [x] T-028 (R-001, FR-04, FR-07, FR-14) Add a `primitives` group to the conformance suite — acceptance: idempotent `putEdges` upsert, rollback of edge writes, cascade built from `edgesOf` + `deleteEdges` + `deleteNodes`, keyset paging of nodes and edges (stable under inserts), and no aliasing of stored data are asserted for every adapter; the memory adapter's duplicate primitive tests are removed; must land before M5
 - [x] T-023 (R-001, architecture) Isolate the graph store under `src/graph_store/` — acceptance: all library code, tests, entry points, generated JSON Schema and tooling paths live under or point at `graph_store`; gate green with the same 120 tests as before; spec and docs describe the layout

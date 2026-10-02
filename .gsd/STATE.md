@@ -1,7 +1,7 @@
 # State
 
-**Milestone:** M3 Conformance suite (M0 to M2b complete; only T-028 left)
-**Current task:** none (next: T-028)
+**Milestone:** M3 complete; M4 Query endpoint is next (not yet broken into tasks)
+**Current task:** none (next: plan M4 with /plan)
 **Last updated:** 2026-10-02
 
 ## Position
@@ -40,6 +40,7 @@ R-001 (Bipartite Graph Store library) is specified in `specs/` and planned throu
 - 2026-10-02 — Lifecycle group (T-027): beyond create/drop/list/describe it requires that graph and node ids are opaque and case-sensitive — any string up to 256 characters including `/`, `..`, spaces, backslashes and non-ASCII must round-trip unchanged, and `Graph` and `graph` are different graphs. This is our reading of "ids are strings" (spec silent); it exists so the file and SQLite adapters (M5/M6) must encode ids instead of using them raw as file names. Six deliberately broken adapters are caught, each by the targeted case.
 - 2026-10-02 — **Graph ids restricted (user decision, T-029)**: a `graphId` is 1 to 128 characters of `[a-z0-9_-]`, starting with a letter or digit, enforced in both schemas (and so in the published JSON Schema, which now carries the pattern), `createGraph`, `dropGraph` and `describeGraph`, always before any adapter call. Reason: graph ids become file names and keys; lowercase-only also removes case-collision on case-insensitive file systems (macOS, Windows). Strict first on purpose: loosening later is non-breaking, tightening is not. This SUPERSEDES the T-027 note that graph ids may be any string and are case-sensitive; **node ids remain opaque and case-sensitive** and the suite still requires them to round-trip. The lifecycle group now tests legal graph-id extremes and awkward node ids; two broken-adapter fixtures were replaced to match.
 - 2026-10-02 — **Graph explorer (user request, T-030)**: `dev/graph-explorer/`, a local-only visual tester. Plain Node `http` server (no new dependencies) around the real library and memory adapter, bound to 127.0.0.1 with Host/Origin/Content-Type checks and a refusal to run under NODE_ENV=production; vanilla SVG UI with animated build-up and removal, scenarios, a request/result log and one-click rejected examples. It reads graph contents through the adapter's own primitives because `query` is still a stub. Kept out of releases three ways: outside `src/` (not compiled), outside the `files` allow-list, and a test that runs `npm pack --dry-run` and fails if anything from `dev/` is in it. Run with `npm run dev:explorer`.
+- 2026-10-02 — Primitives group (T-028): the shared suite now holds the whole storage contract the core relies on — node and edge round trips, replace-on-write, copied (never shared) data, atomic and **serialised** transactions with read-your-writes, a transaction on a missing graph rejecting without creating it, cascade from `edgesOf` + `deleteEdges` + `deleteNodes`, and keyset paging (stable under inserts and deletes; a page that exactly fills the limit has a null cursor). Its first run correctly failed the fixture adapter, which did not serialise transactions; the fixture was fixed, not the case. Paging loops in the suite use a capped `walk` so a broken cursor fails a test instead of hanging. The memory adapter keeps only tests of what is specific to it; 29 deliberately broken adapters are caught, and four deliberate breaks of the memory adapter itself were each caught by the shared suite.
 - 2026-10-01 — Build order follows spec: contracts, memory adapter and write, conformance suite, then query, file, SQLite.
 
 ## Blockers / open questions

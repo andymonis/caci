@@ -12,7 +12,8 @@ import { runAdapterConformance } from './index.js';
  * one flat map filtered on demand (not two indexes), and cursors have their own format. It imports
  * nothing from the memory adapter, and the core was not touched to make it work.
  *
- * It is a test fixture, not a real backend: it does not serialise concurrent transactions.
+ * It serialises transactions with a per-graph promise chain (not the memory adapter's queue), which
+ * the conformance suite requires. It is a test fixture, not a real backend.
  */
 interface Store {
   nodes: Map<string, NodeRecord>;
@@ -61,17 +62,27 @@ function makeTx(store: Store): AdapterTx {
 
 function createSnapshotAdapter(): StorageAdapter {
   const graphs = new Map<string, Store>();
+  const tails = new Map<string, Promise<unknown>>(); // per graph: the last queued transaction
+
+  /** Runs `job` after every earlier job on this graph has finished, whether it succeeded or not. */
+  const inTurn = <T>(graphId: string, job: () => Promise<T>): Promise<T> => {
+    const run = (tails.get(graphId) ?? Promise.resolve()).then(job, job);
+    tails.set(graphId, run.catch(() => undefined));
+    return run;
+  };
+
   return {
     name: 'snapshot-fixture',
     capabilities: { transactions: true, idempotency: false, nativeSetQueries: false },
-    transaction: async (graphId, fn) => {
-      const current = graphs.get(graphId);
-      if (current === undefined) throw new Error(`no such graph: ${graphId}`);
-      const working = cloneStore(current); // snapshot; dropped if fn throws
-      const result = await fn(makeTx(working));
-      graphs.set(graphId, working);
-      return result;
-    },
+    transaction: (graphId, fn) =>
+      inTurn(graphId, async () => {
+        const current = graphs.get(graphId);
+        if (current === undefined) throw new Error(`no such graph: ${graphId}`);
+        const working = cloneStore(current); // snapshot; dropped if fn throws
+        const result = await fn(makeTx(working));
+        graphs.set(graphId, working);
+        return result;
+      }),
     graphs: {
       create: async (id) => void (graphs.has(id) || graphs.set(id, { nodes: new Map(), edges: new Map() })),
       exists: async (id) => graphs.has(id),

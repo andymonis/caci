@@ -287,10 +287,10 @@ src/graph_store/
   link-ops.ts         link / unlink: pure planning plus transactional shell
   adapter.ts          StorageAdapter / AdapterTx contract
   adapters/memory/    memory adapter (M2)
-  testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle), types
+  testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle, primitives), types
 ```
 
-Test map as of T-027 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-028 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -304,15 +304,14 @@ Test map as of T-027 (each test file sits next to the module it covers). Update 
 | `adapter.test.ts` | Adapter contract shape (type-level) |
 | `types.test.ts` | Public types stay identical to the Zod-inferred types |
 | `purity.test.ts` | NFR-02: lint rule against module-level mutable state |
-| `adapters/memory/memory-adapter.test.ts` | Memory adapter nodes and graphs (FR-04, FR-08 groundwork, AC-01 and AC-12 at adapter level): copy-on-write rollback, serialised transactions, keyset paging (FR-14, AC-09 groundwork), no aliasing |
-| `adapters/memory/memory-edges.test.ts` | Memory adapter edges: lookup from both ends, idempotent upsert (AC-06 groundwork), rollback, graph isolation, keyset paging (FR-14), and a cascade delete built from the primitives (FR-07, AC-05 groundwork) |
+| `adapters/memory/memory-adapter.test.ts` | Only what is specific to the memory adapter: its declared capabilities, a finished transaction handle being unusable, its page-limit check, code-unit id ordering, opaque cursors. Everything every adapter must do is in the shared suite. |
 | `write-plan.test.ts` | FR-02, AC-02: pure graph-resolution plan, plus the shell against a spied adapter (nothing written on `GRAPH_NOT_FOUND`, `STORAGE_ERROR` instead of throwing) |
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
 | `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation against the restricted character set (also tested in both schemas, the published JSON Schema and at the endpoints), `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
 | `graph-info.test.ts` | FR-01 (list and describe), FR-14, AC-09 groundwork: `listGraphs` keyset paging (120 graphs over 3 pages), page validation, `describeGraph` counts across page boundaries and after cascade deletes |
-| `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (`write` group), **AC-01 and AC-12** (`isolation` group), **FR-01** (`lifecycle` group: create, drop, list, describe, awkward and case-differing ids) and a smoke group; also tests the harness itself (fresh adapter per test, extra adapters on request, dispose) and that twenty-one deliberately broken adapters are caught, each by the case that targets its bug |
+| `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (`write`), **AC-01 and AC-12** (`isolation`), **FR-01** (`lifecycle`: create, drop, list, describe, id rules) and **FR-02 to FR-08, FR-14** (`primitives`: the storage contract the core relies on, namely node and edge round trips, replace-on-write, no aliasing, atomic and serialised transactions, cascade from primitives, keyset paging) plus a smoke group; also tests the harness itself and that twenty-nine deliberately broken adapters are caught, each by the case that targets its bug |
 | `testing/alternative-adapter.test.ts` | **AC-15**: an independently written adapter (snapshot and restore, its own cursor format) passes the same suite and works end to end through the client, with no core changes |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |

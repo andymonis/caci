@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryAdapter } from '../adapters/memory/index.js';
-import type { AdapterTx, StorageAdapter } from '../adapter.js';
+import type { AdapterTx, NodeRecord, StorageAdapter } from '../adapter.js';
 import { conformanceGroups } from './cases.js';
 import type { ConformanceCase } from './types.js';
 import { runAdapterConformance, type TestApi } from './index.js';
@@ -383,6 +383,116 @@ describe('the lifecycle group catches adapters that get graph lifecycle wrong', 
       }
       expect(failures).toBe(0);
     }
+  });
+});
+
+/** Adapters whose graphs and basic round trips work, but that break the storage contract the core relies on. */
+function brokenForPrimitives(): Array<[string, () => StorageAdapter]> {
+  const wrapTx = (patch: (tx: AdapterTx) => Partial<AdapterTx>): StorageAdapter => {
+    const real = createMemoryAdapter();
+    return { ...real, transaction: (graphId, fn) => real.transaction(graphId, (tx) => fn({ ...tx, ...patch(tx) })) };
+  };
+  return [
+    ['deleteEdges silently does nothing', () => wrapTx(() => ({ deleteEdges: async () => {} }))],
+    ['getNodes returns nodes in storage order instead of request order', () =>
+      wrapTx((tx) => ({ getNodes: async (p, ids) => (await tx.getNodes(p, [...ids].sort())).reverse() }))],
+    ['putNodes merges into the existing record instead of replacing it', () =>
+      wrapTx((tx) => ({
+        putNodes: async (nodes) => {
+          const merged: NodeRecord[] = [];
+          for (const n of nodes) {
+            const [old] = await tx.getNodes(n.partition, [n.id]);
+            merged.push(old?.data === undefined && n.data === undefined ? n : { ...n, data: { ...old?.data, ...n.data } });
+          }
+          await tx.putNodes(merged);
+        },
+      }))],
+    ['edgesOf is not ordered by the other end\'s id', () =>
+      wrapTx((tx) => ({
+        edgesOf: async (p, id, page) => {
+          const all = await tx.edgesOf(p, id, { limit: 1000, cursor: null });
+          return { items: [...all.items].reverse().slice(0, page.limit), nextCursor: null };
+        },
+      }))],
+    ['a page that exactly fills the limit still returns a next cursor', () =>
+      wrapTx((tx) => ({
+        listNodes: async (p, page) => {
+          const r = await tx.listNodes(p, page);
+          const last = r.items.at(-1);
+          return { items: r.items, nextCursor: r.nextCursor ?? (r.items.length === page.limit && last ? 'x' : null) };
+        },
+      }))],
+    ['transactions are not serialised and cannot see their own writes', () => {
+      const real = createMemoryAdapter();
+      return {
+        ...real,
+        transaction: async (graphId, fn) => {
+          const writes: Array<(tx: AdapterTx) => Promise<void>> = [];
+          const read = <T>(f: (tx: AdapterTx) => Promise<T>) => real.transaction(graphId, f);
+          const result = await fn({
+            getNodes: (p, ids) => read((tx) => tx.getNodes(p, ids)),
+            listNodes: (p, page) => read((tx) => tx.listNodes(p, page)),
+            edgesOf: (p, id, page) => read((tx) => tx.edgesOf(p, id, page)),
+            putNodes: async (nodes) => void writes.push((tx) => tx.putNodes(nodes)),
+            deleteNodes: async (p, ids) => void writes.push((tx) => tx.deleteNodes(p, ids)),
+            putEdges: async (edges) => void writes.push((tx) => tx.putEdges(edges)),
+            deleteEdges: async (keys) => void writes.push((tx) => tx.deleteEdges(keys)),
+          });
+          await real.transaction(graphId, async (tx) => {
+            for (const w of writes) await w(tx);
+          });
+          return result;
+        },
+      };
+    }],
+    ['a transaction on a missing graph quietly creates it', () => {
+      const real = createMemoryAdapter();
+      return {
+        ...real,
+        transaction: async (graphId, fn) => {
+          await real.graphs.create(graphId);
+          return real.transaction(graphId, fn);
+        },
+      };
+    }],
+    ['stored node data is the caller\'s own object', () => {
+      const real = createMemoryAdapter();
+      const kept = new Map<string, NodeRecord>();
+      return {
+        ...real,
+        transaction: (graphId, fn) =>
+          real.transaction(graphId, (tx) =>
+            fn({
+              ...tx,
+              putNodes: async (nodes) => {
+                for (const n of nodes) kept.set(`${n.partition}:${n.id}`, n);
+                await tx.putNodes(nodes);
+              },
+              getNodes: async (p, ids) => ids.flatMap((id) => (kept.has(`${p}:${id}`) ? [kept.get(`${p}:${id}`) as NodeRecord] : [])),
+            }),
+          ),
+      };
+    }],
+  ];
+}
+
+describe('the primitives group catches adapters that break the storage contract', () => {
+  const primitives = () => conformanceGroups().find((g) => g.name === 'primitives')?.cases ?? [];
+
+  it.each(brokenForPrimitives())('%s', async (_name, makeBroken) => {
+    const failed: string[] = [];
+    for (const testCase of primitives()) {
+      try {
+        await runCase(testCase, makeBroken);
+      } catch {
+        failed.push(testCase.name);
+      }
+    }
+    expect(failed.length).toBeGreaterThan(0);
+  });
+
+  it('passes every primitives case on the memory adapter', async () => {
+    for (const testCase of primitives()) await expect(runCase(testCase, createMemoryAdapter)).resolves.toBeUndefined();
   });
 });
 
