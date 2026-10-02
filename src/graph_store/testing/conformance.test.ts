@@ -1,0 +1,163 @@
+import { describe, expect, it } from 'vitest';
+import { createMemoryAdapter } from '../adapters/memory/index.js';
+import type { AdapterTx, StorageAdapter } from '../adapter.js';
+import { conformanceGroups } from './cases.js';
+import { runAdapterConformance, type TestApi } from './index.js';
+
+// The real thing: the memory adapter must pass the whole suite, run through Vitest itself.
+runAdapterConformance(() => createMemoryAdapter(), { describe, it });
+
+/** A runner that records what the harness registers, and can execute it afterwards. */
+function recordingRunner() {
+  const names: string[] = [];
+  const bodies: Array<() => Promise<void> | void> = [];
+  const stack: string[] = [];
+  const api: TestApi = {
+    describe: (name, body) => {
+      stack.push(name);
+      body();
+      stack.pop();
+    },
+    it: (name, body) => {
+      names.push([...stack, name].join(' > '));
+      bodies.push(body);
+    },
+  };
+  return {
+    api,
+    names,
+    bodies,
+    runAll: async () => { for (const body of bodies) await body(); },
+  };
+}
+
+describe('runAdapterConformance (the harness itself)', () => {
+  it('registers every case under adapter conformance > group > case', () => {
+    const { api, names } = recordingRunner();
+    runAdapterConformance(() => createMemoryAdapter(), api);
+    const expected = conformanceGroups().flatMap((g) => g.cases.map((c) => `adapter conformance > ${g.name} > ${c.name}`));
+    expect(names).toEqual(expected);
+    expect(names.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('creates a fresh adapter for every test and disposes each one', async () => {
+    const made: StorageAdapter[] = [];
+    const disposed: StorageAdapter[] = [];
+    const { api, names, runAll } = recordingRunner();
+    runAdapterConformance(
+      () => {
+        const adapter = createMemoryAdapter();
+        made.push(adapter);
+        return adapter;
+      },
+      api,
+      { dispose: (adapter) => void disposed.push(adapter) },
+    );
+    await runAll();
+    expect(made).toHaveLength(names.length);
+    expect(new Set(made).size).toBe(made.length);
+    expect(disposed).toEqual(made);
+  });
+
+  it('accepts an async factory and an async dispose', async () => {
+    let disposals = 0;
+    const { api, runAll } = recordingRunner();
+    runAdapterConformance(async () => createMemoryAdapter(), api, {
+      dispose: async () => {
+        disposals += 1;
+      },
+    });
+    await runAll();
+    expect(disposals).toBeGreaterThan(0);
+  });
+
+  it('disposes after every test, including the ones that fail, and still reports the failure', async () => {
+    let disposals = 0;
+    const real = createMemoryAdapter();
+    const broken: StorageAdapter = { ...real, graphs: { ...real.graphs, exists: async () => true } };
+    const runner = recordingRunner();
+    runAdapterConformance(() => broken, runner.api, { dispose: () => void (disposals += 1) });
+
+    let failures = 0;
+    for (const body of runner.bodies) {
+      try {
+        await body();
+      } catch {
+        failures += 1;
+      }
+    }
+    expect(failures).toBeGreaterThan(0);
+    expect(disposals).toBe(runner.bodies.length); // a dispose for every test, passing or failing
+  });
+});
+
+/** The memory adapter with one behaviour broken. The suite must notice each of these. */
+function brokenAdapters(): Array<[string, () => StorageAdapter]> {
+  const wrapTx = (real: StorageAdapter, patch: (tx: AdapterTx) => Partial<AdapterTx>): StorageAdapter => ({
+    ...real,
+    transaction: (graphId, fn) => real.transaction(graphId, (tx) => fn({ ...tx, ...patch(tx) })),
+  });
+  return [
+    ['graphs.exists always says yes', () => {
+      const r = createMemoryAdapter();
+      return { ...r, graphs: { ...r.graphs, exists: async () => true } };
+    }],
+    ['graphs.drop does nothing', () => {
+      const r = createMemoryAdapter();
+      return { ...r, graphs: { ...r.graphs, drop: async () => {} } };
+    }],
+    ['graphs.list is always empty', () => {
+      const r = createMemoryAdapter();
+      return { ...r, graphs: { ...r.graphs, list: async () => ({ items: [], nextCursor: null }) } };
+    }],
+    ['putNodes silently stores nothing', () => wrapTx(createMemoryAdapter(), () => ({ putNodes: async () => {} }))],
+    ['getNodes finds nothing', () => wrapTx(createMemoryAdapter(), () => ({ getNodes: async () => [] }))],
+    ['edgesOf from a category finds nothing', () =>
+      wrapTx(createMemoryAdapter(), (tx) => ({
+        edgesOf: (p, id, page) => (p === 'category' ? Promise.resolve({ items: [], nextCursor: null }) : tx.edgesOf(p, id, page)),
+      }))],
+    ['a failed transaction still commits', () => {
+      const real = createMemoryAdapter();
+      return {
+        ...real,
+        transaction: async (graphId, fn) => {
+          let failure: unknown;
+          const result = await real.transaction(graphId, async (tx) => {
+            try {
+              return await fn(tx);
+            } catch (error) {
+              failure = error; // swallow, so the adapter commits the partial work
+              return undefined as never;
+            }
+          });
+          if (failure !== undefined) throw failure;
+          return result;
+        },
+      };
+    }],
+    ['capabilities are not booleans', () => ({ ...createMemoryAdapter(), capabilities: { transactions: 'yes' } as never })],
+    ['an empty name', () => ({ ...createMemoryAdapter(), name: '' })],
+  ];
+}
+
+describe('the suite catches broken adapters', () => {
+  it.each(brokenAdapters())('%s', async (_name, makeBroken) => {
+    const failures: string[] = [];
+    for (const group of conformanceGroups()) {
+      for (const testCase of group.cases) {
+        try {
+          await testCase.run(makeBroken());
+        } catch {
+          failures.push(testCase.name);
+        }
+      }
+    }
+    expect(failures.length).toBeGreaterThan(0);
+  });
+
+  it('passes every case on the unbroken memory adapter', async () => {
+    for (const group of conformanceGroups()) {
+      for (const testCase of group.cases) await expect(testCase.run(createMemoryAdapter())).resolves.toBeUndefined();
+    }
+  });
+});
