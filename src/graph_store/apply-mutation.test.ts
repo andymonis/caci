@@ -164,21 +164,7 @@ describe('write: applying a mutation', () => {
   });
 });
 
-describe('write: atomicity (FR-08, AC-04)', () => {
-  it('leaves the store unchanged when op 4 of 5 fails', async () => {
-    const adapter = await seeded();
-    const before = await snapshot(adapter);
-    const r = await write(adapter, mutation([
-      upsert('item', 'n1', { title: 'changed' }), // 1: modifies existing data
-      upsert('item', 'brand-new'), // 2: creates
-      { op: 'deleteNode', partition: 'category', id: 'work' }, // 3: deletes with cascade
-      link('n2', 'nonexistent'), // 4: fails, category missing
-      upsert('item', 'never-reached'), // 5
-    ]));
-    expect(r).toMatchObject({ ok: false, error: { code: 'NODE_NOT_FOUND', path: ['ops', 3, 'category'] } });
-    expect(await snapshot(adapter)).toEqual(before);
-  });
-
+describe('write: atomicity (FR-08; AC-04 is in the conformance suite)', () => {
   it('reports the first failing op, with its index in the path', async () => {
     const adapter = await seeded();
     const r = await write(adapter, mutation([upsert('item', 'x'), link('ghost', 'work'), link('n1', 'ghost')]));
@@ -213,15 +199,7 @@ describe('write: atomicity (FR-08, AC-04)', () => {
   });
 });
 
-describe('write: graph resolution (FR-02, AC-02)', () => {
-  it('fails with GRAPH_NOT_FOUND and writes nothing for a missing graph', async () => {
-    const { adapter, calls } = spied();
-    const r = await write(adapter, mutation([upsert('item', 'a')], { graphId: 'C' }));
-    expect(r).toMatchObject({ ok: false, error: { code: 'GRAPH_NOT_FOUND' } });
-    expect(calls).toEqual({ create: [], drop: [], transaction: [], exists: ['C'] });
-    expect(await adapter.graphs.exists('C')).toBe(false);
-  });
-
+describe('write: graph resolution (FR-02; AC-02 is in the conformance suite)', () => {
   it('creates the graph when createIfMissing is set', async () => {
     const adapter = createMemoryAdapter();
     const r = await write(adapter, mutation([upsert('item', 'a')], { graphId: 'C', createIfMissing: true }));
@@ -281,18 +259,8 @@ describe('write: graph resolution (FR-02, AC-02)', () => {
   });
 });
 
-describe('write: validation never reaches the adapter (AC-03, AC-10, AC-14)', () => {
+describe('write: invalid input never reaches the adapter (AC-10, AC-14; AC-03 is in the conformance suite)', () => {
   const untouchable = new Proxy({}, { get() { throw new Error('adapter was touched'); } }) as StorageAdapter;
-
-  it.each([
-    ['an item-item link (items list)', { op: 'link', items: ['a', 'b'] }],
-    ['a category-category link (from/to)', { op: 'link', from: { partition: 'category', id: 'a' }, to: { partition: 'category', id: 'b' } }],
-    ['a link with a second item key', { op: 'link', item: 'a', item2: 'b' }],
-  ])('rejects %s with VALIDATION_ERROR and an ops path, adapter untouched', async (_name, bad) => {
-    const r = await write(untouchable, mutation([upsert('item', 'ok'), bad]));
-    expect(r).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
-    if (!r.ok) expect(r.error.path?.slice(0, 2)).toEqual(['ops', 1]);
-  });
 
   it('rejects an unknown version and malformed input without any adapter call', async () => {
     expect(await write(untouchable, { ...mutation([]), version: 9 })).toMatchObject({ error: { code: 'UNSUPPORTED_VERSION' } });

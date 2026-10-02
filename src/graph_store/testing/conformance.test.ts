@@ -140,6 +140,58 @@ function brokenAdapters(): Array<[string, () => StorageAdapter]> {
   ];
 }
 
+/**
+ * Adapters whose primitives look fine to the smoke group but break write behaviour. Each must be
+ * caught by the named AC case, which shows the write group adds detection the smoke group lacks.
+ */
+function brokenForWrite(): Array<[string, RegExp, () => StorageAdapter]> {
+  const wrapTx = (patch: (tx: AdapterTx) => Partial<AdapterTx>): StorageAdapter => {
+    const real = createMemoryAdapter();
+    return { ...real, transaction: (graphId, fn) => real.transaction(graphId, (tx) => fn({ ...tx, ...patch(tx) })) };
+  };
+  return [
+    ['deleteEdges does nothing, so deleting a node leaves orphan edges', /AC-05/, () => wrapTx(() => ({ deleteEdges: async () => {} }))],
+    ['putEdges keeps the first edge instead of replacing it', /AC-06/, () =>
+      wrapTx((tx) => ({
+        putEdges: async (edges) => {
+          const fresh: typeof edges = [];
+          for (const e of edges) {
+            const existing = (await tx.edgesOf('item', e.item, { limit: 1000, cursor: null })).items;
+            if (!existing.some((x) => x.category === e.category)) fresh.push(e);
+          }
+          await tx.putEdges(fresh);
+        },
+      }))],
+    ['graphs.drop does nothing, so a failed create-if-missing leaves a graph behind', /AC-04/, () => {
+      const r = createMemoryAdapter();
+      return { ...r, graphs: { ...r.graphs, drop: async () => {} } };
+    }],
+  ];
+}
+
+describe('the write group catches write-specific adapter bugs', () => {
+  it.each(brokenForWrite())('%s', async (_name, expected, makeBroken) => {
+    const failed: string[] = [];
+    for (const testCase of conformanceGroups().find((g) => g.name === 'write')?.cases ?? []) {
+      try {
+        await testCase.run(makeBroken());
+      } catch {
+        failed.push(testCase.name);
+      }
+    }
+    expect(failed.some((name) => expected.test(name))).toBe(true);
+  });
+
+  it('the smoke group alone would miss the deleteEdges bug', async () => {
+    const smoke = conformanceGroups().find((g) => g.name === 'smoke')?.cases ?? [];
+    const noDeleteEdges = (): StorageAdapter => {
+      const real = createMemoryAdapter(); // fresh per case, like the harness
+      return { ...real, transaction: (graphId, fn) => real.transaction(graphId, (tx) => fn({ ...tx, deleteEdges: async () => {} })) };
+    };
+    for (const testCase of smoke) await expect(testCase.run(noDeleteEdges())).resolves.toBeUndefined();
+  });
+});
+
 describe('the suite catches broken adapters', () => {
   it.each(brokenAdapters())('%s', async (_name, makeBroken) => {
     const failures: string[] = [];

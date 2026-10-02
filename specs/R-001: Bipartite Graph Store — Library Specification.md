@@ -290,7 +290,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3): harness, case groups, types
 ```
 
-Test map as of T-020 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-021 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -312,11 +312,11 @@ Test map as of T-020 (each test file sits next to the module it covers). Update 
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
 | `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation, `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
 | `graph-info.test.ts` | FR-01 (list and describe), FR-14, AC-09 groundwork: `listGraphs` keyset paging (120 graphs over 3 pages), page validation, `describeGraph` counts across page boundaries and after cascade deletes |
-| `testing/conformance.test.ts` | AC-15 groundwork: the memory adapter passes the suite run through Vitest; the harness makes a fresh adapter per test and disposes each; nine deliberately broken adapters are all caught |
+| `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (the `write` group in `testing/write-cases.ts`) plus a smoke group; also tests the harness itself (fresh adapter per test, dispose) and that twelve deliberately broken adapters are caught |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |
 
-Not yet covered (arrive with later milestones): AC-01 and AC-12 through the public endpoints, AC-07 to AC-09, AC-11, AC-13, AC-15 (full), AC-17 to AC-19, AC-22, and the behaviour behind FR-01, FR-09 to FR-14, FR-16 and FR-18 to FR-21. AC-02 to AC-06 pass on the memory adapter only; M3 moves them into the shared conformance suite.
+Not yet covered (arrive with later milestones): AC-01 and AC-12 through the public endpoints, AC-07 to AC-09, AC-11, AC-13, AC-15 (full), AC-17 to AC-19, AC-22, and the behaviour behind FR-01, FR-09 to FR-14, FR-16 and FR-18 to FR-21. AC-02 to AC-06 now live in the shared conformance suite, so every future adapter has to pass them; they currently run against the memory adapter only.
 
 ## Non-functional requirements
 

@@ -119,24 +119,6 @@ describe('applyUpsertNode (shell)', () => {
 });
 
 describe('applyDeleteNode (shell, cascade)', () => {
-  it('deleting a category linked to 3 items leaves no orphan edges (AC-05)', async () => {
-    const adapter = await adapterWithGraph();
-    await run(adapter, async (tx) => {
-      await tx.putNodes([node('category', 'work'), node('category', 'keep'), ...['i1', 'i2', 'i3'].map((id) => node('item', id))]);
-      await tx.putEdges([edge('i1', 'work'), edge('i2', 'work'), edge('i3', 'work'), edge('i1', 'keep')]);
-    });
-
-    await run(adapter, (tx) => applyDeleteNode(tx, del('category', 'work')));
-
-    expect(await getNode(adapter, 'category', 'work')).toEqual([]);
-    for (const id of ['i1', 'i2', 'i3']) {
-      expect((await edgesOf(adapter, 'item', id)).map((e) => e.category)).not.toContain('work');
-    }
-    expect(await edgesOf(adapter, 'category', 'work')).toEqual([]);
-    expect(await edgesOf(adapter, 'item', 'i1')).toEqual([edge('i1', 'keep')]);
-    expect(await getNode(adapter, 'item', 'i1')).toHaveLength(1);
-  });
-
   it('deleting an item removes its edges from the category side too', async () => {
     const adapter = await adapterWithGraph();
     await run(adapter, async (tx) => {

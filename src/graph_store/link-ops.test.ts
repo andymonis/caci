@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryAdapter } from './adapters/memory/index.js';
 import type { EdgeRecord, NodeRecord, StorageAdapter } from './adapter.js';
 import { applyLink, applyUnlink, planLink, planLinkEndpoints, type LinkOp, type UnlinkOp } from './link-ops.js';
-import { parseMutation } from './parse.js';
 import type { Result } from './result.js';
 
 const link = (over: Partial<LinkOp> = {}): LinkOp => ({
@@ -79,15 +78,6 @@ describe('applyLink (shell)', () => {
     expect(await run(adapter, (tx) => applyLink(tx, link({ weight: 0.8 })))).toEqual({ ok: true, value: undefined });
     expect(await edgesOf(adapter, 'item', 'i')).toEqual([{ item: 'i', category: 'c', weight: 0.8 }]);
     expect(await edgesOf(adapter, 'category', 'c')).toEqual([{ item: 'i', category: 'c', weight: 0.8 }]);
-  });
-
-  it('is idempotent: linking twice leaves one edge with the latest weight (AC-06)', async () => {
-    const adapter = await adapterWithGraph();
-    await seed(adapter, node('item', 'i'), node('category', 'c'));
-    await run(adapter, (tx) => applyLink(tx, link({ weight: 1 })));
-    await run(adapter, (tx) => applyLink(tx, link({ weight: 5 })));
-    expect(await edgesOf(adapter, 'item', 'i')).toEqual([{ item: 'i', category: 'c', weight: 5 }]);
-    expect(await edgesOf(adapter, 'category', 'c')).toHaveLength(1);
   });
 
   it('keeps a weight of 0 as the latest value', async () => {
@@ -187,25 +177,3 @@ describe('applyUnlink (shell)', () => {
   });
 });
 
-describe('AC-03: an edge must join one item and one category', () => {
-  const mutationWith = (...ops: unknown[]) => ({ version: 1, kind: 'mutation', graphId: 'g', ops });
-  const ok1 = { op: 'upsertNode', partition: 'item', id: 'a' };
-
-  it.each([
-    ['two items (items list)', { op: 'link', items: ['a', 'b'] }],
-    ['two items (from/to)', { op: 'link', from: { partition: 'item', id: 'a' }, to: { partition: 'item', id: 'b' } }],
-    ['two categories (categories list)', { op: 'link', categories: ['x', 'y'] }],
-    ['two items (extra item2 key)', { op: 'link', item: 'a', item2: 'b' }],
-    ['two categories (extra category2 key)', { op: 'link', category: 'x', category2: 'y' }],
-    ['an item and a category plus a partition override', { op: 'link', item: 'a', category: 'b', partition: 'item' }],
-    ['unlink with two items', { op: 'unlink', item: 'a', items: ['b'] }],
-  ])('rejects %s with VALIDATION_ERROR and a path to the op', (_name, bad) => {
-    const r = parseMutation(mutationWith(ok1, bad));
-    expect(r).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
-    if (!r.ok) expect(r.error.path?.slice(0, 2)).toEqual(['ops', 1]);
-  });
-
-  it('accepts the one valid shape: an item and a category', () => {
-    expect(parseMutation(mutationWith({ op: 'link', item: 'a', category: 'x' })).ok).toBe(true);
-  });
-});

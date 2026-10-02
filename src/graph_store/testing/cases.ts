@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import type { AdapterTx, EdgeRecord, NodeRecord, StorageAdapter } from '../adapter.js';
 import type { ConformanceCase, ConformanceGroup } from './types.js';
+import { writeGroup } from './write-cases.js';
 
 const first = { limit: 1000, cursor: null };
 const item = (id: string): NodeRecord => ({ partition: 'item', id });
@@ -91,5 +92,5 @@ const smokeCases = (): ConformanceCase[] => [
 
 /** Every behaviour an adapter must have, grouped for reporting. Groups are added as the suite grows. */
 export function conformanceGroups(): ConformanceGroup[] {
-  return [{ name: 'smoke', cases: smokeCases() }];
+  return [{ name: 'smoke', cases: smokeCases() }, writeGroup()];
 }

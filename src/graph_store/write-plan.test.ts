@@ -59,15 +59,6 @@ function spied() {
 }
 
 describe('resolveGraph (shell)', () => {
-  it('missing graph without createIfMissing: GRAPH_NOT_FOUND and nothing is written (AC-02)', async () => {
-    const { adapter, calls } = spied();
-    const r = await resolveGraph(adapter, { graphId: 'C', createIfMissing: false });
-    expect(r).toMatchObject({ ok: false, error: { code: 'GRAPH_NOT_FOUND' } });
-    expect(calls).toEqual({ create: [], drop: [], transaction: [] });
-    expect(await adapter.graphs.exists('C')).toBe(false);
-    expect((await adapter.graphs.list({ limit: 10, cursor: null })).items).toEqual([]);
-  });
-
   it('missing graph with createIfMissing: creates it and reports created', async () => {
     const { adapter, calls } = spied();
     const r = await resolveGraph(adapter, { graphId: 'C', createIfMissing: true });

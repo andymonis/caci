@@ -51,7 +51,7 @@ describe('memory adapter: edges', () => {
 });
 
 describe('memory adapter: put is an idempotent upsert', () => {
-  it('stores one edge when the same link is put twice, latest weight wins (AC-06)', async () => {
+  it('stores one edge when the same link is put twice, latest weight wins (adapter primitive; AC-06 itself is in the conformance suite)', async () => {
     const adapter = await adapterWithGraph();
     await adapter.transaction('g', (tx) => tx.putEdges([edge('a', 'c', { weight: 1 })]));
     await adapter.transaction('g', (tx) => tx.putEdges([edge('a', 'c', { weight: 5 })]));
@@ -116,7 +116,7 @@ describe('memory adapter: delete', () => {
 });
 
 describe('memory adapter: edge transactions and isolation', () => {
-  it('rolls edges back when the callback throws (AC-04 groundwork)', async () => {
+  it('rolls edges back when the callback throws (adapter primitive)', async () => {
     const adapter = await adapterWithGraph();
     await adapter.transaction('g', (tx) => tx.putEdges([edge('keep', 'c')]));
     await expect(
@@ -204,7 +204,7 @@ describe('memory adapter: edge paging', () => {
   });
 });
 
-describe('memory adapter: cascade built from the primitives (FR-07, AC-05 groundwork)', () => {
+describe('memory adapter: cascade built from the primitives (adapter primitives for FR-07)', () => {
   it('deleting a category via edgesOf + deleteEdges + deleteNodes leaves no orphan edges', async () => {
     const adapter = await adapterWithGraph();
     await adapter.transaction('g', async (tx) => {
