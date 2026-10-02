@@ -5,13 +5,16 @@ C4Container
     System_Ext(System_llm, "LLM", "Answers questions and categorises information using CaCi context.")
 
     Enterprise_Boundary(caci_platform, "CaCi Platform") {
-        Container(caci_app, "CaCi Application", "Node.js", "Serves customer workflows and asks questions using graph context.")
+        Container(caci_app, "CaCi Application", "Node.js", "Serves customer workflows, controls capture (preview then approve) and asks questions using graph context. Code: src/app.")
+        Container(llm_adapter, "LLM Component", "TypeScript", "One method per capability, starting with categorise(): turns input into a proposed graph mutation under guardrails. The model is configurable per capability and sits behind a port. Code: src/llm.")
         Container(graph_store, "Bipartite Graph Store", "TypeScript library", "Stateless core that validates and plans graph reads and mutations. Code: src/graph_store.")
         Container(storage_adapter, "Storage Adapter", "TypeScript", "Executes storage primitives behind the graph-store adapter interface. Code: src/graph_store/adapters.")
         ContainerDb(caci_db, "CaCi Operational Store", "SQLite", "Persists isolated bipartite graphs, nodes and edges.")
     }
 
     Rel(customerA, caci_app, "Uses")
+    Rel(caci_app, llm_adapter, "Sends input to categorise; shows the proposal for approval")
+    Rel(llm_adapter, System_llm, "Asks for a structured categorisation")
     Rel(caci_app, graph_store, "Calls write and query")
     Rel(caci_app, System_llm, "Requests answers with graph context")
     Rel(graph_store, storage_adapter, "Executes validated storage plans")

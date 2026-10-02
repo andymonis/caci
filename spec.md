@@ -67,12 +67,20 @@ Mapping from the container diagram to the code base:
 | Storage Adapter | `src/graph_store/adapters/<name>/` (adapters ship as entry points of the library, per the R-001 spec, so they sit inside the graph store folder) |
 | Adapter conformance suite | `src/graph_store/testing/` |
 | CaCi Operational Store (SQLite) | provided by the SQLite adapter (M6); no code outside the adapter |
-| CaCi Application | not started; will be a sibling of `src/graph_store/` |
+| LLM component (the LLM adapter) | `src/llm/` (planned, L1 and L2): `createLlm({ client, config })` returns one method per capability, today `categorise()`, so new capabilities can be added beside it; the model is configurable per capability through tiers (`fast`, `balanced`, `deep`), and model access sits behind a `ModelClient` port, with the real Anthropic client as its own entry point |
+| CaCi Application (the controller) | `src/app/` (planned, A1): takes input, reads graph context, asks the categoriser, shows a preview, and writes only after approval |
+
+The graph store knows nothing about the LLM, and the LLM component knows nothing about storage: only the controller connects them.
 
 Generated JSON Schema for the instruction formats is published under `schema/graph_store/`.
 
+Local-only development tools live under `dev/` and are never published: `dev/graph-explorer/` (built) and `dev/llm-lab/` (planned, T-052).
+
 ## 8. Milestones
-- M1:
+- **Done:** M0 foundations, M1 contracts, M2 write path and memory adapter, M2b graph lifecycle, M3 conformance suite (see `.gsd/PLAN.md` for the task history).
+- **Next, in order:** M4a core reads, then L1 the LLM categoriser core, A1 the controller with preview-then-approve, L2 the real Anthropic client, A1b capture in the explorer.
+- **After that:** M4b matching and presets, M5 file adapter, M6 SQLite adapter, M7 export/import and packaging, then picture and voice input and question answering.
+- **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
 
 GSD planning reference: [Bipartite Graph Store library specification](specs/R-001:%20Bipartite%20Graph%20Store%20%E2%80%94%20Library%20Specification.md#suggested-gsd-phase-breakdown).
 
