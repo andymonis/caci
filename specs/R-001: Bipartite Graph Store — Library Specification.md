@@ -319,10 +319,10 @@ src/graph_store/
   link-ops.ts         link / unlink: pure planning plus transactional shell
   adapter.ts          StorageAdapter / AdapterTx contract
   adapters/memory/    memory adapter (M2)
-  testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle, primitives), types
+  testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle, primitives, reads), types
 ```
 
-Test map as of T-036 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-037 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -349,7 +349,7 @@ Test map as of T-036 (each test file sits next to the module it covers). Update 
 | `query-order.test.ts`, `query-cursor.test.ts` | FR-14, NFR-04: the fixed result order, and query cursors (round trip, bound to their query, corrupted, edited, foreign and garbage cursors all refused, never throwing) |
 | `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation against the restricted character set (also tested in both schemas, the published JSON Schema and at the endpoints), `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
 | `graph-info.test.ts` | FR-01 (list and describe), FR-14, AC-09 groundwork: `listGraphs` keyset paging (120 graphs over 3 pages), page validation, `describeGraph` counts across page boundaries and after cascade deletes |
-| `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (`write`), **AC-01 and AC-12** (`isolation`), **FR-01** (`lifecycle`: create, drop, list, describe, id rules) and **FR-02 to FR-08, FR-14** (`primitives`: the storage contract the core relies on, namely node and edge round trips, replace-on-write, no aliasing, atomic and serialised transactions, cascade from primitives, keyset paging) plus a smoke group; also tests the harness itself and that twenty-nine deliberately broken adapters are caught, each by the case that targets its bug |
+| `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (`write`), **AC-01 and AC-12** (`isolation`), **FR-01** (`lifecycle`: create, drop, list, describe, id rules) **FR-02 to FR-08, FR-14** (`primitives`: the storage contract the core relies on, namely node and edge round trips, replace-on-write, no aliasing, atomic and serialised transactions, cascade from primitives, keyset paging) and **AC-09, 13, 17, 19, 21, 22** with FR-14 and FR-18 to FR-21 (`reads`: `query()` end to end on the adapter's own data, including ordering by UTF-16 code unit) plus a smoke group; also tests the harness itself and that thirty-five deliberately broken adapters are caught, each by the case that targets its bug |
 | `testing/alternative-adapter.test.ts` | **AC-15**: an independently written adapter (snapshot and restore, its own cursor format) passes the same suite and works end to end through the client, with no core changes |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |

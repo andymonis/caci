@@ -496,6 +496,77 @@ describe('the primitives group catches adapters that break the storage contract'
   });
 });
 
+/** Adapters that store and list plausibly, but read wrongly. Each must be caught by the reads group. */
+function brokenForReads(): Array<[string, () => StorageAdapter]> {
+  const wrapTx = (patch: (tx: AdapterTx) => Partial<AdapterTx>): StorageAdapter => {
+    const real = createMemoryAdapter();
+    return { ...real, transaction: (graphId, fn) => real.transaction(graphId, (tx) => fn({ ...tx, ...patch(tx) })) };
+  };
+  const everything = async (tx: AdapterTx, p: 'item' | 'category') => (await tx.listNodes(p, { limit: 1_000_000, cursor: null })).items;
+  return [
+    ['listings come back in the wrong order (each page reversed)', () =>
+      wrapTx((tx) => ({
+        listNodes: async (p, page) => {
+          const r = await tx.listNodes(p, page);
+          return { items: [...r.items].reverse(), nextCursor: r.nextCursor };
+        },
+      }))],
+    ['a listing cursor repeats the last row of the page before', () =>
+      wrapTx((tx) => ({
+        listNodes: async (p, page) => {
+          const all = await everything(tx, p);
+          const start = page.cursor === null ? 0 : Number(page.cursor);
+          const end = Math.min(all.length, start + Math.min(page.limit, 50));
+          return { items: all.slice(start, end), nextCursor: end < all.length ? String(end - 1) : null };
+        },
+      }))],
+    ['a read quietly writes a marker node', () =>
+      wrapTx((tx) => ({
+        listNodes: async (p, page) => {
+          const r = await tx.listNodes(p, page);
+          await tx.putNodes([{ partition: 'item', id: 'zz-touched-by-a-read' }]);
+          return r;
+        },
+      }))],
+    ['edges are never found from an item (subgraphs lose their edges)', () =>
+      wrapTx((tx) => ({ edgesOf: async (p, id, page) => (p === 'item' ? { items: [], nextCursor: null } : tx.edgesOf(p, id, page)) }))],
+    ['listing one kind of node returns both kinds', () =>
+      wrapTx((tx) => ({
+        listNodes: async (_p, page) => {
+          const merged = [...(await everything(tx, 'item')), ...(await everything(tx, 'category'))];
+          return { items: merged.slice(0, page.limit), nextCursor: null };
+        },
+      }))],
+    ['a listing cursor never advances (must fail the suite, not hang it)', () =>
+      wrapTx((tx) => ({
+        listNodes: async (p, page) => {
+          const r = await tx.listNodes(p, { limit: Math.min(page.limit, 50), cursor: null });
+          return { items: r.items, nextCursor: r.items.length > 0 ? 'same' : null };
+        },
+      }))],
+  ];
+}
+
+describe('the reads group catches adapters that read wrongly', () => {
+  const reads = () => conformanceGroups().find((g) => g.name === 'reads')?.cases ?? [];
+
+  it.each(brokenForReads())('%s', async (_name, makeBroken) => {
+    const failed: string[] = [];
+    for (const testCase of reads()) {
+      try {
+        await runCase(testCase, makeBroken);
+      } catch {
+        failed.push(testCase.name);
+      }
+    }
+    expect(failed.length).toBeGreaterThan(0);
+  });
+
+  it('passes every reads case on the memory adapter', async () => {
+    for (const testCase of reads()) await expect(runCase(testCase, createMemoryAdapter)).resolves.toBeUndefined();
+  });
+});
+
 describe('the suite catches broken adapters', () => {
   it.each(brokenAdapters())('%s', async (_name, makeBroken) => {
     const failures: string[] = [];
