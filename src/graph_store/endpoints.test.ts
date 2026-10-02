@@ -46,10 +46,9 @@ describe.each([
   });
 });
 
-describe('query stub', () => {
-  it('returns not-implemented for valid input without touching the adapter', async () => {
-    const r = await query(untouchable, readQuery);
-    expect(r).toMatchObject({ ok: false, error: { message: 'query() is not implemented yet' } });
+describe('query with an adapter that must not be used', () => {
+  it('returns STORAGE_ERROR instead of throwing when a valid query reaches a broken adapter', async () => {
+    expect(await query(untouchable, readQuery)).toMatchObject({ ok: false, error: { code: 'STORAGE_ERROR' } });
   });
 });
 
@@ -119,7 +118,7 @@ describe('createGraphClient', () => {
       'write',
     ]);
     expect((await client.write(null)).ok).toBe(false);
-    expect((await client.query(readQuery)).ok).toBe(false);
+    expect((await client.query(readQuery)).ok).toBe(false); // untouchable adapter
   });
 
   it('runs a whole lifecycle through the client', async () => {

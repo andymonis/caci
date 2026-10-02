@@ -1,6 +1,6 @@
 import type { AdapterTx, Page, Paged, StorageAdapter } from './adapter.js';
 import { GRAPH_ID_PATTERN, GRAPH_ID_RULE, MAX_GRAPH_ID_LENGTH } from './graph-id.js';
-import { DEFAULT_LIMITS, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, type Limits } from './limits.js';
+import { checkOptions, DEFAULT_LIMITS, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, resolveLimits, type GraphOptions, type Limits } from './limits.js';
 import { err, graphError, ok, type GraphError, type Result } from './result.js';
 import type { GraphInfo, GraphRef } from './types.js';
 import { storageError } from './write-plan.js';
@@ -50,9 +50,11 @@ async function guarded<T>(body: () => Promise<Result<T>>): Promise<Result<T, Gra
  * The existence check and the create are separate adapter calls, so two simultaneous creates of
  * the same id can both succeed; `write` with `createIfMissing` is the idempotent alternative.
  */
-export function createGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphRef>> {
+export function createGraph(adapter: StorageAdapter, graphId: string, options?: GraphOptions): Promise<Result<GraphRef>> {
   return guarded(async () => {
-    const id = validateGraphId(graphId);
+    const bad = checkOptions(options);
+    if (bad) return err(bad);
+    const id = validateGraphId(graphId, resolveLimits(options));
     if (!id.ok) return id;
     const plan = planCreateGraph(id.value, await adapter.graphs.exists(id.value));
     if (!plan.ok) return plan;
@@ -62,9 +64,11 @@ export function createGraph(adapter: StorageAdapter, graphId: string): Promise<R
 }
 
 /** Deletes a graph and everything in it (FR-01). Fails with `GRAPH_NOT_FOUND` if it is missing. */
-export function dropGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphRef>> {
+export function dropGraph(adapter: StorageAdapter, graphId: string, options?: GraphOptions): Promise<Result<GraphRef>> {
   return guarded(async () => {
-    const id = validateGraphId(graphId);
+    const bad = checkOptions(options);
+    if (bad) return err(bad);
+    const id = validateGraphId(graphId, resolveLimits(options));
     if (!id.ok) return id;
     const plan = requireGraph(id.value, await adapter.graphs.exists(id.value));
     if (!plan.ok) return plan;
@@ -144,9 +148,11 @@ async function countEdges(tx: AdapterTx): Promise<number> {
  * In v1 the counts come from walking the graph inside one transaction, so the cost grows with
  * the graph's size and writers to this graph wait while it runs.
  */
-export function describeGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphInfo>> {
+export function describeGraph(adapter: StorageAdapter, graphId: string, options?: GraphOptions): Promise<Result<GraphInfo>> {
   return guarded(async () => {
-    const id = validateGraphId(graphId);
+    const bad = checkOptions(options);
+    if (bad) return err(bad);
+    const id = validateGraphId(graphId, resolveLimits(options));
     if (!id.ok) return id;
     const plan = requireGraph(id.value, await adapter.graphs.exists(id.value));
     if (!plan.ok) return plan;

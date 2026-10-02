@@ -42,19 +42,19 @@ export interface CountOutput {
 }
 
 // @public
-export function createGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphRef>>;
+export function createGraph(adapter: StorageAdapter, graphId: string, options?: GraphOptions): Promise<Result<GraphRef>>;
 
 // @public
-export function createGraphClient(adapter: StorageAdapter): GraphClient;
+export function createGraphClient(adapter: StorageAdapter, options?: GraphOptions): GraphClient;
 
 // @public (undocumented)
 export const DEFAULT_LIMITS: Limits;
 
 // @public
-export function describeGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphInfo>>;
+export function describeGraph(adapter: StorageAdapter, graphId: string, options?: GraphOptions): Promise<Result<GraphInfo>>;
 
 // @public
-export function dropGraph(adapter: StorageAdapter, graphId: string): Promise<Result<GraphRef>>;
+export function dropGraph(adapter: StorageAdapter, graphId: string, options?: GraphOptions): Promise<Result<GraphRef>>;
 
 // @public (undocumented)
 export interface EdgeKey {
@@ -131,6 +131,12 @@ export interface GraphInfo {
     graphId: string;
     // (undocumented)
     itemCount: number;
+}
+
+// @public
+export interface GraphOptions {
+    // (undocumented)
+    readonly limits?: Partial<Limits>;
 }
 
 // @public
@@ -266,16 +272,10 @@ export interface PageInfo {
 }
 
 // @public
-export function parseMutation(input: unknown, options?: ParseOptions): Result<Mutation>;
-
-// @public (undocumented)
-export interface ParseOptions {
-    // (undocumented)
-    readonly limits?: Partial<Limits>;
-}
+export function parseMutation(input: unknown, options?: GraphOptions): Result<Mutation>;
 
 // @public
-export function parseQuery(input: unknown, options?: ParseOptions): Result<Query>;
+export function parseQuery(input: unknown, options?: GraphOptions): Result<Query>;
 
 // @public (undocumented)
 export type Partition = 'item' | 'category';
@@ -299,7 +299,7 @@ export interface Query {
 }
 
 // @public
-export function query(adapter: StorageAdapter, input: unknown): Promise<Result<QueryOutput, GraphError>>;
+export function query(adapter: StorageAdapter, input: unknown, options?: GraphOptions): Promise<Result<QueryOutput, GraphError>>;
 
 // @public
 export interface QueryEdge {
@@ -426,7 +426,7 @@ export type WhereCondition = {
 };
 
 // @public
-export function write(adapter: StorageAdapter, instruction: unknown): Promise<Result<WriteOutput, GraphError>>;
+export function write(adapter: StorageAdapter, instruction: unknown, options?: GraphOptions): Promise<Result<WriteOutput, GraphError>>;
 
 // @public (undocumented)
 export interface WriteOutput {

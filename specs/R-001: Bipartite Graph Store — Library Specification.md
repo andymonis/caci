@@ -205,12 +205,14 @@ Keep the surface tiny: two endpoint functions (write and query) for graph data, 
 export function write(
   adapter: StorageAdapter,
   instruction: unknown,
+  options?: GraphOptions,
 ): Promise<Result<WriteOutput, GraphError>>;
 
 // Endpoint 2: reads. Accepts queries only; read-only transaction.
 export function query(
   adapter: StorageAdapter,
   query: unknown,
+  options?: GraphOptions,
 ): Promise<Result<QueryOutput, GraphError>>;
 
 // Validation only, no I/O. Useful at API boundaries.
@@ -226,7 +228,13 @@ export function describeGraph(adapter: StorageAdapter, graphId: string): Promise
 // GraphInfo = { graphId: string; itemCount: number; categoryCount: number; edgeCount: number }
 
 // Optional convenience: binds an adapter, returns a frozen { write, query, createGraph, dropGraph, listGraphs, describeGraph }.
-export function createGraphClient(adapter: StorageAdapter): GraphClient;
+export function createGraphClient(adapter: StorageAdapter, options?: GraphOptions): GraphClient;
+
+// Settings for one call or a whole client. Only `limits` exists today: positive whole numbers for
+// maxOps, maxDataBytes, maxIdLength and maxReachedNodes, each defaulting to the NFR-06 value. Unknown
+// options or limit names are refused with VALIDATION_ERROR (a client throws RangeError when made),
+// so a typo cannot silently leave a limit unset. A client keeps its own frozen copy.
+export interface GraphOptions { readonly limits?: Partial<Limits>; }
 
 // Typed builders so callers need not hand-write JSON.
 export const op: { upsertNode; deleteNode; link; unlink };
@@ -314,7 +322,7 @@ src/graph_store/
   testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation, lifecycle, primitives), types
 ```
 
-Test map as of T-035 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-036 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -333,6 +341,7 @@ Test map as of T-035 (each test file sits next to the module it covers). Update 
 | `node-ops.test.ts` | FR-03, FR-04, FR-07, AC-05: `upsertNode` replace and shallow merge, `deleteNode` with cascade (including multi-page edge lists and id collisions across partitions) |
 | `link-ops.test.ts` | FR-05, FR-06, AC-03, AC-06: `link` and `unlink` (idempotent, `ensureNodes`, `NODE_NOT_FOUND`, weight 0), and proof that item–item or category–category edges cannot pass validation |
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
+| `query-endpoint.test.ts` | FR-15, FR-17, FR-21, AC-10, AC-13, AC-14, AC-20, AC-21: `query()` end to end: what `write` stored comes back in each shape, paging with the returned cursor, invalid or unsupported input never touching the adapter, per-call and per-client `limits` (strictly validated), and a client keeping its own copy of the options |
 | `query-subgraph.test.ts` | FR-20, AC-17, AC-19: the `subgraph` shape: only edges with both ends in the result, each edge once across pages (120 items over 3 pages, another graph alongside), weight always reported (1 when none stored, 0 kept), edge data following `includeData`, filters and `excludeSeeds`, an item and a category sharing an id, and the per-page edge cap |
 | `query-traverse.test.ts` | FR-18, AC-17, AC-21: breadth-first walks to depth 3 from categories and items (cumulative, each node once, cycles safe), several seeds, missing seeds ignored, `excludeSeeds`, the partition filter, dangling edges skipped, paging a walked result, graph isolation, and the reached-node cap (including not reading a huge hub to the end) |
 | `query-exec.test.ts` | FR-09, FR-14, FR-18, FR-20, FR-21, AC-09, AC-13, AC-22: the executor for seeds without traversal: `from: all` and named seeds at depth 0, the partition filter, `nodes`/`ids`/`count`, `includeData`, 120 matches over 3 pages and paging stable under inserts and deletes, the reached-node cap, a store identical after every query, isolation between graphs, and refusal (by name) of what is not built yet |

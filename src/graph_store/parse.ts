@@ -4,7 +4,7 @@ import {
   checkOpCount,
   checkQueryLimits,
   resolveLimits,
-  type ParseOptions,
+  type GraphOptions,
 } from './limits.js';
 import { err, graphError, ok, type GraphError, type Result } from './result.js';
 import { mutationSchema } from './schema/mutation.js';
@@ -44,7 +44,7 @@ function guarded<T>(body: () => Result<T>): Result<T> {
 }
 
 /** Validates a mutation instruction. Pure; never throws. */
-export function parseMutation(input: unknown, options?: ParseOptions): Result<Mutation> {
+export function parseMutation(input: unknown, options?: GraphOptions): Result<Mutation> {
   return guarded(() => {
     const limits = resolveLimits(options);
     if (!isObject(input)) {
@@ -65,7 +65,7 @@ export function parseMutation(input: unknown, options?: ParseOptions): Result<Mu
 }
 
 /** Validates a read query. Pure; never throws. */
-export function parseQuery(input: unknown, options?: ParseOptions): Result<Query> {
+export function parseQuery(input: unknown, options?: GraphOptions): Result<Query> {
   return guarded(() => {
     const limits = resolveLimits(options);
     if (!isObject(input)) {

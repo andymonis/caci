@@ -26,7 +26,7 @@ export type {
   WriteOutput,
 } from './types.js';
 export { DEFAULT_LIMITS } from './limits.js';
-export type { Limits, ParseOptions } from './limits.js';
+export type { Limits, GraphOptions } from './limits.js';
 export type {
   AdapterCapabilities,
   AdapterTx,

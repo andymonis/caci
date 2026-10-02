@@ -27,12 +27,45 @@ export const MAX_PAGE_LIMIT = 1000;
 /** Whether results carry node and edge `data` when the query does not say (provisional; see STATE). */
 export const DEFAULT_INCLUDE_DATA = false;
 
-export interface ParseOptions {
+/** Settings for a call, or for a whole client. Anything left out takes its default. */
+export interface GraphOptions {
   readonly limits?: Partial<Limits>;
 }
 
-export function resolveLimits(options?: ParseOptions): Limits {
+export function resolveLimits(options?: GraphOptions): Limits {
   return { ...DEFAULT_LIMITS, ...options?.limits };
+}
+
+/**
+ * Checks options before they are used, so a typo or nonsense value fails loudly instead of being
+ * ignored or breaking every call: only `limits` is allowed, only known limit names, and each limit
+ * must be a positive whole number. Pure; never throws.
+ */
+export function checkOptions(options: unknown): GraphError | undefined {
+  try {
+    if (options === undefined) return undefined;
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      return graphError('VALIDATION_ERROR', 'options must be an object like { limits: { ... } }', ['options']);
+    }
+    const { limits, ...extra } = options as Record<string, unknown>;
+    const unknownOption = Object.keys(extra)[0];
+    if (unknownOption !== undefined) return graphError('VALIDATION_ERROR', `Unknown option "${unknownOption}"`, ['options', unknownOption]);
+    if (limits === undefined) return undefined;
+    if (typeof limits !== 'object' || limits === null || Array.isArray(limits)) {
+      return graphError('VALIDATION_ERROR', 'options.limits must be an object', ['options', 'limits']);
+    }
+    for (const [name, value] of Object.entries(limits)) {
+      if (!(name in DEFAULT_LIMITS)) {
+        return graphError('VALIDATION_ERROR', `Unknown limit "${name}"; known limits: ${Object.keys(DEFAULT_LIMITS).join(', ')}`, ['options', 'limits', name]);
+      }
+      if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+        return graphError('VALIDATION_ERROR', `limit "${name}" must be a positive whole number`, ['options', 'limits', name]);
+      }
+    }
+    return undefined;
+  } catch {
+    return graphError('VALIDATION_ERROR', 'options could not be read', ['options']);
+  }
 }
 
 type Path = readonly (string | number)[];
