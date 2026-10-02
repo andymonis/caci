@@ -71,6 +71,35 @@ Task format in `PLAN.md`:
 4. Run `/plan` when a milestone needs breaking into tasks.
 5. Loop: `/next`, then `/verify`, then `/ship`, until the milestone is done.
 
+## Writing a storage adapter
+
+An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.
+
+What every adapter must guarantee, and what the conformance suite checks:
+
+- **Atomic transactions.** If the callback passed to `transaction` throws, nothing it did persists. The core refuses to write through an adapter that reports `transactions: false`.
+- **Isolation.** Graphs never see each other's data, even with identical node ids. Two adapters made by the same factory share nothing.
+- **Idempotent `graphs.create` and `graphs.drop`.** Creating an existing graph or dropping a missing one is a no-op; the core decides when those are errors.
+- **Replace on write.** `putNodes` and `putEdges` store the record as given, replacing any earlier one for the same key.
+- **Deterministic keyset paging.** Listings are ordered by id and use an opaque cursor that stays valid when rows are added or removed between pages.
+- **No aliasing.** Data handed in or out is copied, so callers cannot change stored state by mutating what they passed or received.
+
+To check your adapter, call `runAdapterConformance` from your own test file and pass your test runner's `describe` and `it`:
+
+```ts
+import { describe, it } from 'vitest'; // or Jest, or node:test
+import { runAdapterConformance } from 'bipartite-graph/testing';
+import { createMyAdapter } from './my-adapter.js';
+
+runAdapterConformance(
+  () => createMyAdapter(),                 // a fresh, empty adapter every call
+  { describe, it },
+  { dispose: async (adapter) => { /* optional: release what this adapter used, e.g. delete its temp directory */ } },
+);
+```
+
+The factory is called at least once per test (some cases need two adapters), and each adapter it returns must be independent of the others, for example by using its own temp directory. An adapter that passes the suite needs no changes to the core. `src/graph_store/testing/alternative-adapter.test.ts` shows this: it is a second adapter built with a different strategy (snapshot and restore, its own cursor format) that passes the same suite and runs end to end through `createGraphClient`. The memory adapter in `src/graph_store/adapters/memory/` is the reference implementation.
+
 ## Conventions
 
 - **One task, one commit.** Conventional prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`, plus the task id.

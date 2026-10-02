@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryAdapter } from '../adapters/memory/index.js';
 import type { AdapterTx, StorageAdapter } from '../adapter.js';
 import { conformanceGroups } from './cases.js';
+import type { ConformanceCase } from './types.js';
 import { runAdapterConformance, type TestApi } from './index.js';
+
+/** Runs one case the way the harness does: a fresh adapter, plus more from the same factory on request. */
+const runCase = async (testCase: ConformanceCase, make: () => StorageAdapter): Promise<void> =>
+  testCase.run(make(), async () => make());
 
 // The real thing: the memory adapter must pass the whole suite, run through Vitest itself.
 runAdapterConformance(() => createMemoryAdapter(), { describe, it });
@@ -54,9 +59,9 @@ describe('runAdapterConformance (the harness itself)', () => {
       { dispose: (adapter) => void disposed.push(adapter) },
     );
     await runAll();
-    expect(made).toHaveLength(names.length);
-    expect(new Set(made).size).toBe(made.length);
-    expect(disposed).toEqual(made);
+    expect(made.length).toBeGreaterThanOrEqual(names.length); // some cases ask for a second adapter
+    expect(new Set(made).size).toBe(made.length); // never the same adapter twice
+    expect(disposed).toEqual(made); // every adapter handed out is disposed
   });
 
   it('accepts an async factory and an async dispose', async () => {
@@ -73,10 +78,17 @@ describe('runAdapterConformance (the harness itself)', () => {
 
   it('disposes after every test, including the ones that fail, and still reports the failure', async () => {
     let disposals = 0;
-    const real = createMemoryAdapter();
-    const broken: StorageAdapter = { ...real, graphs: { ...real.graphs, exists: async () => true } };
+    let made = 0;
     const runner = recordingRunner();
-    runAdapterConformance(() => broken, runner.api, { dispose: () => void (disposals += 1) });
+    runAdapterConformance(
+      () => {
+        made += 1;
+        const real = createMemoryAdapter();
+        return { ...real, graphs: { ...real.graphs, exists: async () => true } };
+      },
+      runner.api,
+      { dispose: () => void (disposals += 1) },
+    );
 
     let failures = 0;
     for (const body of runner.bodies) {
@@ -87,7 +99,8 @@ describe('runAdapterConformance (the harness itself)', () => {
       }
     }
     expect(failures).toBeGreaterThan(0);
-    expect(disposals).toBe(runner.bodies.length); // a dispose for every test, passing or failing
+    expect(disposals).toBe(made); // every adapter made is disposed, whether its test passed or failed
+    expect(made).toBeGreaterThanOrEqual(runner.bodies.length);
   });
 });
 
@@ -174,7 +187,7 @@ describe('the write group catches write-specific adapter bugs', () => {
     const failed: string[] = [];
     for (const testCase of conformanceGroups().find((g) => g.name === 'write')?.cases ?? []) {
       try {
-        await testCase.run(makeBroken());
+        await runCase(testCase, makeBroken);
       } catch {
         failed.push(testCase.name);
       }
@@ -188,7 +201,59 @@ describe('the write group catches write-specific adapter bugs', () => {
       const real = createMemoryAdapter(); // fresh per case, like the harness
       return { ...real, transaction: (graphId, fn) => real.transaction(graphId, (tx) => fn({ ...tx, deleteEdges: async () => {} })) };
     };
-    for (const testCase of smoke) await expect(testCase.run(noDeleteEdges())).resolves.toBeUndefined();
+    for (const testCase of smoke) await expect(runCase(testCase, noDeleteEdges)).resolves.toBeUndefined();
+  });
+});
+
+describe('the isolation group catches adapters that leak', () => {
+  const isolation = () => conformanceGroups().find((g) => g.name === 'isolation')?.cases ?? [];
+
+  /** Every graph id maps onto one shared inner graph, so graphs see each other's data. */
+  const oneStoreForAllGraphs = (): StorageAdapter => {
+    const real = createMemoryAdapter();
+    const ids = new Set<string>();
+    return {
+      ...real,
+      graphs: {
+        exists: async (id) => ids.has(id),
+        create: async (id) => {
+          ids.add(id);
+          await real.graphs.create('shared');
+        },
+        drop: async (id) => void ids.delete(id),
+        list: async () => ({ items: [...ids].sort(), nextCursor: null }),
+      },
+      transaction: (_graphId, fn) => real.transaction('shared', fn),
+    };
+  };
+
+  it('catches graphs that share one store (AC-01)', async () => {
+    const failed: string[] = [];
+    for (const testCase of isolation()) {
+      try {
+        await runCase(testCase, oneStoreForAllGraphs);
+      } catch {
+        failed.push(testCase.name);
+      }
+    }
+    expect(failed.some((n) => n.startsWith('AC-01'))).toBe(true);
+  });
+
+  it('catches a factory that hands out the same adapter every time (AC-12)', async () => {
+    const shared = createMemoryAdapter();
+    const failed: string[] = [];
+    for (const testCase of isolation().filter((c) => c.name.startsWith('AC-12'))) {
+      try {
+        await runCase(testCase, () => shared);
+      } catch {
+        failed.push(testCase.name);
+      }
+    }
+    expect(failed.length).toBeGreaterThan(0);
+  });
+
+  it('passes every isolation case on the memory adapter', async () => {
+    for (const testCase of isolation()) await expect(runCase(testCase, createMemoryAdapter)).resolves.toBeUndefined();
   });
 });
 
@@ -198,7 +263,7 @@ describe('the suite catches broken adapters', () => {
     for (const group of conformanceGroups()) {
       for (const testCase of group.cases) {
         try {
-          await testCase.run(makeBroken());
+          await runCase(testCase, makeBroken);
         } catch {
           failures.push(testCase.name);
         }
@@ -209,7 +274,7 @@ describe('the suite catches broken adapters', () => {
 
   it('passes every case on the unbroken memory adapter', async () => {
     for (const group of conformanceGroups()) {
-      for (const testCase of group.cases) await expect(testCase.run(createMemoryAdapter())).resolves.toBeUndefined();
+      for (const testCase of group.cases) await expect(runCase(testCase, createMemoryAdapter)).resolves.toBeUndefined();
     }
   });
 });

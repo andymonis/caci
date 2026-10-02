@@ -287,10 +287,10 @@ src/graph_store/
   link-ops.ts         link / unlink: pure planning plus transactional shell
   adapter.ts          StorageAdapter / AdapterTx contract
   adapters/memory/    memory adapter (M2)
-  testing/            runAdapterConformance (M3): harness, case groups, types
+  testing/            runAdapterConformance (M3): harness, case groups (smoke, write, isolation), types
 ```
 
-Test map as of T-021 (each test file sits next to the module it covers). Update this table when tasks land.
+Test map as of T-022 (each test file sits next to the module it covers). Update this table when tasks land.
 
 | Test file | Covers |
 | --- | --- |
@@ -312,11 +312,12 @@ Test map as of T-021 (each test file sits next to the module it covers). Update 
 | `apply-mutation.test.ts` | FR-02, FR-08, AC-02, AC-03 (end to end), AC-04, AC-05, AC-06: `write()` against the memory adapter, including all-or-nothing rollback, removing a graph a failed call created, and validation failures never reaching the adapter |
 | `graphs.test.ts` | FR-01 (create and drop), AC-01 groundwork: graph id validation, `CONFLICT` and `GRAPH_NOT_FOUND`, drop removes everything and leaves other graphs intact, validation never reaches the adapter |
 | `graph-info.test.ts` | FR-01 (list and describe), FR-14, AC-09 groundwork: `listGraphs` keyset paging (120 graphs over 3 pages), page validation, `describeGraph` counts across page boundaries and after cascade deletes |
-| `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (the `write` group in `testing/write-cases.ts`) plus a smoke group; also tests the harness itself (fresh adapter per test, dispose) and that twelve deliberately broken adapters are caught |
+| `testing/conformance.test.ts` | Runs the shared conformance suite against the memory adapter through Vitest. The suite holds **AC-02 to AC-06** (`write` group), **AC-01 and AC-12** (`isolation` group) and a smoke group; also tests the harness itself (fresh adapter per test, extra adapters on request, dispose) and that fifteen deliberately broken adapters are caught |
+| `testing/alternative-adapter.test.ts` | **AC-15**: an independently written adapter (snapshot and restore, its own cursor format) passes the same suite and works end to end through the client, with no core changes |
 | `smoke.test.ts` | Package entry point loads |
 | `npm run api:check` (not a test file) | AC-16: API report diff fails the gate |
 
-Not yet covered (arrive with later milestones): AC-01 and AC-12 through the public endpoints, AC-07 to AC-09, AC-11, AC-13, AC-15 (full), AC-17 to AC-19, AC-22, and the behaviour behind FR-01, FR-09 to FR-14, FR-16 and FR-18 to FR-21. AC-02 to AC-06 now live in the shared conformance suite, so every future adapter has to pass them; they currently run against the memory adapter only.
+Not yet covered (arrive with later milestones): AC-07 to AC-09, AC-11, AC-13, AC-17 to AC-19, AC-22, and the behaviour behind FR-09 to FR-13, FR-16 and FR-18 to FR-21 (FR-14 paging is covered for graphs, nodes and edges). AC-01 to AC-06 and AC-12 now live in the shared conformance suite, so every future adapter has to pass them; AC-15 is shown by an independent fixture adapter. They run against the memory adapter and that fixture only until the file and SQLite adapters exist.
 
 ## Non-functional requirements
 

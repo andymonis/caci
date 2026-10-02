@@ -1,3 +1,4 @@
+import type { StorageAdapter } from '../adapter.js';
 import { conformanceGroups } from './cases.js';
 import type { ConformanceOptions, MakeAdapter, TestApi } from './types.js';
 
@@ -12,8 +13,9 @@ export type { ConformanceOptions, MakeAdapter, TestApi } from './types.js';
  * runAdapterConformance(() => createMyAdapter(), { describe, it });
  * ```
  *
- * `makeAdapter` is called once per test and must return a fresh, empty adapter; use
- * `options.dispose` to clean up whatever it created.
+ * `makeAdapter` is called at least once per test (some cases need two adapters) and each call must
+ * return a fresh, empty adapter that shares nothing with the others; use `options.dispose` to clean
+ * up whatever it created.
  */
 export function runAdapterConformance(
   makeAdapter: MakeAdapter,
@@ -25,11 +27,16 @@ export function runAdapterConformance(
       testApi.describe(group.name, () => {
         for (const testCase of group.cases) {
           testApi.it(testCase.name, async () => {
-            const adapter = await makeAdapter();
+            const made: StorageAdapter[] = [];
+            const makeOne = async (): Promise<StorageAdapter> => {
+              const adapter = await makeAdapter();
+              made.push(adapter);
+              return adapter;
+            };
             try {
-              await testCase.run(adapter);
+              await testCase.run(await makeOne(), makeOne);
             } finally {
-              await options.dispose?.(adapter);
+              for (const adapter of made) await options.dispose?.(adapter);
             }
           });
         }

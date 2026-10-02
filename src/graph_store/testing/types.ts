@@ -14,13 +14,20 @@ export interface ConformanceOptions {
   dispose?: (adapter: StorageAdapter) => Promise<void> | void;
 }
 
-/** Creates a fresh, empty adapter. Called once per test, so tests never share state. */
+/**
+ * Creates a fresh, empty adapter that shares no state with any other one it has made (e.g. its own
+ * temp directory). Called at least once per test, so tests never share state.
+ */
 export type MakeAdapter = () => Promise<StorageAdapter> | StorageAdapter;
 
-/** One behaviour an adapter must have. Throws (an assertion error) when it does not. */
+/**
+ * One behaviour an adapter must have. Throws (an assertion error) when it does not.
+ * `makeAnother` returns a further fresh adapter for cases that need two independent ones;
+ * the harness disposes every adapter it hands out.
+ */
 export interface ConformanceCase {
   readonly name: string;
-  readonly run: (adapter: StorageAdapter) => Promise<void>;
+  readonly run: (adapter: StorageAdapter, makeAnother: () => Promise<StorageAdapter>) => Promise<void>;
 }
 
 export interface ConformanceGroup {
