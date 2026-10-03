@@ -67,10 +67,6 @@
                 "additionalProperties": {
                   "$ref": "#/$defs/__schema0"
                 }
-              },
-              "ensureNodes": {
-                "default": false,
-                "type": "boolean"
               }
             },
             "required": [

@@ -238,13 +238,13 @@ describe('the output schema is the real mutation schema, narrowed', () => {
     const ok = validate();
     expect(ok({ ops: [{ op: 'upsertNode', partition: 'item', id: 'note-1', data: { title: 'Q3 plan', summary: 'x' } }, { op: 'upsertNode', partition: 'category', id: 'planning', data: { name: 'Planning' } }, { op: 'link', item: 'note-1', category: 'planning', weight: 0.8 }], rationale: 'It is about planning.' })).toBe(true);
     expect(ok({ ops: [{ op: 'link', item: 'a', category: 'b' }] })).toBe(true);
-    expect(ok({ ops: [{ op: 'link', item: 'a', category: 'b', ensureNodes: true }] })).toBe(true);
   });
 
   it.each([
     ['deleting a node', { ops: [{ op: 'deleteNode', partition: 'item', id: 'a' }] }],
     ['unlinking', { ops: [{ op: 'unlink', item: 'a', category: 'b' }] }],
     ['an unknown operation', { ops: [{ op: 'explode' }] }],
+    ['choosing whether links create missing nodes (set by the controller)', { ops: [{ op: 'link', item: 'a', category: 'b', ensureNodes: true }] }],
     ['choosing how data is replaced (mode is set by the controller)', { ops: [{ op: 'upsertNode', partition: 'item', id: 'a', mode: 'replace' }] }],
     ['no operations at all', { ops: [] }],
     ['no ops key', { rationale: 'x' }],
@@ -275,7 +275,8 @@ describe('the output schema is the real mutation schema, narrowed', () => {
     expect(variants).toHaveLength(2);
     const link = variants.find((v) => (v.properties.op as { const: string }).const === 'link');
     const realLink = real.find((v) => (v.properties as Record<string, { const?: string }>).op?.const === 'link');
-    expect(link).toEqual(realLink);
+    expect(Object.keys((link as { properties: object }).properties)).toEqual(['op', 'item', 'category', 'weight', 'data']);
+    expect(link).toEqual({ ...realLink, properties: link?.properties, required: expect.any(Array) });
     const upsert = variants.find((v) => (v.properties.op as { const: string }).const === 'upsertNode');
     expect(Object.keys(upsert?.properties ?? {})).toEqual(['op', 'partition', 'id', 'data']);
   });

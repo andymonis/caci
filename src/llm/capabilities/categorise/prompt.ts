@@ -33,10 +33,10 @@ export interface BuiltPrompt {
 
 export const DEFAULT_PROMPT_OPTIONS = Object.freeze({ maxOps: 25, maxTextChars: 8000, maxContextChars: 12_000 });
 
-/** Fields the model may not choose: the controller sets them (an upsert is always a merge, never a replace). */
+/** Fields the model may not choose: the controller sets them (an upsert is always a merge, never a replace; a link never creates missing nodes). */
 const OMITTED_FIELDS: Readonly<Record<AllowedOp, readonly string[]>> = Object.freeze({
   upsertNode: Object.freeze(['mode']),
-  link: Object.freeze([]),
+  link: Object.freeze(['ensureNodes']),
 });
 
 const OP_RULES: Readonly<Record<AllowedOp, string>> = Object.freeze({
