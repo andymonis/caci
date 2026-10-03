@@ -27,7 +27,7 @@ describe('the explorer is never part of a release', () => {
   it('the library build only compiles src/, so dev code cannot end up in dist/', () => {
     expect(read('tsconfig.json').include).toEqual(['src']);
     const dist = join(root, 'dist');
-    if (existsSync(dist)) expect(readdirSync(dist)).toEqual(['graph_store']);
+    if (existsSync(dist)) expect(readdirSync(dist).sort()).toEqual(['graph_store', 'llm']);
   });
 
   it('nothing in the library imports from the explorer', () => {

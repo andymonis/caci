@@ -22,6 +22,7 @@ CLAUDE.md               Loads system_prompt.md and .gsd/STATE.md into every Clau
   STATE.md              Current position, decisions, blockers
 .claude/commands/       Slash commands that drive the loop: /plan /next /verify /ship
 src/graph_store/        The Bipartite Graph Store, isolated as one feature (code, tests, adapters)
+src/llm/                The LLM component: a model port, typed errors and token usage, and one folder per capability
 schema/graph_store/     Generated JSON Schema for the mutation and query formats
 api/                    Committed public API report (API Extractor)
 dev/graph-explorer/     Local-only visual tester for the graph store (never published)
@@ -29,7 +30,7 @@ dev/graph-explorer/     Local-only visual tester for the graph store (never publ
 
 ### Where the code lives
 
-All graph store functionality sits under `src/graph_store/`, with each test file beside the module it covers. Nothing in that folder imports from elsewhere in the repo. Other platform components get their own sibling folders under `src/`. The folder-by-folder breakdown and the test map are in the R-001 spec ("Code layout and test map").
+All graph store functionality sits under `src/graph_store/`, with each test file beside the module it covers. Nothing in that folder imports from elsewhere in the repo. Other platform components get their own sibling folders under `src/`; the first is `src/llm/`, the LLM component. The graph store never imports it, and it reaches the graph store only through its public entry point (`src/llm/boundary.test.ts` enforces both). The folder-by-folder breakdown and the test map are in the R-001 spec ("Code layout and test map").
 
 ### Order of authority
 
