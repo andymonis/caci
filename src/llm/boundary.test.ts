@@ -17,6 +17,9 @@ export function importsOf(source: string): string[] {
 
 const stripExtension = (path: string): string => path.replace(/\.(?:ts|js|mjs)$/, '');
 
+/** The files that put the capabilities together; they are the only ones outside `capabilities/` allowed to import them. */
+const ASSEMBLY: readonly string[] = Object.freeze(['llm/index.ts', 'llm/create-llm.ts']);
+
 /** Describes every dependency that breaks the rules. `files` maps a path under src (like `llm/x.ts`) to its source. */
 export function violations(files: Record<string, string>): string[] {
   const problems: string[] = [];
@@ -37,8 +40,8 @@ export function violations(files: Record<string, string>): string[] {
       if (own !== undefined && other !== undefined && other !== own) {
         problems.push(`${file} imports ${specifier}: a capability must not depend on another capability`);
       }
-      if (file.startsWith('llm/') && !file.startsWith('llm/capabilities/') && target.startsWith('llm/capabilities/')) {
-        problems.push(`${file} imports ${specifier}: the shared kernel must not depend on a capability`);
+      if (file.startsWith('llm/') && !file.startsWith('llm/capabilities/') && !ASSEMBLY.includes(file) && target.startsWith('llm/capabilities/')) {
+        problems.push(`${file} imports ${specifier}: the shared kernel must not depend on a capability (only the assembly files may)`);
       }
     }
   }
@@ -68,7 +71,8 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     expect(
       violations({
         'graph_store/parse.ts': `import { x } from './result.js';`,
-        'llm/index.ts': `import { y } from './errors.js';`,
+        'llm/index.ts': `import { y } from './errors.js'; export { categorise } from './capabilities/categorise/index.js';`,
+        'llm/create-llm.ts': `import { categorise } from './capabilities/categorise/index.js';`,
         'llm/model-client.ts': `import type { Result } from '../graph_store/index.js';`,
         'llm/capabilities/categorise/guard.ts': `import { llmError } from '../../errors.js'; import { parseMutation } from '../../../graph_store/index.js'; import { c } from './context.js';`,
       }),
@@ -83,6 +87,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['a capability reaching into graph store internals', { 'llm/capabilities/categorise/x.ts': `import { y } from '../../../graph_store/limits.js';` }],
     ['the LLM component importing the application', { 'llm/x.ts': `import { app } from '../app/index.js';` }],
     ['one capability importing another', { 'llm/capabilities/categorise/x.ts': `import { answer } from '../answer/index.js';` }],
+    ['the config importing a capability', { 'llm/config.ts': `import { categorise } from './capabilities/categorise/index.js';` }],
     ['the kernel importing a capability', { 'llm/model-client.ts': `import { categorise } from './capabilities/categorise/index.js';` }],
   ])('catches %s', (_name, files) => {
     expect(violations(files).length).toBeGreaterThan(0);

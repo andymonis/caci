@@ -8,3 +8,5 @@ Each folder holds that capability's own prompt, output guard and defaults, and i
 - It must **not** import another capability, so adding one never changes an existing one.
 
 `src/llm/boundary.test.ts` enforces these rules.
+
+The only files outside `capabilities/` that may import a capability are the assembly files, `src/llm/index.ts` and `src/llm/create-llm.ts`, which put the capabilities together into the public `createLlm()`.

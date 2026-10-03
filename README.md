@@ -104,6 +104,23 @@ It behaves like a careful real client: it checks the request first, honours the 
 
 `src/llm/capabilities/categorise/prompt.ts` builds everything sent to the model for one note: a fixed system prompt, one user message, and an output schema. The note and the category data appear only inside their own `<note>` and `<categories>` blocks, with `&`, `<` and `>` escaped so they cannot close a block or add one. The system prompt never contains user text. The output schema is derived from the graph store's own `mutationJsonSchema()` and narrowed to the operations the categoriser may use (`upsertNode`, `link`), so the format cannot drift. An empty or oversized note is refused, never cut. The exact wording is kept as plain-text golden files in `src/llm/capabilities/categorise/__snapshots__/`, so a change to it shows in review.
 
+## Asking the model to categorise a note
+
+`createLlm({ client, config? })` returns an object with one method per capability, today `categorise()`:
+
+```ts
+import { createLlm } from 'bipartite-graph/llm';
+
+const llm = createLlm({ client });           // client: any ModelClient
+const result = await llm.categorise(
+  { text, graphId: 'my-notes', itemId: 'note-01', categories },   // the controller supplies the ids and the current categories
+  { tier: 'balanced', timeoutMs: 20_000, signal },                 // all optional; model or tier can be chosen per call
+);
+// ok: { mutation, rationale?, usage, model, attempts }   an error: { code, message, retryable }
+```
+
+It builds the context and prompt, calls the model, and checks the reply with the output guard. A reply the guard rejects goes back to the model once with the reasons; a second rejection is a `BAD_OUTPUT` error. One time limit covers both attempts, cancellation is honoured, and nothing is written: the result is a proposal for a person to approve and pass to `write`. A bad `graphId`, `itemId` or option is a `CONFIG` error before any model call is paid for.
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.

@@ -21,7 +21,61 @@ export type CapabilityRoute = {
 };
 
 // @public
+export interface CategoriseInput {
+    readonly categories: readonly CategoryEntry[];
+    readonly graphId: string;
+    readonly itemId: string;
+    // (undocumented)
+    readonly requestId?: string;
+    readonly text: string;
+}
+
+// @public (undocumented)
+export interface CategoriseOptions {
+    // (undocumented)
+    readonly context?: ContextOptions;
+    // (undocumented)
+    readonly maxContextChars?: number;
+    readonly maxOps?: number;
+    readonly maxOutputTokens?: number;
+    // (undocumented)
+    readonly maxTextChars?: number;
+    readonly model?: string;
+    // (undocumented)
+    readonly signal?: AbortSignal;
+    readonly tier?: ModelTier;
+    readonly timeoutMs?: number;
+}
+
+// @public
+export interface CategoryEntry {
+    // Warning: (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly data?: JsonObject;
+    // (undocumented)
+    readonly id: string;
+    readonly items?: ReadonlyArray<{
+        readonly id: string;
+        readonly data?: JsonObject;
+    }>;
+    readonly linkCount?: number;
+}
+
+// @public
 export function checkRequest(request: unknown): LlmError | undefined;
+
+// @public (undocumented)
+export interface ContextOptions {
+    readonly includeItemContents?: boolean;
+    readonly maxChars?: number;
+    readonly maxDataChars?: number;
+    // (undocumented)
+    readonly maxItemsPerCategory?: number;
+}
+
+// @public
+export function createLlm(init: LlmInit): Llm;
 
 // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
 //
@@ -43,6 +97,11 @@ export const DEFAULT_TIERS: Readonly<Record<ModelTier, string>>;
 
 // @public
 export function isValidUsage(usage: TokenUsage): boolean;
+
+// @public
+export interface Llm {
+    categorise(input: CategoriseInput, options?: CategoriseOptions): Promise<Result<Proposal, LlmError>>;
+}
 
 // @public
 export const LLM_ERROR_CODES: readonly ["TIMEOUT", "RATE_LIMITED", "REFUSED", "BAD_OUTPUT", "MODEL_ERROR", "CONFIG", "CANCELLED"];
@@ -86,6 +145,13 @@ export interface LlmErrorOptions {
     readonly retryAfterMs?: number;
 }
 
+// @public (undocumented)
+export interface LlmInit {
+    readonly client: ModelClient;
+    readonly config?: LlmConfig;
+    readonly now?: () => number;
+}
+
 // @public
 export const MODEL_TIERS: readonly ["fast", "balanced", "deep"];
 
@@ -127,7 +193,6 @@ export interface ModelRequest {
     // (undocumented)
     readonly messages: readonly ModelMessage[];
     readonly model: string;
-    // Warning: (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
     readonly outputSchema?: JsonObject;
     readonly signal?: AbortSignal;
     // (undocumented)
@@ -149,6 +214,17 @@ export type ModelTier = (typeof MODEL_TIERS)[number];
 
 // @public (undocumented)
 export const NO_USAGE: TokenUsage;
+
+// @public
+export interface Proposal {
+    readonly attempts: 1 | 2;
+    readonly model: string;
+    // Warning: (ae-forgotten-export) The symbol "GuardedReply" needs to be exported by the entry point index.d.ts
+    readonly mutation: GuardedReply['mutation'];
+    // (undocumented)
+    readonly rationale?: string;
+    readonly usage: TokenUsage;
+}
 
 // @public
 export function resolveModel(config: LlmConfig, capability: Capability, choice?: ModelChoice): Result<string, LlmError>;
