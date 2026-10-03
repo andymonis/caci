@@ -100,6 +100,10 @@ client.callCount;  // how many reached the provider
 
 It behaves like a careful real client: it checks the request first, honours the time limit and cancellation, and never throws. A real client is held to the same contract with `runModelClientConformance(makeClient, { describe, it })`. The suite cannot make a real provider refuse or hang, so `makeClient` is told which scenario to produce (a text reply, JSON, prose when JSON was asked for, a refusal, a rate limit, a server fault, a rejected request, an unknown model, or a provider that never answers) and returns a client whose provider, usually a mocked HTTP layer, behaves that way. The shared helpers `checkRequest` and `runWithDeadline` do the request checking and the time limit and cancellation for any client.
 
+## Prompts for the categoriser
+
+`src/llm/capabilities/categorise/prompt.ts` builds everything sent to the model for one note: a fixed system prompt, one user message, and an output schema. The note and the category data appear only inside their own `<note>` and `<categories>` blocks, with `&`, `<` and `>` escaped so they cannot close a block or add one. The system prompt never contains user text. The output schema is derived from the graph store's own `mutationJsonSchema()` and narrowed to the operations the categoriser may use (`upsertNode`, `link`), so the format cannot drift. An empty or oversized note is refused, never cut. The exact wording is kept as plain-text golden files in `src/llm/capabilities/categorise/__snapshots__/`, so a change to it shows in review.
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.

@@ -219,6 +219,11 @@ export function query(
 export function parseMutation(input: unknown): Result<Mutation, GraphError>;
 export function parseQuery(input: unknown): Result<Query, GraphError>;
 
+// The JSON Schema for each instruction format (a fresh copy each call). Callers that need to describe the
+// format, such as the LLM component's prompt builder, read it from here instead of keeping their own copy.
+export function mutationJsonSchema(): Record<string, unknown>;
+export function queryJsonSchema(): Record<string, unknown>;
+
 // Graph lifecycle (FR-01). write and query carry graph data only, so graphs are managed here.
 // All return a Result and never throw; graphId is validated like any other id.
 export function createGraph(adapter: StorageAdapter, graphId: string): Promise<Result<{ graphId: string }, GraphError>>; // CONFLICT if it exists

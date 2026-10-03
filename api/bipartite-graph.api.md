@@ -192,6 +192,9 @@ export interface Mutation {
 }
 
 // @public (undocumented)
+export function mutationJsonSchema(): Record<string, unknown>;
+
+// @public (undocumented)
 export interface NodeRecord {
     // (undocumented)
     readonly data?: JsonObject;
@@ -339,6 +342,9 @@ export type QueryFrom = {
     partition: Partition;
     where: Where;
 };
+
+// @public (undocumented)
+export function queryJsonSchema(): Record<string, unknown>;
 
 // @public
 export interface QueryNode extends NodeRef {

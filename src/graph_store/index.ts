@@ -1,6 +1,8 @@
 export { ERROR_CODES, err, graphError, ok } from './result.js';
 export type { Err, ErrorCode, GraphError, Ok, Result } from './result.js';
 export { parseMutation, parseQuery } from './parse.js';
+// The published JSON Schema of the two instruction formats, for tools (for example an LLM output schema) that must stay in step with them.
+export { mutationJsonSchema, queryJsonSchema } from './schema/json-schema.js';
 export type {
   Mutation,
   Op,
