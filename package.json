@@ -29,6 +29,10 @@
     "./llm/testing": {
       "types": "./dist/llm/testing/index.d.ts",
       "import": "./dist/llm/testing/index.js"
+    },
+    "./app": {
+      "types": "./dist/app/index.d.ts",
+      "import": "./dist/app/index.js"
     }
   },
   "files": [
@@ -57,8 +61,8 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "gate": "npm run typecheck && npm run lint && npm test && npm run api:check",
     "schema": "npm run build && node scripts/generate-json-schema.mjs",
-    "api": "npm run build && api-extractor run --local && api-extractor run --local -c api-extractor.memory.json && api-extractor run --local -c api-extractor.testing.json && api-extractor run --local -c api-extractor.llm.json && api-extractor run --local -c api-extractor.llm-testing.json",
-    "api:check": "npm run build && api-extractor run && api-extractor run -c api-extractor.memory.json && api-extractor run -c api-extractor.testing.json && api-extractor run -c api-extractor.llm.json && api-extractor run -c api-extractor.llm-testing.json",
+    "api": "npm run build && api-extractor run --local && api-extractor run --local -c api-extractor.memory.json && api-extractor run --local -c api-extractor.testing.json && api-extractor run --local -c api-extractor.llm.json && api-extractor run --local -c api-extractor.llm-testing.json && api-extractor run --local -c api-extractor.app.json",
+    "api:check": "npm run build && api-extractor run && api-extractor run -c api-extractor.memory.json && api-extractor run -c api-extractor.testing.json && api-extractor run -c api-extractor.llm.json && api-extractor run -c api-extractor.llm-testing.json && api-extractor run -c api-extractor.app.json",
     "dev:explorer": "npm run build && node dev/graph-explorer/server.mjs"
   }
 }

@@ -23,6 +23,7 @@ CLAUDE.md               Loads system_prompt.md and .gsd/STATE.md into every Clau
 .claude/commands/       Slash commands that drive the loop: /plan /next /verify /ship
 src/graph_store/        The Bipartite Graph Store, isolated as one feature (code, tests, adapters)
 src/llm/                The LLM component: a model port, typed errors and token usage, and one folder per capability
+src/app/                The application layer (controller): input types, input normalising, item id minting
 schema/graph_store/     Generated JSON Schema for the mutation and query formats
 api/                    Committed public API report (API Extractor)
 dev/graph-explorer/     Local-only visual tester for the graph store (never published)
@@ -30,7 +31,7 @@ dev/graph-explorer/     Local-only visual tester for the graph store (never publ
 
 ### Where the code lives
 
-All graph store functionality sits under `src/graph_store/`, with each test file beside the module it covers. Nothing in that folder imports from elsewhere in the repo. Other platform components get their own sibling folders under `src/`; the first is `src/llm/`, the LLM component. The graph store never imports it, and it reaches the graph store only through its public entry point (`src/llm/boundary.test.ts` enforces both). The folder-by-folder breakdown and the test map are in the R-001 spec ("Code layout and test map").
+All graph store functionality sits under `src/graph_store/`, with each test file beside the module it covers. Nothing in that folder imports from elsewhere in the repo. Other platform components get their own sibling folders under `src/`; the first is `src/llm/`, the LLM component. The graph store never imports it, and it reaches the graph store only through its public entry point. `src/app/` is the third sibling: it uses the other two only through their public entry points, and neither knows it exists (`src/boundary.test.ts` enforces all of this). The folder-by-folder breakdown and the test map are in the R-001 spec ("Code layout and test map").
 
 ### Order of authority
 
@@ -120,6 +121,14 @@ const result = await llm.categorise(
 ```
 
 It builds the context and prompt, calls the model, and checks the reply with the output guard. A reply the guard rejects goes back to the model once with the reasons; a second rejection is a `BAD_OUTPUT` error. One time limit covers both attempts, cancellation is honoured, and nothing is written: the result is a proposal for a person to approve and pass to `write`. A bad `graphId`, `itemId` or option is a `CONFIG` error before any model call is paid for.
+
+## The application layer
+
+`src/app/` (entry point `bipartite-graph/app`) is where input meets the graph and the model. So far it holds three small pieces:
+
+- **Input:** `{ kind: 'text', text }`, `{ kind: 'image', mediaType, data }` or `{ kind: 'audio', mediaType, data }`. `parseInput` checks one; unknown kinds and extra fields are `INVALID_INPUT`.
+- **Normalising:** `normaliseInput(input, normalisers?)` turns any input into the text the categoriser reads. Only text is handled today (a blank note is `INVALID_INPUT`); images and audio give `UNSUPPORTED_INPUT` until you supply a normaliser, for example `normaliseInput(input, { audio: transcribe })`. A normaliser that throws or returns something that is not text is `NORMALISER_FAILED`, without leaking its message.
+- **Item ids:** the graph store never makes ids, so `createItemIdGenerator({ now?, random?, prefix? })` does. Ids look like `note-0m5xk2q9a-00-f3k9d2` (time, a counter for the same millisecond, a random tail): lowercase, safe as a file name, and sorting by id is sorting by creation order, even if the clock steps back. Pass `now` and `random` to make them deterministic in tests.
 
 ## Writing a storage adapter
 

@@ -3,11 +3,12 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// The LLM component and the graph store are separate components. The graph store knows nothing
-// about the LLM; the LLM component reaches the graph store only through its public entry point; and
-// no capability depends on another, so adding one never changes an existing one.
+// The graph store, the LLM component and the application are separate components. The graph store
+// knows nothing about the other two; the LLM component knows nothing about the application; the
+// application reaches the other two only through their public entry points; and no capability
+// depends on another, so adding one never changes an existing one.
 
-const srcRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const srcRoot = dirname(fileURLToPath(import.meta.url));
 
 /** Every module specifier a source file imports from or re-exports from, including dynamic imports. */
 export function importsOf(source: string): string[] {
@@ -28,6 +29,15 @@ export function violations(files: Record<string, string>): string[] {
       const target = stripExtension(relative('/', resolve('/', dirname(file), specifier)));
       if (file.startsWith('graph_store/') && (target === 'llm' || target.startsWith('llm/'))) {
         problems.push(`${file} imports ${specifier}: the graph store must not depend on the LLM component`);
+      }
+      if (file.startsWith('graph_store/') && (target === 'app' || target.startsWith('app/'))) {
+        problems.push(`${file} imports ${specifier}: the graph store must not depend on the application`);
+      }
+      if (file.startsWith('app/') && target.startsWith('graph_store/') && target !== 'graph_store/index') {
+        problems.push(`${file} imports ${specifier}: the application may use the graph store only through graph_store/index`);
+      }
+      if (file.startsWith('app/') && target.startsWith('llm/') && target !== 'llm/index') {
+        problems.push(`${file} imports ${specifier}: the application may use the LLM component only through llm/index`);
       }
       if (file.startsWith('llm/') && target.startsWith('graph_store/') && target !== 'graph_store/index') {
         problems.push(`${file} imports ${specifier}: the LLM component may use the graph store only through graph_store/index`);
@@ -72,6 +82,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
       violations({
         'graph_store/parse.ts': `import { x } from './result.js';`,
         'llm/index.ts': `import { y } from './errors.js'; export { categorise } from './capabilities/categorise/index.js';`,
+        'app/x.ts': `import { write } from '../graph_store/index.js'; import { createLlm } from '../llm/index.js'; import { y } from './y.js';`,
         'llm/create-llm.ts': `import { categorise } from './capabilities/categorise/index.js';`,
         'llm/model-client.ts': `import type { Result } from '../graph_store/index.js';`,
         'llm/capabilities/categorise/guard.ts': `import { llmError } from '../../errors.js'; import { parseMutation } from '../../../graph_store/index.js'; import { c } from './context.js';`,
@@ -88,6 +99,9 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the LLM component importing the application', { 'llm/x.ts': `import { app } from '../app/index.js';` }],
     ['one capability importing another', { 'llm/capabilities/categorise/x.ts': `import { answer } from '../answer/index.js';` }],
     ['the config importing a capability', { 'llm/config.ts': `import { categorise } from './capabilities/categorise/index.js';` }],
+    ['the graph store importing the application', { 'graph_store/x.ts': `import { app } from '../app/index.js';` }],
+    ['the application reaching into graph store internals', { 'app/x.ts': `import { parseMutation } from '../graph_store/parse.js';` }],
+    ['the application reaching into the LLM component\'s internals', { 'app/x.ts': `import { guardReply } from '../llm/capabilities/categorise/guard.js';` }],
     ['the kernel importing a capability', { 'llm/model-client.ts': `import { categorise } from './capabilities/categorise/index.js';` }],
   ])('catches %s', (_name, files) => {
     expect(violations(files).length).toBeGreaterThan(0);
@@ -96,10 +110,10 @@ describe('the checker itself (so the real check below cannot pass by accident)',
 
 describe('the real source tree', () => {
   it('keeps the components apart', () => {
-    const files = { ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'llm')) };
-    delete files['llm/boundary.test.ts']; // its sample violations are text inside this very file
+    const files = { ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'llm')), ...sourcesUnder(join(srcRoot, 'app')) };
     expect(Object.keys(files).some((f) => f.startsWith('graph_store/'))).toBe(true);
     expect(Object.keys(files).some((f) => f.startsWith('llm/'))).toBe(true);
+    expect(Object.keys(files).some((f) => f.startsWith('app/'))).toBe(true);
     expect(violations(files)).toEqual([]);
   });
 });
@@ -115,14 +129,13 @@ describe('no ambient input', () => {
     }
   });
 
-  it('keeps the LLM component free of environment and file access', () => {
-    const files = sourcesUnder(join(srcRoot, 'llm'));
-    delete files['llm/boundary.test.ts'];
+  it.each(['llm', 'app'])('keeps the %s component free of environment and file access', (component) => {
+    const files = sourcesUnder(join(srcRoot, component));
     const offenders = Object.entries(files)
       .filter(([file]) => !file.endsWith('.test.ts'))
       .filter(([, source]) => forbidden.some((pattern) => pattern.test(source)))
       .map(([file]) => file);
-    expect(Object.keys(files).length).toBeGreaterThan(3);
+    expect(Object.keys(files).length).toBeGreaterThan(2);
     expect(offenders).toEqual([]);
   });
 });
