@@ -98,3 +98,26 @@ describe('the real source tree', () => {
     expect(violations(files)).toEqual([]);
   });
 });
+
+describe('no ambient input', () => {
+  // Reading environment variables or files is the application's and the dev tools' job. The library
+  // takes everything it needs as arguments, which keeps it pure and testable.
+  const forbidden = [/process\.env/, /from ['"]node:fs/, /from ['"]fs['"]/, /readFileSync|readFile\(/, /process\.argv/];
+
+  it('finds the patterns it forbids (so the check below cannot pass by accident)', () => {
+    for (const bad of ['const k = process.env.X;', "import { readFileSync } from 'node:fs';", "import fs from 'fs';", 'process.argv[2]']) {
+      expect(forbidden.some((pattern) => pattern.test(bad))).toBe(true);
+    }
+  });
+
+  it('keeps the LLM component free of environment and file access', () => {
+    const files = sourcesUnder(join(srcRoot, 'llm'));
+    delete files['llm/boundary.test.ts'];
+    const offenders = Object.entries(files)
+      .filter(([file]) => !file.endsWith('.test.ts'))
+      .filter(([, source]) => forbidden.some((pattern) => pattern.test(source)))
+      .map(([file]) => file);
+    expect(Object.keys(files).length).toBeGreaterThan(3);
+    expect(offenders).toEqual([]);
+  });
+});

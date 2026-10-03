@@ -8,10 +8,50 @@
 export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage;
 
 // @public
+export const CAPABILITIES: readonly ["categorise"];
+
+// @public (undocumented)
+export type Capability = (typeof CAPABILITIES)[number];
+
+// @public
+export type CapabilityRoute = {
+    readonly tier: ModelTier;
+} | {
+    readonly model: string;
+};
+
+// Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function createLlmConfig(input?: LlmConfigInput): Result<LlmConfig, LlmError>;
+
+// @public
+export const DEFAULT_ROUTES: Readonly<Record<Capability, CapabilityRoute>>;
+
+// @public
+export const DEFAULT_TIERS: Readonly<Record<ModelTier, string>>;
+
+// @public
 export function isValidUsage(usage: TokenUsage): boolean;
 
 // @public
 export const LLM_ERROR_CODES: readonly ["TIMEOUT", "RATE_LIMITED", "REFUSED", "BAD_OUTPUT", "MODEL_ERROR", "CONFIG"];
+
+// @public
+export interface LlmConfig {
+    // (undocumented)
+    readonly capabilities: Readonly<Record<Capability, CapabilityRoute>>;
+    // (undocumented)
+    readonly tiers: Readonly<Record<ModelTier, string>>;
+}
+
+// @public
+export interface LlmConfigInput {
+    // (undocumented)
+    readonly capabilities?: Partial<Record<Capability, CapabilityRoute>>;
+    // (undocumented)
+    readonly tiers?: Partial<Record<ModelTier, string>>;
+}
 
 // @public (undocumented)
 export interface LlmError {
@@ -37,9 +77,18 @@ export interface LlmErrorOptions {
 }
 
 // @public
+export const MODEL_TIERS: readonly ["fast", "balanced", "deep"];
+
+// @public
+export interface ModelChoice {
+    // (undocumented)
+    readonly model?: string;
+    // (undocumented)
+    readonly tier?: ModelTier;
+}
+
+// @public
 export interface ModelClient {
-    // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     complete(request: ModelRequest): Promise<Result<ModelResponse, LlmError>>;
 }
@@ -86,7 +135,13 @@ export interface ModelResponse {
 }
 
 // @public (undocumented)
+export type ModelTier = (typeof MODEL_TIERS)[number];
+
+// @public (undocumented)
 export const NO_USAGE: TokenUsage;
+
+// @public
+export function resolveModel(config: LlmConfig, capability: Capability, choice?: ModelChoice): Result<string, LlmError>;
 
 // @public
 export interface TokenUsage {

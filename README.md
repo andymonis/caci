@@ -77,6 +77,10 @@ Task format in `PLAN.md`:
 
 `npm run dev:explorer` starts a local-only page (http://127.0.0.1:4317) that draws a graph and animates it as entries are added and removed, with scenarios, a log of every request and result, and one-click examples of what the library rejects. It lives in `dev/graph-explorer/` and is never part of a release. See its README.
 
+## Choosing models for the LLM component
+
+Which model does a job is configuration. `src/llm/` has three tiers, `fast` (Haiku 4.5), `balanced` (Sonnet 5.5) and `deep` (Opus 5.5), and routes each capability to a tier or to one exact model id. Categorising starts on `fast`; heavier future capabilities start on `deep`. `createLlmConfig({ tiers, capabilities })` checks what you give (an unknown tier, capability or field, or an empty model id, is a `CONFIG` error that says where) and fills in the rest; `resolveModel` picks the model for a call, with the order: a model chosen for that call, then a tier chosen for that call, then the capability's route. Changing a tier's model changes every capability routed to it. The library never reads environment variables or files: the application and the dev tools do that and pass the result in.
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.
