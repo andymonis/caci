@@ -264,21 +264,28 @@ describe('the output schema is the real mutation schema, narrowed', () => {
     expect(validate()({ ops: ops.slice(0, 25) })).toBe(true);
   });
 
-  it('keeps the definitions the operations refer to, so every reference resolves', () => {
-    expect(schema()).toHaveProperty('$defs');
+  it('has no dangling references: every $ref resolves, and unused definitions are not carried', () => {
+    const text = JSON.stringify(schema());
+    const refs = [...text.matchAll(/"\$ref":"(#\/[^"]+)"/g)].map((m) => m[1] as string);
+    for (const ref of refs) {
+      const found = ref.slice(2).split('/').reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], schema());
+      expect(found, ref).toBeDefined();
+    }
+    if (refs.length === 0) expect(schema()).not.toHaveProperty('$defs');
     expect(() => validate()).not.toThrow();
   });
 
   it('keeps each allowed operation exactly as the real schema defines it, minus the fields the model may not set', () => {
     const real = (((mutationJsonSchema().properties as Record<string, { items: { oneOf: Array<Record<string, unknown>> } }>).ops as { items: { oneOf: Array<Record<string, unknown>> } }).items.oneOf);
     const variants = ((schema().properties as { ops: { items: { oneOf: Array<{ properties: Record<string, unknown> }> } } }).ops.items.oneOf);
-    expect(variants).toHaveLength(2);
+    expect(variants).toHaveLength(3); // upsertNode is offered once for items and once for categories
     const link = variants.find((v) => (v.properties.op as { const: string }).const === 'link');
     const realLink = real.find((v) => (v.properties as Record<string, { const?: string }>).op?.const === 'link');
-    expect(Object.keys((link as { properties: object }).properties)).toEqual(['op', 'item', 'category', 'weight', 'data']);
+    expect(Object.keys((link as { properties: object }).properties)).toEqual(['op', 'item', 'category', 'weight']);
     expect(link).toEqual({ ...realLink, properties: link?.properties, required: expect.any(Array) });
-    const upsert = variants.find((v) => (v.properties.op as { const: string }).const === 'upsertNode');
-    expect(Object.keys(upsert?.properties ?? {})).toEqual(['op', 'partition', 'id', 'data']);
+    const upserts = variants.filter((v) => (v.properties.op as { const: string }).const === 'upsertNode');
+    expect(upserts.map((v) => Object.keys(v.properties))).toEqual([['op', 'partition', 'id', 'data'], ['op', 'partition', 'id', 'data']]);
+    expect(upserts.map((v) => v.properties.partition)).toEqual([{ type: 'string', const: 'item' }, { type: 'string', const: 'category' }]);
   });
 
   it('can be narrowed to fewer operations, and an unknown one is an error', () => {
@@ -295,6 +302,60 @@ describe('the output schema is the real mutation schema, narrowed', () => {
 
   it('is the same every time', () => {
     expect(JSON.stringify(schema())).toBe(JSON.stringify(schema()));
+  });
+});
+
+describe('the data each kind of node may carry', () => {
+  const validate = () => {
+    const r = buildOutputSchema(CATEGORISE_OPS, 25);
+    if (!r.ok) throw new Error(r.error.message);
+    return new Ajv2020({ strict: false }).compile(r.value);
+  };
+  const item = (data: unknown) => ({ ops: [{ op: 'upsertNode', partition: 'item', id: 'n', data }] });
+  const category = (data: unknown) => ({ ops: [{ op: 'upsertNode', partition: 'category', id: 'c', data }] });
+
+  it('an item has a title and a summary, and nothing else', () => {
+    expect(validate()(item({ title: 'Dr X', summary: 'Follow up.' }))).toBe(true);
+    for (const bad of [{ title: 'Dr X' }, { summary: 'x' }, { title: 'a', summary: 'b', extra: 1 }, { title: '', summary: 'b' }, { title: 5, summary: 'b' }, { name: 'Dr X' }, {}, 'text', null]) {
+      expect(validate()(item(bad)), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('a category has a name, and nothing else', () => {
+    expect(validate()(category({ name: 'Doctors' }))).toBe(true);
+    for (const bad of [{}, { name: '' }, { name: 5 }, { name: 'a', title: 'b' }, { title: 'a', summary: 'b' }]) {
+      expect(validate()(category(bad)), JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('data is required on both', () => {
+    expect(validate()({ ops: [{ op: 'upsertNode', partition: 'item', id: 'n' }] })).toBe(false);
+    expect(validate()({ ops: [{ op: 'upsertNode', partition: 'category', id: 'c' }] })).toBe(false);
+  });
+
+  it('the partition decides which data shape applies', () => {
+    expect(validate()({ ops: [{ op: 'upsertNode', partition: 'item', id: 'n', data: { name: 'x' } }] })).toBe(false);
+    expect(validate()({ ops: [{ op: 'upsertNode', partition: 'category', id: 'c', data: { title: 'a', summary: 'b' } }] })).toBe(false);
+  });
+
+  it('a link carries no data', () => {
+    expect(validate()({ ops: [{ op: 'link', item: 'a', category: 'b', data: { why: 'x' } }] })).toBe(false);
+    expect(validate()({ ops: [{ op: 'link', item: 'a', category: 'b' }] })).toBe(true);
+  });
+
+  it('every object in the schema is closed, as providers that enforce a schema require', () => {
+    const r = buildOutputSchema(CATEGORISE_OPS, 25);
+    if (!r.ok) throw new Error(r.error.message);
+    const open: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (Array.isArray(node)) return node.forEach((v, i) => walk(v, `${path}[${i}]`));
+      if (typeof node !== 'object' || node === null) return;
+      const n = node as Record<string, unknown>;
+      if (n.type === 'object' && n.additionalProperties !== false) open.push(path);
+      for (const [k, v] of Object.entries(n)) walk(v, `${path}.${k}`);
+    };
+    walk(r.value, 'schema');
+    expect(open).toEqual([]);
   });
 });
 

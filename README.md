@@ -23,7 +23,9 @@ CLAUDE.md               Loads system_prompt.md and .gsd/STATE.md into every Clau
 .claude/commands/       Slash commands that drive the loop: /plan /next /verify /ship
 src/graph_store/        The Bipartite Graph Store, isolated as one feature (code, tests, adapters)
 src/llm/                The LLM component: a model port, typed errors and token usage, and one folder per capability
-src/app/                The application layer (controller): input types, input normalising, item id minting
+src/app/                The application layer (controller): input types, normalising, item ids, propose / approve / reject
+src/llm/anthropic/      The Anthropic model client (the only user of @anthropic-ai/sdk)
+scripts/                Build helpers and the manual llm:try check against the real API
 schema/graph_store/     Generated JSON Schema for the mutation and query formats
 api/                    Committed public API report (API Extractor)
 dev/graph-explorer/     Local-only visual tester for the graph store (never published)
@@ -121,6 +123,25 @@ const result = await llm.categorise(
 ```
 
 It builds the context and prompt, calls the model, and checks the reply with the output guard. A reply the guard rejects goes back to the model once with the reasons; a second rejection is a `BAD_OUTPUT` error. One time limit covers both attempts, cancellation is honoured, and nothing is written: the result is a proposal for a person to approve and pass to `write`. A bad `graphId`, `itemId` or option is a `CONFIG` error before any model call is paid for.
+
+## Using the real model
+
+`bipartite-graph/llm/anthropic` is a `ModelClient` for the Anthropic Messages API. It is the only part of the package that uses `@anthropic-ai/sdk`, which is an **optional peer dependency**: install it only if you use this entry point (the graph store, the rest of the LLM component and the application work without it, and a test keeps it that way).
+
+```ts
+import { createLlm } from 'bipartite-graph/llm';
+import { createAnthropicClient, readAnthropicKey } from 'bipartite-graph/llm/anthropic';
+
+const key = readAnthropicKey(process.env);                 // the app reads the environment; the library never does
+if (!key.ok) throw new Error(key.error.message);
+const llm = createLlm({ client: createAnthropicClient({ apiKey: key.value }) });
+```
+
+- **The model comes from each request.** The client has no default model; `createLlm`'s configuration (tiers and routes) chooses it.
+- **The key** comes from `ANTHROPIC_API_KEY`, read by your code with `readAnthropicKey(env)` and passed in. It lives in a closure, is never on the client object, and is removed from every error message (the SDK's raw error text is never passed on). The SDK's own environment lookups (token, base URL, credential files) are switched off, so only the key you pass is used.
+- **Structured output.** A request with an `outputSchema` asks the provider for JSON in that shape. Providers enforce only part of JSON Schema, so the schema is converted first: types, properties, required, items, `anyOf`/`$defs`/`$ref` and a few formats are kept; everything else (`maxItems`, `maxLength`, `const`, `enum`, ranges) becomes text in the field's `description`, and every object is closed. The output guard is what enforces the full rules. The categoriser's schema gives each kind of node a closed `data` shape (item: `title`, `summary`; category: `name`) for the same reason.
+- **Errors** map onto the component's own: a rate limit is `RATE_LIMITED` (with the wait the provider asked for), a time-out is `TIMEOUT`, a refusal is `REFUSED`, a server fault or network failure is a retryable `MODEL_ERROR`, a rejected request is a non-retryable `MODEL_ERROR`, and an unknown model or a refused key is `CONFIG`. The SDK does not retry by default (`maxRetries: 0`), so callers see every failure and decide.
+- **Trying it for real.** `ANTHROPIC_API_KEY=... npm run llm:try` (options `--tier`, `--model`, `--text`) sends one sample note and prints the proposal. It is not part of the gate, costs a small amount, and sends the sample to Anthropic.
 
 ## The application layer
 

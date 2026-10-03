@@ -39,7 +39,7 @@ export interface GuardedReply {
 /** The fields the model may set on each operation. Everything else is the controller's. */
 const FIELDS: Readonly<Record<AllowedOp, readonly string[]>> = Object.freeze({
   upsertNode: Object.freeze(['op', 'partition', 'id', 'data']),
-  link: Object.freeze(['op', 'item', 'category', 'weight', 'data']),
+  link: Object.freeze(['op', 'item', 'category', 'weight']),
 });
 const CONTROLLER_FIELDS: readonly string[] = Object.freeze(['mode', 'ensureNodes', 'graphId', 'requestId', 'createIfMissing', 'version', 'kind']);
 const MAX_PROBLEMS = 5;

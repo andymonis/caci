@@ -136,6 +136,46 @@ describe('the real source tree', () => {
   });
 });
 
+describe('the provider SDK', () => {
+  // `@anthropic-ai/sdk` is an optional dependency used by one entry point. Nothing else may import it,
+  // so the graph store, the rest of the LLM component and the application work without it.
+  const imports = (source: string): boolean => /(?:from|import)\s*\(?\s*['"]@anthropic-ai\/sdk/.test(source);
+
+  it('finds an SDK import (so the check below cannot pass by accident)', () => {
+    expect(imports(`import Anthropic from '@anthropic-ai/sdk';`)).toBe(true);
+    expect(imports(`import { RateLimitError } from "@anthropic-ai/sdk";`)).toBe(true);
+    expect(imports(`const m = await import('@anthropic-ai/sdk/resources');`)).toBe(true);
+    expect(imports(`import { x } from './sdk.js';`)).toBe(false);
+  });
+
+  it('is imported only inside llm/anthropic', () => {
+    const files = { ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'llm')), ...sourcesUnder(join(srcRoot, 'app')) };
+    const offenders = Object.entries(files)
+      .filter(([file]) => !file.startsWith('llm/anthropic/'))
+      .filter(([file]) => file !== 'boundary.test.ts')
+      .filter(([, source]) => imports(source))
+      .map(([file]) => file);
+    expect(Object.keys(files).some((f) => f.startsWith('llm/anthropic/'))).toBe(true);
+    expect(offenders).toEqual([]);
+  });
+
+  it('is not reachable from the main LLM entry point', () => {
+    const files = sourcesUnder(join(srcRoot, 'llm'));
+    const reachable = (from: string, seen: Set<string> = new Set()): Set<string> => {
+      if (seen.has(from)) return seen;
+      seen.add(from);
+      for (const specifier of importsOf(files[from] ?? '')) {
+        const target = `${stripExtension(relative('/', resolve('/', dirname(from), specifier)))}.ts`;
+        if (target in files) reachable(target, seen);
+      }
+      return seen;
+    };
+    const fromIndex = [...reachable('llm/index.ts')];
+    expect(fromIndex.length).toBeGreaterThan(5);
+    expect(fromIndex.filter((f) => f.startsWith('llm/anthropic/'))).toEqual([]);
+  });
+});
+
 describe('no ambient input', () => {
   // Reading environment variables or files is the application's and the dev tools' job. The library
   // takes everything it needs as arguments, which keeps it pure and testable.

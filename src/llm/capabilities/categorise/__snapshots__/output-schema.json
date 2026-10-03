@@ -15,10 +15,7 @@
               },
               "partition": {
                 "type": "string",
-                "enum": [
-                  "item",
-                  "category"
-                ]
+                "const": "item"
               },
               "id": {
                 "type": "string",
@@ -26,18 +23,71 @@
               },
               "data": {
                 "type": "object",
-                "propertyNames": {
-                  "type": "string"
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "description": "A short title for the note."
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300,
+                    "description": "One line saying what the note is about."
+                  }
                 },
-                "additionalProperties": {
-                  "$ref": "#/$defs/__schema0"
-                }
+                "required": [
+                  "title",
+                  "summary"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
               "op",
               "partition",
-              "id"
+              "id",
+              "data"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "upsertNode"
+              },
+              "partition": {
+                "type": "string",
+                "const": "category"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "data": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "description": "A short readable name for the category."
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "op",
+              "partition",
+              "id",
+              "data"
             ],
             "additionalProperties": false
           },
@@ -58,15 +108,6 @@
               },
               "weight": {
                 "type": "number"
-              },
-              "data": {
-                "type": "object",
-                "propertyNames": {
-                  "type": "string"
-                },
-                "additionalProperties": {
-                  "$ref": "#/$defs/__schema0"
-                }
               }
             },
             "required": [
@@ -89,38 +130,5 @@
   "required": [
     "ops"
   ],
-  "additionalProperties": false,
-  "$defs": {
-    "__schema0": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "number"
-        },
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        },
-        {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/__schema0"
-          }
-        },
-        {
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {
-            "$ref": "#/$defs/__schema0"
-          }
-        }
-      ]
-    }
-  }
+  "additionalProperties": false
 }

@@ -33,10 +33,28 @@ export interface BuiltPrompt {
 
 export const DEFAULT_PROMPT_OPTIONS = Object.freeze({ maxOps: 25, maxTextChars: 8000, maxContextChars: 12_000 });
 
-/** Fields the model may not choose: the controller sets them (an upsert is always a merge, never a replace; a link never creates missing nodes). */
+/** Fields the model may not choose: the controller sets them (an upsert is always a merge, never a replace; a link never creates missing nodes or carries data). */
 const OMITTED_FIELDS: Readonly<Record<AllowedOp, readonly string[]>> = Object.freeze({
   upsertNode: Object.freeze(['mode']),
-  link: Object.freeze(['ensureNodes']),
+  link: Object.freeze(['ensureNodes', 'data']),
+});
+
+/**
+ * What the model may put in `data`. The graph store accepts any object there, but providers that
+ * enforce a schema need every object closed, so the model is offered exactly what the prompt asks for.
+ */
+const DATA_SHAPES = Object.freeze({
+  item: Object.freeze({
+    properties: Object.freeze({
+      title: Object.freeze({ type: 'string', minLength: 1, maxLength: 120, description: 'A short title for the note.' }),
+      summary: Object.freeze({ type: 'string', minLength: 1, maxLength: 300, description: 'One line saying what the note is about.' }),
+    }),
+    required: Object.freeze(['title', 'summary']),
+  }),
+  category: Object.freeze({
+    properties: Object.freeze({ name: Object.freeze({ type: 'string', minLength: 1, maxLength: 60, description: 'A short readable name for the category.' }) }),
+    required: Object.freeze(['name']),
+  }),
 });
 
 const OP_RULES: Readonly<Record<AllowedOp, string>> = Object.freeze({
@@ -116,7 +134,17 @@ export function buildOutputSchema(allowedOps: readonly AllowedOp[], maxOps: numb
     const variant = (all as Json[]).find((v) => ((v.properties as Json | undefined)?.op as Json | undefined)?.const === op);
     if (variant === undefined) return bad('output schema', `the mutation schema has no "${op}" operation`);
     const properties = Object.fromEntries(Object.entries(variant.properties as Json).filter(([field]) => !OMITTED_FIELDS[op].includes(field)));
-    kept.push({ ...variant, properties, required: (variant.required as string[]).filter((f) => f in properties) });
+    const required = (variant.required as string[]).filter((f) => f in properties);
+    if (op === 'upsertNode') {
+      // one variant per partition, so each kind of node has its own closed `data`
+      for (const partition of ['item', 'category'] as const) {
+        const shape = DATA_SHAPES[partition];
+        const data = { type: 'object', properties: structuredClone(shape.properties), required: [...shape.required], additionalProperties: false } as Json;
+        kept.push({ ...variant, properties: { ...properties, partition: { type: 'string', const: partition }, data }, required: [...required, 'data'] });
+      }
+    } else {
+      kept.push({ ...variant, properties, required });
+    }
   }
   return ok({
     $schema: full.$schema as string,
@@ -127,7 +155,7 @@ export function buildOutputSchema(allowedOps: readonly AllowedOp[], maxOps: numb
     },
     required: ['ops'],
     additionalProperties: false,
-    ...(full.$defs === undefined ? {} : { $defs: full.$defs as never }),
+    ...(full.$defs === undefined || !JSON.stringify(kept).includes('"$ref"') ? {} : { $defs: full.$defs as never }),
   } as JsonObject);
 }
 

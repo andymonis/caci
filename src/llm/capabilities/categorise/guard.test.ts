@@ -212,8 +212,8 @@ describe('size limits', () => {
     expect(guard(json(wide)).ok).toBe(true);
   });
 
-  it('caps data on links too', () => {
-    expect(guard(json({ ops: [ITEM, { ...LINK, data: { why: 'x'.repeat(3000) } }] })).ok).toBe(false);
+  it('a link carries no data at all (the model is not offered it)', () => {
+    expect(message(json({ ops: [ITEM, { ...LINK, data: { why: 'x' } }] }))).toContain('ops[1]: unknown field "data"');
   });
 
   it('caps id length', () => {
