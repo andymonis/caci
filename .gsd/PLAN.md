@@ -4,7 +4,7 @@ Format: `- [ ] T-001 (R-xxx) Imperative task title — acceptance: <how we know 
 Tasks must be atomic: one commit, one context window.
 Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipartite Graph Store — Library Specification.md`.
 
-## Current milestone: M4a Core reads (M0 to M3 complete)
+## Current milestone: L1 LLM categoriser core (M0 to M4a complete)
 
 Order of work: **M4a** (reads) → **L1** (LLM categoriser core, with model tiers) → **A1** (controller, preview then approve) → **L2** (real Anthropic client, shared dev server, LLM lab, model-comparison evals) → **A1b** (explorer capture panel) → M4b → M5 and on. Decided 2026-10-02: build the reads the categoriser needs first, and never write model output without a human preview and approval.
 
@@ -18,7 +18,6 @@ Order of work: **M4a** (reads) → **L1** (LLM categoriser core, with model tier
 
 
 ## M4a Core reads (spec phase 4, part 1; covers AC-09, AC-13, AC-17, AC-19, AC-21, AC-22)
-- [ ] T-038 (dev tooling) Explorer reads through `query()` — acceptance: the explorer fetches its picture with one `from: all` subgraph query, so it exercises the public API; a Query panel with a JSON editor and presets ("all categories", "everything about this node, depth 1 or 2") highlights the result nodes; server tests updated; checked by hand in Chrome
 
 ## L1 LLM categoriser core (new component `src/llm/`; no network in the gate)
 - [ ] T-039 (LLM) Scaffold `src/llm/` and the model port — acceptance: a new sibling folder with its own entry point (`./llm`) and API report, laid out as a small shared kernel (`model-client`, `errors`, `usage`) plus one folder per capability under `capabilities/` so a new capability never edits another; the purity lint applies; a small `ModelClient` interface where **every request names the model** (model id, system prompt, messages, optional output schema, max tokens, timeout in; text or JSON and token usage out); its own closed error type (`TIMEOUT`, `RATE_LIMITED`, `REFUSED`, `BAD_OUTPUT`, `MODEL_ERROR`, `CONFIG`); nothing in `src/graph_store` imports from it
@@ -51,6 +50,7 @@ Order of work: **M4a** (reads) → **L1** (LLM categoriser core, with model tier
 - From M5 onward, "conformance suite passes on all adapters" is a standing gate item.
 
 ## Backlog
+- Explorer UI is verified by hand in Chrome only. A hidden or background browser tab throttles timers and never fires `requestAnimationFrame`, so scripted checks should wait on server round trips, not timers. If the UI keeps growing, consider a small browser-level test (for example Playwright) as a dev-only dependency.
 - Paging a query over a large graph re-reads from the start to reach the cursor (the adapter only offers opaque cursors, so the executor skips whole pages until it passes the position). Each page costs a number of adapter calls proportional to its position. Fine for now; for M5/M6 consider an optional adapter primitive or capability to list "after this id" (SQLite and the file adapter can do it cheaply) and measure it in the NFR-05 benchmark.
 - Privacy before real use of the LLM (T-047 onward): captured text is sent to an external model. Decide whether a redaction step is needed and what must never be sent; the `ModelClient` port keeps a local model possible later. Not answered yet.
 - Packaging: `src/llm/` and `src/app/` currently ship as entry points of one package whose name says "bipartite-graph". Decide at M7 whether the platform becomes a workspace of separate packages.
@@ -103,4 +103,5 @@ Order of work: **M4a** (reads) → **L1** (LLM categoriser core, with model tier
 - [x] T-035 (R-001, FR-20, AC-17, AC-19) `subgraph` shape — acceptance: nodes plus only the edges with both ends in the whole result; each edge appears exactly once across pages; a depth-1 query on `doctor-x` returns exactly it, its 4 items and 4 edges; `from: all` with paging returns every node and edge once and nothing from other graphs; edge weight is always reported (1 when none is stored) and edge data follows `includeData`
 - [x] T-036 (R-001, FR-15, FR-17, AC-10, AC-14, AC-20, AC-21) Wire `query()` and the options — acceptance: `query()` and the client call the executor; the real `QueryOutput` replaces the placeholder; `write`, `query` and `createGraphClient` accept `{ limits }` so callers can set tighter caps; invalid, wrong-endpoint and `depth: 4` input never touch the adapter; API reports re-baselined; stale Backlog items removed
 - [x] T-037 (R-001, NFR-07) `reads` group in the conformance suite — acceptance: AC-09, AC-13, AC-17, AC-19, AC-21 and AC-22 run for every adapter against its own data using only public functions; the fixture adapter passes; deliberately broken adapters (unsorted listing, a cursor that repeats a row, a read that writes) are caught
+- [x] T-038 (dev tooling) Explorer reads through `query()` — acceptance: the explorer fetches its picture with one `from: all` subgraph query, so it exercises the public API; a Query panel with a JSON editor and presets ("all categories", "everything about this node, depth 1 or 2") highlights the result nodes; server tests updated; checked by hand in Chrome
 - [x] T-023 (R-001, architecture) Isolate the graph store under `src/graph_store/` — acceptance: all library code, tests, entry points, generated JSON Schema and tooling paths live under or point at `graph_store`; gate green with the same 120 tests as before; spec and docs describe the layout

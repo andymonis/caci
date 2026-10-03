@@ -91,6 +91,19 @@
       </section>
 
       <section>
+        <h2>Query</h2>
+        <textarea id="query-json" rows="9" spellcheck="false" aria-label="Query JSON"></textarea>
+        <div class="row">
+          <button id="run-query">Run query</button>
+          <button id="next-page" disabled>Next page</button>
+          <button id="clear-hit" class="ghost">Clear</button>
+        </div>
+        <p id="query-status" class="hint" aria-live="polite"></p>
+        <h3>Presets</h3>
+        <div id="query-presets" class="stack"></div>
+      </section>
+
+      <section>
         <h2>Raw mutation</h2>
         <textarea id="raw" rows="8" spellcheck="false" aria-label="Mutation JSON"></textarea>
         <button id="send-raw">Send to write()</button>

@@ -1,5 +1,5 @@
-import { computeLayout, describeDiff, diffGraphs, edgePath, mergeOrder, nodeKey } from './layout.js';
-import { rejected, scenarios } from './scenarios.js';
+import { computeLayout, describeDiff, diffGraphs, edgeKey, edgePath, mergeOrder, nodeKey } from './layout.js';
+import { queryPresets, rejected, scenarios } from './scenarios.js';
 
 const $ = (id) => document.getElementById(id);
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -19,6 +19,9 @@ const state = {
   scenario: { def: scenarios[0], index: 0, timer: null },
   frame: 0,
   rawDirty: false,
+  queryDirty: false,
+  lastQuery: null, // { request, nextCursor } of the last query that worked
+  hit: null, // { nodes: Set, edges: Set } of the last query result, shown highlighted
 };
 
 function svgEl(name, attrs = {}) {
@@ -99,6 +102,7 @@ function render(value, { animate }) {
   startTween();
   renderCounts(value);
   renderLists(graph);
+  applyHit();
   if (previous !== null) setChange(describeDiff(diff));
   if (state.selection) renderSelection();
 }
@@ -147,7 +151,7 @@ function reconcileEdges(layout, flash, animate) {
       const line = svgEl('path', { class: 'edge' });
       const hit = svgEl('path', { class: 'edge-hit' });
       const title = svgEl('title');
-      const g = svgEl('g');
+      const g = svgEl('g', { class: 'edge-g' });
       g.append(line, hit, title);
       const choose = () => select({ type: 'edge', key: edge.key });
       hit.addEventListener('click', choose);
@@ -163,7 +167,7 @@ function reconcileEdges(layout, flash, animate) {
     }
     rec.weight = edge.weight;
     rec.line.style.strokeWidth = String(1.5 + Math.min(Math.max(edge.weight ?? 1, 0), 5) * 0.8);
-    rec.title.textContent = `${edge.item} → ${edge.category}${edge.weight === undefined ? '' : `  (weight ${edge.weight})`}`;
+    rec.title.textContent = `${edge.item} → ${edge.category}${edge.weight === undefined || edge.weight === 1 ? '' : `  (weight ${edge.weight})`}`;
     if (animate && flash.has(edge.key)) pulse(rec.line);
   }
   for (const [key, rec] of state.edges) {
@@ -361,6 +365,8 @@ async function switchGraph(graphId) {
   renderSelection();
   setChange('');
   if (!state.rawDirty) $('raw').value = sampleRaw();
+  clearQuery();
+  if (!state.queryDirty) $('query-json').value = queryTemplate();
   await refresh({ animate: false });
 }
 
@@ -382,6 +388,64 @@ function parseJsonField(text, what) {
     setChange(`${what}: ${error.message}`, true);
     return { ok: false };
   }
+}
+
+// ---------- queries ----------
+
+function queryTemplate() {
+  return JSON.stringify({ version: 1, graphId: state.graphId ?? 'demo', from: { all: true }, filter: { partition: 'category' }, return: { shape: 'nodes' }, page: { limit: 50 } }, null, 2);
+}
+
+function queryStatus(text, bad = false) {
+  const el = $('query-status');
+  el.textContent = text;
+  el.classList.toggle('bad', bad);
+}
+
+/** Shows which nodes and links the last query matched; everything else fades. */
+function applyHit() {
+  const hit = state.hit;
+  svg.classList.toggle('querying', hit !== null);
+  for (const [key, rec] of state.nodes) rec.g.classList.toggle('hit', hit !== null && hit.nodes.has(key));
+  for (const [key, rec] of state.edges) rec.g.classList.toggle('hit', hit !== null && hit.edges.has(key));
+}
+
+function clearQuery() {
+  state.hit = null;
+  state.lastQuery = null;
+  $('next-page').disabled = true;
+  queryStatus('');
+  applyHit();
+}
+
+/** Sends a query through the library's query(), logs it, and highlights what it matched. */
+async function runQuery(label, request) {
+  const result = await api('/api/query', 'POST', request);
+  log(label, request, result);
+  if (!result.ok) {
+    state.hit = null;
+    state.lastQuery = null;
+    $('next-page').disabled = true;
+    queryStatus(`${result.error?.code}: ${result.error?.message ?? ''}`.slice(0, 200), true);
+    applyHit();
+    return result;
+  }
+  const value = result.value;
+  const nodes = value.nodes ?? value.ids ?? [];
+  state.hit = 'count' in value ? null : { nodes: new Set(nodes.map((n) => nodeKey(n.partition, n.id))), edges: new Set((value.edges ?? []).map((e) => edgeKey(e.item, e.category))) };
+  state.lastQuery = { request, nextCursor: value.nextCursor ?? null };
+  $('next-page').disabled = state.lastQuery.nextCursor === null;
+  const parts = 'count' in value ? [`count ${value.count}`] : [`${nodes.length} node${nodes.length === 1 ? '' : 's'}`, ...('edges' in value ? [`${value.edges.length} link${value.edges.length === 1 ? '' : 's'}`] : [])];
+  queryStatus(`${parts.join(', ')}${value.truncated ? ' (truncated by a size cap)' : ''}${state.lastQuery.nextCursor === null ? '' : ' · more pages'}`);
+  applyHit();
+  return result;
+}
+
+function selectedNode() {
+  const sel = state.selection;
+  if (sel === null || sel.type !== 'node') return null;
+  const at = sel.key.indexOf(':');
+  return { partition: sel.key.slice(0, at), id: sel.key.slice(at + 1) };
 }
 
 // ---------- scenarios ----------
@@ -517,6 +581,41 @@ for (const entry of rejected) {
         await submit(`try: ${entry.label}`, entry.build(state.graphId ?? 'demo'));
       },
     }, entry.label),
+  );
+}
+
+$('query-json').value = queryTemplate();
+$('query-json').addEventListener('input', () => {
+  state.queryDirty = true;
+});
+$('run-query').addEventListener('click', async () => {
+  let request;
+  try {
+    request = JSON.parse($('query-json').value);
+  } catch (error) {
+    return queryStatus(`query: ${error.message}`, true);
+  }
+  await runQuery('query', request);
+});
+$('next-page').addEventListener('click', async () => {
+  if (state.lastQuery === null || state.lastQuery.nextCursor === null) return;
+  const request = { ...state.lastQuery.request, page: { ...state.lastQuery.request.page, cursor: state.lastQuery.nextCursor } };
+  $('query-json').value = JSON.stringify(request, null, 2);
+  await runQuery('query (next page)', request);
+});
+$('clear-hit').addEventListener('click', clearQuery);
+for (const preset of queryPresets) {
+  $('query-presets').append(
+    html('button', {
+      class: 'ghost',
+      onclick: async () => {
+        const node = selectedNode();
+        if (preset.needs === 'node' && node === null) return queryStatus('Click a node in the graph first.', true);
+        const request = preset.build(state.graphId ?? 'demo', node);
+        $('query-json').value = JSON.stringify(request, null, 2);
+        await runQuery(`query: ${preset.label}`, request);
+      },
+    }, preset.label),
   );
 }
 

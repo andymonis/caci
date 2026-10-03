@@ -58,3 +58,17 @@ export const rejected = [
   { id: 'bad-id', label: 'Use a graph id with a capital and a slash', build: () => ({ version: 1, kind: 'mutation', graphId: 'My/Graph', ops: [] }) },
   { id: 'version', label: 'Use an unknown version', build: (graphId) => ({ version: 2, kind: 'mutation', graphId, ops: [] }) },
 ];
+
+/**
+ * Ready-made queries. `needs` says what must be selected in the graph first ('node'); `build`
+ * receives the graph id and the selected node (if any) and returns a query.
+ */
+export const queryPresets = [
+  { id: 'categories', label: 'All categories', build: (graphId) => ({ version: 1, graphId, from: { all: true }, filter: { partition: 'category' }, return: { shape: 'ids' }, page: { limit: 100 } }) },
+  { id: 'count', label: 'Count everything', build: (graphId) => ({ version: 1, graphId, from: { all: true }, return: { shape: 'count' } }) },
+  { id: 'paged', label: 'First 3 nodes, then use Next page', build: (graphId) => ({ version: 1, graphId, from: { all: true }, return: { shape: 'nodes' }, page: { limit: 3 } }) },
+  { id: 'whole', label: 'The whole graph as a subgraph', build: (graphId) => ({ version: 1, graphId, from: { all: true }, return: { shape: 'subgraph' }, page: { limit: 1000 } }) },
+  { id: 'about1', label: 'Everything about the selected node (1 hop)', needs: 'node', build: (graphId, node) => ({ version: 1, graphId, from: { partition: node.partition, ids: [node.id] }, traverse: { depth: 1 }, return: { shape: 'subgraph' } }) },
+  { id: 'about2', label: 'Everything about the selected node (2 hops)', needs: 'node', build: (graphId, node) => ({ version: 1, graphId, from: { partition: node.partition, ids: [node.id] }, traverse: { depth: 2 }, return: { shape: 'subgraph' } }) },
+  { id: 'related', label: 'Items related to the selected item (share a category)', needs: 'node', build: (graphId, node) => ({ version: 1, graphId, from: { partition: node.partition, ids: [node.id] }, traverse: { depth: 2 }, filter: { partition: 'item', excludeSeeds: true }, return: { shape: 'ids' } }) },
+];

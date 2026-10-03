@@ -21,8 +21,9 @@ npm run dev:explorer
 ```
 
 then open http://127.0.0.1:4317 (set `GRAPH_EXPLORER_PORT` to change the port). It builds the library
-first, because the server uses the real `write`, `createGraph`, `dropGraph`, `listGraphs` and
-`describeGraph` plus the memory adapter. Nothing is faked.
+first, because the server uses the real `write`, `query`, `createGraph`, `dropGraph`, `listGraphs` and
+`describeGraph` plus the memory adapter. Nothing is faked, and the picture itself is read with one
+whole-graph `query()` (a page at a time), so what you see is what a caller of the library would get.
 
 ## What you can do
 
@@ -33,6 +34,7 @@ first, because the server uses the real `write`, `createGraph`, `dropGraph`, `li
 - **Try what gets rejected**: one click sends an item-to-item link, a misspelt field, a graph id with a
   capital and a slash, and so on, and shows the library's error.
 - **Send a raw mutation**: paste any mutation JSON and see the result.
+- **Run queries**: the Query panel sends any query JSON to the library's `query()` and highlights the matching nodes and links in the picture while everything else fades. Presets cover the common ones: all categories, a count, the first three nodes (then **Next page** follows the cursor), the whole graph as a subgraph, everything about the selected node within 1 or 2 hops, and the items related to a selected item. Click a node first for the presets that need one. Refusals (depth 4, a feature not built yet, a missing graph) appear in red with the library's own message.
 - **Click a node or a link** to see its data and remove it. Hover to highlight what it connects to.
 - **Read the log**: every request and result, newest first. Open an entry for the full JSON.
 - **Auto-refresh** redraws once a second, so changes made from elsewhere (for example `curl`) show up.

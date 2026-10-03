@@ -56,6 +56,10 @@ describe('the explorer is local only', () => {
     expect((await post({ 'content-type': 'text/plain' })).status).toBe(415);
     expect((await post({ origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json' })).status).toBe(200);
     expect((await raw('/api/graphs/x', { method: 'DELETE', headers: { host: `127.0.0.1:${port}`, origin: 'https://evil.example' } })).status).toBe(403);
+    const query = (headers) => raw('/api/query', { method: 'POST', headers: { host: `127.0.0.1:${port}`, ...headers }, body: '{}' });
+    expect((await query({ origin: 'https://evil.example', 'content-type': 'application/json' })).status).toBe(403);
+    expect((await query({ 'content-type': 'text/plain' })).status).toBe(415);
+    expect((await query({ 'content-type': 'application/json' })).status).toBe(200);
   });
 
   it('rejects oversized and malformed bodies', async () => {
@@ -89,6 +93,79 @@ describe('static files', () => {
   });
 });
 
+describe('queries through the public query() function', () => {
+  async function filled() {
+    await mutate(
+      [
+        { op: 'upsertNode', partition: 'category', id: 'doctor-x', data: { name: 'Dr X' } },
+        ...['v1', 'v2', 'v3'].map((id) => ({ op: 'upsertNode', partition: 'item', id })),
+        ...['v1', 'v2', 'v3'].map((item) => ({ op: 'link', item, category: 'doctor-x' })),
+      ],
+      { createIfMissing: true },
+    );
+  }
+  const ask = (query) => call('/api/query', 'POST', { version: 1, graphId: 'g', ...query });
+
+  it('answers a query exactly as the library does', async () => {
+    await filled();
+    const { status, json } = await ask({ from: { partition: 'category', ids: ['doctor-x'] }, traverse: { depth: 1 }, return: { shape: 'subgraph' } });
+    expect(status).toBe(200);
+    expect(json.value.nodes.map((n) => n.id)).toEqual(['v1', 'v2', 'v3', 'doctor-x']);
+    expect(json.value.edges).toEqual(['v1', 'v2', 'v3'].map((item) => ({ item, category: 'doctor-x', weight: 1 })));
+  });
+
+  it('pages with the cursor it hands back', async () => {
+    await filled();
+    const first = await ask({ from: { all: true }, return: { shape: 'ids' }, page: { limit: 3 } });
+    expect(first.json.value.ids).toHaveLength(3);
+    const second = await ask({ from: { all: true }, return: { shape: 'ids' }, page: { limit: 3, cursor: first.json.value.nextCursor } });
+    expect(second.json.value.ids.map((n) => n.id)).toEqual(['doctor-x']);
+    expect(second.json.value.nextCursor).toBeNull();
+  });
+
+  it('reports refusals as results, not transport failures', async () => {
+    await filled();
+    expect((await ask({ from: { partition: 'category', ids: ['x'] }, traverse: { depth: 4 }, return: { shape: 'nodes' } })).json).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR', path: ['traverse', 'depth'] },
+    });
+    expect((await ask({ filter: { all: ['a'] }, from: { all: true }, return: { shape: 'nodes' } })).json.error.message).toContain('not supported yet');
+    expect((await call('/api/query', 'POST', { version: 1, graphId: 'missing', from: { all: true }, return: { shape: 'count' } })).json).toMatchObject({
+      ok: false,
+      error: { code: 'GRAPH_NOT_FOUND' },
+    });
+    expect((await call('/api/query', 'POST', null)).json).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
+  });
+
+  it('never changes the store', async () => {
+    await filled();
+    const before = (await call('/api/graphs/g')).json;
+    await ask({ from: { all: true }, return: { shape: 'subgraph', includeData: true } });
+    expect((await call('/api/graphs/g')).json).toEqual(before);
+  });
+
+  it('draws a graph larger than one page of results completely (2,500 items, 2,500 links)', async () => {
+    const ids = Array.from({ length: 2500 }, (_, i) => `n${String(i).padStart(4, '0')}`);
+    const chunks = (list) => Array.from({ length: Math.ceil(list.length / 800) }, (_, i) => list.slice(i * 800, (i + 1) * 800));
+    let first = true;
+    for (const chunk of chunks(ids)) {
+      expect((await mutate(chunk.map((id) => ({ op: 'upsertNode', partition: 'item', id })), { createIfMissing: first })).json.ok).toBe(true);
+      first = false;
+    }
+    await mutate([{ op: 'upsertNode', partition: 'category', id: 'hub' }]);
+    for (const chunk of chunks(ids)) {
+      expect((await mutate(chunk.map((item) => ({ op: 'link', item, category: 'hub' })))).json.ok).toBe(true);
+    }
+    const { json } = await call('/api/graphs/g');
+    expect(json.value.items).toHaveLength(2500);
+    expect(json.value.categories).toHaveLength(1);
+    expect(json.value.edges).toHaveLength(2500);
+    expect(json.value.info).toMatchObject({ itemCount: 2500, categoryCount: 1, edgeCount: 2500 });
+    expect(new Set(json.value.edges.map((e) => e.item)).size).toBe(2500); // each edge once
+    expect(json.value.truncated).toBe(false);
+  });
+});
+
 describe('driving the graph store', () => {
   it('starts empty and lists graphs as they are created and dropped', async () => {
     expect((await call('/api/graphs')).json).toEqual({ ok: true, value: { items: [] } });
@@ -112,7 +189,8 @@ describe('driving the graph store', () => {
     expect(json.value.info).toEqual({ graphId: 'g', itemCount: 2, categoryCount: 1, edgeCount: 2 });
     expect(json.value.items.map((n) => n.id)).toEqual(['n1', 'n2']);
     expect(json.value.items[0].data).toEqual({ title: 'one' });
-    expect(json.value.edges).toEqual([{ item: 'n1', category: 'work', weight: 2 }, { item: 'n2', category: 'work' }]);
+    expect(json.value.edges).toEqual([{ item: 'n1', category: 'work', weight: 2 }, { item: 'n2', category: 'work', weight: 1 }]); // a missing weight reads as 1
+    expect(json.value.truncated).toBe(false);
   });
 
   it('shows removals: deleting a category takes its links with it', async () => {

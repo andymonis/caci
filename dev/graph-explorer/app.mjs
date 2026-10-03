@@ -86,18 +86,34 @@ export function createApp(lib) {
     return rows;
   }
 
-  /** Everything in one graph, read through the adapter's own primitives so the picture is the stored truth. */
+  /**
+   * Everything in one graph, read through the public `query()` (one whole-graph subgraph query, a
+   * page at a time), so the picture shows what a real caller of the library would get.
+   */
   async function readGraph(graphId) {
     const info = await lib.describeGraph(adapter, graphId);
     if (!info.ok) return info;
-    const data = await adapter.transaction(graphId, async (tx) => {
-      const items = await allPages((page) => tx.listNodes('item', page));
-      const categories = await allPages((page) => tx.listNodes('category', page));
-      const edges = [];
-      for (const item of items) edges.push(...(await allPages((page) => tx.edgesOf('item', item.id, page))));
-      return { items, categories, edges };
-    });
-    return { ok: true, value: { info: info.value, ...data } };
+    const items = [];
+    const categories = [];
+    const edges = [];
+    let truncated = false;
+    let cursor = null;
+    for (let pages = 0; pages < 1000; pages++) {
+      const result = await lib.query(adapter, {
+        version: 1,
+        graphId,
+        from: { all: true },
+        return: { shape: 'subgraph', includeData: true },
+        page: { limit: PAGE, cursor },
+      });
+      if (!result.ok) return result;
+      for (const node of result.value.nodes) (node.partition === 'item' ? items : categories).push(node);
+      edges.push(...result.value.edges);
+      truncated ||= result.value.truncated;
+      cursor = result.value.nextCursor;
+      if (cursor === null) break;
+    }
+    return { ok: true, value: { info: info.value, items, categories, edges, truncated } };
   }
 
   async function api(req, res, url) {
@@ -126,6 +142,9 @@ export function createApp(lib) {
     }
     if (parts[0] === 'graphs' && parts.length === 2 && req.method === 'DELETE') {
       return send(res, 200, await lib.dropGraph(adapter, graphId));
+    }
+    if (parts[0] === 'query' && parts.length === 1 && req.method === 'POST') {
+      return send(res, 200, await lib.query(adapter, await readJson(req)));
     }
     if (parts[0] === 'write' && parts.length === 1 && req.method === 'POST') {
       return send(res, 200, await lib.write(adapter, await readJson(req)));

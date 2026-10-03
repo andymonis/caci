@@ -79,3 +79,9 @@ form > input { margin-bottom: .4rem; }
 .log pre { margin: .3rem 0 0; font-size: .72rem; white-space: pre-wrap; word-break: break-word; background: var(--bg); padding: .4rem; border-radius: 6px; }
 .log time { color: var(--muted); font-size: .72rem; }
 #selection pre { font-size: .75rem; white-space: pre-wrap; background: var(--bg); padding: .4rem; border-radius: 6px; margin: .4rem 0; }
+
+/* query results: the matching nodes and links stay bright, everything else fades */
+.querying .node:not(.hit), .querying .edge-g:not(.hit) { opacity: .18; }
+.node.hit .shape { stroke-width: 4; filter: drop-shadow(0 0 6px var(--accent)); }
+.edge-g.hit .edge { stroke: var(--accent); }
+.hint.bad { color: var(--bad); }
