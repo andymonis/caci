@@ -3,8 +3,11 @@
 
 export { CAPABILITIES, createLlmConfig, DEFAULT_ROUTES, DEFAULT_TIERS, MODEL_TIERS, resolveModel } from './config.js';
 export type { Capability, CapabilityRoute, LlmConfig, LlmConfigInput, ModelChoice, ModelTier } from './config.js';
+export { runWithDeadline } from './deadline.js';
+export type { DeadlineOptions } from './deadline.js';
 export { LLM_ERROR_CODES, llmError } from './errors.js';
 export type { LlmError, LlmErrorCode, LlmErrorOptions } from './errors.js';
 export type { ModelClient, ModelMessage, ModelOutput, ModelRequest, ModelResponse } from './model-client.js';
+export { checkRequest } from './request-check.js';
 export { addUsage, isValidUsage, NO_USAGE, totalTokens } from './usage.js';
 export type { TokenUsage } from './usage.js';

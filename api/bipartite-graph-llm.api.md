@@ -20,10 +20,20 @@ export type CapabilityRoute = {
     readonly model: string;
 };
 
+// @public
+export function checkRequest(request: unknown): LlmError | undefined;
+
 // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
 //
 // @public
 export function createLlmConfig(input?: LlmConfigInput): Result<LlmConfig, LlmError>;
+
+// @public (undocumented)
+export interface DeadlineOptions {
+    readonly signal?: AbortSignal | undefined;
+    // (undocumented)
+    readonly timeoutMs: number;
+}
 
 // @public
 export const DEFAULT_ROUTES: Readonly<Record<Capability, CapabilityRoute>>;
@@ -35,7 +45,7 @@ export const DEFAULT_TIERS: Readonly<Record<ModelTier, string>>;
 export function isValidUsage(usage: TokenUsage): boolean;
 
 // @public
-export const LLM_ERROR_CODES: readonly ["TIMEOUT", "RATE_LIMITED", "REFUSED", "BAD_OUTPUT", "MODEL_ERROR", "CONFIG"];
+export const LLM_ERROR_CODES: readonly ["TIMEOUT", "RATE_LIMITED", "REFUSED", "BAD_OUTPUT", "MODEL_ERROR", "CONFIG", "CANCELLED"];
 
 // @public
 export interface LlmConfig {
@@ -142,6 +152,9 @@ export const NO_USAGE: TokenUsage;
 
 // @public
 export function resolveModel(config: LlmConfig, capability: Capability, choice?: ModelChoice): Result<string, LlmError>;
+
+// @public
+export function runWithDeadline<T>(work: (signal: AbortSignal) => Promise<Result<T, LlmError>>, options: DeadlineOptions): Promise<Result<T, LlmError>>;
 
 // @public
 export interface TokenUsage {

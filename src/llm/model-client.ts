@@ -21,7 +21,7 @@ export interface ModelRequest {
   readonly maxOutputTokens: number;
   /** Give up after this long and return a `TIMEOUT` error. */
   readonly timeoutMs: number;
-  /** Lets the caller cancel the call; a cancelled call ends with an error result, not an exception. */
+  /** Lets the caller cancel the call; a cancelled call ends with a `CANCELLED` error result, not an exception. */
   readonly signal?: AbortSignal;
 }
 

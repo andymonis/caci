@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { LLM_ERROR_CODES, llmError } from './errors.js';
 
 describe('LLM error codes', () => {
-  it('are the closed set from the plan, in order', () => {
-    expect([...LLM_ERROR_CODES]).toEqual(['TIMEOUT', 'RATE_LIMITED', 'REFUSED', 'BAD_OUTPUT', 'MODEL_ERROR', 'CONFIG']);
+  it('are the closed set, in order (CANCELLED was added with the model-client contract)', () => {
+    expect([...LLM_ERROR_CODES]).toEqual(['TIMEOUT', 'RATE_LIMITED', 'REFUSED', 'BAD_OUTPUT', 'MODEL_ERROR', 'CONFIG', 'CANCELLED']);
   });
 
   it('do not overlap the graph store codes that mean something else', () => {
@@ -24,6 +24,7 @@ describe('llmError', () => {
     ['BAD_OUTPUT', false],
     ['MODEL_ERROR', false],
     ['CONFIG', false],
+    ['CANCELLED', false],
   ] as const)('%s is retryable: %s, by default', (code, retryable) => {
     expect(llmError(code, 'x').retryable).toBe(retryable);
   });

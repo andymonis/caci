@@ -81,6 +81,25 @@ Task format in `PLAN.md`:
 
 Which model does a job is configuration. `src/llm/` has three tiers, `fast` (Haiku 4.5), `balanced` (Sonnet 5.5) and `deep` (Opus 5.5), and routes each capability to a tier or to one exact model id. Categorising starts on `fast`; heavier future capabilities start on `deep`. `createLlmConfig({ tiers, capabilities })` checks what you give (an unknown tier, capability or field, or an empty model id, is a `CONFIG` error that says where) and fills in the rest; `resolveModel` picks the model for a call, with the order: a model chosen for that call, then a tier chosen for that call, then the capability's route. Changing a tier's model changes every capability routed to it. The library never reads environment variables or files: the application and the dev tools do that and pass the result in.
 
+## Testing code that uses a model
+
+`bipartite-graph/llm/testing` has a scripted model client that plays back answers and errors instead of calling a model, so everything built on the `ModelClient` port can be tested without a network or a key:
+
+```ts
+import { createScriptedModelClient } from 'bipartite-graph/llm/testing';
+
+const client = createScriptedModelClient([
+  { reply: '{"ops":[]}' },        // the provider answers (parsed as JSON if the request asked for JSON)
+  { rateLimited: true, retryAfterMs: 500 },
+  { refusal: true },
+]);
+await client.complete(request);
+client.requests;   // every request it was asked, frozen copies
+client.callCount;  // how many reached the provider
+```
+
+It behaves like a careful real client: it checks the request first, honours the time limit and cancellation, and never throws. A real client is held to the same contract with `runModelClientConformance(makeClient, { describe, it })`. The suite cannot make a real provider refuse or hang, so `makeClient` is told which scenario to produce (a text reply, JSON, prose when JSON was asked for, a refusal, a rate limit, a server fault, a rejected request, an unknown model, or a provider that never answers) and returns a client whose provider, usually a mocked HTTP layer, behaves that way. The shared helpers `checkRequest` and `runWithDeadline` do the request checking and the time limit and cancellation for any client.
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.

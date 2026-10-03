@@ -52,7 +52,7 @@ const isTier = (value: unknown): value is ModelTier => (MODEL_TIERS as readonly 
 const isCapability = (value: unknown): value is Capability => (CAPABILITIES as readonly unknown[]).includes(value);
 
 /** A model id as providers write them: non-empty, no whitespace or control characters, a sane length. */
-function modelIdProblem(value: unknown): string | undefined {
+export function modelIdProblem(value: unknown): string | undefined {
   if (typeof value !== 'string') return 'a model id must be a string';
   if (value.length === 0) return 'a model id must not be empty';
   if (value.length > 200) return 'a model id is too long (over 200 characters)';

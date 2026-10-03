@@ -2,7 +2,7 @@
  * Everything that can go wrong when talking to a model, as a closed set so callers can handle each
  * case. This is the LLM component's own list: it is separate from the graph store's error codes.
  */
-export const LLM_ERROR_CODES = ['TIMEOUT', 'RATE_LIMITED', 'REFUSED', 'BAD_OUTPUT', 'MODEL_ERROR', 'CONFIG'] as const;
+export const LLM_ERROR_CODES = ['TIMEOUT', 'RATE_LIMITED', 'REFUSED', 'BAD_OUTPUT', 'MODEL_ERROR', 'CONFIG', 'CANCELLED'] as const;
 
 export type LlmErrorCode = (typeof LLM_ERROR_CODES)[number];
 
@@ -29,6 +29,7 @@ const RETRYABLE_BY_DEFAULT: Readonly<Record<LlmErrorCode, boolean>> = Object.fre
   BAD_OUTPUT: false,
   MODEL_ERROR: false,
   CONFIG: false,
+  CANCELLED: false,
 });
 
 export function llmError(code: LlmErrorCode, message: string, options: LlmErrorOptions = {}): LlmError {
