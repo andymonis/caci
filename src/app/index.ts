@@ -9,3 +9,5 @@ export { INPUT_KINDS, parseInput } from './input.js';
 export type { AudioInput, ImageInput, Input, InputKind, TextInput } from './input.js';
 export { normaliseInput, normaliseText } from './normalise.js';
 export type { InputNormaliser, Normalisers } from './normalise.js';
+export { describeSummary, summarise } from './summary.js';
+export type { ExistingNodes, Link, ProposalSummary } from './summary.js';

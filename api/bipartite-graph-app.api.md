@@ -35,6 +35,17 @@ export interface AudioInput {
 export function createItemIdGenerator(options?: ItemIdOptions): ItemIdGenerator;
 
 // @public
+export function describeSummary(summary: ProposalSummary): string;
+
+// @public
+export interface ExistingNodes {
+    // (undocumented)
+    readonly categories: readonly string[];
+    // (undocumented)
+    readonly items: readonly string[];
+}
+
+// @public
 export interface ImageInput {
     // (undocumented)
     readonly data: Uint8Array;
@@ -68,6 +79,14 @@ export interface ItemIdOptions {
     readonly random?: () => string;
 }
 
+// @public (undocumented)
+export interface Link {
+    // (undocumented)
+    readonly category: string;
+    // (undocumented)
+    readonly item: string;
+}
+
 // @public
 export function normaliseInput(input: unknown, normalisers?: Normalisers): Promise<Result<string, AppError>>;
 
@@ -86,6 +105,24 @@ export const normaliseText: InputNormaliser<TextInput>;
 
 // @public
 export function parseInput(value: unknown): Result<Input, AppError>;
+
+// @public
+export interface ProposalSummary {
+    // (undocumented)
+    readonly newCategories: readonly string[];
+    readonly newItems: readonly string[];
+    readonly newLinks: readonly Link[];
+    readonly notes: readonly string[];
+    readonly problems: readonly string[];
+    readonly reusedCategories: readonly string[];
+    readonly updatedCategories: readonly string[];
+    readonly updatedItems: readonly string[];
+}
+
+// Warning: (ae-forgotten-export) The symbol "Mutation" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function summarise(mutation: Mutation, existing: ExistingNodes): Result<ProposalSummary, AppError>;
 
 // @public
 export interface TextInput {
