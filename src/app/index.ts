@@ -11,3 +11,6 @@ export { normaliseInput, normaliseText } from './normalise.js';
 export type { InputNormaliser, Normalisers } from './normalise.js';
 export { describeSummary, summarise } from './summary.js';
 export type { ExistingNodes, Link, ProposalSummary } from './summary.js';
+export { createController, DEFAULT_CONTROLLER_OPTIONS } from './controller.js';
+export type { Controller, ControllerError, ControllerInit, ProposeOptions } from './controller.js';
+export type { PendingProposal } from './pending.js';

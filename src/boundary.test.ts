@@ -21,8 +21,14 @@ const stripExtension = (path: string): string => path.replace(/\.(?:ts|js|mjs)$/
 /** The files that put the capabilities together; they are the only ones outside `capabilities/` allowed to import them. */
 const ASSEMBLY: readonly string[] = Object.freeze(['llm/index.ts', 'llm/create-llm.ts']);
 
-/** The graph store's public entry points the application may import (the memory adapter is how it, and its tests, get a store). */
-const APP_MAY_USE: readonly string[] = Object.freeze(['graph_store/index', 'graph_store/adapters/memory/index']);
+/**
+ * The public entry points the application may import. Its tests (and test utilities) may also use
+ * the memory adapter and the scripted model client, which is how they get a store and a model.
+ */
+const APP_MAY_USE: readonly string[] = Object.freeze(['graph_store/index']);
+const APP_TEST_MAY_USE: readonly string[] = Object.freeze(['graph_store/index', 'graph_store/adapters/memory/index']);
+const APP_LLM: readonly string[] = Object.freeze(['llm/index']);
+const APP_TEST_LLM: readonly string[] = Object.freeze(['llm/index', 'llm/testing/index']);
 
 /** Describes every dependency that breaks the rules. `files` maps a path under src (like `llm/x.ts`) to its source. */
 export function violations(files: Record<string, string>): string[] {
@@ -36,11 +42,12 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('graph_store/') && (target === 'app' || target.startsWith('app/'))) {
         problems.push(`${file} imports ${specifier}: the graph store must not depend on the application`);
       }
-      if (file.startsWith('app/') && target.startsWith('graph_store/') && !APP_MAY_USE.includes(target)) {
-        problems.push(`${file} imports ${specifier}: the application may use the graph store only through its public entry points (${APP_MAY_USE.join(', ')})`);
+      const appTest = /\.test(?:-util)?\.ts$/.test(file);
+      if (file.startsWith('app/') && target.startsWith('graph_store/') && !(appTest ? APP_TEST_MAY_USE : APP_MAY_USE).includes(target)) {
+        problems.push(`${file} imports ${specifier}: the application may use the graph store only through its public entry points (${(appTest ? APP_TEST_MAY_USE : APP_MAY_USE).join(', ')})`);
       }
-      if (file.startsWith('app/') && target.startsWith('llm/') && target !== 'llm/index') {
-        problems.push(`${file} imports ${specifier}: the application may use the LLM component only through llm/index`);
+      if (file.startsWith('app/') && target.startsWith('llm/') && !(appTest ? APP_TEST_LLM : APP_LLM).includes(target)) {
+        problems.push(`${file} imports ${specifier}: the application may use the LLM component only through its public entry points (${(appTest ? APP_TEST_LLM : APP_LLM).join(', ')})`);
       }
       if (file.startsWith('llm/') && target.startsWith('graph_store/') && target !== 'graph_store/index') {
         problems.push(`${file} imports ${specifier}: the LLM component may use the graph store only through graph_store/index`);
@@ -85,7 +92,9 @@ describe('the checker itself (so the real check below cannot pass by accident)',
       violations({
         'graph_store/parse.ts': `import { x } from './result.js';`,
         'llm/index.ts': `import { y } from './errors.js'; export { categorise } from './capabilities/categorise/index.js';`,
-        'app/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { write } from '../graph_store/index.js'; import { createLlm } from '../llm/index.js'; import { y } from './y.js';`,
+        'app/x.ts': `import { write } from '../graph_store/index.js'; import { createLlm } from '../llm/index.js'; import { y } from './y.js';`,
+        'app/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createScriptedModelClient } from '../llm/testing/index.js';`,
+        'app/helper.test-util.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
         'llm/create-llm.ts': `import { categorise } from './capabilities/categorise/index.js';`,
         'llm/model-client.ts': `import type { Result } from '../graph_store/index.js';`,
         'llm/capabilities/categorise/guard.ts': `import { llmError } from '../../errors.js'; import { parseMutation } from '../../../graph_store/index.js'; import { c } from './context.js';`,
@@ -105,6 +114,9 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the graph store importing the application', { 'graph_store/x.ts': `import { app } from '../app/index.js';` }],
     ['the application reaching into graph store internals', { 'app/x.ts': `import { parseMutation } from '../graph_store/parse.js';` }],
     ['the application reaching into the memory adapter\'s internals', { 'app/x.ts': `import { x } from '../graph_store/adapters/memory/memory-adapter.js';` }],
+    ['production application code using the memory adapter', { 'app/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
+    ['production application code using the scripted model client', { 'app/x.ts': `import { createScriptedModelClient } from '../llm/testing/index.js';` }],
+    ['an application test using the LLM component\'s internals', { 'app/x.test.ts': `import { guardReply } from '../llm/capabilities/categorise/guard.js';` }],
     ['the application using the conformance suite', { 'app/x.ts': `import { runAdapterConformance } from '../graph_store/testing/index.js';` }],
     ['the LLM component using the memory adapter', { 'llm/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
     ['the application reaching into the LLM component\'s internals', { 'app/x.ts': `import { guardReply } from '../llm/capabilities/categorise/guard.js';` }],

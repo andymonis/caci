@@ -8,7 +8,7 @@ export default tseslint.config(
   {
     // NFR-02: no module-level mutable state in library code.
     files: ['src/**/*.ts'],
-    ignores: ['src/**/*.test.ts'],
+    ignores: ['src/**/*.test.ts', 'src/**/*.test-util.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',

@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export const APP_ERROR_CODES: readonly ["INVALID_INPUT", "UNSUPPORTED_INPUT", "NORMALISER_FAILED"];
+export const APP_ERROR_CODES: readonly ["INVALID_INPUT", "UNSUPPORTED_INPUT", "NORMALISER_FAILED", "TOO_MANY_PENDING", "UNEXPECTED"];
 
 // @public (undocumented)
 export interface AppError {
@@ -31,8 +31,60 @@ export interface AudioInput {
     readonly mediaType: string;
 }
 
+// @public (undocumented)
+export interface Controller {
+    get(proposalId: string): PendingProposal | undefined;
+    // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
+    propose(graphId: string, input: unknown, options?: ProposeOptions): Promise<Result<PendingProposal, ControllerError>>;
+}
+
+// @public
+export type ControllerError = {
+    readonly source: 'app';
+    readonly error: AppError;
+} | {
+    readonly source: 'graph';
+    readonly error: GraphError;
+} | {
+    readonly source: 'llm';
+    readonly error: LlmError;
+};
+
+// @public (undocumented)
+export interface ControllerInit {
+    // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly adapter: StorageAdapter;
+    // Warning: (ae-forgotten-export) The symbol "GraphOptions" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly graphOptions?: GraphOptions;
+    readonly ids?: ItemIdGenerator;
+    // Warning: (ae-forgotten-export) The symbol "Llm" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly llm: Llm;
+    readonly maxCategories?: number;
+    readonly maxPending?: number;
+    readonly normalisers?: Normalisers;
+    readonly now?: () => number;
+    readonly proposalIds?: ItemIdGenerator;
+    readonly ttlMs?: number;
+}
+
+// @public
+export function createController(init: ControllerInit): Controller;
+
 // @public
 export function createItemIdGenerator(options?: ItemIdOptions): ItemIdGenerator;
+
+// @public (undocumented)
+export const DEFAULT_CONTROLLER_OPTIONS: Readonly<{
+    ttlMs: number;
+    maxPending: 100;
+    maxCategories: 500;
+}>;
 
 // @public
 export function describeSummary(summary: ProposalSummary): string;
@@ -64,8 +116,6 @@ export const INPUT_KINDS: readonly InputKind[];
 // @public (undocumented)
 export type InputKind = Input['kind'];
 
-// Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
-//
 // @public
 export type InputNormaliser<T extends Input> = (input: T) => Promise<Result<string, AppError>>;
 
@@ -107,6 +157,40 @@ export const normaliseText: InputNormaliser<TextInput>;
 export function parseInput(value: unknown): Result<Input, AppError>;
 
 // @public
+export interface PendingProposal {
+    // (undocumented)
+    readonly attempts: 1 | 2;
+    readonly context: {
+        readonly categoriesRead: number;
+        readonly capped: boolean;
+    };
+    // (undocumented)
+    readonly createdAt: number;
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly graphId: string;
+    // (undocumented)
+    readonly id: string;
+    readonly itemId: string;
+    // (undocumented)
+    readonly model: string;
+    // Warning: (ae-forgotten-export) The symbol "Mutation" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly mutation: Mutation;
+    readonly note: string;
+    // (undocumented)
+    readonly rationale?: string;
+    // (undocumented)
+    readonly summary: ProposalSummary;
+    readonly text: string;
+    // Warning: (ae-forgotten-export) The symbol "TokenUsage" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly usage: TokenUsage;
+}
+
+// @public
 export interface ProposalSummary {
     // (undocumented)
     readonly newCategories: readonly string[];
@@ -119,8 +203,12 @@ export interface ProposalSummary {
     readonly updatedItems: readonly string[];
 }
 
-// Warning: (ae-forgotten-export) The symbol "Mutation" needs to be exported by the entry point index.d.ts
-//
+// @public (undocumented)
+export interface ProposeOptions {
+    // Warning: (ae-forgotten-export) The symbol "CategoriseOptions" needs to be exported by the entry point index.d.ts
+    readonly categorise?: CategoriseOptions;
+}
+
 // @public
 export function summarise(mutation: Mutation, existing: ExistingNodes): Result<ProposalSummary, AppError>;
 
@@ -131,6 +219,11 @@ export interface TextInput {
     // (undocumented)
     readonly text: string;
 }
+
+// Warnings were encountered during analysis:
+//
+// dist/app/controller.d.ts:13:5 - (ae-forgotten-export) The symbol "GraphError" needs to be exported by the entry point index.d.ts
+// dist/app/controller.d.ts:16:5 - (ae-forgotten-export) The symbol "LlmError" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
