@@ -1,4 +1,4 @@
-import { err, ok, type GraphError, type GraphOptions, type Mutation, type Result, type StorageAdapter } from '../graph_store/index.js';
+import { err, ok, write, type GraphError, type GraphOptions, type Mutation, type Result, type StorageAdapter, type WriteOutput } from '../graph_store/index.js';
 import type { CategoriseOptions, Llm, LlmError } from '../llm/index.js';
 import { appError, type AppError } from './errors.js';
 import { createItemIdGenerator, type ItemIdGenerator } from './ids.js';
@@ -38,12 +38,30 @@ export interface ProposeOptions {
   readonly categorise?: CategoriseOptions;
 }
 
+/** What a successful approval returns. */
+export interface Approved {
+  /** The proposal that was applied; it is no longer held. */
+  readonly proposal: PendingProposal;
+  /** What `write` reported. */
+  readonly written: WriteOutput;
+}
+
 export interface Controller {
   /**
    * Asks the model how to file a note in a graph and holds the answer as a pending proposal.
    * Reads the graph; **writes nothing**.
    */
   propose(graphId: string, input: unknown, options?: ProposeOptions): Promise<Result<PendingProposal, ControllerError>>;
+  /**
+   * Applies a pending proposal with `write()`, once. The proposal is taken out before the write
+   * starts, so a second (or simultaneous) approval finds nothing and writes nothing. If the write
+   * fails nothing is changed (a mutation is all-or-nothing) and the proposal is put back, with its
+   * original expiry, so it can be tried again or rejected. The preview was computed when the proposal
+   * was made; the graph may have changed since, and the write is what decides.
+   */
+  approve(proposalId: string): Promise<Result<Approved, ControllerError>>;
+  /** Discards a pending proposal without writing anything. */
+  reject(proposalId: string): Result<PendingProposal, ControllerError>;
   /** A held proposal, unless it is unknown or has expired. */
   get(proposalId: string): PendingProposal | undefined;
 }
@@ -89,6 +107,8 @@ export function createController(init: ControllerInit): Controller {
 
   async function propose(graphId: string, input: unknown, options?: ProposeOptions): Promise<Result<PendingProposal, ControllerError>> {
     try {
+      // Refuse before any paid work if there is no room to hold the answer.
+      if (!store.hasRoom()) return app(appError('TOO_MANY_PENDING', 'too many proposals are waiting; approve, reject or let some expire first'));
       // The graph is read first: it is cheap, and a note should not be transcribed or sent to a model for a graph that is not there.
       const read = await readCategories(adapter, graphId, settings.maxCategories, graphOptions);
       if (!read.ok) return graph(read.error);
@@ -130,5 +150,32 @@ export function createController(init: ControllerInit): Controller {
     }
   }
 
-  return Object.freeze({ propose, get: (proposalId: string) => store.get(proposalId) });
+  const unavailable = (state: 'expired' | 'unknown', id: string): Result<never, ControllerError> =>
+    state === 'expired'
+      ? app(appError('PROPOSAL_EXPIRED', `proposal ${id} ran out of time before it was approved; ask for a new one`))
+      : app(appError('PROPOSAL_NOT_FOUND', `no pending proposal ${id}: it is unknown, or it was already approved or rejected`));
+
+  async function approve(proposalId: string): Promise<Result<Approved, ControllerError>> {
+    const taken = store.take(proposalId);
+    if (taken.state !== 'found') return unavailable(taken.state, String(proposalId));
+    const { proposal } = taken;
+    try {
+      const written = await write(adapter, proposal.mutation, graphOptions);
+      if (!written.ok) {
+        store.restore(proposal);
+        return graph(written.error);
+      }
+      return ok(Object.freeze({ proposal, written: written.value }));
+    } catch {
+      store.restore(proposal);
+      return app(appError('UNEXPECTED', 'approve failed unexpectedly; the proposal was kept'));
+    }
+  }
+
+  function reject(proposalId: string): Result<PendingProposal, ControllerError> {
+    const taken = store.take(proposalId);
+    return taken.state === 'found' ? ok(taken.proposal) : unavailable(taken.state, String(proposalId));
+  }
+
+  return Object.freeze({ propose, approve, reject, get: (proposalId: string) => store.get(proposalId) });
 }

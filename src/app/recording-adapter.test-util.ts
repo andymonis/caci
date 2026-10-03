@@ -31,7 +31,7 @@ export function recordAdapter(inner: StorageAdapter): RecordingAdapter {
   const adapter: StorageAdapter = {
     name: `recording(${inner.name})`,
     capabilities: inner.capabilities,
-    transaction: (graphId, fn) => inner.transaction(graphId, (tx) => fn(wrapTx(tx))),
+    transaction: (graphId, fn) => (note('transaction'), inner.transaction(graphId, (tx) => fn(wrapTx(tx)))),
     graphs: {
       create: (id) => (note('graphs.create'), inner.graphs.create(id)),
       exists: (id) => (note('graphs.exists'), inner.graphs.exists(id)),

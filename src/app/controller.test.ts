@@ -1,50 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';
-import { createGraph, describeGraph, write, type Op, type StorageAdapter } from '../graph_store/index.js';
+import { createGraph, describeGraph, ok, type StorageAdapter } from '../graph_store/index.js';
 import { createLlm } from '../llm/index.js';
 import { createScriptedModelClient, type ScriptStep } from '../llm/testing/index.js';
-import { createController, type ControllerInit } from './controller.js';
-import { ok } from '../graph_store/index.js';
-import { recordAdapter } from './recording-adapter.test-util.js';
-
-const category = (id: string, name = id): Op => ({ op: 'upsertNode', partition: 'category', id, mode: 'merge', data: { name } });
-const item = (id: string): Op => ({ op: 'upsertNode', partition: 'item', id, mode: 'merge', data: { title: id } });
-const link = (i: string, c: string): Op => ({ op: 'link', item: i, category: c, ensureNodes: false });
-const reply = (value: unknown): ScriptStep => ({ reply: JSON.stringify(value) });
-
-const PROPOSAL = {
-  ops: [
-    { op: 'upsertNode', partition: 'item', id: 'note-1', data: { title: 'Dr X visit', summary: 'Follow up.' } },
-    { op: 'upsertNode', partition: 'category', id: 'doctor-x', data: { name: 'Dr X' } },
-    { op: 'link', item: 'note-1', category: 'doctor-x', weight: 0.9 },
-    { op: 'link', item: 'note-1', category: 'appointments', weight: 0.7 },
-  ],
-  rationale: 'About a doctor visit.',
-};
-const NOTE = { kind: 'text', text: 'Saw Dr X on Tuesday about the blood test.' };
-
-type Script = Parameters<typeof createScriptedModelClient>[0];
-async function setup(options: { script?: Script; existing?: Op[]; init?: Partial<ControllerInit>; createGraphFirst?: boolean } = {}) {
-  const inner = createMemoryAdapter();
-  const recording = recordAdapter(inner);
-  if (options.createGraphFirst !== false) {
-    await createGraph(inner, 'notes');
-    if (options.existing) expect((await write(inner, { version: 1, kind: 'mutation', graphId: 'notes', createIfMissing: false, ops: options.existing })).ok).toBe(true);
-  }
-  const client = createScriptedModelClient(options.script ?? [reply(PROPOSAL)]);
-  let clock = 1_000_000;
-  const clockControl = { now: () => clock, advance: (ms: number) => void (clock += ms) };
-  let minted = 0;
-  const controller = createController({
-    adapter: recording.adapter,
-    llm: createLlm({ client, now: clockControl.now }),
-    ids: () => `note-${++minted}`,
-    now: clockControl.now,
-    ...options.init,
-  });
-  return { controller, client, inner, recording, clock: clockControl, minted: () => minted };
-}
-const EXISTING: Op[] = [category('appointments', 'Appointments'), category('errands'), item('older-note'), link('older-note', 'appointments')];
+import { createController } from './controller.js';
+import { category, EXISTING, item, NOTE, PROPOSAL, reply, setup, type Script } from './controller-fixture.test-util.js';
 
 describe('propose: a proposal for a note', () => {
   it('returns a pending proposal with the mutation, summary and plain text', async () => {
@@ -331,10 +291,10 @@ describe('proposals expire and are limited in number', () => {
 describe('createController', () => {
   const base = { adapter: createMemoryAdapter(), llm: createLlm({ client: createScriptedModelClient([]) }) };
 
-  it('returns a frozen object with propose and get', () => {
+  it('returns a frozen object with propose, approve, reject and get', () => {
     const c = createController(base);
     expect(Object.isFrozen(c)).toBe(true);
-    expect(Object.keys(c).sort()).toEqual(['get', 'propose']);
+    expect(Object.keys(c).sort()).toEqual(['approve', 'get', 'propose', 'reject']);
   });
 
   it.each([

@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export const APP_ERROR_CODES: readonly ["INVALID_INPUT", "UNSUPPORTED_INPUT", "NORMALISER_FAILED", "TOO_MANY_PENDING", "UNEXPECTED"];
+export const APP_ERROR_CODES: readonly ["INVALID_INPUT", "UNSUPPORTED_INPUT", "NORMALISER_FAILED", "TOO_MANY_PENDING", "PROPOSAL_NOT_FOUND", "PROPOSAL_EXPIRED", "UNEXPECTED"];
 
 // @public (undocumented)
 export interface AppError {
@@ -22,6 +22,13 @@ export function appError(code: AppErrorCode, message: string): AppError;
 export type AppErrorCode = (typeof APP_ERROR_CODES)[number];
 
 // @public
+export interface Approved {
+    readonly proposal: PendingProposal;
+    // Warning: (ae-forgotten-export) The symbol "WriteOutput" needs to be exported by the entry point index.d.ts
+    readonly written: WriteOutput;
+}
+
+// @public
 export interface AudioInput {
     // (undocumented)
     readonly data: Uint8Array;
@@ -33,9 +40,11 @@ export interface AudioInput {
 
 // @public (undocumented)
 export interface Controller {
+    approve(proposalId: string): Promise<Result<Approved, ControllerError>>;
     get(proposalId: string): PendingProposal | undefined;
     // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
     propose(graphId: string, input: unknown, options?: ProposeOptions): Promise<Result<PendingProposal, ControllerError>>;
+    reject(proposalId: string): Result<PendingProposal, ControllerError>;
 }
 
 // @public
