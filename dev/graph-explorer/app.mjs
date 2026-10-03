@@ -1,13 +1,11 @@
 // Local development tool: a tiny HTTP server around the graph store so the explorer UI can drive it.
-// It is not part of the library or the published package, and it only ever listens on loopback.
-import { readFile } from 'node:fs/promises';
-import { createServer } from 'node:http';
+// It is not part of the library or the published package, and it only ever listens on loopback
+// (the server, its host/origin checks and its static-file allow-list come from ../shared/server-kit.mjs).
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { assertLocalDevelopment as assertLocal, createLoopbackServer, HttpError } from '../shared/server-kit.mjs';
 
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), 'public');
-const MAX_BODY_BYTES = 1_000_000;
-const LOOPBACK = '127.0.0.1';
 const PAGE = 1000;
 
 /** Only these files are ever served, so no request path can reach anything else on disk. */
@@ -20,18 +18,9 @@ const FILES = {
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
-class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
 /** Refuses to run anywhere that looks like a deployment. */
 export function assertLocalDevelopment(env = process.env) {
-  if (env.NODE_ENV === 'production') {
-    throw new Error('The graph explorer is a local development tool and must not run with NODE_ENV=production.');
-  }
+  assertLocal('The graph explorer', env);
 }
 
 /**
@@ -40,40 +29,6 @@ export function assertLocalDevelopment(env = process.env) {
  */
 export function createApp(lib) {
   let adapter = lib.createMemoryAdapter();
-
-  const send = (res, status, body, type = 'application/json; charset=utf-8') => {
-    res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
-    res.end(typeof body === 'string' ? body : JSON.stringify(body));
-  };
-
-  const server = createServer((req, res) => {
-    handle(req, res).catch((error) => {
-      if (error instanceof HttpError) send(res, error.status, { error: error.message });
-      else send(res, 500, { error: 'internal error', detail: String(error?.message ?? error) });
-    });
-  });
-
-  /** Requests must be addressed to this exact loopback origin; this blocks DNS-rebinding from other sites. */
-  function hostAllowed(req) {
-    const port = server.address()?.port;
-    return [`${LOOPBACK}:${port}`, `localhost:${port}`].includes(req.headers.host ?? '');
-  }
-
-  async function readJson(req) {
-    const chunks = [];
-    let size = 0;
-    for await (const chunk of req) {
-      size += chunk.length;
-      if (size > MAX_BODY_BYTES) throw new HttpError(413, 'request body too large');
-      chunks.push(chunk);
-    }
-    const text = Buffer.concat(chunks).toString('utf8');
-    try {
-      return text === '' ? {} : JSON.parse(text);
-    } catch {
-      throw new HttpError(400, 'request body is not valid JSON');
-    }
-  }
 
   async function allPages(fetchPage) {
     const rows = [];
@@ -116,16 +71,7 @@ export function createApp(lib) {
     return { ok: true, value: { info: info.value, items, categories, edges, truncated } };
   }
 
-  async function api(req, res, url) {
-    const writes = req.method !== 'GET';
-    if (writes) {
-      if (req.headers.origin !== undefined && req.headers.origin !== `http://${req.headers.host}`) {
-        throw new HttpError(403, 'cross-origin request refused');
-      }
-      if (req.method === 'POST' && !String(req.headers['content-type'] ?? '').startsWith('application/json')) {
-        throw new HttpError(415, 'send application/json');
-      }
-    }
+  async function api(req, res, url, { send, readJson }) {
     const parts = url.pathname.split('/').slice(2); // after /api
     const graphId = parts[1] === undefined ? undefined : decodeURIComponent(parts[1]);
 
@@ -156,25 +102,5 @@ export function createApp(lib) {
     throw new HttpError(404, 'no such API route');
   }
 
-  async function handle(req, res) {
-    if (!hostAllowed(req)) throw new HttpError(403, 'this tool only answers on 127.0.0.1 or localhost');
-    const url = new URL(req.url ?? '/', 'http://explorer.invalid');
-    const file = req.method === 'GET' ? FILES[url.pathname] : undefined;
-    if (file !== undefined) {
-      return send(res, 200, await readFile(join(PUBLIC_DIR, file[0]), 'utf8'), file[1]);
-    }
-    if (url.pathname.startsWith('/api/')) return api(req, res, url);
-    throw new HttpError(404, 'not found');
-  }
-
-  return {
-    server,
-    /** Always binds loopback. Pass 0 for a free port. Resolves with the port. */
-    listen: (port = 0) =>
-      new Promise((resolve, reject) => {
-        server.once('error', reject);
-        server.listen(port, LOOPBACK, () => resolve(server.address().port));
-      }),
-    close: () => new Promise((resolve) => server.close(() => resolve())),
-  };
+  return createLoopbackServer({ files: FILES, publicDir: PUBLIC_DIR, api });
 }

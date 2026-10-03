@@ -9,7 +9,7 @@ everything else stays where it is.
 
 - It lives in `dev/`, outside `src/`, so it is not compiled into `dist/`.
 - The package publishes only `dist/` and `schema/` (see `files` in `package.json`).
-- `not-published.test.mjs` asks npm what it would publish and fails if anything from here is in it.
+- `dev/not-published.test.mjs` (one test for every dev tool) asks npm what it would publish and fails if anything from `dev/` is in it, and checks that only the shared server kit touches the network modules.
 - The server binds `127.0.0.1` only, checks the `Host` and `Origin` headers, and refuses to start when
   `NODE_ENV=production`.
 - Data is held in memory and is lost when you stop it.
@@ -44,8 +44,8 @@ whole-graph `query()` (a page at a time), so what you see is what a caller of th
 | File | Purpose |
 | --- | --- |
 | `server.mjs` | Entry point: loads the built library and starts the server |
-| `app.mjs` | The loopback-only HTTP server and its small JSON API |
+| `app.mjs` | The explorer's JSON API, mounted on the shared loopback server (`../shared/server-kit.mjs`: host, origin and content-type checks, body limit, file allow-list, production guard) |
 | `public/` | The page: `index.html`, `style.css`, `app.js` (rendering and animation), `layout.js` (pure layout and diff logic), `scenarios.js` (sample data) |
-| `*.test.mjs` | Tests for the server, the layout logic and the "never published" guarantees |
+| `*.test.mjs` | Tests for the API and the layout logic (the server kit and the "never published" guarantees are tested in `../shared/` and `../`) |
 
 The page uses no libraries and loads nothing from the network.

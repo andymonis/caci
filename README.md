@@ -29,6 +29,7 @@ scripts/                Build helpers and the manual llm:try check against the r
 schema/graph_store/     Generated JSON Schema for the mutation and query formats
 api/                    Committed public API report (API Extractor)
 dev/graph-explorer/     Local-only visual tester for the graph store (never published)
+dev/shared/             The loopback server kit every dev tool is built on (never published)
 ```
 
 ### Where the code lives
