@@ -30,6 +30,7 @@ schema/graph_store/     Generated JSON Schema for the mutation and query formats
 api/                    Committed public API report (API Extractor)
 dev/graph-explorer/     Local-only visual tester for the graph store (never published)
 dev/shared/             The loopback server kit every dev tool is built on (never published)
+dev/llm-lab/            Local-only lab for trying the LLM component, scripted by default (never published)
 ```
 
 ### Where the code lives
