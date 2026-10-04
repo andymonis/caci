@@ -125,6 +125,16 @@ const result = await llm.categorise(
 
 It builds the context and prompt, calls the model, and checks the reply with the output guard. A reply the guard rejects goes back to the model once with the reasons; a second rejection is a `BAD_OUTPUT` error. One time limit covers both attempts, cancellation is honoured, and nothing is written: the result is a proposal for a person to approve and pass to `write`. A bad `graphId`, `itemId` or option is a `CONFIG` error before any model call is paid for.
 
+### Watching a call
+
+Pass `trace` in the options to see what a `categorise` call does, step by step:
+
+```ts
+await llm.categorise(input, { trace: (event) => console.log(event.type, event) });
+```
+
+Events arrive in order: `prompt` (the instructions, messages and schema as built), then for each attempt `request`, then `response` (the raw output, tokens, answering model, time taken) or `failure`, then `verdict` (accepted, or every problem the output guard found), then `repair` (the feedback sent back) before attempt 2, and always `done` last (`ok`, how many calls were made, total time, and the error if it failed). Events are frozen copies, so changing one affects nothing, and a callback that throws or rejects is ignored: it can never change the result. They hold only what the call itself used, never the API key. This is what the LLM lab (next) shows on screen.
+
 ## Using the real model
 
 `bipartite-graph/llm/anthropic` is a `ModelClient` for the Anthropic Messages API. It is the only part of the package that uses `@anthropic-ai/sdk`, which is an **optional peer dependency**: install it only if you use this entry point (the graph store, the rest of the LLM component and the application work without it, and a test keeps it that way).

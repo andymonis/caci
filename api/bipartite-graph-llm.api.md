@@ -21,6 +21,58 @@ export type CapabilityRoute = {
 };
 
 // @public
+export type CategoriseEvent =
+/** What was built to send: the fixed instructions, the messages and the output schema. */
+    {
+    readonly type: 'prompt';
+    readonly system: string;
+    readonly messages: readonly ModelMessage[];
+    readonly schema: JsonObject;
+}
+/** A call to the model is about to be made. Attempt 2 is the repair. */
+| {
+    readonly type: 'request';
+    readonly attempt: 1 | 2;
+    readonly model: string;
+    readonly timeoutMs: number;
+    readonly messages: readonly ModelMessage[];
+} | {
+    readonly type: 'response';
+    readonly attempt: 1 | 2;
+    readonly output: ModelOutput;
+    readonly usage: TokenUsage;
+    readonly model: string;
+    readonly elapsedMs: number;
+}
+/** The call failed (a provider error, a time-out, a cancellation). */
+| {
+    readonly type: 'failure';
+    readonly attempt: 1 | 2;
+    readonly error: LlmError;
+    readonly elapsedMs: number;
+}
+/** What the output guard made of a reply: accepted, or every problem it found. */
+| {
+    readonly type: 'verdict';
+    readonly attempt: 1 | 2;
+    readonly accepted: boolean;
+    readonly problems: readonly string[];
+}
+/** The reasons being sent back for the repair attempt. */
+| {
+    readonly type: 'repair';
+    readonly feedback: string;
+}
+/** Always last, once per call. `attempts` is how many calls to the model were started. */
+| {
+    readonly type: 'done';
+    readonly ok: boolean;
+    readonly attempts: number;
+    readonly elapsedMs: number;
+    readonly error?: LlmError;
+};
+
+// @public
 export interface CategoriseInput {
     readonly categories: readonly CategoryEntry[];
     readonly graphId: string;
@@ -45,12 +97,11 @@ export interface CategoriseOptions {
     readonly signal?: AbortSignal;
     readonly tier?: ModelTier;
     readonly timeoutMs?: number;
+    readonly trace?: (event: CategoriseEvent) => void | Promise<void>;
 }
 
 // @public
 export interface CategoryEntry {
-    // Warning: (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     readonly data?: JsonObject;
     // (undocumented)
@@ -245,6 +296,7 @@ export function totalTokens(usage: TokenUsage): number;
 
 // Warnings were encountered during analysis:
 //
+// dist/llm/capabilities/categorise/categorise.d.ts:49:5 - (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
 // dist/llm/model-client.d.ts:30:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)

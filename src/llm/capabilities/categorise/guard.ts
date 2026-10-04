@@ -45,18 +45,19 @@ const CONTROLLER_FIELDS: readonly string[] = Object.freeze(['mode', 'ensureNodes
 const MAX_PROBLEMS = 5;
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-const rejected = (problems: readonly string[]): LlmError =>
+/** The error for a rejected reply: up to five numbered problems, so one repair attempt can fix them together. */
+export const rejectionError = (problems: readonly string[]): LlmError =>
   llmError('BAD_OUTPUT', `The reply was not accepted: ${problems.slice(0, MAX_PROBLEMS).map((p, i) => `(${i + 1}) ${p}`).join(' ')}${problems.length > MAX_PROBLEMS ? ` (and ${problems.length - MAX_PROBLEMS} more)` : ''}`);
 const unknownKey = (where: string, key: string): string =>
   CONTROLLER_FIELDS.includes(key) ? `${where}: "${key}" is set by the system, not by you; leave it out` : `${where}: unknown field "${key}"`;
 
-function readValue(output: ModelOutput, maxChars: number): Result<unknown, LlmError> {
+function readValue(output: ModelOutput, maxChars: number): Result<unknown, string[]> {
   if (output.kind === 'json') return ok(output.value);
-  if (output.text.length > maxChars) return err(rejected([`the reply is ${output.text.length} characters, over the limit of ${maxChars}`]));
+  if (output.text.length > maxChars) return err([`the reply is ${output.text.length} characters, over the limit of ${maxChars}`]);
   try {
     return ok(JSON.parse(output.text) as JsonValue);
   } catch {
-    return err(rejected(['the reply is not a single JSON object (reply with the JSON only, no other text, no code fences)']));
+    return err(['the reply is not a single JSON object (reply with the JSON only, no other text, no code fences)']);
   }
 }
 
@@ -107,20 +108,21 @@ function checkShape(value: unknown, context: GuardContext, options: Required<Gua
 }
 
 /**
- * Turns the model's reply into a mutation the controller can safely preview, or says what was
- * wrong. Pure; never throws. The model only chooses the operations: the graph id, request id,
- * `createIfMissing`, `mode` and `ensureNodes` are always the controller's. Only `upsertNode` and
- * `link` pass, the note's item id is the one the controller minted, and counts and sizes are capped
- * tighter than the library's defaults. Anything unexpected (prose, extra fields, other
- * operations) rejects the whole reply; nothing is repaired or dropped silently.
+ * Checks the model's reply and gives either a mutation the controller can safely preview or the
+ * complete list of what was wrong (not just the first few). Pure; never throws. The model only
+ * chooses the operations: the graph id, request id, `createIfMissing`, `mode` and `ensureNodes` are
+ * always the controller's. Only `upsertNode` and `link` pass, the note's item id is the one the
+ * controller minted, and counts and sizes are capped tighter than the library's defaults. Anything
+ * unexpected (prose, extra fields, other operations) rejects the whole reply; nothing is repaired
+ * or dropped silently.
  */
-export function guardReply(output: ModelOutput, context: GuardContext, options: GuardOptions = {}): Result<GuardedReply, LlmError> {
+export function inspectReply(output: ModelOutput, context: GuardContext, options: GuardOptions = {}): Result<GuardedReply, readonly string[]> {
   try {
     const settings: Required<GuardOptions> = { ...DEFAULT_GUARD_OPTIONS, ...options };
     const raw = readValue(output, settings.maxOutputChars);
     if (!raw.ok) return raw;
     const { problems, ops, rationale } = checkShape(raw.value, context, settings);
-    if (problems.length > 0) return err(rejected(problems));
+    if (problems.length > 0) return err(problems);
 
     const parsed = parseMutation(
       {
@@ -135,10 +137,16 @@ export function guardReply(output: ModelOutput, context: GuardContext, options: 
     );
     if (!parsed.ok) {
       const path = parsed.error.path?.length ? `${parsed.error.path.join('.')}: ` : '';
-      return err(rejected([`${path}${parsed.error.message}`]));
+      return err([`${path}${parsed.error.message}`]);
     }
     return ok({ mutation: parsed.value, ...(rationale === undefined ? {} : { rationale }) });
   } catch {
-    return err(rejected(['the reply could not be read']));
+    return err(['the reply could not be read']);
   }
+}
+
+/** Like `inspectReply`, but a rejection is a `BAD_OUTPUT` error whose message numbers the first problems. */
+export function guardReply(output: ModelOutput, context: GuardContext, options: GuardOptions = {}): Result<GuardedReply, LlmError> {
+  const inspected = inspectReply(output, context, options);
+  return inspected.ok ? inspected : err(rejectionError(inspected.error));
 }

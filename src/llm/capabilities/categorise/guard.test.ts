@@ -268,3 +268,39 @@ describe('never throws', () => {
     expect(guardReply(null as never, CONTEXT)).toMatchObject({ ok: false });
   });
 });
+
+describe('inspectReply: the complete list of problems', () => {
+  it('is the accepted reply when there are none', async () => {
+    const { inspectReply } = await import('./guard.js');
+    const r = inspectReply(json(GOOD), CONTEXT);
+    expect(r.ok && r.value.mutation.ops).toHaveLength(3);
+  });
+
+  it('lists every problem, where the error message shows only five', async () => {
+    const { inspectReply } = await import('./guard.js');
+    const r = inspectReply(json({ ops: Array.from({ length: 9 }, () => ({ op: 'deleteNode' })) }), CONTEXT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.length).toBeGreaterThan(9);
+      expect(guard(json({ ops: Array.from({ length: 9 }, () => ({ op: 'deleteNode' })) })).ok).toBe(false);
+    }
+  });
+
+  it('gives one problem for text that is not JSON, and for an oversized reply', async () => {
+    const { inspectReply } = await import('./guard.js');
+    expect(inspectReply(text('hello'), CONTEXT)).toMatchObject({ ok: false, error: [expect.stringContaining('not a single JSON object')] });
+    expect(inspectReply(text('x'.repeat(40_000)), CONTEXT)).toMatchObject({ ok: false, error: [expect.stringContaining('over the limit of 32000')] });
+  });
+
+  it('agrees with guardReply: the same reasons, the same acceptance', async () => {
+    const { inspectReply, rejectionError } = await import('./guard.js');
+    for (const reply of [GOOD, BAD_CASE, { ops: [] }, { ...GOOD, extra: 1 }]) {
+      const inspected = inspectReply(json(reply), CONTEXT);
+      const guarded = guard(json(reply));
+      expect(inspected.ok).toBe(guarded.ok);
+      if (!inspected.ok && !guarded.ok) expect(guarded.error).toEqual(rejectionError(inspected.error));
+    }
+  });
+});
+
+const BAD_CASE = { ops: [{ op: 'deleteNode', partition: 'item', id: 'note-9' }] };
