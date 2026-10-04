@@ -4,9 +4,86 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LLM Lab (local only)</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <h1>LLM Lab</h1>
-  <p>The server is running. The page arrives with the next task; the API is at <code>/api/status</code>.</p>
+  <header class="top">
+    <h1>LLM Lab</h1>
+    <span class="badge-local" title="Runs on 127.0.0.1 only and is never part of the published package">local development only</span>
+    <span id="mode-badge" class="badge" aria-live="polite"></span>
+    <span class="spacer"></span>
+    <span id="busy" class="busy" aria-live="polite"></span>
+  </header>
+
+  <main class="layout">
+    <aside class="panel controls">
+      <form id="form-run" autocomplete="off">
+        <section>
+          <h2>Try it</h2>
+          <label>What to try
+            <select id="capability" name="capability"></select>
+          </label>
+          <label>Note
+            <textarea id="note" rows="5" spellcheck="true" placeholder="Saw Dr Patel on Tuesday about the blood test results. Need to book a follow-up."></textarea>
+          </label>
+          <label>Existing categories <span class="hint">(JSON list)</span>
+            <textarea id="categories" rows="5" spellcheck="false"></textarea>
+          </label>
+          <p id="form-error" class="error" role="alert" hidden></p>
+        </section>
+
+        <section>
+          <h2>Model</h2>
+          <div class="row">
+            <label class="inline"><input type="radio" name="model-mode" value="default" checked> default</label>
+            <label class="inline"><input type="radio" name="model-mode" value="tier"> tier</label>
+            <label class="inline"><input type="radio" name="model-mode" value="model"> exact id</label>
+          </div>
+          <select id="tier" aria-label="Tier" disabled></select>
+          <input id="model" aria-label="Exact model id" placeholder="claude-haiku-4-5-20251001" spellcheck="false" disabled>
+          <p id="model-hint" class="hint"></p>
+        </section>
+
+        <section>
+          <h2>Who answers</h2>
+          <label class="switch" id="network-label">
+            <input type="checkbox" id="network"> <span>Use the real model <strong>(uses the network)</strong></span>
+          </label>
+          <p id="network-note" class="hint"></p>
+          <label>Scripted behaviour
+            <select id="scenario"></select>
+          </label>
+          <p id="scenario-hint" class="hint"></p>
+        </section>
+
+        <div class="row">
+          <button type="submit" id="run">Run</button>
+        </div>
+      </form>
+
+      <section>
+        <h2>Compare models</h2>
+        <p class="hint">Runs the same note and categories over each, one after another.</p>
+        <div id="compare-tiers" class="row wrap"></div>
+        <input id="compare-extra" aria-label="Extra exact model ids" placeholder="extra model ids, separated by commas" spellcheck="false">
+        <div class="row"><button type="button" id="compare">Compare</button></div>
+        <p id="compare-error" class="error" role="alert" hidden></p>
+      </section>
+    </aside>
+
+    <section class="panel result" aria-live="polite" id="result">
+      <p class="empty">Write a note and press <strong>Run</strong>. The scripted model is used unless you switch on the real one.</p>
+    </section>
+
+    <aside class="panel side">
+      <div class="row between">
+        <h2>History</h2>
+        <button type="button" id="clear" class="ghost small">Clear</button>
+      </div>
+      <ol id="history" class="history"></ol>
+      <p id="history-empty" class="hint">Nothing yet.</p>
+    </aside>
+  </main>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

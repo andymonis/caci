@@ -9,7 +9,7 @@ package**, and it only listens on `127.0.0.1` (the server and its safety checks 
 npm run dev:lab          # http://127.0.0.1:4318   (LLM_LAB_PORT to change the port)
 ```
 
-The page itself arrives in the next task; for now the API is usable with `curl`.
+Open it in a browser for the page, or use the API directly with `curl`.
 
 ## The scripted model is the default
 
@@ -41,6 +41,10 @@ A real call happens only when **both** are true:
 A real call **sends the note and the category names to Anthropic** and costs money. Without a key,
 `"network": true` is refused with `409`. A scenario cannot be combined with a real call.
 
+## The page
+
+Write a note and some categories (a JSON list), pick a model and press **Run**. The result shows the proposal with its plain summary and operations, then **every attempt**: what was asked, the raw output, and either "the output guard accepted this" or the numbered problems it found, with the repair feedback sent back before attempt 2. "Prompt that was sent" shows the fixed instructions, the user message with the note and categories in their escaped blocks, and the output schema. **Compare** runs the same input over the ticked tiers and any extra model ids and shows one row each (result, attempts, latency, tokens, new and reused categories, links, problems); click a run id for its detail. The history on the right keeps the last 50 runs. The "uses the network" switch is off by default, disabled with the reason when no key was found, and warns what a real call sends and that it costs money. The page loads nothing from the network, and a test fails if it ever builds HTML from text.
+
 ## API
 
 | Route | Does |
@@ -69,5 +73,5 @@ curl -s -X POST -H 'content-type: application/json' http://127.0.0.1:4318/api/ru
 | `server.mjs` | Entry point: loads the built library, reads the key (once), starts the server |
 | `app.mjs` | The routes, on the shared loopback server |
 | `scenarios.mjs` | The scripted behaviours |
-| `public/` | The page |
+| `public/` | The page: `index.html`, `style.css`, `app.js` (draws the page; text only ever goes in with `textContent`) and `view.js` (pure helpers, unit-tested) |
 | `*.test.mjs` | Tests; `../not-published.test.mjs` guards the "never published" and "loopback only" rules |

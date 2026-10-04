@@ -252,8 +252,13 @@ describe('what a request must look like', () => {
     expect((await call('/api/status', 'POST', {})).status).toBe(404);
   });
 
-  it('the page is served, and nothing else from disk', async () => {
+  it('serves the page, its script, its helpers and its stylesheet with the right types, and nothing else from disk', async () => {
     await open();
+    for (const [path, type] of [['/', 'text/html'], ['/app.js', 'text/javascript'], ['/view.js', 'text/javascript'], ['/style.css', 'text/css']]) {
+      const r = await fetch(base + path);
+      expect(r.status, path).toBe(200);
+      expect(r.headers.get('content-type'), path).toContain(type);
+    }
     const page = await fetch(`${base}/`);
     expect(page.status).toBe(200);
     expect((await fetch(`${base}/app.mjs`)).status).toBe(404);

@@ -136,6 +136,10 @@ await llm.categorise(input, { trace: (event) => console.log(event.type, event) }
 
 Events arrive in order: `prompt` (the instructions, messages and schema as built), then for each attempt `request`, then `response` (the raw output, tokens, answering model, time taken) or `failure`, then `verdict` (accepted, or every problem the output guard found), then `repair` (the feedback sent back) before attempt 2, and always `done` last (`ok`, how many calls were made, total time, and the error if it failed). Events are frozen copies, so changing one affects nothing, and a callback that throws or rejects is ignored: it can never change the result. They hold only what the call itself used, never the API key. This is what the LLM lab (next) shows on screen.
 
+### Trying it: the LLM lab
+
+`npm run dev:lab` opens a local page (http://127.0.0.1:4318, never published) for trying the component: write a note and some existing categories, choose a model (the configured default, a tier, or an exact id) and press Run. It shows what would be approved (the proposal and its plain summary), every attempt with the raw output and what the output guard said about it, the repair feedback, and the exact prompt that was sent, with tokens, latency and the model used. Compare runs the same note over several models side by side, and a history lists earlier runs. It uses a scripted model by default, with ten behaviours to choose from (a good answer, a repaired one, a refusal, a time-out...), so it costs nothing; the real model is used only when an API key was in the environment at start-up and you switch on "Use the real model (uses the network)" for that run. See `dev/llm-lab/README.md`.
+
 ## Using the real model
 
 `bipartite-graph/llm/anthropic` is a `ModelClient` for the Anthropic Messages API. It is the only part of the package that uses `@anthropic-ai/sdk`, which is an **optional peer dependency**: install it only if you use this entry point (the graph store, the rest of the LLM component and the application work without it, and a test keeps it that way).

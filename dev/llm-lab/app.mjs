@@ -19,6 +19,9 @@ export const MAX_CATEGORIES = 200;
 const FILES = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
+  '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/view.js': ['view.js', 'text/javascript; charset=utf-8'],
+  '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
 const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
