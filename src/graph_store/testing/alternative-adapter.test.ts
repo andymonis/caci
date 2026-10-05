@@ -84,7 +84,12 @@ function createSnapshotAdapter(): StorageAdapter {
         return result;
       }),
     graphs: {
-      create: async (id) => void (graphs.has(id) || graphs.set(id, { nodes: new Map(), edges: new Map() })),
+      create: (id) =>
+        inTurn(id, async () => {
+          if (graphs.has(id)) return false;
+          graphs.set(id, { nodes: new Map(), edges: new Map() });
+          return true;
+        }),
       exists: async (id) => graphs.has(id),
       list: async (page) => paged([...graphs.keys()], (id) => id, page),
       drop: async (id) => void graphs.delete(id),

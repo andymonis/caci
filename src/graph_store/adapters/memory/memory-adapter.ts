@@ -176,10 +176,12 @@ export function createMemoryAdapter(): StorageAdapter {
       }),
 
     graphs: {
-      /** Idempotent: creating an existing graph leaves it untouched. */
+      /** Atomic: reports whether this call created the graph; an existing graph is left untouched. */
       create: (id) =>
         exclusive(id, async () => {
-          if (!graphs.has(id)) graphs.set(id, emptyGraph());
+          if (graphs.has(id)) return false;
+          graphs.set(id, emptyGraph());
+          return true;
         }),
       exists: async (id) => graphs.has(id),
       list: async (page) => paginate([...graphs.keys()].sort(compareKeys), (id) => id, page),

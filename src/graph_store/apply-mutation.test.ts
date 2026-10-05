@@ -234,8 +234,9 @@ describe('write: graph resolution (FR-02; AC-02 is in the conformance suite)', (
       graphs: {
         ...adapter.graphs,
         create: async (id) => {
-          await adapter.graphs.create(id);
+          const created = await adapter.graphs.create(id);
           await real.transaction(id, (tx) => tx.putNodes([{ partition: 'item', id: 'from-other-writer' } as NodeRecord]));
+          return created;
         },
       },
     };

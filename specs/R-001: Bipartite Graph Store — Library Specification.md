@@ -272,7 +272,9 @@ export interface StorageAdapter {
   transaction<T>(graphId: GraphId, fn: (tx: AdapterTx) => Promise<T>): Promise<T>;
 
   graphs: {
-    create(id: GraphId): Promise<void>;
+    // Atomic: true if this call created the graph, false if it already existed (left untouched).
+    // Of simultaneous creates of one id, exactly one returns true.
+    create(id: GraphId): Promise<boolean>;
     exists(id: GraphId): Promise<boolean>;
     list(page: Page): Promise<Paged<GraphId>>;
     drop(id: GraphId): Promise<void>;
@@ -309,7 +311,7 @@ Each decision has a reason, because most are forced by something found while che
 - **One connection, all transactions serialised.** The driver is synchronous while a transaction callback is asynchronous, so two transactions interleaving on one connection would share a SQLite transaction and break isolation. Every transaction runs through one queue as `BEGIN IMMEDIATE` then commit, or rollback if the callback throws. Other connections and processes are protected by SQLite's own locking and a busy timeout, with write-ahead logging for files.
 - **Adapters stay dumb.** No foreign keys between edges and nodes: the adapter does not check endpoints and does not cascade (the core does, per FR-07). Edges are replaced whole on `putEdges`. Data is stored as JSON text and copied in and out.
 - **Schema versioning.** The schema version is recorded with `PRAGMA user_version`. A database that is not SQLite, or is newer than the library knows, is refused and never modified.
-- **Atomic graph creation.** `graphs.create` will report whether this call created the graph (insert or ignore), which settles the two known creation races for every adapter (planned as T-059; the interface above changes then).
+- **Atomic graph creation (T-059, done).** `graphs.create` reports whether this call created the graph (for SQLite, insert or ignore), which settles the two known creation races for every adapter: `createGraph` is `CONFLICT` exactly when it returns `false`, and `write` with `createIfMissing` knows whether it created the graph, so a failed call removes only a graph it made. An adapter that answers with anything but a boolean is a `STORAGE_ERROR`. The conformance suite has cases for sequential and simultaneous creates, and deliberately broken adapters (always true, always false, check-then-create, silent, text) are caught.
 - **Push-down is later.** `nativeSetQueries` stays false, and no `data` matching is pushed down, until M4b makes the core issue set queries and `where` filters. NFR-05's three-clause set query is therefore measured after M4b; the single-category lookup, paging and write timings are measured with the adapter.
 - **Data at rest is not encrypted.** The database file holds notes and category names in plain text. A new file is created owner-only (mode 0600) and `data/` is git-ignored; rely on full-disk encryption. An encrypted build such as SQLCipher would be a native dependency and is not planned.
 - **One process at a time is the supported use.** SQLite protects the file if a second process opens it, but the library offers no coordination beyond that, and pending proposals in the application layer are in memory.

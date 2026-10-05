@@ -22,11 +22,15 @@ export function validateGraphId(graphId: unknown, limits: Pick<Limits, 'maxIdLen
   return ok(graphId);
 }
 
-/** Functional core: creating a graph that already exists is a `CONFLICT`. Pure. */
-export function planCreateGraph(graphId: string, exists: boolean): Result<undefined> {
-  return exists
-    ? err(graphError('CONFLICT', `Graph "${graphId}" already exists`, ['graphId']))
-    : ok(undefined);
+/**
+ * Functional core: what the adapter's answer to "create this graph" means. `true` means this call
+ * made it; `false` means it already existed, which is a `CONFLICT`. Anything else means the adapter
+ * does not follow the contract, which is a `STORAGE_ERROR` rather than a guess. Pure.
+ */
+export function confirmCreated(graphId: string, created: unknown): Result<undefined> {
+  if (created === true) return ok(undefined);
+  if (created === false) return err(graphError('CONFLICT', `Graph "${graphId}" already exists`, ['graphId']));
+  return err(graphError('STORAGE_ERROR', 'Storage adapter failed: graphs.create did not say whether it created the graph'));
 }
 
 /** Functional core: operating on a graph that does not exist is `GRAPH_NOT_FOUND`. Pure. */
@@ -46,9 +50,9 @@ async function guarded<T>(body: () => Promise<Result<T>>): Promise<Result<T, Gra
 }
 
 /**
- * Creates an empty graph (FR-01). Fails with `CONFLICT` if it already exists.
- * The existence check and the create are separate adapter calls, so two simultaneous creates of
- * the same id can both succeed; `write` with `createIfMissing` is the idempotent alternative.
+ * Creates an empty graph (FR-01). Fails with `CONFLICT` if it already exists. Creation is one
+ * atomic adapter call, so of two simultaneous creates of one id exactly one succeeds.
+ * `write` with `createIfMissing` is the idempotent alternative.
  */
 export function createGraph(adapter: StorageAdapter, graphId: string, options?: GraphOptions): Promise<Result<GraphRef>> {
   return guarded(async () => {
@@ -56,9 +60,8 @@ export function createGraph(adapter: StorageAdapter, graphId: string, options?: 
     if (bad) return err(bad);
     const id = validateGraphId(graphId, resolveLimits(options));
     if (!id.ok) return id;
-    const plan = planCreateGraph(id.value, await adapter.graphs.exists(id.value));
-    if (!plan.ok) return plan;
-    await adapter.graphs.create(id.value);
+    const confirmed = confirmCreated(id.value, await adapter.graphs.create(id.value));
+    if (!confirmed.ok) return confirmed;
     return ok({ graphId: id.value });
   });
 }

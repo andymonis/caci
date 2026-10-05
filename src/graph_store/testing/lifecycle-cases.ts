@@ -78,6 +78,47 @@ const creating = (): ConformanceCase[] => [
     },
   },
   {
+    name: 'FR-01: graphs.create says whether this call created the graph, and leaves an existing graph untouched',
+    run: async (adapter) => {
+      assert.strictEqual(await adapter.graphs.create('g'), true);
+      await write(adapter, populate('g'));
+      assert.strictEqual(await adapter.graphs.create('g'), false);
+      assert.deepEqual(await describeGraph(adapter, 'g'), info('g', 3, 2, 3));
+      await adapter.graphs.drop('g');
+      assert.strictEqual(await adapter.graphs.create('g'), true); // gone, so it is created again
+      assert.strictEqual(await adapter.graphs.create('other'), true); // another id is its own question
+    },
+  },
+  {
+    name: 'FR-01: of simultaneous graphs.create calls for one id, exactly one reports true',
+    run: async (adapter) => {
+      const answers = await Promise.all(Array.from({ length: 8 }, () => adapter.graphs.create('g')));
+      assert.ok(answers.every((a) => typeof a === 'boolean'), 'every answer must be a boolean');
+      assert.equal(answers.filter((a) => a === true).length, 1);
+      assert.equal(await adapter.graphs.exists('g'), true);
+    },
+  },
+  {
+    name: 'FR-01: of simultaneous createGraph calls, exactly one succeeds and the rest are CONFLICT',
+    run: async (adapter) => {
+      const results = await Promise.all(Array.from({ length: 8 }, () => createGraph(adapter, 'g')));
+      assert.equal(results.filter((r) => r.ok).length, 1);
+      for (const r of results) if (!r.ok) assert.equal(r.error.code, 'CONFLICT');
+      assert.deepEqual(await describeGraph(adapter, 'g'), info('g', 0, 0, 0));
+    },
+  },
+  {
+    name: 'FR-01, FR-08: of simultaneous writes that create the same new graph, exactly one reports graphCreated and none loses its data',
+    run: async (adapter) => {
+      const results = await Promise.all(
+        Array.from({ length: 6 }, (_, i) => write(adapter, mutation([upsert('item', `w${i}`)], { graphId: 'g', createIfMissing: true }))),
+      );
+      assert.ok(results.every((r) => r.ok), 'every write must succeed');
+      assert.equal(results.filter((r) => r.ok && r.value.graphCreated).length, 1);
+      assert.deepEqual(await describeGraph(adapter, 'g'), info('g', 6, 0, 0));
+    },
+  },
+  {
     name: 'FR-01: the adapter\'s graphs.create and graphs.drop are idempotent',
     run: async (adapter) => {
       await adapter.graphs.create('g');

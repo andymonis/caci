@@ -217,8 +217,10 @@ describe('the isolation group catches adapters that leak', () => {
       graphs: {
         exists: async (id) => ids.has(id),
         create: async (id) => {
+          const created = !ids.has(id);
           ids.add(id);
           await real.graphs.create('shared');
+          return created;
         },
         drop: async (id) => void ids.delete(id),
         list: async () => ({ items: [...ids].sort(), nextCursor: null }),
@@ -257,6 +259,26 @@ describe('the isolation group catches adapters that leak', () => {
   });
 });
 
+/** Adapters whose `graphs.create` does not honour its contract. Each must be caught by the creation cases. */
+function brokenCreates(): Array<[string, () => StorageAdapter]> {
+  const wrap = (create: (real: StorageAdapter, id: string) => Promise<boolean>): (() => StorageAdapter) => () => {
+    const real = createMemoryAdapter();
+    return { ...real, graphs: { ...real.graphs, create: (id) => create(real, id) } };
+  };
+  return [
+    ['graphs.create always says true, so an existing graph is reported as new', wrap(async (real, id) => (await real.graphs.create(id), true))],
+    ['graphs.create always says false, so a new graph is reported as already there', wrap(async (real, id) => (await real.graphs.create(id), false))],
+    ['graphs.create checks and then creates in two steps, so simultaneous creates all say true', wrap(async (real, id) => {
+      const had = await real.graphs.exists(id);
+      await Promise.resolve();
+      await real.graphs.create(id);
+      return !had;
+    })],
+    ['graphs.create does not say anything', wrap(async (real, id) => { await real.graphs.create(id); return undefined as unknown as boolean; })],
+    ['graphs.create says "yes" as text instead of true', wrap(async (real, id) => ((await real.graphs.create(id)) ? ('true' as unknown as boolean) : false))],
+  ];
+}
+
 /** Adapters that pass the smoke group but get graph lifecycle wrong. Each must be caught by the lifecycle group. */
 function brokenForLifecycle(): Array<[string, () => StorageAdapter]> {
   return [
@@ -266,7 +288,7 @@ function brokenForLifecycle(): Array<[string, () => StorageAdapter]> {
       return {
         ...real,
         graphs: {
-          create: async (id) => { hidden.delete(id); await real.graphs.create(id); },
+          create: async (id) => { const wasHidden = hidden.delete(id); const created = await real.graphs.create(id); return created || wasHidden; },
           exists: async (id) => !hidden.has(id) && real.graphs.exists(id),
           drop: async (id) => void hidden.add(id),
           list: async (page) => {
@@ -276,6 +298,7 @@ function brokenForLifecycle(): Array<[string, () => StorageAdapter]> {
         },
       };
     }],
+    ...brokenCreates(),
     ['list returns only the first page', () => {
       const real = createMemoryAdapter();
       return {
@@ -292,7 +315,7 @@ function brokenForLifecycle(): Array<[string, () => StorageAdapter]> {
       return {
         ...real,
         graphs: {
-          create: async (id) => { if (!order.includes(id)) order.push(id); await real.graphs.create(id); },
+          create: async (id) => { if (!order.includes(id)) order.push(id); return real.graphs.create(id); },
           exists: real.graphs.exists,
           drop: async (id) => { order.splice(order.indexOf(id) >>> 0, order.includes(id) ? 1 : 0); await real.graphs.drop(id); },
           list: async (page) => {
@@ -311,7 +334,7 @@ function brokenForLifecycle(): Array<[string, () => StorageAdapter]> {
           ...real.graphs,
           create: async (id) => {
             if (await real.graphs.exists(id)) throw new Error('already exists');
-            await real.graphs.create(id);
+            return real.graphs.create(id);
           },
         },
       };
@@ -357,6 +380,18 @@ describe('the lifecycle group catches adapters that get graph lifecycle wrong', 
   it.each(brokenForLifecycle())('%s', async (_name, makeBroken) => {
     const failed: string[] = [];
     for (const testCase of lifecycle()) {
+      try {
+        await runCase(testCase, makeBroken);
+      } catch {
+        failed.push(testCase.name);
+      }
+    }
+    expect(failed.length).toBeGreaterThan(0);
+  });
+
+  it.each(brokenCreates())('%s: caught by a creation case specifically', async (_name, makeBroken) => {
+    const failed: string[] = [];
+    for (const testCase of lifecycle().filter((c) => /graphs\.create|createGraph calls|create the same new graph/.test(c.name))) {
       try {
         await runCase(testCase, makeBroken);
       } catch {

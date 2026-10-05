@@ -69,7 +69,13 @@ export interface StorageAdapter {
   transaction<T>(graphId: GraphId, fn: (tx: AdapterTx) => Promise<T>): Promise<T>;
 
   graphs: {
-    create(id: GraphId): Promise<void>;
+    /**
+     * Creates the graph if it does not exist, in one step, and says whether this call created it:
+     * `true` if it did, `false` if the graph was already there (and is left untouched). Of several
+     * simultaneous creates of one id, exactly one reports `true`. The core relies on this to
+     * return `CONFLICT` and to know whether a failed `write` may remove a graph it made.
+     */
+    create(id: GraphId): Promise<boolean>;
     exists(id: GraphId): Promise<boolean>;
     list(page: Page): Promise<Paged<GraphId>>;
     drop(id: GraphId): Promise<void>;

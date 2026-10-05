@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMemoryAdapter } from './adapters/memory/index.js';
 import type { StorageAdapter } from './adapter.js';
 import { write } from './endpoints.js';
-import { createGraph, dropGraph, planCreateGraph, requireGraph, validateGraphId } from './graphs.js';
+import { confirmCreated, createGraph, dropGraph, requireGraph, validateGraphId } from './graphs.js';
 
 describe('validateGraphId (pure)', () => {
   it.each([
@@ -53,10 +53,16 @@ describe('validateGraphId (pure)', () => {
   });
 });
 
-describe('planCreateGraph / requireGraph (pure)', () => {
-  it('create: CONFLICT only when the graph exists', () => {
-    expect(planCreateGraph('g', false)).toEqual({ ok: true, value: undefined });
-    expect(planCreateGraph('g', true)).toMatchObject({ ok: false, error: { code: 'CONFLICT', path: ['graphId'] } });
+describe('confirmCreated / requireGraph (pure)', () => {
+  it('create: true means this call made it; false is a CONFLICT', () => {
+    expect(confirmCreated('g', true)).toEqual({ ok: true, value: undefined });
+    expect(confirmCreated('g', false)).toMatchObject({ ok: false, error: { code: 'CONFLICT', path: ['graphId'] } });
+  });
+
+  it('create: an answer that is not a boolean is a STORAGE_ERROR, never a guess', () => {
+    for (const answer of [undefined, null, 0, 1, 'true', {}, []]) {
+      expect(confirmCreated('g', answer)).toMatchObject({ ok: false, error: { code: 'STORAGE_ERROR', message: expect.stringContaining('did not say whether it created') } });
+    }
   });
 
   it('drop: GRAPH_NOT_FOUND only when the graph is missing', () => {
@@ -111,9 +117,26 @@ describe('createGraph', () => {
     await createGraph(adapter, 'g');
     await write(adapter, withData('g', 'keep'));
     calls.create.length = 0;
+    calls.exists.length = 0;
     expect(await createGraph(adapter, 'g')).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
-    expect(calls.create).toEqual([]);
+    expect(calls.create).toEqual(['g']); // one atomic call decides it; there is no separate check
+    expect(calls.exists).toEqual([]);
     expect((await contents(adapter, 'g')).items[0]?.data).toEqual({ tag: 'keep' });
+  });
+
+  it('of simultaneous creates of one id, exactly one succeeds and the rest are CONFLICT', async () => {
+    const adapter = createMemoryAdapter();
+    const results = await Promise.all(Array.from({ length: 8 }, () => createGraph(adapter, 'g')));
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok && r.error.code === 'CONFLICT')).toHaveLength(7);
+  });
+
+  it('an adapter that does not say whether it created the graph is a STORAGE_ERROR, not a guess', async () => {
+    const real = createMemoryAdapter();
+    for (const answer of [undefined, null, 'yes', 0]) {
+      const vague = { ...real, graphs: { ...real.graphs, create: async () => answer } } as unknown as StorageAdapter;
+      expect(await createGraph(vague, 'g')).toMatchObject({ ok: false, error: { code: 'STORAGE_ERROR' } });
+    }
   });
 
   it('does not touch other graphs', async () => {

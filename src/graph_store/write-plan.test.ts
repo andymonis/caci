@@ -4,32 +4,17 @@ import type { StorageAdapter } from './adapter.js';
 import { planGraphResolution, resolveGraph } from './write-plan.js';
 
 describe('planGraphResolution (pure)', () => {
-  it('uses an existing graph as is, whatever createIfMissing says', () => {
-    for (const createIfMissing of [false, true]) {
-      expect(planGraphResolution({ graphId: 'g', createIfMissing }, true)).toEqual({
-        ok: true,
-        value: { graphId: 'g', create: false },
-      });
-    }
+  it('plans to create atomically when createIfMissing is true', () => {
+    expect(planGraphResolution({ graphId: 'C', createIfMissing: true })).toEqual({ graphId: 'C', strategy: 'create-if-missing' });
   });
 
-  it('fails with GRAPH_NOT_FOUND for a missing graph without createIfMissing (AC-02)', () => {
-    expect(planGraphResolution({ graphId: 'C', createIfMissing: false }, false)).toMatchObject({
-      ok: false,
-      error: { code: 'GRAPH_NOT_FOUND', path: ['graphId'] },
-    });
-  });
-
-  it('plans to create a missing graph when createIfMissing is true', () => {
-    expect(planGraphResolution({ graphId: 'C', createIfMissing: true }, false)).toEqual({
-      ok: true,
-      value: { graphId: 'C', create: true },
-    });
+  it('plans to require the graph otherwise (AC-02)', () => {
+    expect(planGraphResolution({ graphId: 'C', createIfMissing: false })).toEqual({ graphId: 'C', strategy: 'require-existing' });
   });
 
   it('is deterministic and does not touch its input', () => {
     const input = Object.freeze({ graphId: 'g', createIfMissing: true });
-    expect(planGraphResolution(input, false)).toEqual(planGraphResolution(input, false));
+    expect(planGraphResolution(input)).toEqual(planGraphResolution(input));
   });
 });
 
@@ -68,9 +53,8 @@ describe('resolveGraph (shell)', () => {
   });
 
   it('existing graph: leaves it alone and reports not created', async () => {
-    const { adapter, calls } = spied();
+    const { adapter } = spied();
     await adapter.graphs.create('g');
-    calls.create.length = 0;
     await adapter.transaction('g', (tx) => tx.putNodes([{ partition: 'item', id: 'a' }]));
     for (const createIfMissing of [false, true]) {
       expect(await resolveGraph(adapter, { graphId: 'g', createIfMissing })).toEqual({
@@ -78,9 +62,51 @@ describe('resolveGraph (shell)', () => {
         value: { created: false },
       });
     }
-    expect(calls.create).toEqual([]);
     const kept = await adapter.transaction('g', (tx) => tx.getNodes('item', ['a']));
     expect(kept).toHaveLength(1);
+  });
+
+  it('without createIfMissing it only checks, never creates (AC-02)', async () => {
+    const { adapter, calls } = spied();
+    expect(await resolveGraph(adapter, { graphId: 'C', createIfMissing: false })).toMatchObject({
+      ok: false,
+      error: { code: 'GRAPH_NOT_FOUND', path: ['graphId'] },
+    });
+    expect(calls.create).toEqual([]);
+    expect(await adapter.graphs.exists('C')).toBe(false);
+  });
+
+  it('with createIfMissing it makes one atomic create call and no separate check', async () => {
+    const real = createMemoryAdapter();
+    const seen: string[] = [];
+    const adapter: StorageAdapter = {
+      ...real,
+      graphs: {
+        ...real.graphs,
+        exists: (id) => (seen.push(`exists ${id}`), real.graphs.exists(id)),
+        create: (id) => (seen.push(`create ${id}`), real.graphs.create(id)),
+      },
+    };
+    await resolveGraph(adapter, { graphId: 'g', createIfMissing: true });
+    expect(seen).toEqual(['create g']);
+  });
+
+  it('two simultaneous creating writes: exactly one is told it created the graph', async () => {
+    const { adapter } = spied();
+    const results = await Promise.all(Array.from({ length: 5 }, () => resolveGraph(adapter, { graphId: 'g', createIfMissing: true })));
+    expect(results.filter((r) => r.ok && r.value.created)).toHaveLength(1);
+    expect(results.every((r) => r.ok)).toBe(true);
+  });
+
+  it('an adapter that does not say whether it created the graph is a STORAGE_ERROR, not a guess', async () => {
+    const real = createMemoryAdapter();
+    for (const answer of [undefined, null, 'yes', 1]) {
+      const vague = { ...real, graphs: { ...real.graphs, create: async () => answer } } as unknown as StorageAdapter;
+      expect(await resolveGraph(vague, { graphId: 'g', createIfMissing: true })).toMatchObject({
+        ok: false,
+        error: { code: 'STORAGE_ERROR', message: expect.stringContaining('did not say whether it created') },
+      });
+    }
   });
 
   it('only touches the named graph', async () => {
@@ -95,7 +121,7 @@ describe('resolveGraph (shell)', () => {
       ...real,
       graphs: { ...real.graphs, exists: async () => { throw new Error('disk on fire'); } },
     };
-    expect(await resolveGraph(failingExists, { graphId: 'g', createIfMissing: true })).toMatchObject({
+    expect(await resolveGraph(failingExists, { graphId: 'g', createIfMissing: false })).toMatchObject({
       ok: false,
       error: { code: 'STORAGE_ERROR', message: expect.stringContaining('disk on fire') },
     });

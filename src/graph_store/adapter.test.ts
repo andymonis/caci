@@ -27,7 +27,7 @@ const stub = {
   capabilities: { transactions: true, idempotency: false, nativeSetQueries: false },
   transaction: (_graphId, fn) => fn(tx),
   graphs: {
-    create: async () => {},
+    create: async () => true,
     exists: async () => true,
     list: () => empty<string>(),
     drop: async () => {},

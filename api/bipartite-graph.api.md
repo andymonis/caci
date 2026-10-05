@@ -396,7 +396,7 @@ export interface StorageAdapter {
     readonly capabilities: AdapterCapabilities;
     // (undocumented)
     graphs: {
-        create(id: GraphId): Promise<void>;
+        create(id: GraphId): Promise<boolean>;
         exists(id: GraphId): Promise<boolean>;
         list(page: Page): Promise<Paged<GraphId>>;
         drop(id: GraphId): Promise<void>;
