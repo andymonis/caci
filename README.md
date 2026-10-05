@@ -179,6 +179,64 @@ const llm = createLlm({ client: createAnthropicClient({ apiKey: key.value }) });
 - **Propose:** `createController({ adapter, llm, ids?, normalisers?, ttlMs?, maxPending?, maxCategories? })` returns `{ propose, get }`. `propose(graphId, input, options?)` reads the graph's categories with `query()` (up to `maxCategories`, default 500, and reports when it hit the cap), turns the input into text, mints the item id, asks `llm.categorise()`, checks which of the proposal's ids already exist, and returns a frozen pending proposal: `{ id, itemId, note, mutation, rationale?, summary, text, usage, model, attempts, context, createdAt, expiresAt }`. It reads the graph and **writes nothing**; a test with a recording adapter proves it, including on every failure path. The graph is checked first, so a note is never transcribed or sent to a model for a graph that is not there. Errors keep their own type, tagged with where they came from: `{ source: 'app' | 'graph' | 'llm', error }`. Proposals wait 15 minutes by default (`get` returns nothing after `expiresAt`), at most 100 at a time (`TOO_MANY_PENDING` rather than quietly forgetting one). A proposal whose summary has `problems` is still returned, so a person can see why it would fail.
 - **Approve and reject:** `approve(proposalId)` applies the held mutation with `write()`, exactly once, and returns `{ proposal, written }`. The proposal is taken out of the store *before* the write starts, so a second or simultaneous approval finds nothing (`PROPOSAL_NOT_FOUND`) and writes nothing. If the write fails (the graph is gone, the store is down, a link no longer has its category) nothing changes, because a mutation is all-or-nothing; the graph store's error comes back and the proposal is put back with its original expiry, so it can be retried or rejected. `reject(proposalId)` discards it without writing. A proposal past `expiresAt` is `PROPOSAL_EXPIRED` for both (recent expired ids are remembered, up to 1,000, so the answer does not depend on whether something swept it away; older ones are `PROPOSAL_NOT_FOUND`). The preview was worked out when the proposal was made, so the graph may have changed since; the write is what decides. A full store refuses a new proposal before the model is asked, so no paid call is wasted.
 
+## Capturing text
+
+Capturing takes a note as text and files it in a graph: **propose, preview, approve**. The model suggests; a person decides; nothing the model produces is written until it is approved.
+
+1. `propose(graphId, { kind: 'text', text })` reads the graph's existing categories, asks the model how to file the note, and checks the answer with the output guard (only `upsertNode` and `link`, the controller's own item id, capped sizes; one repair attempt if it is rejected). It returns a pending proposal and **writes nothing**.
+2. The proposal carries a plain summary (new items, new categories, existing categories reused, links) and a list of **problems**, such as a link to a category that does not exist, so a person can see what approving would do and whether it would fail.
+3. `approve(id)` applies it in one all-or-nothing write; `reject(id)` throws it away. A proposal waits 15 minutes by default, approving twice writes once, and a write that fails changes nothing and leaves the proposal there to retry or reject.
+
+```ts
+import { createGraph } from 'bipartite-graph';
+import { createMemoryAdapter } from 'bipartite-graph/adapters/memory';
+import { createLlm } from 'bipartite-graph/llm';
+import { createAnthropicClient, readAnthropicKey } from 'bipartite-graph/llm/anthropic';
+import { createController } from 'bipartite-graph/app';
+
+const adapter = createMemoryAdapter();
+await createGraph(adapter, 'notes');
+
+const key = readAnthropicKey(process.env);   // your code reads the environment; the libraries never do
+if (!key.ok) throw new Error(key.error.message);
+const controller = createController({ adapter, llm: createLlm({ client: createAnthropicClient({ apiKey: key.value }) }) });
+
+const proposal = await controller.propose('notes', { kind: 'text', text: 'Saw Dr Patel about the blood test results.' });
+if (!proposal.ok) {
+  // proposal.error.source says where it failed: 'app' (the input), 'graph' or 'llm' (the model), each with its own code
+} else {
+  console.log(proposal.value.text);                 // the plain summary, for a person to read
+  await controller.approve(proposal.value.id);      // or controller.reject(proposal.value.id)
+}
+```
+
+**Trying it without writing code:** the graph explorer's *Capture a note* panel draws a proposal over the graph as dashed nodes and links before you approve it (`npm run dev:explorer`); the LLM lab shows every step of a call (`npm run dev:lab`); the evaluation harness compares models (`npm run eval`). All three use a free scripted or demo model unless you ask for the real one.
+
+### Privacy: what is sent, and what is not protected
+
+With a real model, **the note and the graph's existing categories (their ids and data, up to 500 by default) are sent to Anthropic**, together with the fixed instructions. Nothing else is: not the items' contents, not other notes, and never the API key's value in any message or log. A real call also costs money.
+
+- **Nothing is anonymised or pseudonymised.** Names and any other personal details in a note go to the model as written. Do not describe this as private or anonymised.
+- **The proof of concept is for the owner's own data.** Do not capture other people's data with it. Pseudonymising notes before they are sent (a local mapping of names to tokens, restored in the preview) is designed in the plan's Backlog and must be built, and the legal side settled, before anyone else's data is used or the tool is offered to others.
+- The model can only *propose* `upsertNode` and `link` operations. It cannot delete, unlink or choose graph ids, and its text is never treated as instructions (it is escaped into its own block of the prompt).
+- Keep the key out of the repository: the dev tools read `ANTHROPIC_API_KEY` from the environment (`source ./set-key.sh` loads it from a key file outside the repo).
+
+### Running with a real model
+
+| Where | How | Real calls happen when |
+| --- | --- | --- |
+| `npm run llm:try` | `ANTHROPIC_API_KEY=... npm run llm:try` | you run it (one sample note) |
+| Explorer capture panel | `npm run dev:explorer -- --real-model` with the key set | you tick "use the real model" for a proposal |
+| LLM lab | `npm run dev:lab` with the key set | you switch on "Use the real model (uses the network)" for a run |
+| Evaluation harness | `npm run eval -- --models fast,balanced,deep --yes` | you add `--yes` (without it, it prints the plan and sends nothing) |
+
+### What is not done yet
+
+- **Pictures and voice** are accepted by the input type but not handled: they return `UNSUPPORTED_INPUT` until normalisers exist (image description, transcription).
+- **Link counts** are not passed to the model, so with more than 500 categories it sees the first 500 by id, not the most used.
+- **Pending proposals live in memory** and are lost when the process stops.
+- **The default model** (`fast`) rests on a small first evaluation; see *Choosing the model: the evaluation harness*.
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.
