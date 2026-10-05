@@ -51,7 +51,8 @@ _Each requirement gets an id and a testable acceptance criterion._
 - **Tooling:** Vitest, ESLint (flat config), `tsc --noEmit`. TypeScript pinned to `~6.0` until `typescript-eslint` supports 7.
 - **`link` default:** fails on missing endpoints; `ensureNodes: true` opts in. Strict and explicit.
 - **v1 scope:** `requestId` accepted in the schema but not implemented; caller-supplied ids only; strict bipartite with no category hierarchy.
-- **Build order:** contracts, memory adapter and write, conformance suite, query, file adapter, SQLite adapter, export/import and packaging.
+- **Build order:** contracts, memory adapter and write, conformance suite, query, the capture proof of concept (LLM component, controller, dev tools), then **SQLite persistence**, then query matching, export/import and packaging. The file (JSON) adapter is deferred (decided 2026-10-05): `node:sqlite` gives zero-dependency local storage with real transactions.
+- **Persistence:** SQLite through `node:sqlite` (built into Node, needs 22.13 or later, experimental), behind the same adapter interface and conformance suite as the memory adapter. The reasons and the design decisions (ids stored as UTF-16 blobs, serialised transactions, versioned schema, no encryption at rest) are in the R-001 spec.
 - **Code layout:** all graph store functionality (library code, tests, adapters, conformance suite) lives under `src/graph_store/`. It is an isolated feature: nothing outside that folder may be imported by it. Other platform containers get their own sibling folders under `src/` when they exist. Reason: the architecture treats the graph store as a self-contained container.
 - Dated decision log lives in `.gsd/STATE.md`.
 
@@ -66,7 +67,7 @@ Mapping from the container diagram to the code base:
 | Bipartite Graph Store (TypeScript library) | `src/graph_store/` |
 | Storage Adapter | `src/graph_store/adapters/<name>/` (adapters ship as entry points of the library, per the R-001 spec, so they sit inside the graph store folder) |
 | Adapter conformance suite | `src/graph_store/testing/` |
-| CaCi Operational Store (SQLite) | provided by the SQLite adapter (M6); no code outside the adapter |
+| CaCi Operational Store (SQLite) | provided by the SQLite adapter (planned as P1, the first persistent adapter); no code outside the adapter |
 | LLM component (the LLM adapter) | `src/llm/` (planned, L1 and L2): `createLlm({ client, config })` returns one method per capability, today `categorise()`, so new capabilities can be added beside it; the model is configurable per capability through tiers (`fast`, `balanced`, `deep`), and model access sits behind a `ModelClient` port, with the real Anthropic client as its own entry point |
 | CaCi Application (the controller) | `src/app/` (planned, A1): takes input, reads graph context, asks the categoriser, shows a preview, and writes only after approval |
 
@@ -77,9 +78,9 @@ Generated JSON Schema for the instruction formats is published under `schema/gra
 Local-only development tools live under `dev/` and are never published: `dev/graph-explorer/` (built) and `dev/llm-lab/` (planned, T-052).
 
 ## 8. Milestones
-- **Done:** M0 foundations, M1 contracts, M2 write path and memory adapter, M2b graph lifecycle, M3 conformance suite (see `.gsd/PLAN.md` for the task history).
-- **Next, in order:** M4a core reads, then L1 the LLM categoriser core, A1 the controller with preview-then-approve, L2 the real Anthropic client, A1b capture in the explorer.
-- **After that:** M4b matching and presets, M5 file adapter, M6 SQLite adapter, M7 export/import and packaging, then picture and voice input and question answering.
+- **Done:** M0 foundations, M1 contracts, M2 write path and memory adapter, M2b graph lifecycle, M3 conformance suite, M4a core reads, L1 the LLM categoriser core, A1 the controller with preview-then-approve, L2 the real Anthropic client, the LLM lab and the evaluation harness, A1b capture in the explorer and the end-to-end test (see `.gsd/PLAN.md` for the task history). The capture proof of concept is complete, on in-memory storage.
+- **Next:** P1 SQLite persistence (the plan is in `.gsd/PLAN.md`: spec, atomic graph creation, loop guards, the adapter, durability, the capture flow and the explorer on SQLite, an NFR-05 benchmark, optional export/import).
+- **After that, to be planned:** M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Roadmap items recorded in the Backlog, each needing its own spec first: a platform-level CaCi controller, user accounts, support circles, a PWA front end, and deployment to a Raspberry Pi.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
 
 GSD planning reference: [Bipartite Graph Store library specification](specs/R-001:%20Bipartite%20Graph%20Store%20%E2%80%94%20Library%20Specification.md#suggested-gsd-phase-breakdown).

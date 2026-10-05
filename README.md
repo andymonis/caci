@@ -7,7 +7,7 @@ It combines two ideas:
 - **Spec Kit-style alignment:** write down the rules (Constitution) and the intent (Spec) before any code.
 - **GSD-style execution:** a tight loop of small tasks, each verified and committed on its own.
 
-> Status: M0 to M2 and the graph lifecycle API are complete: schemas, parsers, limits, the adapter contract, a memory adapter, an atomic `write`, and `createGraph` / `dropGraph` / `listGraphs` / `describeGraph`. `query` is still a stub until M4, and the shared adapter conformance suite (M3) is next. Stack: TypeScript, Zod, Vitest, ESLint.
+> Status: the graph store (write, query, graph lifecycle, a memory adapter and a shared conformance suite), the LLM component (categoriser, model tiers, real Anthropic client), the capture controller (propose, preview, approve) and the local dev tools (graph explorer with a capture panel, LLM lab, evaluation harness) are complete, on **in-memory storage**. **SQLite persistence is next** (planned in `.gsd/PLAN.md`; the file adapter is deferred). Stack: TypeScript, Zod, Vitest, ESLint.
 
 ## Project layout
 

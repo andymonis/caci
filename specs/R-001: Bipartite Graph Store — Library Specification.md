@@ -6,7 +6,7 @@ Oct 1, 2026 · @Andy
 
 A TypeScript library for Node that stores, categorises and retrieves information as a bipartite graph: **items** on one side, **categories** on the other, edges only between them. Callers use two endpoints, write for JSON mutation instructions and query for JSON read queries; the library validates each, translates them into storage operations and returns typed results.
 
-The library holds no state of its own. All state lives in a pluggable storage adapter (in-memory, JSON file, SQLite for local work; others later). Every instruction is scoped to a `graphId`, so one store can hold many isolated graphs, typically one per user.
+The library holds no state of its own. All state lives in a pluggable storage adapter (in-memory for tests and as the reference, SQLite for local work and small deployments; a JSON-file adapter is deferred; others later). Every instruction is scoped to a `graphId`, so one store can hold many isolated graphs, typically one per user.
 
 The design follows a functional-core / imperative-shell shape: pure functions validate and plan, and a thin shell hands the plan to the adapter to execute.
 
@@ -19,7 +19,7 @@ The goal is one stable, typed entry point that turns JSON instructions into reli
 1. Two endpoints with versioned, schema-validated JSON formats: mutation instructions to write, queries to read the whole graph or a subset.
 2. Strict bipartite integrity: edges only ever join an item to a category.
 3. Multi-graph isolation by `graphId`; no read or write ever crosses graphs.
-4. Storage-agnostic core behind a small adapter interface, with file and SQLite adapters for local development.
+4. Storage-agnostic core behind a small adapter interface, with memory and SQLite adapters for development and local use (a JSON-file adapter is deferred, decided 2026-10-05).
 5. Stateless, functional behaviour: same instruction plus same store contents gives the same result; no module-level mutable state.
 6. A stable public API under semver, safe to import from other packages.
 
@@ -173,7 +173,7 @@ Rules:
 - `where` uses a closed operator set: `eq`, `ne`, `in`, `contains`, `startsWith`, `exists`, on dotted paths into `data`.
 - The query endpoint runs in a read-only transaction; a query can never write, and a mutation sent here is rejected.
 - The named queries in the requirements (items by categories, related items, co-occurrence) ship as typed presets that compile into this one format, so there is a single execution path to test.
-- Matching on `data` scans in the core by default; adapters that can (SQLite via `json_extract`) push it down. Indexed fields per graph are a later option.
+- Matching on `data` scans in the core by default; adapters that can (SQLite via `json_extract`, which arrives with the query features of M4b) push it down. Indexed fields per graph are a later option.
 
 ### Query results
 
@@ -247,7 +247,7 @@ export const q: { from; all; references; itemsByCategories; relatedItems; coOccu
 // e.g. q.references({ partition: 'category', id: 'doctor-x' }) builds the doctor X query
 
 // Adapters ship as separate entry points so core has no driver dependencies.
-// 'bipartite-graph/adapters/memory' | '/file' | '/sqlite'
+// 'bipartite-graph/adapters/memory' | '/sqlite'   ('/file' is deferred)
 
 // Conformance suite for anyone writing an adapter. The caller passes their test runner's
 // describe and it (Vitest, Jest and node:test all fit), so the library depends on none of them.
@@ -297,8 +297,22 @@ Adapter expectations:
 | Adapter | Purpose | Notes |
 | --- | --- | --- |
 | Memory | Unit tests, reference implementation | Copy-on-write maps; transaction = swap on commit. |
-| File (JSON) | Zero-dependency local dev | One file per graph; write to temp then atomic rename; single-writer lock per graph. Fine to a few thousand nodes. |
-| SQLite | Realistic local dev, small deployments | Tables `graphs`, `nodes`, `edges` with composite keys led by `graph_id`; indexes on both edge directions; native set queries via SQL. Driver: `better-sqlite3` or `node:sqlite`. |
+| SQLite | Realistic local dev, small deployments (**first persistent adapter**) | Tables `graphs`, `nodes`, `edges` keyed by `graph_id` and by the id blobs described below; an index on the reverse edge direction. Driver: `node:sqlite` (built into Node, no dependency). See *SQLite adapter design decisions*. |
+| File (JSON) | **Deferred (2026-10-05).** Was: zero-dependency, human-readable local storage | One file per graph; write to temp then atomic rename; single-writer lock per graph. Kept as an idea: `node:sqlite` now provides zero-dependency local storage with real transactions, so build this only if readable files are wanted. |
+
+### SQLite adapter design decisions (2026-10-05)
+
+Each decision has a reason, because most are forced by something found while checking `node:sqlite` on Node 22.19 (SQLite 3.50.4).
+
+- **Driver: `node:sqlite`.** Built into Node, so the adapter adds no dependency (NFR-03). It is marked experimental (it prints an `ExperimentalWarning`) and needs Node 22.13 or later without flags. It is confined to one internal file so that moving to `better-sqlite3` later is a one-file change plus a dependency approval.
+- **Node ids are stored as UTF-16 big-endian blobs.** SQLite has no custom collation through this driver, and its default text order compares UTF-8 bytes, which differs from the UTF-16 code-unit order this contract requires (verified: `😀` sorts after `U+FF5E` in SQLite but before `U+E000` in JavaScript). The byte order of the UTF-16 big-endian encoding equals JavaScript's `<`, so ordering, keyset paging and cursors come out right. Text storage also corrupts a lone surrogate (it comes back as `U+FFFD`), which would break "node ids round-trip unchanged"; the blob is therefore the identity too, and ids are decoded from it exactly. Graph ids are restricted to a safe character set and are stored as text.
+- **One connection, all transactions serialised.** The driver is synchronous while a transaction callback is asynchronous, so two transactions interleaving on one connection would share a SQLite transaction and break isolation. Every transaction runs through one queue as `BEGIN IMMEDIATE` then commit, or rollback if the callback throws. Other connections and processes are protected by SQLite's own locking and a busy timeout, with write-ahead logging for files.
+- **Adapters stay dumb.** No foreign keys between edges and nodes: the adapter does not check endpoints and does not cascade (the core does, per FR-07). Edges are replaced whole on `putEdges`. Data is stored as JSON text and copied in and out.
+- **Schema versioning.** The schema version is recorded with `PRAGMA user_version`. A database that is not SQLite, or is newer than the library knows, is refused and never modified.
+- **Atomic graph creation.** `graphs.create` will report whether this call created the graph (insert or ignore), which settles the two known creation races for every adapter (planned as T-059; the interface above changes then).
+- **Push-down is later.** `nativeSetQueries` stays false, and no `data` matching is pushed down, until M4b makes the core issue set queries and `where` filters. NFR-05's three-clause set query is therefore measured after M4b; the single-category lookup, paging and write timings are measured with the adapter.
+- **Data at rest is not encrypted.** The database file holds notes and category names in plain text. A new file is created owner-only (mode 0600) and `data/` is git-ignored; rely on full-disk encryption. An encrypted build such as SQLCipher would be a native dependency and is not planned.
+- **One process at a time is the supported use.** SQLite protects the file if a second process opens it, but the library offers no coordination beyond that, and pending proposals in the application layer are in memory.
 
 The core must not import any adapter. Adapters depend on the core's types, never the other way round.
 
@@ -365,11 +379,11 @@ Not yet covered (arrive with later milestones): AC-07 to AC-09, AC-11, AC-13, AC
 
 | ID | Area | Requirement |
 | --- | --- | --- |
-| NFR-01 | Platform | Node LTS (22+), TypeScript `strict`, ESM-first with CJS build if consumers need it. |
+| NFR-01 | Platform | Node LTS (22+), TypeScript `strict`, ESM-first with CJS build if consumers need it. The SQLite adapter needs Node 22.13 or later (`node:sqlite` without flags). |
 | NFR-02 | Purity | No module-level mutable state; no singletons; no global config. Lint rule or test enforces it. |
-| NFR-03 | Dependencies | Core: one runtime dependency at most (the schema validator). Drivers live only in adapter entry points. |
+| NFR-03 | Dependencies | Core: one runtime dependency at most (the schema validator). Drivers live only in adapter entry points; the SQLite adapter uses `node:sqlite`, which is built into Node and adds no dependency. |
 | NFR-04 | Determinism | Same instruction on same store contents returns byte-identical results, including ordering and cursors. |
-| NFR-05 | Performance | SQLite adapter, 10k items, 1k categories, 100k edges: single-category lookup under 20 ms, three-clause set query under 100 ms (p95, dev laptop). Treat as a baseline to measure, not a hard promise. |
+| NFR-05 | Performance | SQLite adapter, 10k items, 1k categories, 100k edges: single-category lookup under 20 ms, three-clause set query under 100 ms (p95, dev laptop). Treat as a baseline to measure, not a hard promise. The three-clause set query is measured after M4b, when the core issues set queries. |
 | NFR-06 | Limits | Configurable caps: ops per mutation (default 1,000), `data` payload size (default 64 KB), node id length (default 256 chars; graph ids are fixed at 1 to 128 characters of a restricted set), nodes one query may reach (default 10,000, after which the result is marked `truncated`). |
 | NFR-07 | Quality | 90%+ line coverage on core; every adapter passes the conformance suite in CI. |
 | NFR-08 | Docs | Generated API reference, a README quick start, and an adapter-authoring guide. |
@@ -391,7 +405,7 @@ Each AC is testable and maps to the requirement it proves. Unless stated, every 
 | AC-08 | FR-12 | Given item X sharing 2 categories with Y and 1 with Z, when querying related items for X, then Y ranks above Z and X is excluded. |
 | AC-09 | FR-14 | Given 120 matches and `limit: 50`, when paging with returned cursors, then exactly 120 unique items return across 3 pages, in stable order. |
 | AC-10 | FR-15 | When `write` or `query` receives `null`, a string, or a malformed object, then it returns `{ ok: false }` and never throws. |
-| AC-11 | FR-16 | Given a graph exported from the file adapter, when imported into SQLite and exported again, then both exports are deep-equal. |
+| AC-11 | FR-16 | Given a graph exported from the memory adapter, when imported into SQLite and exported again, then both exports are deep-equal (and the same from SQLite into memory). *Re-based 2026-10-05: it named the file adapter, which is deferred.* |
 | AC-12 | NFR-02 | When two clients with different adapters run in one process, then neither sees the other's data or configuration. |
 | AC-13 | NFR-04 | When the same query runs twice on an unchanged store, then results are deep-equal. |
 | AC-14 | Version | When a mutation or query has an unknown `version`, then the result is `UNSUPPORTED_VERSION`. |
@@ -410,9 +424,9 @@ Each AC is testable and maps to the requirement it proves. Unless stated, every 
 
 **Keep the adapter dumb.** The biggest long-term risk is behaviour drifting between backends. Putting all rules in the core and shipping a conformance suite is what makes "switchable storage" true rather than aspirational. Build the memory adapter and the suite before the file or SQLite adapters.
 
-**Set queries are the performance hotspot.** A naive core implementation of AND/OR/NOT pulls edge lists into memory. That is fine for the file adapter and fatal at scale; hence the optional `nativeSetQueries` fast path. Ship the naive version first, prove correctness, then add the SQL path behind the same tests.
+**Set queries are the performance hotspot.** A naive core implementation of AND/OR/NOT pulls edge lists into memory. That is fine for the memory adapter and fatal at scale; hence the optional `nativeSetQueries` fast path. Ship the naive version first, prove correctness, then add the SQL path behind the same tests.
 
-**File adapter concurrency.** Two Node processes writing the same JSON file will corrupt it. Either document single-process use, or use a lockfile. Do not let it quietly become a production backend.
+**File adapter concurrency (the adapter is deferred; kept for when it is revived).** Two Node processes writing the same JSON file will corrupt it. Either document single-process use, or use a lockfile. Do not let it quietly become a production backend.
 
 **Pagination over a changing set.** Offset cursors skip or repeat rows when data changes between pages. Use keyset cursors (last seen id) for deterministic paging.
 
@@ -435,8 +449,8 @@ Seven phases, each small enough for one GSD milestone and each ending in green t
 2. **Write endpoint + memory adapter.** `parseMutation`, `write`, bipartite and cascade rules, atomic transactions. Exit: AC-03 to AC-06.
 3. **Conformance suite.** Extract every behaviour test into `runAdapterConformance`; memory adapter passes. Exit: AC-15 on memory.
 4. **Query endpoint.** `parseQuery`, `query`: seeds, traversal, filters, return shapes, keyset cursors, then the named presets compiled onto it. Exit: AC-07 to AC-09, AC-13, AC-17 to AC-19, AC-21, AC-22.
-5. **File adapter.** Per-graph JSON files, atomic rename, lock. Exit: full conformance pass, AC-01, AC-02.
-6. **SQLite adapter.** Schema, indexes, native set-query and `data` match push-down, benchmark harness for NFR-05. Exit: full conformance pass, benchmark report.
-7. **Export/import, packaging, docs.** FR-16, adapter entry points, README, adapter guide, release 1.0.0. Exit: AC-11, AC-12.
+5. **SQLite adapter (brought forward 2026-10-05, replacing the file adapter in this slot).** Atomic graph creation in the contract, then the driver wrapper, schema and key encoding, the adapter, durability and concurrency tests, the capture flow on it, and a benchmark harness for NFR-05. Exit: full conformance pass on memory and file databases, AC-01, AC-02 and AC-15 on SQLite, durability (reopen, rollback, kill) shown, benchmark report. Its `data` and set-query push-down waits for M4b.
+6. **File adapter. Deferred (2026-10-05).** Per-graph JSON files, atomic rename, lock. Revive only if human-readable storage is wanted; exit would be full conformance pass.
+7. **Export/import, packaging, docs.** FR-16, adapter entry points, README, adapter guide, release 1.0.0. Exit: AC-11 (re-based on memory and SQLite), AC-12. Export/import may be done earlier as the backup and migration path for SQLite.
 
-Tip for GSD: put the FR/AC tables from this doc into the project's requirements file so each plan can cite IDs, and make "conformance suite passes on all adapters" a standing verification step from phase 5 onward.
+Tip for GSD: put the FR/AC tables from this doc into the project's requirements file so each plan can cite IDs, and make "conformance suite passes on all adapters" a standing verification step from the SQLite adapter (phase 5) onward.
