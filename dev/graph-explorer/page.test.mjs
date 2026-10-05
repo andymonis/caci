@@ -12,7 +12,7 @@ const html = readFileSync(join(publicDir, 'index.html'), 'utf8');
 
 describe('the explorer page', () => {
   it('finds its scripts (so the checks below cannot pass by looking at nothing)', () => {
-    expect(sources.sort()).toEqual(['app.js', 'capture.js', 'layout.js', 'scenarios.js']);
+    expect(sources.sort()).toEqual(['app.js', 'capture.js', 'layout.js', 'scenarios.js', 'storage.js']);
   });
 
   it.each(sources)('%s never writes HTML or runs text as code', (file) => {

@@ -12,7 +12,7 @@ everything else stays where it is.
 - `dev/not-published.test.mjs` (one test for every dev tool) asks npm what it would publish and fails if anything from `dev/` is in it, and checks that only the shared server kit touches the network modules.
 - The server binds `127.0.0.1` only, checks the `Host` and `Origin` headers, and refuses to start when
   `NODE_ENV=production`.
-- Data is held in memory and is lost when you stop it.
+- Data is held in memory and is lost when you stop it, unless you start it with `--db <file>` (see below).
 
 ## Run it
 
@@ -24,6 +24,16 @@ then open http://127.0.0.1:4317 (set `GRAPH_EXPLORER_PORT` to change the port). 
 first, because the server uses the real `write`, `query`, `createGraph`, `dropGraph`, `listGraphs` and
 `describeGraph` plus the memory adapter. Nothing is faked, and the picture itself is read with one
 whole-graph `query()` (a page at a time), so what you see is what a caller of the library would get.
+
+## Keeping the data: `--db`
+
+```
+npm run dev:explorer -- --db ./data/caci.db
+```
+
+uses the SQLite adapter instead of memory. It prints which file it uses and that the data is still there after a restart, and the header shows `saved to <file>`. The file (and its folder, if missing) is created owner-only; `data/` is git-ignored. **The file is not encrypted** and holds your notes in plain text. A bad path (a folder that cannot be made, a file that is not a database, a database written by a newer version) prints a clear message and no server starts. Press Ctrl+C to close the database cleanly.
+
+**Reset everything** then means *delete every graph in that file*: the button says so, needs a second click, and its tooltip names the file. The capture panel uses the same store, so a note you approve is still there after a restart (a proposal you have not approved is not: those live in memory).
 
 ## What you can do
 

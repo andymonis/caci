@@ -17,6 +17,7 @@ const FILES = {
   '/layout.js': ['layout.js', 'text/javascript; charset=utf-8'],
   '/scenarios.js': ['scenarios.js', 'text/javascript; charset=utf-8'],
   '/capture.js': ['capture.js', 'text/javascript; charset=utf-8'],
+  '/storage.js': ['storage.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 };
 
@@ -28,6 +29,8 @@ export function assertLocalDevelopment(env = process.env) {
 /**
  * @param lib the graph store: { write, createGraph, dropGraph, listGraphs, describeGraph, createMemoryAdapter }.
  *            It is passed in so the tool can run against the build (`dist`) or the sources (tests).
+ * @param options.adapter the store to use; the default is a new memory adapter. A file-backed adapter makes the data persist.
+ * @param options.storage what the page is told about it: { kind: 'memory' } (the default) or { kind: 'sqlite', path }.
  * @param options.capture turns on the capture panel (propose a filing for a note, then approve or reject it):
  *            { createController, createLlm, createScriptedModelClient, createAnthropicClient?, apiKey?, realModel?, controllerOptions? }
  *            (`controllerOptions` are passed to every controller: tests use them to shorten how long a proposal lasts).
@@ -35,7 +38,8 @@ export function assertLocalDevelopment(env = process.env) {
  *            with `realModel: true` AND `apiKey` is set, and then only for requests that ask for it with `network: true`.
  */
 export function createApp(lib, options = {}) {
-  let adapter = lib.createMemoryAdapter();
+  const adapter = options.adapter ?? lib.createMemoryAdapter();
+  const storage = Object.freeze(options.storage === undefined ? { kind: 'memory' } : { ...options.storage });
   const capture = options.capture;
   const apiKey = typeof capture?.apiKey === 'string' && capture.apiKey !== '' ? capture.apiKey : undefined;
   const realAvailable = capture?.realModel === true && apiKey !== undefined && typeof capture.createAnthropicClient === 'function';
@@ -182,8 +186,16 @@ export function createApp(lib, options = {}) {
     if (parts[0] === 'write' && parts.length === 1 && req.method === 'POST') {
       return send(res, 200, await lib.write(adapter, await readJson(req)));
     }
+    if (parts[0] === 'storage' && parts.length === 1 && req.method === 'GET') {
+      return send(res, 200, { ok: true, value: storage });
+    }
     if (parts[0] === 'reset' && parts.length === 1 && req.method === 'POST') {
-      adapter = lib.createMemoryAdapter();
+      // the same store stays open (a file cannot be swapped for a new one): drop every graph in it
+      const ids = await allPages((page) => lib.listGraphs(adapter, page).then((r) => (r.ok ? r.value : { items: [], nextCursor: null })));
+      for (const id of ids) {
+        const dropped = await lib.dropGraph(adapter, id);
+        if (!dropped.ok) return send(res, 200, dropped);
+      }
       controllers = makeControllers();
       owners.clear();
       return send(res, 200, { ok: true, value: {} });

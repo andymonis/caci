@@ -1,7 +1,7 @@
 import { computeLayout, describeDiff, diffGraphs, edgeKey, edgePath, mergeOrder, nodeKey, shortLabel } from './layout.js';
 import { queryPresets, rejected, scenarios } from './scenarios.js';
 import { applyGhosts, describeFailure, FINAL_CODES, proposalHeadline, realModelSwitch } from './capture.js';
-
+import { resetLabels, resetTitle, storageLabel } from './storage.js';
 const $ = (id) => document.getElementById(id);
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const svg = $('canvas');
@@ -658,19 +658,21 @@ $('auto-refresh').addEventListener('change', (event) => {
 });
 
 let resetArmed = false;
+let storage = { kind: 'memory' };
 $('reset').addEventListener('click', async (event) => {
   const button = event.currentTarget;
+  const labels = resetLabels(storage);
   if (!resetArmed) {
     resetArmed = true;
-    button.textContent = 'Click again to confirm';
+    button.textContent = labels.armed;
     setTimeout(() => {
       resetArmed = false;
-      button.textContent = 'Reset everything';
+      button.textContent = labels.idle;
     }, 3000);
     return;
   }
   resetArmed = false;
-  button.textContent = 'Reset everything';
+  button.textContent = labels.idle;
   stopScenario();
   log('reset everything', undefined, await api('/api/reset', 'POST', {}));
   await switchGraph(null);
@@ -786,6 +788,16 @@ async function ensureDemoGraph() {
   await switchGraph(all[0] ?? null);
 }
 
+async function startStorage() {
+  const answer = await api('/api/storage');
+  if (answer.ok) storage = answer.value;
+  $('storage').textContent = storageLabel(storage);
+  $('storage').title = storage.kind === 'sqlite' ? 'The data is kept in this file and is still here after a restart' : 'The data is lost when the explorer stops';
+  $('reset').textContent = resetLabels(storage).idle;
+  $('reset').title = resetTitle(storage);
+}
+
 loadScenario(scenarios[0].id);
+await startStorage();
 await startCapture();
 await ensureDemoGraph();
