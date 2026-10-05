@@ -23,10 +23,10 @@ const ASSEMBLY: readonly string[] = Object.freeze(['llm/index.ts', 'llm/create-l
 
 /**
  * The public entry points the application may import. Its tests (and test utilities) may also use
- * the memory adapter and the scripted model client, which is how they get a store and a model.
+ * the memory and SQLite adapters and the scripted model client, which is how they get a store and a model.
  */
 const APP_MAY_USE: readonly string[] = Object.freeze(['graph_store/index']);
-const APP_TEST_MAY_USE: readonly string[] = Object.freeze(['graph_store/index', 'graph_store/adapters/memory/index']);
+const APP_TEST_MAY_USE: readonly string[] = Object.freeze(['graph_store/index', 'graph_store/adapters/memory/index', 'graph_store/adapters/sqlite/index']);
 const APP_LLM: readonly string[] = Object.freeze(['llm/index']);
 const APP_TEST_LLM: readonly string[] = Object.freeze(['llm/index', 'llm/testing/index']);
 
@@ -94,6 +94,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'llm/index.ts': `import { y } from './errors.js'; export { categorise } from './capabilities/categorise/index.js';`,
         'app/x.ts': `import { write } from '../graph_store/index.js'; import { createLlm } from '../llm/index.js'; import { y } from './y.js';`,
         'app/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createScriptedModelClient } from '../llm/testing/index.js';`,
+        'app/y.test.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';`,
         'app/helper.test-util.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
         'llm/create-llm.ts': `import { categorise } from './capabilities/categorise/index.js';`,
         'llm/model-client.ts': `import type { Result } from '../graph_store/index.js';`,
@@ -115,6 +116,9 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the application reaching into graph store internals', { 'app/x.ts': `import { parseMutation } from '../graph_store/parse.js';` }],
     ['the application reaching into the memory adapter\'s internals', { 'app/x.ts': `import { x } from '../graph_store/adapters/memory/memory-adapter.js';` }],
     ['production application code using the memory adapter', { 'app/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
+    ['production application code using the SQLite adapter', { 'app/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
+    ['the application reaching into the SQLite adapter\'s internals', { 'app/x.test.ts': `import { openDb } from '../graph_store/adapters/sqlite/db.js';` }],
+    ['the LLM component using the SQLite adapter', { 'llm/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
     ['production application code using the scripted model client', { 'app/x.ts': `import { createScriptedModelClient } from '../llm/testing/index.js';` }],
     ['an application test using the LLM component\'s internals', { 'app/x.test.ts': `import { guardReply } from '../llm/capabilities/categorise/guard.js';` }],
     ['the application using the conformance suite', { 'app/x.ts': `import { runAdapterConformance } from '../graph_store/testing/index.js';` }],

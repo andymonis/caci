@@ -143,6 +143,7 @@ export function openDb(options: OpenOptions = {}): Db {
   } catch (cause) {
     throw new DbError('OPEN_FAILED', `could not open the database at "${path}": ${messageOf(cause)}`);
   }
+  raw.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`); // first, so even the opening read waits for another process's lock
   try {
     raw.prepare('SELECT count(*) AS n FROM sqlite_master').get(); // reads the file header; fails for a file that is not a database
   } catch (cause) {
@@ -150,7 +151,6 @@ export function openDb(options: OpenOptions = {}): Db {
     const code = (cause as { errcode?: number }).errcode === SQLITE_NOTADB || /not a database/i.test(messageOf(cause)) ? 'NOT_A_DATABASE' : 'OPEN_FAILED';
     throw new DbError(code, `"${path}" ${code === 'NOT_A_DATABASE' ? 'is not a SQLite database' : 'could not be read'}: ${messageOf(cause)}`);
   }
-  raw.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
   raw.exec('PRAGMA foreign_keys = ON');
 
   /** Turns "database is locked" into a `DbError` that says what happened and for how long we waited. */
@@ -210,7 +210,7 @@ export function openDb(options: OpenOptions = {}): Db {
     },
     useWriteAheadLog: () => {
       if (path !== ':memory:') {
-        ensureOpen().exec('PRAGMA journal_mode = WAL');
+        guard(() => ensureOpen().exec('PRAGMA journal_mode = WAL'));
         raw.exec('PRAGMA synchronous = NORMAL'); // safe with write-ahead logging, and much faster
       }
     },
