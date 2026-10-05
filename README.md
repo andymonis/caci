@@ -31,6 +31,7 @@ api/                    Committed public API report (API Extractor)
 dev/graph-explorer/     Local-only visual tester for the graph store (never published)
 dev/shared/             The loopback server kit every dev tool is built on (never published)
 dev/llm-lab/            Local-only lab for trying the LLM component, scripted by default (never published)
+dev/eval/               Local-only evaluation harness: compares models on a golden set (never published)
 ```
 
 ### Where the code lives
@@ -139,6 +140,10 @@ Events arrive in order: `prompt` (the instructions, messages and schema as built
 ### Trying it: the LLM lab
 
 `npm run dev:lab` opens a local page (http://127.0.0.1:4318, never published) for trying the component: write a note and some existing categories, choose a model (the configured default, a tier, or an exact id) and press Run. It shows what would be approved (the proposal and its plain summary), every attempt with the raw output and what the output guard said about it, the repair feedback, and the exact prompt that was sent, with tokens, latency and the model used. Compare runs the same note over several models side by side, and a history lists earlier runs. It uses a scripted model by default, with ten behaviours to choose from (a good answer, a repaired one, a refusal, a time-out...), so it costs nothing; the real model is used only when an API key was in the environment at start-up and you switch on "Use the real model (uses the network)" for that run. See `dev/llm-lab/README.md`.
+
+### Choosing the model: the evaluation harness
+
+`npm run eval -- --models fast,balanced,deep` runs 15 sample notes through `categorise` on each model and prints pass rate, repairs, latency and tokens side by side, then which cases each model got wrong and why. A model passes a case when it answers, the preview shows no problems, and it reuses the right categories, avoids the wrong ones, does not invent a duplicate and stays within the link and new-category limits. A real run prints its plan and sends nothing until you add `--yes`, because it costs money and sends the notes to Anthropic; `--scripted` checks the harness for free. See `dev/eval/README.md`. The default model for `categorise` is still provisional until this has been run with a key.
 
 ## Using the real model
 

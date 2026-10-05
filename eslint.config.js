@@ -37,7 +37,7 @@ export default tseslint.config(
     // Local development tooling (never published): the explorer's Node server and its tests.
     files: ['dev/**/*.mjs'],
     languageOptions: {
-      globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly', URL: 'readonly', fetch: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', structuredClone: 'readonly' },
+      globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly', URL: 'readonly', fetch: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', structuredClone: 'readonly', AbortController: 'readonly' },
     },
   },
   {

@@ -11,3 +11,4 @@ coverage/
 *.log
 .claude/settings.local.json
 temp/
+eval-results/
