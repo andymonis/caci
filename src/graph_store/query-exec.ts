@@ -1,5 +1,6 @@
-import type { AdapterTx, EdgeRecord, NodeRecord, Page, Paged, Partition, StorageAdapter } from './adapter.js';
+import type { AdapterTx, EdgeRecord, NodeRecord, Partition, StorageAdapter } from './adapter.js';
 import { DEFAULT_LIMITS } from './limits.js';
+import { READ_PAGE, walkPages } from './paging.js';
 import { encodeQueryCursor } from './query-cursor.js';
 import { isAfter, sortNodeRefs } from './query-order.js';
 import type { QueryPlan } from './query-plan.js';
@@ -21,21 +22,7 @@ export function readOnly(tx: AdapterTx): ReadTx {
   });
 }
 
-/** Rows asked of the adapter at a time. */
-const READ_PAGE = 1000;
-
-/** Walks any listing page by page, failing loudly if the adapter's cursor does not advance. */
-async function* pages<T>(fetch: (page: Page) => Promise<Paged<T>>, what: string): AsyncGenerator<readonly T[]> {
-  let cursor: string | null = null;
-  do {
-    const page: Paged<T> = await fetch({ limit: READ_PAGE, cursor });
-    yield page.items;
-    if (page.nextCursor !== null && page.nextCursor === cursor) {
-      throw new Error(`the adapter's paging cursor did not advance while listing ${what}`);
-    }
-    cursor = page.nextCursor;
-  } while (cursor !== null);
-}
+const pages = walkPages; // fails loudly, rather than looping for ever, if the adapter's cursor does not advance
 
 const pagesOf = (tx: ReadTx, partition: Partition) => pages((page) => tx.listNodes(partition, page), `${partition} nodes`);
 

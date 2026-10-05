@@ -1,6 +1,7 @@
 import type { AdapterTx, Page, Paged, StorageAdapter } from './adapter.js';
 import { GRAPH_ID_PATTERN, GRAPH_ID_RULE, MAX_GRAPH_ID_LENGTH } from './graph-id.js';
 import { checkOptions, DEFAULT_LIMITS, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, resolveLimits, type GraphOptions, type Limits } from './limits.js';
+import { walkPages } from './paging.js';
 import { err, graphError, ok, type GraphError, type Result } from './result.js';
 import type { GraphInfo, GraphRef } from './types.js';
 import { storageError } from './write-plan.js';
@@ -122,27 +123,22 @@ export function listGraphs(adapter: StorageAdapter, page?: { limit?: number; cur
   });
 }
 
-/** Counts every row of a paged listing without holding more than one page in memory. */
-async function countAll(fetch: (page: Page) => Promise<Paged<unknown>>): Promise<number> {
+/**
+ * Counts every row of a paged listing without holding more than one page in memory. Throws (so the
+ * caller reports `STORAGE_ERROR`) if the adapter's cursor does not advance, instead of looping for ever.
+ */
+async function countAll(fetch: (page: Page) => Promise<Paged<unknown>>, what: string): Promise<number> {
   let count = 0;
-  let cursor: string | null = null;
-  do {
-    const result: Paged<unknown> = await fetch({ limit: MAX_PAGE_LIMIT, cursor });
-    count += result.items.length;
-    cursor = result.nextCursor;
-  } while (cursor !== null);
+  for await (const items of walkPages(fetch, what, MAX_PAGE_LIMIT)) count += items.length;
   return count;
 }
 
 async function countEdges(tx: AdapterTx): Promise<number> {
   // Every edge has exactly one item end, so summing over items counts each edge once.
   let edges = 0;
-  let cursor: string | null = null;
-  do {
-    const items: Paged<{ id: string }> = await tx.listNodes('item', { limit: MAX_PAGE_LIMIT, cursor });
-    for (const item of items.items) edges += await countAll((page) => tx.edgesOf('item', item.id, page));
-    cursor = items.nextCursor;
-  } while (cursor !== null);
+  for await (const items of walkPages((page) => tx.listNodes('item', page), 'item nodes', MAX_PAGE_LIMIT)) {
+    for (const item of items) edges += await countAll((page) => tx.edgesOf('item', item.id, page), `edges of item "${item.id}"`);
+  }
   return edges;
 }
 
@@ -161,8 +157,8 @@ export function describeGraph(adapter: StorageAdapter, graphId: string, options?
     if (!plan.ok) return plan;
     const info = await adapter.transaction(id.value, async (tx) => ({
       graphId: id.value,
-      itemCount: await countAll((page) => tx.listNodes('item', page)),
-      categoryCount: await countAll((page) => tx.listNodes('category', page)),
+      itemCount: await countAll((page) => tx.listNodes('item', page), 'item nodes'),
+      categoryCount: await countAll((page) => tx.listNodes('category', page), 'category nodes'),
       edgeCount: await countEdges(tx),
     }));
     return ok(info);

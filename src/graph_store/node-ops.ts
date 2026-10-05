@@ -1,4 +1,5 @@
 import type { AdapterTx, EdgeKey, EdgeRecord, JsonObject, NodeRecord } from './adapter.js';
+import { walkPages } from './paging.js';
 import type { Op } from './types.js';
 
 export type UpsertNodeOp = Extract<Op, { op: 'upsertNode' }>;
@@ -39,12 +40,10 @@ export async function applyUpsertNode(tx: AdapterTx, op: UpsertNodeOp): Promise<
  * first, then the node (FR-07). Deleting a node that does not exist is a no-op.
  */
 export async function applyDeleteNode(tx: AdapterTx, op: DeleteNodeOp): Promise<void> {
-  let cursor: string | null = null;
-  do {
-    const page = await tx.edgesOf(op.partition, op.id, { limit: EDGE_PAGE_SIZE, cursor });
-    await tx.deleteEdges(planCascade(page.items));
-    // Keyset cursors stay valid after the rows before them are deleted.
-    cursor = page.nextCursor;
-  } while (cursor !== null);
+  // Keyset cursors stay valid after the rows before them are deleted. An adapter whose cursor does
+  // not advance makes this throw (the write is then rolled back) rather than loop for ever.
+  for await (const edges of walkPages((page) => tx.edgesOf(op.partition, op.id, page), `edges of ${op.partition} "${op.id}"`, EDGE_PAGE_SIZE)) {
+    await tx.deleteEdges(planCascade(edges));
+  }
   await tx.deleteNodes(op.partition, [op.id]);
 }
