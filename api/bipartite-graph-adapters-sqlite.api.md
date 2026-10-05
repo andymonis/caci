@@ -25,7 +25,9 @@ export type DbErrorCode =
 /** A SQLite database, but not one of ours (or an incomplete one). It has not been changed. */
 | 'NOT_A_GRAPH_DATABASE'
 /** One of ours, written by a newer version of the library. It has not been changed. */
-| 'NEWER_SCHEMA' | 'MIGRATION_FAILED' | 'CLOSED';
+| 'NEWER_SCHEMA' | 'MIGRATION_FAILED'
+/** Another connection held the write lock for longer than the busy timeout. Nothing was changed by the failed statement. */
+| 'BUSY' | 'CLOSED';
 
 // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
 //

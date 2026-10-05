@@ -237,6 +237,30 @@ With a real model, **the note and the graph's existing categories (their ids and
 - **Pending proposals live in memory** and are lost when the process stops.
 - **The default model** (`fast`) rests on a small first evaluation; see *Choosing the model: the evaluation harness*.
 
+## Persistence
+
+The memory adapter forgets everything when the process ends. The SQLite adapter keeps a graph store in one file:
+
+```ts
+import { createGraphClient } from 'bipartite-graph';
+import { createSqliteAdapter } from 'bipartite-graph/adapters/sqlite';
+
+const adapter = createSqliteAdapter({ path: './data/caci.db' }); // created if missing; ':memory:' (the default) keeps nothing
+const graphs = createGraphClient(adapter);
+// ... write and query as usual ...
+await adapter.close(); // always close it when you are done
+```
+
+It uses the `node:sqlite` module built into Node, so there is no extra dependency, but it needs **Node 22.13 or later** and Node marks it **experimental**: it prints an `ExperimentalWarning` the first time it loads, and its details may change in a future Node. Only one small file in the library touches it, so moving to another driver later is a contained change. On an older Node, `createSqliteAdapter` throws a `DbError` (`DRIVER_UNAVAILABLE`) that says so.
+
+- **Where the file lives.** Wherever `path` says; the directory must exist. A new file is created readable and writable by its owner only (mode 0600; ignored on Windows). While the adapter is open there are also `-wal` and `-shm` files beside it; a clean `close()` removes them. `data/`, `*.db` and the `-wal`, `-shm` and `-journal` files are git-ignored.
+- **A file that is not ours is never changed.** A file that is not a SQLite database, another application's SQLite database, or one written by a newer version of this library is refused with a `DbError` (`NOT_A_DATABASE`, `NOT_A_GRAPH_DATABASE`, `NEWER_SCHEMA`) and left exactly as it was. Older files are upgraded in one transaction.
+- **If the process dies.** A transaction is all or nothing: a crash or `kill -9` in the middle of a write leaves the file as it was before that write (tested). With the default setting a *power cut* can lose the last few committed writes but does not damage the file.
+- **One process at a time is the intended use.** Several processes (or several adapters) can share one file: they see each other's committed data and take turns to write, and 100 simultaneous updates from two processes lose none (tested). A writer that cannot get the lock within `busyTimeoutMs` (default 5,000) fails with a `DbError` (`BUSY`), which `write()` reports as `STORAGE_ERROR`. Do not open two adapters on one file inside the same process and let both hold transactions open across `await`s: waiting for a lock blocks the whole process.
+- **Backup.** Call `close()`, then copy the file. Copying while the adapter is open can miss the newest writes (they may still be in the `-wal` file).
+- **The file is not encrypted.** It holds your notes and categories in plain text. Protect it as you would the notes themselves: rely on disk encryption and file permissions. Nothing is anonymised (see *Privacy: what is sent, and what is not protected*).
+- **Not for the browser or a network drive.** SQLite needs a local file system that supports locking.
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.

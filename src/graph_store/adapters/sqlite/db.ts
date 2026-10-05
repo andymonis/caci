@@ -22,6 +22,8 @@ export type DbErrorCode =
   /** One of ours, written by a newer version of the library. It has not been changed. */
   | 'NEWER_SCHEMA'
   | 'MIGRATION_FAILED'
+  /** Another connection held the write lock for longer than the busy timeout. Nothing was changed by the failed statement. */
+  | 'BUSY'
   | 'CLOSED';
 
 /** A problem with the database as a whole, as opposed to one statement failing. */
@@ -52,6 +54,8 @@ const driver = await loadDriver();
 export const DEFAULT_BUSY_TIMEOUT_MS = 5000;
 const MAX_BUSY_TIMEOUT_MS = 600_000;
 const SQLITE_NOTADB = 26;
+const SQLITE_BUSY = 5;
+const SQLITE_LOCKED = 6;
 const MAX_CACHED_STATEMENTS = 128;
 
 export interface OpenOptions {
@@ -149,6 +153,19 @@ export function openDb(options: OpenOptions = {}): Db {
   raw.exec(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
   raw.exec('PRAGMA foreign_keys = ON');
 
+  /** Turns "database is locked" into a `DbError` that says what happened and for how long we waited. */
+  const guard = <T>(body: () => T): T => {
+    try {
+      return body();
+    } catch (cause) {
+      const errcode = (cause as { errcode?: number }).errcode;
+      if (errcode === SQLITE_BUSY || errcode === SQLITE_LOCKED || /database is locked|database table is locked/i.test(messageOf(cause))) {
+        throw new DbError('BUSY', `the database "${path}" is locked by another connection or process; gave up after waiting ${busyTimeoutMs} ms`);
+      }
+      throw cause;
+    }
+  };
+
   const cache = new Map<string, StatementSync>();
   let open = true;
 
@@ -176,15 +193,15 @@ export function openDb(options: OpenOptions = {}): Db {
     get statementCount() {
       return cache.size;
     },
-    exec: (sql) => ensureOpen().exec(sql),
-    run: (sql, ...params) => (checkParams(params), Number(statement(sql).run(...params).changes)),
-    get: <T>(sql: string, ...params: readonly SqlValue[]) => (checkParams(params), statement(sql).get(...params) as T | undefined),
-    all: <T>(sql: string, ...params: readonly SqlValue[]) => (checkParams(params), statement(sql).all(...params) as T[]),
+    exec: (sql) => guard(() => ensureOpen().exec(sql)),
+    run: (sql, ...params) => guard(() => (checkParams(params), Number(statement(sql).run(...params).changes))),
+    get: <T>(sql: string, ...params: readonly SqlValue[]) => guard(() => (checkParams(params), statement(sql).get(...params) as T | undefined)),
+    all: <T>(sql: string, ...params: readonly SqlValue[]) => guard(() => (checkParams(params), statement(sql).all(...params) as T[])),
     begin: () => {
       if (ensureOpen().isTransaction) throw new Error('a transaction is already open on this connection');
-      raw.exec('BEGIN IMMEDIATE');
+      guard(() => raw.exec('BEGIN IMMEDIATE'));
     },
-    commit: () => ensureOpen().exec('COMMIT'),
+    commit: () => guard(() => ensureOpen().exec('COMMIT')),
     rollback: () => ensureOpen().exec('ROLLBACK'),
     pragma: (name) => {
       if (!/^[a-z_]+$/.test(name)) throw new Error(`not a pragma name: ${name}`);
