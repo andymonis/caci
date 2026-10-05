@@ -4,6 +4,19 @@ export const nodeKey = (partition, id) => `${partition}:${id}`;
 export const edgeKey = (item, category) => `${item}\u0000${category}`;
 
 /**
+ * A label that fits beside a node: long ids (like the ones the controller mints) keep their start and
+ * their end, which is where they differ, with an ellipsis between. The full id stays in the tooltip.
+ */
+export function shortLabel(id, max = 18) {
+  const text = String(id);
+  const chars = [...text];
+  if (chars.length <= max) return text;
+  const keep = max - 1;
+  const head = Math.ceil(keep / 2);
+  return `${chars.slice(0, head).join('')}…${chars.slice(chars.length - (keep - head)).join('')}`;
+}
+
+/**
  * Keeps ids in the order they were first seen: ids still present keep their place, new ids are
  * appended (sorted among themselves). Nodes therefore never jump when something else is added.
  */

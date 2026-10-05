@@ -32,6 +32,27 @@
         <p class="hint">Graph ids: lowercase letters, digits, <code>_</code> or <code>-</code>.</p>
       </section>
 
+      <section id="capture" hidden>
+        <h2>Capture a note</h2>
+        <textarea id="capture-text" rows="4" spellcheck="true" aria-label="Note to file" placeholder="Saw Dr Patel about the blood test results. Book a follow-up in six weeks."></textarea>
+        <label class="inline"><input type="checkbox" id="capture-real"> use the real model</label>
+        <p id="capture-real-hint" class="hint"></p>
+        <div class="row"><button type="button" id="capture-propose">Propose</button></div>
+        <div id="capture-proposal" hidden>
+          <h3>Proposal <span class="hint">(dashed on the graph)</span></h3>
+          <pre id="capture-summary"></pre>
+          <p id="capture-why" class="hint"></p>
+          <p id="capture-problems" class="hint bad" role="alert" hidden></p>
+          <div class="row">
+            <button type="button" id="capture-approve">Approve</button>
+            <button type="button" id="capture-reject" class="danger">Reject</button>
+          </div>
+          <p id="capture-meta" class="hint"></p>
+        </div>
+        <p id="capture-status" class="hint" aria-live="polite"></p>
+        <p class="hint">Dashed = proposed. A ringed category already exists and would be reused. The demo model is free: it matches words in the note to category names.</p>
+      </section>
+
       <section>
         <h2>Add or update a node</h2>
         <form id="form-node">

@@ -28,7 +28,7 @@ export interface LlmConfig {
   readonly capabilities: Readonly<Record<Capability, CapabilityRoute>>;
 }
 
-/** Defaults, provisional until the evaluation harness compares the tiers on real inputs. */
+/** Defaults. A first real comparison (15 sample notes, one run each) put `fast` level with `balanced` on quality and the quickest and cheapest; see the evaluation harness. */
 export const DEFAULT_TIERS: Readonly<Record<ModelTier, string>> = Object.freeze({
   fast: 'claude-haiku-4-5-20251001',
   balanced: 'claude-sonnet-5-5',

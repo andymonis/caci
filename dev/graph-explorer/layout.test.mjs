@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeLayout, describeDiff, diffGraphs, edgeKey, edgePath, mergeOrder, nodeKey } from './public/layout.js';
+import { computeLayout, describeDiff, diffGraphs, edgeKey, edgePath, mergeOrder, nodeKey, shortLabel } from './public/layout.js';
 
 const graph = (items = [], categories = [], edges = []) => ({
   items: items.map((id) => ({ partition: 'item', id })),
@@ -124,5 +124,33 @@ describe('describeDiff', () => {
       edges: { added: ['e'], removed: ['f', 'g'], changed: ['h'] },
     };
     expect(describeDiff(diff)).toBe('+2 nodes, -1 node, +1 edge, -2 edges, ~1 edge updated');
+  });
+});
+
+describe('shortLabel', () => {
+  it('leaves short ids alone', () => {
+    expect(shortLabel('health')).toBe('health');
+    expect(shortLabel('a'.repeat(18))).toBe('a'.repeat(18));
+    expect(shortLabel('')).toBe('');
+  });
+  it('shortens long ids to the limit, keeping the start and the end', () => {
+    const label = shortLabel('note-0muv2wl8o-00-tqymze');
+    expect([...label]).toHaveLength(18);
+    expect(label).toBe('note-0muv…0-tqymze'); // 9 characters of the start, an ellipsis, 8 of the end
+    expect(label.startsWith('note-0mu')).toBe(true);
+    expect(label.endsWith('-tqymze')).toBe(true);
+    expect(label).toContain('…');
+  });
+  it('two ids that differ only at the end stay distinguishable', () => {
+    expect(shortLabel('note-0muv2wl8o-00-tqymze')).not.toBe(shortLabel('note-0muv2wl8o-00-tqymzf'));
+  });
+  it('respects a different limit and never splits a character', () => {
+    expect([...shortLabel('abcdefghij', 5)]).toHaveLength(5);
+    const emoji = shortLabel('😀'.repeat(30), 10);
+    expect([...emoji]).toHaveLength(10);
+    expect(emoji).not.toMatch(/\ufffd/);
+  });
+  it('turns anything into text', () => {
+    expect(shortLabel(42)).toBe('42');
   });
 });

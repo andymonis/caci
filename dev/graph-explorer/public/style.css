@@ -85,3 +85,11 @@ form > input { margin-bottom: .4rem; }
 .node.hit .shape { stroke-width: 4; filter: drop-shadow(0 0 6px var(--accent)); }
 .edge-g.hit .edge { stroke: var(--accent); }
 .hint.bad { color: var(--bad); }
+
+/* capture: a pending proposal is drawn dashed over the real graph; nothing is written until it is approved */
+.node.ghost .shape { stroke-dasharray: 4 3; fill-opacity: .35; }
+.node.ghost text { font-style: italic; fill: var(--muted); }
+.node.reused .shape { stroke-width: 5; filter: drop-shadow(0 0 5px var(--accent)); }
+.node.updated .shape { stroke-dasharray: 2 2; }
+.edge-g.ghost .edge { stroke: var(--accent); stroke-dasharray: 6 4; }
+#capture-summary { font-size: .75rem; white-space: pre-wrap; word-break: break-word; background: var(--bg); padding: .4rem; border-radius: 6px; margin: .3rem 0; }

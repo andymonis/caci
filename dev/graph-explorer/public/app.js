@@ -1,5 +1,6 @@
-import { computeLayout, describeDiff, diffGraphs, edgeKey, edgePath, mergeOrder, nodeKey } from './layout.js';
+import { computeLayout, describeDiff, diffGraphs, edgeKey, edgePath, mergeOrder, nodeKey, shortLabel } from './layout.js';
 import { queryPresets, rejected, scenarios } from './scenarios.js';
+import { applyGhosts, describeFailure, FINAL_CODES, proposalHeadline, realModelSwitch } from './capture.js';
 
 const $ = (id) => document.getElementById(id);
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -22,6 +23,8 @@ const state = {
   queryDirty: false,
   lastQuery: null, // { request, nextCursor } of the last query that worked
   hit: null, // { nodes: Set, edges: Set } of the last query result, shown highlighted
+  capture: null, // { proposal, ghosts } while a proposal waits for approval; drawn over the graph, never part of state.data
+  captureAvailable: false,
 };
 
 function svgEl(name, attrs = {}) {
@@ -84,21 +87,25 @@ function render(value, { animate }) {
   state.data = value;
   const empty = value === null;
   const graph = empty ? { items: [], categories: [], edges: [] } : value;
+  // A pending proposal is laid over the real graph for drawing only; counts, lists and diffs use the real one.
+  state.capture = state.capture === null ? null : { ...state.capture, ghosts: applyGhosts(graph, state.capture.proposal) };
+  const shown = state.capture === null ? graph : state.capture.ghosts.graph;
 
-  state.order.item = mergeOrder(state.order.item, graph.items.map((n) => n.id));
-  state.order.category = mergeOrder(state.order.category, graph.categories.map((n) => n.id));
+  state.order.item = mergeOrder(state.order.item, shown.items.map((n) => n.id));
+  state.order.category = mergeOrder(state.order.category, shown.categories.map((n) => n.id));
   const pick = (ids, list) => {
     const byId = new Map(list.map((n) => [n.id, n]));
     return ids.map((id) => byId.get(id)).filter(Boolean);
   };
-  const layout = computeLayout({ items: pick(state.order.item, graph.items), categories: pick(state.order.category, graph.categories), edges: graph.edges });
+  const layout = computeLayout({ items: pick(state.order.item, shown.items), categories: pick(state.order.category, shown.categories), edges: shown.edges });
   svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
-  $('empty').hidden = !empty && (graph.items.length > 0 || graph.categories.length > 0);
+  $('empty').hidden = !empty && (shown.items.length > 0 || shown.categories.length > 0);
 
   const diff = diffGraphs(previous, graph);
   const flash = new Set([...diff.nodes.added, ...diff.nodes.changed, ...diff.edges.added, ...diff.edges.changed]);
   reconcileNodes(layout, flash, previous !== null);
   reconcileEdges(layout, flash, previous !== null);
+  styleGhosts();
   startTween();
   renderCounts(value);
   renderLists(graph);
@@ -133,7 +140,7 @@ function reconcileNodes(layout, flash, animate) {
       rec.exiting = false;
       rec.g.classList.remove('exit');
     }
-    rec.text.textContent = node.id;
+    rec.text.textContent = shortLabel(node.id);
     rec.title.textContent = node.data === undefined ? node.id : `${node.id}\n${JSON.stringify(node.data)}`;
     if (animate && flash.has(node.key)) pulse(rec.g);
   }
@@ -173,6 +180,19 @@ function reconcileEdges(layout, flash, animate) {
   for (const [key, rec] of state.edges) {
     if (!live.has(key) && !rec.exiting) retire(state.edges, key, rec);
   }
+}
+
+/** Marks proposed nodes and links (dashed), existing categories being reused (ringed) and nodes being changed. */
+function styleGhosts() {
+  const ghosts = state.capture?.ghosts;
+  for (const [key, rec] of state.nodes) {
+    const proposed = ghosts?.ghostNodes.has(key) === true;
+    rec.g.classList.toggle('ghost', proposed);
+    rec.g.classList.toggle('reused', ghosts?.reusedNodes.has(key) === true);
+    rec.g.classList.toggle('updated', ghosts?.updatedNodes.has(key) === true);
+    if (proposed) rec.title.textContent = `proposed, not written yet\n${rec.title.textContent}`;
+  }
+  for (const [key, rec] of state.edges) rec.g.classList.toggle('ghost', ghosts?.ghostEdges.has(key) === true);
 }
 
 function retire(map, key, rec) {
@@ -354,6 +374,7 @@ async function refresh({ animate = true } = {}) {
 }
 
 async function switchGraph(graphId) {
+  clearCapture();
   state.graphId = graphId;
   state.data = null;
   state.selection = null;
@@ -656,6 +677,105 @@ $('reset').addEventListener('click', async (event) => {
   await ensureDemoGraph();
 });
 
+// ---------- capture: propose a filing for a note, then approve or reject it ----------
+
+function captureStatus(text, bad = false) {
+  const el = $('capture-status');
+  el.textContent = text;
+  el.className = bad ? 'hint bad' : 'hint';
+}
+
+function clearCapture() {
+  state.capture = null;
+  $('capture-proposal').hidden = true;
+  captureStatus('');
+}
+
+function refreshCaptureSwitch() {
+  const sw = realModelSwitch({ available: state.captureAvailable, on: $('capture-real').checked });
+  $('capture-real').disabled = sw.disabled;
+  if (sw.disabled) $('capture-real').checked = false;
+  $('capture-real-hint').textContent = sw.warning ?? sw.hint;
+  $('capture-real-hint').className = sw.warning ? 'hint bad' : 'hint';
+}
+
+function showProposal(proposal) {
+  const { summary } = proposal;
+  $('capture-proposal').hidden = false;
+  $('capture-summary').textContent = proposal.text;
+  $('capture-why').textContent = proposal.rationale ?? '';
+  $('capture-meta').textContent = `${proposal.mode === 'real' ? 'Real model' : 'Demo model'} ${proposal.model} · ${proposal.attempts} attempt${proposal.attempts === 1 ? '' : 's'} · ${proposal.usage.inputTokens} in / ${proposal.usage.outputTokens} out`;
+  const problems = $('capture-problems');
+  problems.hidden = summary.problems.length === 0;
+  problems.textContent = summary.problems.length === 0 ? '' : `Approving would fail: ${summary.problems.join(' ')}`;
+}
+
+async function propose() {
+  const text = $('capture-text').value;
+  if (state.graphId === null) return captureStatus('Create or select a graph first.', true);
+  if (text.trim() === '') return captureStatus('Write a note first.', true);
+  if (state.capture !== null) await discard('replaced by a new proposal');
+  const body = { graphId: state.graphId, text, ...($('capture-real').checked ? { network: true } : {}) };
+  captureStatus('Asking the model…');
+  $('capture-propose').disabled = true;
+  const result = await api('/api/capture/propose', 'POST', body);
+  $('capture-propose').disabled = false;
+  log('capture: propose', { graphId: body.graphId, network: body.network === true, note: text }, result);
+  if (!result.ok) return captureStatus(describeFailure(result.error), true);
+  const proposal = result.value;
+  state.capture = { proposal, ghosts: null };
+  showProposal(proposal);
+  captureStatus('Nothing is written until you approve.');
+  render(state.data, { animate: true });
+  setChange(proposalHeadline(proposal.summary));
+}
+
+/** Throws a pending proposal away on the server and the page. */
+async function discard(why) {
+  const id = state.capture?.proposal.id;
+  clearCapture();
+  if (id !== undefined) log(`capture: reject (${why})`, { id }, await api('/api/capture/reject', 'POST', { id }));
+  render(state.data, { animate: true });
+}
+
+async function approve() {
+  const proposal = state.capture?.proposal;
+  if (proposal === undefined) return;
+  const result = await api('/api/capture/approve', 'POST', { id: proposal.id });
+  log('capture: approve', { id: proposal.id }, result);
+  if (!result.ok) {
+    captureStatus(describeFailure(result.error), true);
+    if (FINAL_CODES.includes(result.error.code)) {
+      clearCapture();
+      captureStatus(describeFailure(result.error), true);
+      await refresh({ animate: true });
+    }
+    return;
+  }
+  clearCapture();
+  $('capture-text').value = '';
+  await refresh({ animate: true });
+  captureStatus(`Written: ${result.value.written.applied} operations.`);
+}
+
+async function reject() {
+  if (state.capture === null) return;
+  await discard('by you');
+  captureStatus('Rejected. Nothing was written.');
+}
+
+$('capture-propose').addEventListener('click', propose);
+$('capture-approve').addEventListener('click', approve);
+$('capture-reject').addEventListener('click', reject);
+$('capture-real').addEventListener('change', refreshCaptureSwitch);
+
+async function startCapture() {
+  const status = await api('/api/capture/status');
+  state.captureAvailable = status.ok && status.value.network.available;
+  $('capture').hidden = !status.ok;
+  refreshCaptureSwitch();
+}
+
 async function ensureDemoGraph() {
   const ids = await loadGraphs();
   if (ids.length === 0) {
@@ -667,4 +787,5 @@ async function ensureDemoGraph() {
 }
 
 loadScenario(scenarios[0].id);
+await startCapture();
 await ensureDemoGraph();
