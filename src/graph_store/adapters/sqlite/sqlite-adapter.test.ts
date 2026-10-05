@@ -118,6 +118,6 @@ describe('sqlite adapter: behaviour specific to this implementation', () => {
   });
 
   it('refuses to open something that is not a graph database, and says why', () => {
-    expect(() => createSqliteAdapter({ path: '/no/such/dir/x.db' })).toThrow(/could not open/);
+    expect(() => createSqliteAdapter({ path: '/no/such/dir/x.db' })).toThrow(/could not (open|create)/);
   });
 });

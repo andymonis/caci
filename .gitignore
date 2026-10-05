@@ -12,3 +12,10 @@ coverage/
 .claude/settings.local.json
 temp/
 eval-results/
+
+# SQLite databases hold notes in plain text: never commit them
+data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal

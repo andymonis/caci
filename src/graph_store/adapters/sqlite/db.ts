@@ -4,6 +4,7 @@
  * is a change to this file alone. `node:sqlite` is built into Node 22.13 and later and is still
  * marked experimental: it prints an `ExperimentalWarning` the first time it is loaded.
  */
+import { closeSync, existsSync, openSync } from 'node:fs';
 import type { DatabaseSync, SQLInputValue, SQLOutputValue, StatementSync } from 'node:sqlite';
 
 export type SqlValue = SQLInputValue;
@@ -100,6 +101,20 @@ function checkParams(params: readonly SqlValue[]): void {
 }
 
 /**
+ * A new database file holds the owner's notes in plain text, so it is created readable and writable
+ * by its owner only (mode 0600, narrowed further by the umask; ignored on Windows). SQLite gives the
+ * `-wal` and `-shm` files the same mode. A file that already exists is never touched here.
+ */
+function createOwnerOnly(path: string): void {
+  try {
+    closeSync(openSync(path, 'wx', 0o600));
+  } catch (cause) {
+    if ((cause as { code?: string }).code === 'EEXIST') return; // someone else created it a moment ago: use theirs
+    throw new DbError('OPEN_FAILED', `could not create the database at "${path}": ${messageOf(cause)}`);
+  }
+}
+
+/**
  * Opens a connection. It only reads at first, so a file that is not a SQLite database is refused
  * without being changed; settings that write to the file come later (`useWriteAheadLog`), after the
  * schema code has decided the file is ours. Per-connection settings (the busy timeout, foreign keys)
@@ -115,6 +130,8 @@ export function openDb(options: OpenOptions = {}): Db {
   if (!Number.isInteger(busyTimeoutMs) || busyTimeoutMs < 0 || busyTimeoutMs > MAX_BUSY_TIMEOUT_MS) {
     throw new DbError('OPEN_FAILED', `busyTimeoutMs must be a whole number from 0 to ${MAX_BUSY_TIMEOUT_MS}`);
   }
+
+  if (path !== ':memory:' && !existsSync(path)) createOwnerOnly(path);
 
   let raw: DatabaseSync;
   try {
