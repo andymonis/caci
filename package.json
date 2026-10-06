@@ -95,6 +95,7 @@
     "dev:explorer": "npm run build && node dev/graph-explorer/server.mjs",
     "llm:try": "npm run build && node scripts/llm-try.mjs",
     "serve": "npm run build && node scripts/serve.mjs",
+    "users": "npm run build && node scripts/users.mjs",
     "dev:lab": "bash -c 'source ./set-key.sh && npm run build && node dev/llm-lab/server.mjs'",
     "eval": "npm run build && node dev/eval/run.mjs",
     "bench:sqlite": "npm run build && node dev/bench/run.mjs"

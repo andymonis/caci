@@ -261,6 +261,72 @@ It uses the `node:sqlite` module built into Node, so there is no extra dependenc
 - **The file is not encrypted.** It holds your notes and categories in plain text. Protect it as you would the notes themselves: rely on disk encryption and file permissions. Nothing is anonymised (see *Privacy: what is sent, and what is not protected*).
 - **Not for the browser or a network drive.** SQLite needs a local file system that supports locking.
 
+## User accounts and the login API
+
+An optional layer for people who want accounts: each person registers, signs in, and gets **one graph of their own**; nothing they send can choose another. It is specified in `specs/R-002-user-accounts.md`. You run it with `npm run serve`, which starts a small HTTP server (`node:http`, no extra dependency) and keeps its data in two files.
+
+```
+CACI_DATA_DIR=./data npm run serve
+```
+
+**Register yourself first.** The first account ever created becomes the admin, so on a fresh install register straight away, before anyone else can reach the server. Registration is open to anyone who can reach it (switch it off with `CACI_ALLOW_REGISTRATION=false` once the people you want have accounts).
+
+### Settings
+
+All settings are environment variables. An unknown `CACI_` name, or a bad value, stops the service from starting and names the variable; nothing is silently ignored.
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `CACI_PORT` | Port to listen on (0 picks a free one) | `8080` |
+| `CACI_BIND` | Address to listen on | `127.0.0.1` (this machine only) |
+| `CACI_DATA_DIR` | Folder for `graphs.db` and `users.db` (created owner-only) | `./data` |
+| `CACI_ALLOW_REGISTRATION` | `true` or `false` | `true` |
+| `CACI_COOKIE_SECURE` | Mark the session cookie `Secure` (needs HTTPS) | `false` |
+| `CACI_TRUSTED_PROXIES` | Reverse proxies in front, 0 to 5 | `0` |
+| `CACI_ALLOWED_HOSTS` | Comma separated host names the server answers to | not set |
+| `CACI_ALLOW_INSECURE` | Accept a non-loopback address with plain cookies | `false` |
+
+Listening on anything but this machine (`CACI_BIND=0.0.0.0`, say) is refused unless `CACI_COOKIE_SECURE=true`, or you also set `CACI_ALLOW_INSECURE=true` to say you accept that session cookies cross the network in the clear.
+
+### The routes
+
+Bodies are JSON (`Content-Type: application/json`, at most 16 KB). The session is an `HttpOnly`, `SameSite=Strict` cookie; **it is the only credential**, so an `Authorization` header or a token in a URL does nothing. Failures are `{ "error": { "code", "message", "field"? } }`: 401 not signed in, 403 not allowed, 404, 409 conflict (a taken username, or the last admin), 422 bad input (with `field`), 429 too many tries (with `Retry-After`).
+
+| Route | What it does |
+|---|---|
+| `POST /api/register` | `username`, `displayName`, `password`, optional `email`. Creates the account and its graph together |
+| `POST /api/login` | `username`, `password`. Sets the cookie and returns the user and their graph id |
+| `POST /api/logout` | Ends this session and clears the cookie |
+| `GET /api/me` | Who you are, and your graph id |
+| `PATCH /api/me` | Change `displayName` and/or `email` (not the username or role) |
+| `POST /api/me/password` | `currentPassword`, `newPassword`; ends all your other sessions |
+| `DELETE /api/me` | `password`; deletes your account, your graph and your sessions |
+| `GET /api/users` | Admin: everyone, by username (`limit`, `cursor`) |
+| `GET /api/users/:id` | Admin, or yourself |
+| `PATCH /api/users/:id` | Admin: `displayName`, `email`, `role`; yourself: not the role |
+| `DELETE /api/users/:id` | Admin: delete someone else's account and graph |
+| `POST /api/users/:id/password` | Admin: set someone's password and end their sessions |
+
+Usernames are 3 to 32 of `a-z 0-9 . _ -` (any case is lower-cased). Passwords are 12 to 128 characters, not your username, not a very common one, hashed with scrypt. An unknown user and a wrong password look exactly alike, in the answer and in the work done.
+
+### What protects it, and what does not
+
+- **Too many tries.** After 5 wrong passwords for a username (real or not) the next try waits 1 second, then 2, 4, 8... up to 15 minutes; one address gets 20 tries across all names; registration is limited to 10 an hour per address. The counts are in memory, so a restart forgets them, and someone who knows a username can keep that account waiting by failing on purpose.
+- **Other sites.** Every write must come from this site (`Origin` is checked), with a JSON body, and the cookie is `SameSite=Strict`.
+- **Email** is only stored as a contact detail: it is never checked, and nothing is ever sent (there is no emailed reset).
+- **The files are not encrypted.** `graphs.db` holds your notes and `users.db` your accounts, password hashes and session fingerprints, in plain files readable only by their owner (mode 0600). Rely on disk encryption and keep backups safe. Back up by stopping the service and copying the two files.
+- **No HTTPS here.** Put a reverse proxy that speaks HTTPS in front, bind this service to `127.0.0.1`, and set `CACI_COOKIE_SECURE=true`, `CACI_TRUSTED_PROXIES=1` (so the client address is the one the proxy saw) and `CACI_ALLOWED_HOSTS` to the public name.
+
+### Forgotten passwords
+
+There is no emailed reset. An admin resets anyone's password with `POST /api/users/:id/password` (that ends all of that person's sessions). If **no admin** can sign in, run this on the machine that holds the data, with the same `CACI_DATA_DIR` as the service:
+
+```
+npm run users -- recover-admin <username>
+```
+
+It asks for the new password on the terminal (not shown, typed twice), or reads it from standard input (`echo ... | npm run users -- recover-admin ann`). It never takes the password as an argument, so it is not in your shell history or the process list. It works only for an admin account, ends that account's sessions, and changes nothing else. Being able to run it is the proof of access: whoever can read the data folder can already read everything in it.
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.

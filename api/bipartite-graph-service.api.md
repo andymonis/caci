@@ -21,6 +21,21 @@ export const isLoopbackAddress: (bind: string) => boolean;
 export function parseServiceConfig(env: Readonly<Record<string, string | undefined>>): Result<ServiceConfig, readonly ConfigError[]>;
 
 // @public (undocumented)
+export const RECOVER_USAGE = "Usage: npm run users -- recover-admin <username>   (the new password is read from standard input)";
+
+// @public
+export function recoverAdmin(args: readonly string[], env: Readonly<Record<string, string | undefined>>, io: RecoverIo): Promise<0 | 1 | 2>;
+
+// @public (undocumented)
+export interface RecoverIo {
+    readonly readPassword: () => Promise<string>;
+    // (undocumented)
+    readonly stderr: (text: string) => void;
+    // (undocumented)
+    readonly stdout: (text: string) => void;
+}
+
+// @public (undocumented)
 export interface RunningService {
     close(): Promise<void>;
     readonly dataDir: string;

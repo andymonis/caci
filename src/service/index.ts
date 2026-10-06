@@ -7,3 +7,5 @@ export { startService } from './service.js';
 export type { RunningService, ServiceOptions } from './service.js';
 export { serve } from './cli.js';
 export type { ServeIo, ServeResult } from './cli.js';
+export { recoverAdmin, USAGE as RECOVER_USAGE } from './recover.js';
+export type { RecoverIo } from './recover.js';
