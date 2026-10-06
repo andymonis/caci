@@ -19,6 +19,8 @@ export type DbErrorCode =
   | 'NOT_A_DATABASE'
   /** A SQLite database, but not one of ours (or an incomplete one). It has not been changed. */
   | 'NOT_A_GRAPH_DATABASE'
+  /** A SQLite database, but not a CaCi user database (or an incomplete one). It has not been changed. */
+  | 'NOT_A_USERS_DATABASE'
   /** One of ours, written by a newer version of the library. It has not been changed. */
   | 'NEWER_SCHEMA'
   | 'MIGRATION_FAILED'

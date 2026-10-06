@@ -30,7 +30,7 @@ const countOf = async (adapter: SqliteAdapter): Promise<unknown> =>
   adapter.transaction('g', async (tx) => (await tx.getNodes('item', ['counter']))[0]?.data?.count);
 
 function runChild(path: string, n: number): Promise<void> {
-  const child = spawn(process.execPath, ['--import', join(here, 'ts-loader.mjs'), join(here, 'rmw-child.mjs'), path, String(n)], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const child = spawn(process.execPath, ['--import', join(here, '..', '..', '..', 'sqlite', 'ts-loader.mjs'), join(here, 'rmw-child.mjs'), path, String(n)], { stdio: ['ignore', 'ignore', 'pipe'] });
   let stderr = '';
   child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
   return new Promise((resolve, reject) => child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`child failed (${code}): ${stderr}`)))));

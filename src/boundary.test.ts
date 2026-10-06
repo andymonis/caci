@@ -56,8 +56,8 @@ export function violations(files: Record<string, string>): string[] {
         problems.push(`${file} imports ${specifier}: the LLM component must not depend on the application`);
       }
       const usersTest = /\.test(?:-util)?\.ts$/.test(file);
-      if (file.startsWith('users/') && target.startsWith('graph_store/') && target !== 'graph_store/index' && !(usersTest && target === 'graph_store/adapters/memory/index')) {
-        problems.push(`${file} imports ${specifier}: the users component may use the graph store only through graph_store/index (its tests may also use the memory adapter)`);
+      if (file.startsWith('users/') && target.startsWith('graph_store/') && target !== 'graph_store/index' && !(usersTest && (target === 'graph_store/adapters/memory/index' || target === 'graph_store/adapters/sqlite/index'))) {
+        problems.push(`${file} imports ${specifier}: the users component may use the graph store only through graph_store/index (its tests may also use the memory and SQLite adapters)`);
       }
       if (file.startsWith('users/') && /^(?:llm|app|api)(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: the users component must not depend on the LLM component, the application or the API`);
@@ -112,6 +112,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'app/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createScriptedModelClient } from '../llm/testing/index.js';`,
         'graph_store/adapters/sqlite/x.ts': `import { openDb } from '../../../sqlite/db.js';`,
         'users/x.ts': `import { openDb } from '../sqlite/db.js'; import { createGraph } from '../graph_store/index.js';`,
+        'users/sqlite/y.test.ts': `import { createSqliteAdapter } from '../../graph_store/adapters/sqlite/index.js';`,
         'users/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
         'api/x.ts': `import { newUserId } from '../users/index.js';`,
         'sqlite/y.ts': `import { z } from './x.js';`,

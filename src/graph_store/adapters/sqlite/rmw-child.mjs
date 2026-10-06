@@ -1,6 +1,6 @@
 // Test support: a child process that adds 1 to a shared counter, n times, as concurrent
 // transactions of its own adapter. Not part of the package.
-// usage: node --import ./ts-loader.mjs rmw-child.mjs <path> <n>
+// usage: node --import ../../../sqlite/ts-loader.mjs rmw-child.mjs <path> <n>
 import process from 'node:process';
 import { createSqliteAdapter } from './index.ts';
 

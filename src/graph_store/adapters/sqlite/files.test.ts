@@ -129,7 +129,7 @@ describe('a database file', () => {
 
   it('survives a process killed part-way through a write transaction: it opens intact, without the partial write', async () => {
     const path = join(tempDir(), 'g.db');
-    const child = spawn(process.execPath, ['--import', join(here, 'ts-loader.mjs'), join(here, 'kill-child.mjs'), path, 'hang'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, ['--import', join(here, '..', '..', '..', 'sqlite', 'ts-loader.mjs'), join(here, 'kill-child.mjs'), path, 'hang'], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()));
     await new Promise<void>((resolve, reject) => {
@@ -156,7 +156,7 @@ describe('a database file', () => {
 
   it('the killed run really did write before it was killed (the test would prove nothing otherwise)', async () => {
     const path = join(tempDir(), 'g.db');
-    const child = spawn(process.execPath, ['--import', join(here, 'ts-loader.mjs'), join(here, 'kill-child.mjs'), path, 'finish'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, ['--import', join(here, '..', '..', '..', 'sqlite', 'ts-loader.mjs'), join(here, 'kill-child.mjs'), path, 'finish'], { stdio: ['ignore', 'pipe', 'pipe'] });
     await new Promise<void>((resolve, reject) => {
       child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`the child failed with ${code}`))));
     });

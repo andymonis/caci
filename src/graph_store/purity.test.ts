@@ -39,5 +39,5 @@ describe('purity lint rule (NFR-02)', () => {
       r.messages.filter((m) => m.ruleId === 'no-restricted-syntax').map(() => r.filePath),
     );
     expect(offenders).toEqual([]);
-  });
+  }, 60_000); // lints every source file, so it grows with the code base and slows under load
 });

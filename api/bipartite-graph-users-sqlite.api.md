@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export function createSqliteAdapter(options?: SqliteAdapterOptions): SqliteAdapter;
+export function createSqliteUserStore(options?: SqliteUserStoreOptions): SqliteUserStore;
 
 // @public
 export class DbError extends Error {
@@ -31,18 +31,25 @@ export type DbErrorCode =
 /** Another connection held the write lock for longer than the busy timeout. Nothing was changed by the failed statement. */
 | 'BUSY' | 'CLOSED';
 
-// Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "UserStore" needs to be exported by the entry point index.d.ts
 //
 // @public
-export interface SqliteAdapter extends StorageAdapter {
-    close(): Promise<void>;
+export interface SqliteUserStore extends UserStore {
+    // (undocumented)
+    close(): void;
 }
 
 // @public (undocumented)
-export interface SqliteAdapterOptions {
+export interface SqliteUserStoreOptions {
     readonly busyTimeoutMs?: number;
     readonly path?: string;
 }
+
+// @public
+export const USERS_APPLICATION_ID = 1130452339;
+
+// @public
+export const USERS_SCHEMA_VERSION = 1;
 
 // (No @packageDocumentation comment for this package)
 

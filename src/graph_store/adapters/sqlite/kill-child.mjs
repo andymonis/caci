@@ -1,5 +1,5 @@
 // Test support: a child process that writes to a database file and is then killed. Not part of the package.
-// usage: node --import ./ts-loader.mjs kill-child.mjs <path> <mode>
+// usage: node --import ../../../sqlite/ts-loader.mjs kill-child.mjs <path> <mode>
 import process from 'node:process';
 import { createSqliteAdapter } from './index.ts';
 

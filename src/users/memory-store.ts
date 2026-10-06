@@ -1,4 +1,5 @@
 import { err, ok, type Result } from '../graph_store/index.js';
+import { checkLimit, decodeCursor, encodeCursor } from './cursor.js';
 import { usersError, type UsersError } from './errors.js';
 import type { Credential, CreateOptions, GuardOptions, UserList, UserPage, UserPatch, UserRecord, UserStore } from './store.js';
 import type { User } from './types.js';
@@ -9,15 +10,6 @@ interface Stored {
 }
 
 const copy = (user: User): User => ({ ...user });
-
-const CURSOR_PREFIX = 'c';
-const encodeCursor = (username: string): string => CURSOR_PREFIX + Buffer.from(username, 'utf8').toString('base64url');
-function decodeCursor(cursor: string): string {
-  if (!cursor.startsWith(CURSOR_PREFIX) || !/^[A-Za-z0-9_-]*$/.test(cursor.slice(1))) throw new RangeError('Invalid page cursor');
-  const text = Buffer.from(cursor.slice(1), 'base64url').toString('utf8');
-  if (encodeCursor(text) !== cursor) throw new RangeError('Invalid page cursor');
-  return text;
-}
 
 /**
  * The reference user store: in memory, for tests and as the model the SQLite store must match.
@@ -96,7 +88,7 @@ export function createMemoryUserStore(): UserStore {
     },
 
     list: async (page: UserPage): Promise<UserList> => {
-      if (!Number.isInteger(page.limit) || page.limit < 1) throw new RangeError(`Page limit must be a positive integer, got ${page.limit}`);
+      checkLimit(page.limit);
       const after = page.cursor === null ? undefined : decodeCursor(page.cursor);
       const sorted = [...byId.values()].map((s) => s.user).sort((a, b) => (a.username < b.username ? -1 : a.username > b.username ? 1 : 0));
       const rest = after === undefined ? sorted : sorted.filter((u) => u.username > after);
