@@ -45,6 +45,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 |----|------|
 | R-001 | [Bipartite Graph Store — Library Specification](specs/R-001:%20Bipartite%20Graph%20Store%20%E2%80%94%20Library%20Specification.md) |
 | R-002 | [User Accounts and Login API — Specification](specs/R-002-user-accounts.md) |
+| R-003 | [CaCi Controller — Specification](specs/R-003-caci-controller.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -70,9 +71,14 @@ Mapping from the container diagram to the code base:
 | Adapter conformance suite | `src/graph_store/testing/` |
 | CaCi Operational Store (SQLite) | provided by the SQLite adapter (planned as P1, the first persistent adapter); no code outside the adapter |
 | LLM component (the LLM adapter) | `src/llm/` (planned, L1 and L2): `createLlm({ client, config })` returns one method per capability, today `categorise()`, so new capabilities can be added beside it; the model is configurable per capability through tiers (`fast`, `balanced`, `deep`), and model access sits behind a `ModelClient` port, with the real Anthropic client as its own entry point |
-| CaCi Application (the controller) | `src/app/` (planned, A1): takes input, reads graph context, asks the categoriser, shows a preview, and writes only after approval |
+| CaCi Application (the capture controller) | `src/app/`: takes input, reads graph context, asks the categoriser, shows a preview, and writes only after approval |
+| CaCi Controller (the platform controller, R-003) | `src/caci/` (planned, C1): composes the user controller, the capture controller, the LLM component and the graph store; owns proposal ownership, per-account limits and "the graph comes from the session" |
+| User Controller (accounts, sessions, R-002) | `src/users/`, with its SQLite stores in `src/users/sqlite/` and its shared test suites in `src/users/testing/` |
+| Shared SQLite driver wrapper | `src/sqlite/` (the only code that imports `node:sqlite`) |
+| HTTP API (the only network code) | `src/api/`: the server kit, the account routes, and (planned) the capture and read routes |
+| Service (configuration, the two database files, `npm run serve`, `npm run users`) | `src/service/` and `scripts/` |
 
-The graph store knows nothing about the LLM, and the LLM component knows nothing about storage: only the controller connects them.
+The graph store knows nothing about the LLM, and the LLM component knows nothing about storage: only the controller connects them. The user accounts layer sits in front of everything: a session gives the user and their one graph, and nothing a client sends can choose another.
 
 Generated JSON Schema for the instruction formats is published under `schema/graph_store/`.
 
