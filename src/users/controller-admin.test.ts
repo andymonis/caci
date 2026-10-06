@@ -340,6 +340,23 @@ describe('deleteUser', () => {
     expect(graphsLeft).toEqual(all.map((u) => userGraphId(u.id)).sort()); // every graph belongs to a user and every user has one
   });
 
+  it('of eight admins all deleting the next one at the same moment, at least one admin always remains, with a graph, and no account is left without one', async () => {
+    const w = world();
+    const first = await signedIn(w, 'admin1');
+    const crowd = [first];
+    for (let i = 0; i < 7; i++) {
+      const member = await signedIn(w, `crowd${i}`);
+      await must(w.controller.updateUser(first.token, member.user.id, { role: 'admin' }));
+      crowd.push(member);
+    }
+    const results = await Promise.all(crowd.map((member, i) => w.controller.deleteUser(member.token, (crowd[(i + 1) % crowd.length] as { user: User }).user.id)));
+    expect(results.filter((r) => r.ok).length).toBeLessThanOrEqual(7); // never all eight
+    const left = (await w.users.list({ limit: 50, cursor: null })).items;
+    expect(left.filter((u) => u.role === 'admin').length).toBeGreaterThanOrEqual(1);
+    expect(await graphIds(w.graphs)).toEqual(left.map((u) => userGraphId(u.id)).sort());
+    expect(results.some((r) => !r.ok && r.error.code === 'LAST_ADMIN')).toBe(true); // the guard really was what stopped the last one
+  });
+
   it('a demoted admin loses the power to delete at once, on the session they already have', async () => {
     const w = world();
     const { admin, ann, bob } = await team(w);
