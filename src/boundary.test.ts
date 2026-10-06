@@ -55,6 +55,16 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('llm/') && (target === 'app' || target.startsWith('app/'))) {
         problems.push(`${file} imports ${specifier}: the LLM component must not depend on the application`);
       }
+      const usersTest = /\.test(?:-util)?\.ts$/.test(file);
+      if (file.startsWith('users/') && target.startsWith('graph_store/') && target !== 'graph_store/index' && !(usersTest && target === 'graph_store/adapters/memory/index')) {
+        problems.push(`${file} imports ${specifier}: the users component may use the graph store only through graph_store/index (its tests may also use the memory adapter)`);
+      }
+      if (file.startsWith('users/') && /^(?:llm|app|api)(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the users component must not depend on the LLM component, the application or the API`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite)\//.test(file) && /^users(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: only the API may depend on the users component`);
+      }
       if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/'))) {
         problems.push(`${file} imports ${specifier}: only the graph store and the users component may use the shared SQLite driver wrapper`);
       }
@@ -101,7 +111,9 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'app/x.ts': `import { write } from '../graph_store/index.js'; import { createLlm } from '../llm/index.js'; import { y } from './y.js';`,
         'app/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createScriptedModelClient } from '../llm/testing/index.js';`,
         'graph_store/adapters/sqlite/x.ts': `import { openDb } from '../../../sqlite/db.js';`,
-        'users/x.ts': `import { openDb } from '../sqlite/db.js';`,
+        'users/x.ts': `import { openDb } from '../sqlite/db.js'; import { createGraph } from '../graph_store/index.js';`,
+        'users/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
+        'api/x.ts': `import { newUserId } from '../users/index.js';`,
         'sqlite/y.ts': `import { z } from './x.js';`,
         'app/y.test.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';`,
         'app/helper.test-util.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
@@ -128,6 +140,12 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['production application code using the SQLite adapter', { 'app/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
     ['the application reaching into the SQLite adapter\'s internals', { 'app/x.test.ts': `import { openDb } from '../graph_store/adapters/sqlite/db.js';` }],
     ['the LLM component using the SQLite adapter', { 'llm/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
+    ['the users component reaching into the graph store\'s internals', { 'users/x.ts': `import { x } from '../graph_store/write-plan.js';` }],
+    ['production users code using the memory adapter', { 'users/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
+    ['the users component using the LLM component', { 'users/x.ts': `import { createLlm } from '../llm/index.js';` }],
+    ['the users component using the application', { 'users/x.ts': `import { createController } from '../app/index.js';` }],
+    ['the graph store using the users component', { 'graph_store/x.ts': `import { newUserId } from '../users/index.js';` }],
+    ['the application using the users component', { 'app/x.ts': `import { newUserId } from '../users/index.js';` }],
     ['the application using the shared SQLite wrapper', { 'app/x.ts': `import { openDb } from '../sqlite/db.js';` }],
     ['the LLM component using the shared SQLite wrapper', { 'llm/x.ts': `import { openDb } from '../sqlite/db.js';` }],
     ['the API using the shared SQLite wrapper', { 'api/x.ts': `import { openDb } from '../sqlite/db.js';` }],
