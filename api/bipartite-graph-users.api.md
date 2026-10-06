@@ -8,7 +8,23 @@
 export const COMMON_PASSWORDS: readonly string[];
 
 // @public
+export function createMemoryUserStore(): UserStore;
+
+// @public (undocumented)
+export interface CreateOptions {
+    readonly adminIfFirst?: boolean;
+}
+
+// @public
 export function createPasswordHasher(options?: PasswordHasherOptions): PasswordHasher;
+
+// @public
+export interface Credential {
+    // (undocumented)
+    readonly passwordHash: string;
+    // (undocumented)
+    readonly user: User;
+}
 
 // @public
 export const DEFAULT_SCRYPT: ScryptParams;
@@ -21,6 +37,11 @@ export const DISPLAY_NAME_MAX = 80;
 
 // @public (undocumented)
 export const EMAIL_MAX = 254;
+
+// @public (undocumented)
+export interface GuardOptions {
+    readonly protectLastAdmin?: boolean;
+}
 
 // @public (undocumented)
 export const isUserId: (value: unknown) => value is string;
@@ -107,10 +128,53 @@ export const USER_ID_PATTERN: RegExp;
 export function userGraphId(userId: string): string;
 
 // @public (undocumented)
+export interface UserList {
+    // (undocumented)
+    readonly items: readonly User[];
+    readonly nextCursor: string | null;
+}
+
+// @public (undocumented)
 export const USERNAME_MAX = 32;
 
 // @public (undocumented)
 export const USERNAME_MIN = 3;
+
+// @public (undocumented)
+export interface UserPage {
+    readonly cursor: string | null;
+    // (undocumented)
+    readonly limit: number;
+}
+
+// @public
+export interface UserPatch {
+    // (undocumented)
+    readonly displayName?: string;
+    // (undocumented)
+    readonly email?: string | null;
+    // (undocumented)
+    readonly passwordHash?: string;
+    // (undocumented)
+    readonly role?: Role;
+    readonly updatedAt: number;
+}
+
+// @public
+export interface UserRecord {
+    readonly createdAt: number;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email?: string;
+    // (undocumented)
+    readonly id: string;
+    readonly passwordHash: string;
+    // (undocumented)
+    readonly role: Role;
+    // (undocumented)
+    readonly username: string;
+}
 
 // @public
 export const USERS_ERROR_CODES: readonly ["INVALID_INPUT", "CONFLICT", "NOT_FOUND", "UNAUTHENTICATED", "FORBIDDEN", "THROTTLED", "LAST_ADMIN", "STORAGE_ERROR"];
@@ -133,6 +197,23 @@ export function usersError(code: UsersErrorCode, message: string, extra?: {
 
 // @public (undocumented)
 export type UsersErrorCode = (typeof USERS_ERROR_CODES)[number];
+
+// @public
+export interface UserStore {
+    // (undocumented)
+    count(): Promise<number>;
+    create(record: UserRecord, options?: CreateOptions): Promise<Result<User, UsersError>>;
+    // (undocumented)
+    credentialByUsername(username: string): Promise<Credential | undefined>;
+    // (undocumented)
+    credentialOf(id: string): Promise<Credential | undefined>;
+    delete(id: string, options?: GuardOptions): Promise<Result<boolean, UsersError>>;
+    // (undocumented)
+    get(id: string): Promise<User | undefined>;
+    getByUsername(username: string): Promise<User | undefined>;
+    list(page: UserPage): Promise<UserList>;
+    update(id: string, patch: UserPatch, options?: GuardOptions): Promise<Result<User, UsersError>>;
+}
 
 // (No @packageDocumentation comment for this package)
 

@@ -10,3 +10,5 @@ export { isUserId, newUserId, USER_ID_PATTERN, userGraphId } from './ids.js';
 export { COMMON_PASSWORDS, DISPLAY_NAME_MAX, EMAIL_MAX, parseDisplayName, parseEmail, parsePassword, parseUsername, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from './validate.js';
 export { createPasswordHasher, DEFAULT_SCRYPT } from './password.js';
 export type { Derive, PasswordHasher, PasswordHasherOptions, ScryptParams } from './password.js';
+export { createMemoryUserStore } from './memory-store.js';
+export type { Credential, CreateOptions, GuardOptions, UserList, UserPage, UserPatch, UserRecord, UserStore } from './store.js';
