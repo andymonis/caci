@@ -65,6 +65,19 @@ export function violations(files: Record<string, string>): string[] {
       if (/^(?:graph_store|llm|app|sqlite)\//.test(file) && /^users(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: only the API may depend on the users component`);
       }
+      const apiTest = /\.test(?:-util)?\.ts$/.test(file);
+      if (file.startsWith('api/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the API must not depend on the LLM component, the application or the SQLite wrapper`);
+      }
+      if (file.startsWith('api/') && target.startsWith('graph_store/') && target !== 'graph_store/index' && !(apiTest && /^graph_store\/adapters\/(?:memory|sqlite)\/index$/.test(target))) {
+        problems.push(`${file} imports ${specifier}: the API may use the graph store only through graph_store/index (its tests may also use the adapters)`);
+      }
+      if (file.startsWith('api/') && target.startsWith('users/') && !/^users\/index$/.test(target) && !(apiTest && /^users\/(?:sqlite\/index|testing\/index)$/.test(target))) {
+        problems.push(`${file} imports ${specifier}: the API may use the users component only through users/index (its tests may also use the SQLite store)`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite|users)\//.test(file) && /^api(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: nothing may depend on the API`);
+      }
       if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/'))) {
         problems.push(`${file} imports ${specifier}: only the graph store and the users component may use the shared SQLite driver wrapper`);
       }
@@ -114,7 +127,8 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'users/x.ts': `import { openDb } from '../sqlite/db.js'; import { createGraph } from '../graph_store/index.js';`,
         'users/sqlite/y.test.ts': `import { createSqliteAdapter } from '../../graph_store/adapters/sqlite/index.js';`,
         'users/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
-        'api/x.ts': `import { newUserId } from '../users/index.js';`,
+        'api/x.ts': `import { newUserId } from '../users/index.js'; import { write } from '../graph_store/index.js'; import { y } from './y.js';`,
+        'api/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { runUserStoreConformance } from '../users/testing/index.js';`,
         'sqlite/y.ts': `import { z } from './x.js';`,
         'app/y.test.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';`,
         'app/helper.test-util.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
@@ -142,6 +156,13 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the application reaching into the SQLite adapter\'s internals', { 'app/x.test.ts': `import { openDb } from '../graph_store/adapters/sqlite/db.js';` }],
     ['the LLM component using the SQLite adapter', { 'llm/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
     ['the users component reaching into the graph store\'s internals', { 'users/x.ts': `import { x } from '../graph_store/write-plan.js';` }],
+    ['the API reaching into the users component\'s internals', { 'api/x.ts': `import { x } from '../users/controller.js';` }],
+    ['the API using the LLM component', { 'api/x.ts': `import { createLlm } from '../llm/index.js';` }],
+    ['the API using the application', { 'api/x.ts': `import { createController } from '../app/index.js';` }],
+    ['the API reaching into the graph store\'s internals', { 'api/x.ts': `import { x } from '../graph_store/write-plan.js';` }],
+    ['production API code using a graph store adapter', { 'api/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
+    ['the users component using the API', { 'users/x.ts': `import { createApiServer } from '../api/index.js';` }],
+    ['the graph store using the API', { 'graph_store/x.ts': `import { createApiServer } from '../api/index.js';` }],
     ['production users code using the memory adapter', { 'users/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
     ['the users component using the LLM component', { 'users/x.ts': `import { createLlm } from '../llm/index.js';` }],
     ['the users component using the application', { 'users/x.ts': `import { createController } from '../app/index.js';` }],
