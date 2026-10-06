@@ -5,6 +5,14 @@
 ```ts
 
 // @public
+export interface Authenticated {
+    // (undocumented)
+    readonly graphId: string;
+    // (undocumented)
+    readonly user: User;
+}
+
+// @public
 export const COMMON_PASSWORDS: readonly string[];
 
 // @public
@@ -26,6 +34,9 @@ export function createPasswordHasher(options?: PasswordHasherOptions): PasswordH
 
 // @public
 export function createRegistrationThrottle(options?: RegistrationThrottleOptions): RegistrationThrottle;
+
+// @public (undocumented)
+export function createUserController(init: UserControllerInit): UserController;
 
 // @public
 export interface Credential {
@@ -81,6 +92,19 @@ export interface LockRule {
     readonly maxDelayMs: number;
     readonly threshold: number;
     readonly windowMs: number;
+}
+
+// @public (undocumented)
+export interface LoggedIn extends Authenticated {
+    readonly token: string;
+}
+
+// @public (undocumented)
+export interface LoginInput {
+    // (undocumented)
+    readonly password: unknown;
+    // (undocumented)
+    readonly username: unknown;
 }
 
 // @public (undocumented)
@@ -148,6 +172,18 @@ export interface PasswordHasherOptions {
 export type RandomBytes = (length: number) => Uint8Array;
 
 // @public (undocumented)
+export interface RegisterInput {
+    // (undocumented)
+    readonly displayName: unknown;
+    // (undocumented)
+    readonly email?: unknown;
+    // (undocumented)
+    readonly password: unknown;
+    // (undocumented)
+    readonly username: unknown;
+}
+
+// @public (undocumented)
 export interface RegistrationThrottle {
     // (undocumented)
     check(clientKey: string, now: number): Verdict;
@@ -163,6 +199,12 @@ export interface RegistrationThrottleOptions {
     readonly max?: number;
     readonly maxEntries?: number;
     readonly windowMs?: number;
+}
+
+// @public
+export interface RequestContext {
+    // (undocumented)
+    readonly clientKey: string;
 }
 
 // @public (undocumented)
@@ -240,6 +282,40 @@ export interface User {
 
 // @public
 export const USER_ID_PATTERN: RegExp;
+
+// @public
+export interface UserController {
+    graphIdOf(user: Pick<User, 'id'>): string;
+    login(input: LoginInput, context: RequestContext): Promise<Result<LoggedIn, UsersError>>;
+    logout(token: unknown): Promise<Result<true, UsersError>>;
+    register(input: RegisterInput, context: RequestContext): Promise<Result<User, UsersError>>;
+    resolve(token: unknown): Promise<Result<Authenticated, UsersError>>;
+}
+
+// @public (undocumented)
+export interface UserControllerConfig {
+    readonly allowRegistration?: boolean;
+}
+
+// @public (undocumented)
+export interface UserControllerInit {
+    readonly clock?: () => number;
+    // (undocumented)
+    readonly config?: UserControllerConfig;
+    // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
+    readonly graphAdapter: StorageAdapter;
+    // (undocumented)
+    readonly hasher?: PasswordHasher;
+    // (undocumented)
+    readonly loginThrottle?: LoginThrottle;
+    readonly newUserId?: () => string;
+    // (undocumented)
+    readonly registrationThrottle?: RegistrationThrottle;
+    // (undocumented)
+    readonly sessions: SessionStore;
+    // (undocumented)
+    readonly users: UserStore;
+}
 
 // @public
 export function userGraphId(userId: string): string;

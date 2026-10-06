@@ -19,3 +19,5 @@ export { hashToken, isWellFormedToken, newSessionToken } from './tokens.js';
 export type { RandomBytes } from './tokens.js';
 export { createLoginThrottle, createRegistrationThrottle, DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, throttledError } from './throttle.js';
 export type { LockRule, LoginThrottle, LoginThrottleOptions, RegistrationThrottle, RegistrationThrottleOptions, Verdict } from './throttle.js';
+export { createUserController } from './controller.js';
+export type { Authenticated, LoggedIn, LoginInput, RegisterInput, RequestContext, UserController, UserControllerConfig, UserControllerInit } from './controller.js';
