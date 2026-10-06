@@ -8,6 +8,9 @@
 export const COMMON_PASSWORDS: readonly string[];
 
 // @public
+export function createLoginThrottle(options?: LoginThrottleOptions): LoginThrottle;
+
+// @public
 export function createMemorySessionStore(options?: SessionOptions): SessionStore;
 
 // @public
@@ -22,12 +25,18 @@ export interface CreateOptions {
 export function createPasswordHasher(options?: PasswordHasherOptions): PasswordHasher;
 
 // @public
+export function createRegistrationThrottle(options?: RegistrationThrottleOptions): RegistrationThrottle;
+
+// @public
 export interface Credential {
     // (undocumented)
     readonly passwordHash: string;
     // (undocumented)
     readonly user: User;
 }
+
+// @public (undocumented)
+export const DEFAULT_CLIENT_RULE: LockRule;
 
 // @public
 export const DEFAULT_SCRYPT: ScryptParams;
@@ -39,6 +48,9 @@ export const DEFAULT_SESSION_OPTIONS: Readonly<{
     renewEveryMs: 60000;
     maxPerUser: 20;
 }>;
+
+// @public (undocumented)
+export const DEFAULT_USERNAME_RULE: LockRule;
 
 // @public
 export type Derive = (password: string, salt: Uint8Array, params: ScryptParams, keyBytes: number) => Promise<Uint8Array>;
@@ -62,6 +74,30 @@ export const isUserId: (value: unknown) => value is string;
 
 // @public
 export const isWellFormedToken: (value: unknown) => value is string;
+
+// @public (undocumented)
+export interface LockRule {
+    readonly baseDelayMs: number;
+    readonly maxDelayMs: number;
+    readonly threshold: number;
+    readonly windowMs: number;
+}
+
+// @public (undocumented)
+export interface LoginThrottle {
+    check(username: string, clientKey: string, now: number): Verdict;
+    purge(now: number): void;
+    recordFailure(username: string, clientKey: string, now: number): void;
+    recordSuccess(username: string, clientKey: string, now: number): void;
+    readonly size: number;
+}
+
+// @public (undocumented)
+export interface LoginThrottleOptions {
+    readonly maxEntries?: number;
+    readonly perClient?: Partial<LockRule>;
+    readonly perUsername?: Partial<LockRule>;
+}
 
 // @public (undocumented)
 export function newSessionToken(random?: RandomBytes): string;
@@ -110,6 +146,24 @@ export interface PasswordHasherOptions {
 
 // @public (undocumented)
 export type RandomBytes = (length: number) => Uint8Array;
+
+// @public (undocumented)
+export interface RegistrationThrottle {
+    // (undocumented)
+    check(clientKey: string, now: number): Verdict;
+    // (undocumented)
+    purge(now: number): void;
+    record(clientKey: string, now: number): void;
+    // (undocumented)
+    readonly size: number;
+}
+
+// @public (undocumented)
+export interface RegistrationThrottleOptions {
+    readonly max?: number;
+    readonly maxEntries?: number;
+    readonly windowMs?: number;
+}
 
 // @public (undocumented)
 export interface ResolvedSessionOptions {
@@ -163,6 +217,9 @@ export interface SessionStore {
         readonly except?: string;
     }): Promise<number>;
 }
+
+// @public
+export function throttledError(retryAfterMs: number): UsersError;
 
 // @public
 export interface User {
@@ -274,6 +331,14 @@ export interface UserStore {
     list(page: UserPage): Promise<UserList>;
     update(id: string, patch: UserPatch, options?: GuardOptions): Promise<Result<User, UsersError>>;
 }
+
+// @public
+export type Verdict = {
+    readonly allowed: true;
+} | {
+    readonly allowed: false;
+    readonly retryAfterMs: number;
+};
 
 // (No @packageDocumentation comment for this package)
 
