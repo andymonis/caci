@@ -65,8 +65,11 @@ export function violations(files: Record<string, string>): string[] {
       if (/^(?:graph_store|llm|app|sqlite)\//.test(file) && /^users(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: only the API may depend on the users component`);
       }
-      if (file.startsWith('service/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target) && target !== 'llm/index') {
-        problems.push(`${file} imports ${specifier}: the service may use the LLM component only through llm/index, and not the application or the SQLite wrapper (yet)`);
+      if (file.startsWith('service/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target) && !['llm/index', 'llm/anthropic/index', 'app/index'].includes(target)) {
+        problems.push(`${file} imports ${specifier}: the service may use the LLM component only through llm/index and llm/anthropic/index, the application only through app/index, and not the SQLite wrapper`);
+      }
+      if (file.startsWith('service/') && target.startsWith('caci/') && target !== 'caci/index') {
+        problems.push(`${file} imports ${specifier}: the service may use the CaCi controller only through caci/index`);
       }
       if (file.startsWith('service/') && target.startsWith('graph_store/') && !/^graph_store\/(?:index|adapters\/sqlite\/index)$/.test(target)) {
         problems.push(`${file} imports ${specifier}: the service may use the graph store only through graph_store/index and its SQLite adapter's entry point`);
@@ -205,7 +208,10 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the service reaching into the users component\'s internals', { 'service/x.ts': `import { x } from '../users/controller.js';` }],
     ['the service using the SQLite wrapper directly', { 'service/x.ts': `import { openDb } from '../sqlite/db.js';` }],
     ['the service reaching into the LLM component\'s internals', { 'service/x.ts': `import { readAnthropicKey } from '../llm/api-key.js';` }],
-    ['the service using the Anthropic client directly', { 'service/x.ts': `import { createAnthropicClient } from '../llm/anthropic/index.js';` }],
+    ['the service reaching into the Anthropic client\'s files', { 'service/x.ts': `import { createAnthropicClient } from '../llm/anthropic/client.js';` }],
+    ['the service reaching into the capture controller\'s files', { 'service/x.ts': `import { x } from '../app/pending.js';` }],
+    ['the service reaching into the CaCi controller\'s files', { 'service/x.ts': `import { x } from '../caci/browse.js';` }],
+    ['the service using the SQLite wrapper', { 'service/x.ts': `import { openDb } from '../sqlite/db.js';` }],
     ['the service reaching into the API internals', { 'service/x.ts': `import { x } from '../api/server.js';` }],
     ['the service reaching into the graph store internals', { 'service/x.ts': `import { x } from '../graph_store/write-plan.js';` }],
     ['the API using the service', { 'api/x.ts': `import { serve } from '../service/index.js';` }],

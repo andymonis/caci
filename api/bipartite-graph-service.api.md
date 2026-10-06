@@ -80,6 +80,12 @@ export interface ServiceConfig {
 
 // @public (undocumented)
 export interface ServiceOptions {
+    readonly anthropic?: {
+        readonly fetch?: typeof fetch;
+    };
+    readonly apiKey?: string;
+    // Warning: (ae-forgotten-export) The symbol "ModelClient" needs to be exported by the entry point index.d.ts
+    readonly llmClient?: ModelClient;
     readonly log?: (event: {
         readonly method: string;
         readonly path: string;

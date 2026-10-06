@@ -1,3 +1,4 @@
+import { readAnthropicKey } from '../llm/index.js';
 import { parseServiceConfig, type ConfigError } from './config.js';
 import { startService, type RunningService } from './service.js';
 
@@ -22,10 +23,18 @@ export async function serve(env: Readonly<Record<string, string | undefined>>, i
     return { code: 2 };
   }
   try {
-    const service = await startService(config.value);
+    // the key is read here, when the model starts, and goes to the client only: it is not in the settings and is never printed
+    const key = config.value.llm === 'anthropic' ? readAnthropicKey(env) : undefined;
+    if (key !== undefined && !key.ok) throw new Error(key.error.message);
+    const service = await startService(config.value, key?.ok === true ? { apiKey: key.value } : {});
     const shown = service.host.includes(':') ? `[${service.host}]` : service.host;
     io.stdout(`Listening on http://${shown}:${service.port}\n`);
     io.stdout(`Data is kept in ${service.dataDir} (graphs.db and users.db, not encrypted).\n`);
+    io.stdout(
+      config.value.llm === 'anthropic'
+        ? "Model: Anthropic (the real model). Every account's notes, and the names of their categories, are sent to Anthropic, and nothing is anonymised.\n"
+        : 'Model: the free demo model. Nothing leaves this machine.\n',
+    );
     io.stdout(config.value.allowRegistration ? 'Registration is open: the first account made becomes the admin, so register yourself first.\n' : 'Registration is closed.\n');
     if (!config.value.cookieSecure) io.stdout('Session cookies are not marked Secure: use this on this machine only, or behind HTTPS.\n');
     return { code: 0, service };

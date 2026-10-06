@@ -1,7 +1,10 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createAccountRoutes, createApiServer } from '../api/index.js';
+import { createAccountRoutes, createApiServer, createCaptureRoutes, createReadRoutes } from '../api/index.js';
+import { createController } from '../app/index.js';
+import { createCaciController } from '../caci/index.js';
 import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';
+import { createDemoModelClient, createLlm, type ModelClient } from '../llm/index.js';
 import { createUserController } from '../users/index.js';
 import { createSqliteSessionStore, createSqliteUserStore } from '../users/sqlite/index.js';
 import type { ServiceConfig } from './config.js';
@@ -19,6 +22,21 @@ export interface RunningService {
 export interface ServiceOptions {
   /** Called after every request with method, path (no query), status and time. */
   readonly log?: (event: { readonly method: string; readonly path: string; readonly status: number; readonly ms: number }) => void;
+  /** The Anthropic API key, needed when `config.llm` is `anthropic` (the caller reads it from the environment; it is held by the client and goes nowhere else). */
+  readonly apiKey?: string;
+  /** For tests: how the real client talks to the provider, so that a stand-in provider can answer. */
+  readonly anthropic?: { readonly fetch?: typeof fetch };
+  /** For tests: a model client to use instead of the demo or the Anthropic one. */
+  readonly llmClient?: ModelClient;
+}
+
+/** The model that files notes: the one given, the free demo one, or (only when asked for, so the provider's SDK is not needed otherwise) the real one. */
+async function modelFor(config: ServiceConfig, options: ServiceOptions): Promise<ModelClient> {
+  if (options.llmClient !== undefined) return options.llmClient;
+  if (config.llm === 'demo') return createDemoModelClient();
+  if (options.apiKey === undefined) throw new Error('the real model needs its API key (ANTHROPIC_API_KEY)');
+  const { createAnthropicClient } = await import('../llm/anthropic/index.js');
+  return createAnthropicClient({ apiKey: options.apiKey, ...(options.anthropic?.fetch === undefined ? {} : { fetch: options.anthropic.fetch }) });
 }
 
 /**
@@ -27,6 +45,7 @@ export interface ServiceOptions {
  * already opened is closed again, and the error says what was wrong.
  */
 export async function startService(config: ServiceConfig, options: ServiceOptions = {}): Promise<RunningService> {
+  const client = await modelFor(config, options); // first, before any folder or file is made: a missing key must leave nothing behind
   const dataDir = resolve(config.dataDir);
   try {
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -48,7 +67,19 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     closers.push(() => sessions.close());
 
     const controller = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration } });
-    const routes = createAccountRoutes({ controller, secureCookies: config.cookieSecure });
+    const capture = createController({ adapter: graphs, llm: createLlm({ client }) });
+    const caci = createCaciController({
+      users: controller,
+      capture,
+      graphAdapter: graphs,
+      mode: config.llm,
+      limits: { maxPendingPerUser: config.maxPendingPerUser, proposalsPerHour: config.proposalsPerHour },
+    });
+    const routes = [
+      ...createAccountRoutes({ controller, secureCookies: config.cookieSecure }),
+      ...createCaptureRoutes({ caci, secureCookies: config.cookieSecure }),
+      ...createReadRoutes({ caci, secureCookies: config.cookieSecure }),
+    ];
     const api = createApiServer({
       routes,
       host: config.bind,
