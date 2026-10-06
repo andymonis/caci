@@ -1,11 +1,13 @@
 import { createGraph, dropGraph, err, ok, type Result, type StorageAdapter } from '../graph_store/index.js';
 import { usersError, type UsersError } from './errors.js';
 import { newUserId, userGraphId } from './ids.js';
+import { authorise } from './authorise.js';
+import { isUserId } from './ids.js';
 import { createPasswordHasher, type PasswordHasher } from './password.js';
 import type { SessionStore } from './session-store.js';
-import type { UserStore } from './store.js';
+import type { UserList, UserStore } from './store.js';
 import { createLoginThrottle, createRegistrationThrottle, throttledError, type LoginThrottle, type RegistrationThrottle } from './throttle.js';
-import type { User } from './types.js';
+import type { Role, User } from './types.js';
 import { parseDisplayName, parseEmail, parsePassword, parseUsername } from './validate.js';
 
 export interface UserControllerConfig {
@@ -56,6 +58,24 @@ export interface ChangePasswordInput {
   readonly newPassword: unknown;
 }
 
+export interface ListUsersInput {
+  /** 1 to 200; default 50. */
+  readonly limit?: unknown;
+  /** The `nextCursor` of the previous page. */
+  readonly cursor?: unknown;
+}
+
+/** What an admin may change about someone. The username and the id never change. */
+export interface UpdateUserInput {
+  readonly displayName?: unknown;
+  readonly email?: unknown;
+  readonly role?: unknown;
+}
+
+export interface ResetPasswordInput {
+  readonly newPassword: unknown;
+}
+
 export interface DeleteMeInput {
   readonly password: unknown;
 }
@@ -92,6 +112,16 @@ export interface UserController {
   changePassword(token: unknown, input: ChangePasswordInput, context: RequestContext): Promise<Result<User, UsersError>>;
   /** Needs the password. Deletes the caller's graph, then the account and its sessions. If the graph cannot be deleted the account is kept, and the error says so. */
   deleteMe(token: unknown, input: DeleteMeInput, context: RequestContext): Promise<Result<true, UsersError>>;
+  /** Admin only: every account, by username, a page at a time. */
+  listUsers(token: unknown, input?: ListUsersInput): Promise<Result<UserList, UsersError>>;
+  /** An admin may read anyone; a user only themselves (asking about anyone else is `FORBIDDEN`, whether or not that account exists). */
+  getUser(token: unknown, userId: unknown): Promise<Result<User, UsersError>>;
+  /** An admin may edit anyone's display name, email and role; a user only their own display name and email (never their role). The last admin cannot be demoted. */
+  updateUser(token: unknown, userId: unknown, input: UpdateUserInput): Promise<Result<User, UsersError>>;
+  /** Admin only: sets a new password (the policy applies), ends all of that user's sessions, and never reveals the old one. */
+  resetPassword(token: unknown, userId: unknown, input: ResetPasswordInput): Promise<Result<User, UsersError>>;
+  /** Admin only: deletes someone else's account, graph first, then the account and its sessions. Your own account goes through `deleteMe`. */
+  deleteUser(token: unknown, userId: unknown): Promise<Result<true, UsersError>>;
   /** The graph of a user. The only way the rest of the system learns which graph to use. */
   graphIdOf(user: Pick<User, 'id'>): string;
 }
@@ -165,8 +195,128 @@ export function createUserController(init: UserControllerInit): UserController {
     return false;
   }
 
+  /**
+   * Takes an account away with everything of theirs: the graph first (if it cannot be deleted the account
+   * stays, so no data is orphaned), then the account with the store's atomic last-admin guard, then
+   * the sessions. Returns the error, or nothing when it is done.
+   */
+  async function removeAccount(user: User): Promise<UsersError | undefined> {
+    const dropped = await dropGraph(graphAdapter, userGraphId(user.id));
+    if (!dropped.ok && dropped.error.code !== 'GRAPH_NOT_FOUND') {
+      return usersError('STORAGE_ERROR', 'the data could not be deleted, so the account was kept');
+    }
+    const removed = await users.delete(user.id, { protectLastAdmin: true });
+    if (!removed.ok) {
+      await ensureGraph(user.id).catch(() => false); // someone else became the only admin meanwhile: give back an (empty) graph
+      return removed.error;
+    }
+    await sessions.revokeAllFor(user.id).catch(() => undefined); // and a lingering session would fail at its next use anyway
+    return undefined;
+  }
+
+  /** Who is asking and may they do this? Decided before anything about the target is looked up, so a refusal says nothing about whether the target exists. */
+  async function authorised(token: unknown, action: Parameters<typeof authorise>[1], targetId?: string): Promise<Result<User, UsersError>> {
+    const me = await whoIs(token);
+    if (!me.ok) return me;
+    if (!authorise(me.value.user, action, targetId)) return err(usersError('FORBIDDEN', 'you may not do that'));
+    return ok(me.value.user);
+  }
+
+  const idOf = (value: unknown): string | undefined => (isUserId(value) ? value : undefined);
+  const noSuchUser = (): UsersError => usersError('NOT_FOUND', 'no such user');
+
   return {
     graphIdOf: (user) => userGraphId(user.id),
+
+    listUsers: (token, input = {}) =>
+      guarded(async () => {
+        const me = await authorised(token, 'listUsers');
+        if (!me.ok) return me;
+        const limit = input.limit === undefined ? 50 : input.limit;
+        if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > 200) return err(usersError('INVALID_INPUT', 'limit must be a whole number from 1 to 200', { field: 'limit' }));
+        const cursor = input.cursor === undefined ? null : input.cursor;
+        if (cursor !== null && typeof cursor !== 'string') return err(usersError('INVALID_INPUT', 'cursor must be text', { field: 'cursor' }));
+        try {
+          return ok(await users.list({ limit, cursor }));
+        } catch (cause) {
+          if (cause instanceof RangeError) return err(usersError('INVALID_INPUT', 'cursor is not one this service gave', { field: 'cursor' }));
+          throw cause;
+        }
+      }),
+
+    getUser: (token, userId) =>
+      guarded(async () => {
+        const me = await authorised(token, 'getUser', typeof userId === 'string' ? userId : undefined);
+        if (!me.ok) return me;
+        const id = idOf(userId);
+        const user = id === undefined ? undefined : await users.get(id);
+        return user === undefined ? err(noSuchUser()) : ok(user);
+      }),
+
+    updateUser: (token, userId, input) =>
+      guarded(async () => {
+        const target = typeof userId === 'string' ? userId : undefined;
+        const me = await authorised(token, 'updateUser', target);
+        if (!me.ok) return me;
+        for (const key of Object.keys(input ?? {})) {
+          if (key !== 'displayName' && key !== 'email' && key !== 'role') return err(usersError('INVALID_INPUT', `${key} cannot be changed`, { field: key }));
+        }
+        if (input.role !== undefined) {
+          // a role change is its own action: a user never gets it, not even on themselves, and then nothing at all is changed
+          const allowed = await authorised(token, 'changeRole', target);
+          if (!allowed.ok) return allowed;
+          if (input.role !== 'user' && input.role !== 'admin') return err(usersError('INVALID_INPUT', 'role must be "user" or "admin"', { field: 'role' }));
+        }
+        if (input.displayName === undefined && input.email === undefined && input.role === undefined) return err(usersError('INVALID_INPUT', 'nothing to change', { field: 'displayName' }));
+        let displayName: string | undefined;
+        if (input.displayName !== undefined) {
+          const parsed = parseDisplayName(input.displayName);
+          if (!parsed.ok) return parsed;
+          displayName = parsed.value;
+        }
+        let email: string | null | undefined;
+        if (input.email === null) email = null;
+        else if (input.email !== undefined) {
+          const parsed = parseEmail(input.email);
+          if (!parsed.ok) return parsed;
+          email = parsed.value ?? null;
+        }
+        const id = idOf(userId);
+        if (id === undefined) return err(noSuchUser());
+        return users.update(id, { ...(displayName === undefined ? {} : { displayName }), ...(email === undefined ? {} : { email }), ...(input.role === undefined ? {} : { role: input.role as Role }), updatedAt: clock() }, { protectLastAdmin: true });
+      }),
+
+    resetPassword: (token, userId, input) =>
+      guarded(async () => {
+        const me = await authorised(token, 'resetPassword', typeof userId === 'string' ? userId : undefined);
+        if (!me.ok) return me;
+        const id = idOf(userId);
+        const target = id === undefined ? undefined : await users.get(id);
+        if (target === undefined) return err(noSuchUser());
+        const fresh = parsePassword(input?.newPassword, { username: target.username });
+        if (!fresh.ok) return err({ ...fresh.error, field: 'newPassword' });
+        const updated = await users.update(target.id, { passwordHash: await hasher.hash(fresh.value), updatedAt: clock() });
+        if (!updated.ok) return updated;
+        try {
+          // everything they were signed in on ends; an admin resetting their own password keeps the session they are using
+          await sessions.revokeAllFor(target.id, target.id === me.value.id && typeof token === 'string' ? { except: token } : {});
+        } catch {
+          return err(usersError('STORAGE_ERROR', 'the password was changed, but the sessions could not be ended'));
+        }
+        return updated;
+      }),
+
+    deleteUser: (token, userId) =>
+      guarded(async () => {
+        const me = await authorised(token, 'deleteUser', typeof userId === 'string' ? userId : undefined);
+        if (!me.ok) return me;
+        const id = idOf(userId);
+        const target = id === undefined ? undefined : await users.get(id);
+        if (target === undefined) return err(noSuchUser());
+        if (target.id === me.value.id) return err(usersError('INVALID_INPUT', 'to delete your own account use deleteMe, which asks for your password', { field: 'userId' }));
+        const failed = await removeAccount(target);
+        return failed === undefined ? ok(true as const) : err(failed);
+      }),
 
     getMe: (token) => guarded(() => whoIs(token)),
 
@@ -218,22 +368,14 @@ export function createUserController(init: UserControllerInit): UserController {
       guarded(async () => {
         const me = await whoIs(token);
         if (!me.ok) return me;
-        const { user, graphId } = me.value;
+        const { user } = me.value;
         const wrong = await confirmPassword(user, input.password, 'password', context, clock());
         if (wrong !== undefined) return err(wrong);
         // the last admin is refused before any data is touched
         if (user.role === 'admin' && !(await hasOtherAdmin(user.id))) return err(usersError('LAST_ADMIN', 'the last admin cannot delete their own account'));
 
-        const dropped = await dropGraph(graphAdapter, graphId);
-        if (!dropped.ok && dropped.error.code !== 'GRAPH_NOT_FOUND') {
-          return err(usersError('STORAGE_ERROR', 'your data could not be deleted, so the account was kept'));
-        }
-        const removed = await users.delete(user.id, { protectLastAdmin: true });
-        if (!removed.ok) {
-          await ensureGraph(user.id).catch(() => false); // someone else became the only admin meanwhile: give back an (empty) graph
-          return removed;
-        }
-        await sessions.revokeAllFor(user.id).catch(() => undefined); // and a lingering session would fail at its next use anyway
+        const failed = await removeAccount(user);
+        if (failed !== undefined) return err(failed);
         return ok(true as const);
       }),
 

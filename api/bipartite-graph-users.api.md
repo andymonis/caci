@@ -4,6 +4,20 @@
 
 ```ts
 
+// @public (undocumented)
+export type Action = (typeof ACTIONS)[number];
+
+// @public
+export const ACTIONS: readonly ["listUsers", "getUser", "updateUser", "changeRole", "resetPassword", "deleteUser"];
+
+// @public (undocumented)
+export interface Actor {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly role: Role;
+}
+
 // @public
 export interface Authenticated {
     // (undocumented)
@@ -11,6 +25,9 @@ export interface Authenticated {
     // (undocumented)
     readonly user: User;
 }
+
+// @public
+export function authorise(actor: Actor, action: Action, targetId?: string): boolean;
 
 // @public (undocumented)
 export interface ChangePasswordInput {
@@ -99,6 +116,12 @@ export const isUserId: (value: unknown) => value is string;
 
 // @public
 export const isWellFormedToken: (value: unknown) => value is string;
+
+// @public (undocumented)
+export interface ListUsersInput {
+    readonly cursor?: unknown;
+    readonly limit?: unknown;
+}
 
 // @public (undocumented)
 export interface LockRule {
@@ -222,6 +245,12 @@ export interface RequestContext {
 }
 
 // @public (undocumented)
+export interface ResetPasswordInput {
+    // (undocumented)
+    readonly newPassword: unknown;
+}
+
+// @public (undocumented)
 export interface ResolvedSessionOptions {
     // (undocumented)
     readonly absoluteMs: number;
@@ -286,6 +315,16 @@ export interface UpdateMeInput {
 }
 
 // @public
+export interface UpdateUserInput {
+    // (undocumented)
+    readonly displayName?: unknown;
+    // (undocumented)
+    readonly email?: unknown;
+    // (undocumented)
+    readonly role?: unknown;
+}
+
+// @public
 export interface User {
     readonly createdAt: number;
     // (undocumented)
@@ -309,13 +348,18 @@ export const USER_ID_PATTERN: RegExp;
 export interface UserController {
     changePassword(token: unknown, input: ChangePasswordInput, context: RequestContext): Promise<Result<User, UsersError>>;
     deleteMe(token: unknown, input: DeleteMeInput, context: RequestContext): Promise<Result<true, UsersError>>;
+    deleteUser(token: unknown, userId: unknown): Promise<Result<true, UsersError>>;
     getMe(token: unknown): Promise<Result<Authenticated, UsersError>>;
+    getUser(token: unknown, userId: unknown): Promise<Result<User, UsersError>>;
     graphIdOf(user: Pick<User, 'id'>): string;
+    listUsers(token: unknown, input?: ListUsersInput): Promise<Result<UserList, UsersError>>;
     login(input: LoginInput, context: RequestContext): Promise<Result<LoggedIn, UsersError>>;
     logout(token: unknown): Promise<Result<true, UsersError>>;
     register(input: RegisterInput, context: RequestContext): Promise<Result<User, UsersError>>;
+    resetPassword(token: unknown, userId: unknown, input: ResetPasswordInput): Promise<Result<User, UsersError>>;
     resolve(token: unknown): Promise<Result<Authenticated, UsersError>>;
     updateMe(token: unknown, input: UpdateMeInput): Promise<Result<User, UsersError>>;
+    updateUser(token: unknown, userId: unknown, input: UpdateUserInput): Promise<Result<User, UsersError>>;
 }
 
 // @public (undocumented)
