@@ -1,4 +1,4 @@
-import type { Controller, PendingProposal, ProposalSummary } from '../app/index.js';
+import type { ControllerError, Controller, PendingProposal, ProposalSummary } from '../app/index.js';
 import { err, ok, type JsonValue, type Result } from '../graph_store/index.js';
 import { createRegistrationThrottle as createWindowLimiter, type Authenticated, type UserController } from '../users/index.js';
 import { caciError, type CaciError } from './errors.js';
@@ -6,6 +6,8 @@ import { caciError, type CaciError } from './errors.js';
 /** The longest note accepted: the categoriser's own limit, so a refusal here is clear and costs no model call. */
 export const MAX_NOTE_CHARS = 8000;
 const HOUR_MS = 60 * 60_000;
+/** How many expired proposals are remembered, so that their owners can be told they expired. */
+const REMEMBER_EXPIRED = 1000;
 
 export interface CaciLimits {
   /** Proposals one account may have waiting at once. Default 10. */
@@ -41,6 +43,13 @@ export interface ProposalView {
   readonly rationale?: string;
 }
 
+/** What approving a proposal reports: which proposal, how many operations were written, and what they were. */
+export interface ApprovedView {
+  readonly id: string;
+  readonly applied: number;
+  readonly summary: ProposalSummary;
+}
+
 export interface CaciController {
   /**
    * Asks the model how to file a note, for the person the session belongs to, in **their** graph (taken
@@ -48,12 +57,23 @@ export interface CaciController {
    * them. Writes nothing.
    */
   propose(token: unknown, input: { readonly text: unknown }): Promise<Result<ProposalView, CaciError>>;
+  /**
+   * A pending proposal, for its owner only. Anyone else (another account, an admin, a made-up id) gets exactly
+   * the answer a missing proposal gets. Its owner is told when it has expired.
+   */
+  get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
+  /**
+   * Writes the owner's pending proposal to their graph, once. If the write fails nothing is changed and the
+   * proposal stays pending, so it can be tried again or rejected. Approving twice, or twice at once, writes once.
+   */
+  approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
+  /** Discards the owner's pending proposal. Nothing is written. */
+  reject(token: unknown, proposalId: unknown): Promise<Result<{ readonly id: string }, CaciError>>;
 }
 
 interface Held {
   readonly userId: string;
-  /** `Infinity` while the model is still being asked: the place is reserved before the call, not after it. */
-  expiresAt: number;
+  readonly expiresAt: number;
 }
 
 const whole = (value: number | undefined, fallback: number, name: string): number => {
@@ -85,21 +105,96 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   const maxPending = whole(init.limits?.maxPendingPerUser, 10, 'maxPendingPerUser');
   const perHour = whole(init.limits?.proposalsPerHour, 30, 'proposalsPerHour');
   const hourly = createWindowLimiter({ max: perHour, windowMs: HOUR_MS });
-  /** Every proposal (and every place reserved for one) with its owner. */
+  /** Every pending proposal with its owner. */
   const held = new Map<string, Held>();
+  /** Places kept for proposals whose model call is still running, by owner: the place is taken before the call, not after it. */
+  const reserved = new Map<number, string>();
   let reservations = 0;
 
+  /** Expired proposals and their owners, oldest first, bounded. */
+  const expiredOwners = new Map<string, string>();
   const sweep = (now: number): void => {
-    for (const [id, h] of [...held]) if (h.expiresAt <= now) held.delete(id);
+    for (const [id, h] of [...held]) {
+      if (h.expiresAt > now) continue;
+      held.delete(id);
+      expiredOwners.set(id, h.userId);
+      if (expiredOwners.size > REMEMBER_EXPIRED) expiredOwners.delete(expiredOwners.keys().next().value as string);
+    }
   };
-  const pendingOf = (userId: string): Held[] => [...held.values()].filter((h) => h.userId === userId);
+  const pendingOf = (userId: string): number[] => [...[...held.values()].filter((h) => h.userId === userId).map((h) => h.expiresAt), ...[...reserved.values()].filter((u) => u === userId).map(() => Number.POSITIVE_INFINITY)];
 
   async function whoIs(token: unknown): Promise<Result<Authenticated, CaciError>> {
     const me = await users.resolve(token);
     return me.ok ? ok(me.value) : err(caciError('UNAUTHENTICATED', 'not signed in'));
   }
 
+  const notFound = (): CaciError => caciError('NOT_FOUND', 'no such proposal');
+  const expired = (): CaciError => caciError('EXPIRED', 'that proposal has expired: make it again');
+
+  /**
+   * The owner's view of a proposal id. Everyone else, and every id that is not a proposal, gets the very
+   * same `NOT_FOUND`, so nobody can tell a stranger's proposal from one that does not exist.
+   */
+  async function owned(token: unknown, proposalId: unknown): Promise<Result<{ userId: string; id: string }, CaciError>> {
+    const me = await whoIs(token);
+    if (!me.ok) return me;
+    const userId = me.value.user.id;
+    sweep(clock());
+    if (typeof proposalId !== 'string') return err(notFound());
+    if (held.get(proposalId)?.userId === userId) return ok({ userId, id: proposalId });
+    if (expiredOwners.get(proposalId) === userId) return err(expired());
+    return err(notFound());
+  }
+
+  /** The capture controller's own refusals for a proposal that is gone, in this controller's words. */
+  const gone = (error: ControllerError): CaciError | undefined => {
+    if (error.source !== 'app') return undefined;
+    if (error.error.code === 'PROPOSAL_NOT_FOUND') return notFound();
+    if (error.error.code === 'PROPOSAL_EXPIRED') return expired();
+    return undefined;
+  };
+
   return {
+    async get(token, proposalId) {
+      const mine = await owned(token, proposalId);
+      if (!mine.ok) return mine;
+      const proposal = capture.get(mine.value.id);
+      if (proposal === undefined) {
+        held.delete(mine.value.id);
+        return err(expired());
+      }
+      return ok(viewOf(proposal, mode));
+    },
+
+    async approve(token, proposalId) {
+      const mine = await owned(token, proposalId);
+      if (!mine.ok) return mine;
+      const done = await capture.approve(mine.value.id);
+      if (done.ok) {
+        held.delete(mine.value.id);
+        return ok(Object.freeze({ id: mine.value.id, applied: done.value.written.applied, summary: done.value.proposal.summary }));
+      }
+      const reason = gone(done.error);
+      if (reason !== undefined) {
+        held.delete(mine.value.id);
+        return err(reason);
+      }
+      return done; // a failed write: the proposal is still pending, and is still counted
+    },
+
+    async reject(token, proposalId) {
+      const mine = await owned(token, proposalId);
+      if (!mine.ok) return mine;
+      const done = capture.reject(mine.value.id);
+      if (done.ok) {
+        held.delete(mine.value.id);
+        return ok(Object.freeze({ id: mine.value.id }));
+      }
+      const reason = gone(done.error);
+      if (reason !== undefined) held.delete(mine.value.id);
+      return err(reason ?? done.error);
+    },
+
     async propose(token, input) {
       const me = await whoIs(token);
       if (!me.ok) return me;
@@ -117,7 +212,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       sweep(now);
       const mine = pendingOf(userId);
       if (mine.length >= maxPending) {
-        const soonest = Math.min(...mine.map((h) => h.expiresAt));
+        const soonest = Math.min(...mine);
         return err(caciError('TOO_MANY_PENDING', `you already have ${maxPending} proposals waiting: approve or reject one first`, Number.isFinite(soonest) ? { retryAfterMs: Math.max(1, soonest - now) } : {}));
       }
       const wait = hourly.check(userId, now);
@@ -125,16 +220,16 @@ export function createCaciController(init: CaciControllerInit): CaciController {
 
       // from here the model will be asked: count it, and keep a place before the first await so that simultaneous requests cannot slip past the limit
       hourly.record(userId, now);
-      const reservation = `reservation-${++reservations}`; // proposal ids start with prop-, so the two kinds of key never meet
-      held.set(reservation, { userId, expiresAt: Number.POSITIVE_INFINITY });
+      const reservation = ++reservations;
+      reserved.set(reservation, userId);
       try {
         const made = await capture.propose(me.value.graphId, { kind: 'text', text });
-        held.delete(reservation);
+        reserved.delete(reservation);
         if (!made.ok) return made;
         held.set(made.value.id, { userId, expiresAt: made.value.expiresAt });
         return ok(viewOf(made.value, mode));
       } catch (cause) {
-        held.delete(reservation);
+        reserved.delete(reservation);
         throw cause;
       }
     },

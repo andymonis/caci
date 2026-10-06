@@ -5,14 +5,31 @@
 ```ts
 
 // @public
+export interface ApprovedView {
+    // (undocumented)
+    readonly applied: number;
+    // (undocumented)
+    readonly id: string;
+    // Warning: (ae-forgotten-export) The symbol "ProposalSummary" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly summary: ProposalSummary;
+}
+
+// @public
 export const CACI_ERROR_CODES: readonly ["UNAUTHENTICATED", "NOT_FOUND", "EXPIRED", "THROTTLED", "TOO_MANY_PENDING", "INVALID_INPUT"];
 
 // @public (undocumented)
 export interface CaciController {
+    approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
+    get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
     // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
     propose(token: unknown, input: {
         readonly text: unknown;
     }): Promise<Result<ProposalView, CaciError>>;
+    reject(token: unknown, proposalId: unknown): Promise<Result<{
+        readonly id: string;
+    }, CaciError>>;
 }
 
 // @public (undocumented)
@@ -79,8 +96,6 @@ export interface ProposalView {
     // Warning: (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
     readonly operations: readonly JsonValue[];
     readonly rationale?: string;
-    // Warning: (ae-forgotten-export) The symbol "ProposalSummary" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     readonly summary: ProposalSummary;
     readonly text: string;

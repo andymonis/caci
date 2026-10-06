@@ -6,4 +6,4 @@
 export { CACI_ERROR_CODES, caciError } from './errors.js';
 export type { CaciError, CaciErrorCode, CaciOwnError } from './errors.js';
 export { createCaciController, MAX_NOTE_CHARS, viewOf } from './controller.js';
-export type { CaciControllerInit, CaciController, CaciLimits, ProposalView } from './controller.js';
+export type { ApprovedView, CaciControllerInit, CaciController, CaciLimits, ProposalView } from './controller.js';

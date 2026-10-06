@@ -1,56 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createController } from '../app/index.js';
-import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';
-import { describeGraph, type StorageAdapter } from '../graph_store/index.js';
-import { createDemoModelClient, createLlm, llmError, type ModelClient, type ModelRequest } from '../llm/index.js';
-import { createLoginThrottle, createMemorySessionStore, createMemoryUserStore, createPasswordHasher, createRegistrationThrottle, createUserController, type UserController } from '../users/index.js';
-import { createCaciController, MAX_NOTE_CHARS, type CaciController, type CaciLimits } from './index.js';
-
-const PW = 'correct horse 7 staple';
-const T0 = 1_700_000_000_000;
-
-interface World {
-  caci: CaciController;
-  users: UserController;
-  graphs: StorageAdapter;
-  now: { value: number };
-  modelCalls: ModelRequest[];
-  tokens: Record<string, string>;
-  graphIds: Record<string, string>;
-}
-
-async function world(extra: { limits?: CaciLimits; client?: ModelClient; capturePending?: number; mode?: 'demo' | 'anthropic'; people?: string[] } = {}): Promise<World> {
-  const now = { value: T0 };
-  const graphs = createMemoryAdapter();
-  const users = createUserController({
-    users: createMemoryUserStore(),
-    sessions: createMemorySessionStore(),
-    graphAdapter: graphs,
-    hasher: createPasswordHasher({ params: { N: 16, r: 1, p: 1 } }),
-    loginThrottle: createLoginThrottle(),
-    registrationThrottle: createRegistrationThrottle({ max: 1000 }),
-    clock: () => now.value,
-  });
-  const modelCalls: ModelRequest[] = [];
-  const inner = extra.client ?? createDemoModelClient();
-  const client: ModelClient = { complete: (request) => (modelCalls.push(request), inner.complete(request)) };
-  const capture = createController({ adapter: graphs, llm: createLlm({ client }), now: () => now.value, ...(extra.capturePending === undefined ? {} : { maxPending: extra.capturePending }) });
-  const caci = createCaciController({ users, capture, clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }), ...(extra.mode === undefined ? {} : { mode: extra.mode }) });
-  const tokens: Record<string, string> = {};
-  const graphIds: Record<string, string> = {};
-  for (const name of extra.people ?? ['ann', 'bob']) {
-    await users.register({ username: name, displayName: name, password: PW }, { clientKey: name });
-    const login = await users.login({ username: name, password: PW }, { clientKey: name });
-    if (!login.ok) throw new Error('login failed');
-    tokens[name] = login.value.token;
-    graphIds[name] = login.value.graphId;
-  }
-  return { caci, users, graphs, now, modelCalls, tokens, graphIds };
-}
-const ownErrorOf = (r: { ok: boolean; error?: unknown }): { code: string; field?: string; retryAfterMs?: number } | undefined => {
-  const e = r.error as { source: string; error: { code: string } } | undefined;
-  return e?.source === 'caci' ? (e.error as { code: string }) : undefined;
-};
+import { describeGraph } from '../graph_store/index.js';
+import { createDemoModelClient, createLlm, llmError, type ModelClient } from '../llm/index.js';
+import { createCaciController, MAX_NOTE_CHARS } from './index.js';
+import { ownErrorOf, T0, world } from './controller.test-util.js';
 
 describe('propose', () => {
   it('asks the model for the signed-in person and holds a proposal: id, expiry, mode, preview, summary, operations; writes nothing', async () => {
