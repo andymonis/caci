@@ -65,6 +65,21 @@ export function violations(files: Record<string, string>): string[] {
       if (/^(?:graph_store|llm|app|sqlite)\//.test(file) && /^users(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: only the API may depend on the users component`);
       }
+      if (file.startsWith('service/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the service must not depend on the LLM component, the application or the SQLite wrapper`);
+      }
+      if (file.startsWith('service/') && target.startsWith('graph_store/') && !/^graph_store\/(?:index|adapters\/sqlite\/index)$/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the service may use the graph store only through graph_store/index and its SQLite adapter's entry point`);
+      }
+      if (file.startsWith('service/') && target.startsWith('users/') && !/^users\/(?:index|sqlite\/index)$/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the service may use the users component only through users/index and users/sqlite/index`);
+      }
+      if (file.startsWith('service/') && target.startsWith('api/') && target !== 'api/index') {
+        problems.push(`${file} imports ${specifier}: the service may use the API only through api/index`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite|users|api)\//.test(file) && /^service(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: nothing may depend on the service`);
+      }
       const apiTest = /\.test(?:-util)?\.ts$/.test(file);
       if (file.startsWith('api/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: the API must not depend on the LLM component, the application or the SQLite wrapper`);
@@ -128,6 +143,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'users/sqlite/y.test.ts': `import { createSqliteAdapter } from '../../graph_store/adapters/sqlite/index.js';`,
         'users/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
         'api/x.ts': `import { newUserId } from '../users/index.js'; import { write } from '../graph_store/index.js'; import { y } from './y.js';`,
+        'service/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js'; import { createUserController } from '../users/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { createApiServer } from '../api/index.js'; import { ok } from '../graph_store/index.js'; import { y } from './y.js';`,
         'api/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { runUserStoreConformance } from '../users/testing/index.js';`,
         'sqlite/y.ts': `import { z } from './x.js';`,
         'app/y.test.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';`,
@@ -163,6 +179,13 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['production API code using a graph store adapter', { 'api/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
     ['the users component using the API', { 'users/x.ts': `import { createApiServer } from '../api/index.js';` }],
     ['the graph store using the API', { 'graph_store/x.ts': `import { createApiServer } from '../api/index.js';` }],
+    ['the service reaching into the users component\'s internals', { 'service/x.ts': `import { x } from '../users/controller.js';` }],
+    ['the service using the SQLite wrapper directly', { 'service/x.ts': `import { openDb } from '../sqlite/db.js';` }],
+    ['the service using the LLM component', { 'service/x.ts': `import { createLlm } from '../llm/index.js';` }],
+    ['the service reaching into the API internals', { 'service/x.ts': `import { x } from '../api/server.js';` }],
+    ['the service reaching into the graph store internals', { 'service/x.ts': `import { x } from '../graph_store/write-plan.js';` }],
+    ['the API using the service', { 'api/x.ts': `import { serve } from '../service/index.js';` }],
+    ['the users component using the service', { 'users/x.ts': `import { serve } from '../service/index.js';` }],
     ['production users code using the memory adapter', { 'users/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
     ['the users component using the LLM component', { 'users/x.ts': `import { createLlm } from '../llm/index.js';` }],
     ['the users component using the application', { 'users/x.ts': `import { createController } from '../app/index.js';` }],
