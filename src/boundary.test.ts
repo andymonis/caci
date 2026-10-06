@@ -80,6 +80,16 @@ export function violations(files: Record<string, string>): string[] {
       if (/^(?:graph_store|llm|app|sqlite|users|api)\//.test(file) && /^service(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: nothing may depend on the service`);
       }
+      const caciTest = /\.test(?:-util)?\.ts$/.test(file);
+      if (file.startsWith('caci/') && /^(?:sqlite|api|service)(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the CaCi controller must not depend on the SQLite wrapper, the API or the service`);
+      }
+      if (file.startsWith('caci/') && /^(?:graph_store|llm|app|users)\//.test(target) && !/^(?:graph_store|llm|app|users)\/index$/.test(target) && !(caciTest && target === 'graph_store/adapters/memory/index')) {
+        problems.push(`${file} imports ${specifier}: the CaCi controller may use other components only through their index (its tests may also use the memory adapter)`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite|users)\//.test(file) && /^caci(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: only the API and the service may depend on the CaCi controller`);
+      }
       const apiTest = /\.test(?:-util)?\.ts$/.test(file);
       if (file.startsWith('api/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: the API must not depend on the LLM component, the application or the SQLite wrapper`);
@@ -143,6 +153,9 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'users/sqlite/y.test.ts': `import { createSqliteAdapter } from '../../graph_store/adapters/sqlite/index.js';`,
         'users/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
         'api/x.ts': `import { newUserId } from '../users/index.js'; import { write } from '../graph_store/index.js'; import { y } from './y.js';`,
+        'caci/x.ts': `import { createController } from '../app/index.js'; import { createUserController } from '../users/index.js'; import { ok } from '../graph_store/index.js'; import { createLlm } from '../llm/index.js'; import { y } from './y.js';`,
+        'caci/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
+        'api/z.ts': `import { createCaciController } from '../caci/index.js';`,
         'service/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js'; import { createUserController } from '../users/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { createApiServer } from '../api/index.js'; import { ok } from '../graph_store/index.js'; import { y } from './y.js';`,
         'api/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { runUserStoreConformance } from '../users/testing/index.js';`,
         'sqlite/y.ts': `import { z } from './x.js';`,
@@ -186,6 +199,12 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the service reaching into the graph store internals', { 'service/x.ts': `import { x } from '../graph_store/write-plan.js';` }],
     ['the API using the service', { 'api/x.ts': `import { serve } from '../service/index.js';` }],
     ['the users component using the service', { 'users/x.ts': `import { serve } from '../service/index.js';` }],
+    ['the CaCi controller reaching into the capture controller\'s internals', { 'caci/x.ts': `import { x } from '../app/pending.js';` }],
+    ['the CaCi controller using the SQLite wrapper', { 'caci/x.ts': `import { openDb } from '../sqlite/db.js';` }],
+    ['the CaCi controller using the API', { 'caci/x.ts': `import { createApiServer } from '../api/index.js';` }],
+    ['production CaCi code using the memory adapter', { 'caci/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
+    ['the application using the CaCi controller', { 'app/x.ts': `import { createCaciController } from '../caci/index.js';` }],
+    ['the users component using the CaCi controller', { 'users/x.ts': `import { createCaciController } from '../caci/index.js';` }],
     ['production users code using the memory adapter', { 'users/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
     ['the users component using the LLM component', { 'users/x.ts': `import { createLlm } from '../llm/index.js';` }],
     ['the users component using the application', { 'users/x.ts': `import { createController } from '../app/index.js';` }],

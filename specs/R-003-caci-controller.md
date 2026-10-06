@@ -50,7 +50,7 @@ The first four rows are answers given by the owner; D4 to D7 are proposals that 
 
 | ID | Requirement |
 |----|-------------|
-| CC-FR-01 | **Propose**: given a session and a note (`text`, at most 20,000 characters), asks the model for a filing and holds the result as a pending proposal owned by the caller, for their graph. Nothing is written. |
+| CC-FR-01 | **Propose**: given a session and a note (`text`, at most 8,000 characters: the categoriser's own limit, refused here with a clear message and without a model call), asks the model for a filing and holds the result as a pending proposal owned by the caller, for their graph. Nothing is written. |
 | CC-FR-02 | **Graph from the session**: the graph a proposal reads context from and is later written to is the caller's own graph, taken from the session. No request field can name a graph. |
 | CC-FR-03 | **Limits**: an account may have at most 10 pending proposals and may start at most 30 an hour. A request over either is refused with `THROTTLED` (hourly) or `TOO_MANY_PENDING` (pending), saying when to try again where that is known. A refusal is made before the model is called. Both numbers are configurable. |
 | CC-FR-04 | **Get**: the owner can read a pending proposal: its id, when it expires, the mode, the plain-text preview, the summary (new items, new and reused categories, links, problems) and the operations they would be approving. |
@@ -124,7 +124,7 @@ All need the session cookie (R-002) and the same cross-origin and JSON rules as 
 | `GET /api/graph/category?id=` | `limit`, `cursor`; the items in one category |
 | `GET /api/graph/item?id=` | One item and its categories |
 
-A proposal in a response is `{ id, createdAt, expiresAt, mode, text, summary, operations }`, where `text` is the plain-text preview, `summary` is `{ newItems, updatedItems, newCategories, updatedCategories, reusedCategories, newLinks, problems, notes }` and `operations` are the operations the person would be approving.
+A proposal in a response is `{ id, createdAt, expiresAt, mode, text, summary, operations, rationale? }`, where `text` is the plain-text preview, `summary` is `{ newItems, updatedItems, newCategories, updatedCategories, reusedCategories, newLinks, problems, notes }` and `operations` are the operations the person would be approving and `rationale` is the model's short reason, when it gave one.
 
 ## Configuration
 
