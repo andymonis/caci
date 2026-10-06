@@ -12,6 +12,14 @@ export interface Authenticated {
     readonly user: User;
 }
 
+// @public (undocumented)
+export interface ChangePasswordInput {
+    // (undocumented)
+    readonly currentPassword: unknown;
+    // (undocumented)
+    readonly newPassword: unknown;
+}
+
 // @public
 export const COMMON_PASSWORDS: readonly string[];
 
@@ -62,6 +70,12 @@ export const DEFAULT_SESSION_OPTIONS: Readonly<{
 
 // @public (undocumented)
 export const DEFAULT_USERNAME_RULE: LockRule;
+
+// @public (undocumented)
+export interface DeleteMeInput {
+    // (undocumented)
+    readonly password: unknown;
+}
 
 // @public
 export type Derive = (password: string, salt: Uint8Array, params: ScryptParams, keyBytes: number) => Promise<Uint8Array>;
@@ -264,6 +278,14 @@ export interface SessionStore {
 export function throttledError(retryAfterMs: number): UsersError;
 
 // @public
+export interface UpdateMeInput {
+    // (undocumented)
+    readonly displayName?: unknown;
+    // (undocumented)
+    readonly email?: unknown;
+}
+
+// @public
 export interface User {
     readonly createdAt: number;
     // (undocumented)
@@ -285,11 +307,15 @@ export const USER_ID_PATTERN: RegExp;
 
 // @public
 export interface UserController {
+    changePassword(token: unknown, input: ChangePasswordInput, context: RequestContext): Promise<Result<User, UsersError>>;
+    deleteMe(token: unknown, input: DeleteMeInput, context: RequestContext): Promise<Result<true, UsersError>>;
+    getMe(token: unknown): Promise<Result<Authenticated, UsersError>>;
     graphIdOf(user: Pick<User, 'id'>): string;
     login(input: LoginInput, context: RequestContext): Promise<Result<LoggedIn, UsersError>>;
     logout(token: unknown): Promise<Result<true, UsersError>>;
     register(input: RegisterInput, context: RequestContext): Promise<Result<User, UsersError>>;
     resolve(token: unknown): Promise<Result<Authenticated, UsersError>>;
+    updateMe(token: unknown, input: UpdateMeInput): Promise<Result<User, UsersError>>;
 }
 
 // @public (undocumented)
