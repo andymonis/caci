@@ -56,6 +56,16 @@ export interface ApiServerOptions {
     readonly trustedProxies?: number;
 }
 
+// @public (undocumented)
+export interface CaptureRoutesOptions {
+    // Warning: (ae-forgotten-export) The symbol "CaciController" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly caci: CaciController;
+    readonly cookieName?: string;
+    readonly secureCookies?: boolean;
+}
+
 // @public
 export function clearCookie(name: string, options: {
     readonly secure: boolean;
@@ -73,6 +83,9 @@ export function createAccountRoutes(options: AccountRoutesOptions): readonly Rou
 // @public
 export function createApiServer(options: ApiServerOptions): ApiServer;
 
+// @public
+export function createCaptureRoutes(options: CaptureRoutesOptions): readonly Route[];
+
 // Warning: (ae-forgotten-export) The symbol "UsersError" needs to be exported by the entry point index.d.ts
 //
 // @public
@@ -80,6 +93,12 @@ export function errorResponse(error: UsersError, extra?: Pick<ApiResponse, 'cook
 
 // @public
 export function isJsonContentType(value: string | undefined): boolean;
+
+// Warning: (ae-forgotten-export) The symbol "CaciError" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "Mapped" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function mapCaciError(error: CaciError): Mapped;
 
 // @public (undocumented)
 export type Match = {

@@ -10,3 +10,5 @@ export { createApiServer } from './server.js';
 export type { ApiServer, ApiServerOptions } from './server.js';
 export { createAccountRoutes, errorResponse, STATUS_OF } from './routes.js';
 export type { AccountRoutesOptions } from './routes.js';
+export { createCaptureRoutes, mapCaciError } from './capture-routes.js';
+export type { CaptureRoutesOptions } from './capture-routes.js';

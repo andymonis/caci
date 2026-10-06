@@ -1,6 +1,7 @@
 import type { JsonValue, Result } from '../graph_store/index.js';
 import type { UserController, UsersError } from '../users/index.js';
 import { clearCookie, serialiseCookie } from './cookies.js';
+import { NO_BODY, unknownKey } from './common.js';
 import type { ApiResponse, Route, RouteContext } from './router.js';
 
 export interface AccountRoutesOptions {
@@ -33,16 +34,6 @@ export function errorResponse(error: UsersError, extra: Pick<ApiResponse, 'cooki
     ...(error.retryAfterMs === undefined ? {} : { retryAfterSeconds: error.retryAfterMs / 1000 }),
     ...extra,
   };
-}
-
-const NO_BODY = Object.freeze({});
-
-/** A body with a key we do not know is refused by name, so a typo (or an attempt to send `role` to register) is never silently ignored. */
-function unknownKey(body: Readonly<Record<string, JsonValue>>, allowed: readonly string[]): UsersError | undefined {
-  for (const key of Object.keys(body)) {
-    if (!allowed.includes(key)) return { code: 'INVALID_INPUT', message: `${key} is not accepted here`, field: key };
-  }
-  return undefined;
 }
 
 /**

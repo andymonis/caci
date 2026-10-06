@@ -91,8 +91,14 @@ export function violations(files: Record<string, string>): string[] {
         problems.push(`${file} imports ${specifier}: only the API and the service may depend on the CaCi controller`);
       }
       const apiTest = /\.test(?:-util)?\.ts$/.test(file);
-      if (file.startsWith('api/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target)) {
-        problems.push(`${file} imports ${specifier}: the API must not depend on the LLM component, the application or the SQLite wrapper`);
+      if (file.startsWith('api/') && /^(?:llm|app)(?:\/|$)/.test(target) && !(apiTest && /^(?:llm|app)\/index$/.test(target))) {
+        problems.push(`${file} imports ${specifier}: the API must not depend on the LLM component or the application (its tests may use their indexes to build a stand-in service)`);
+      }
+      if (file.startsWith('api/') && /^sqlite(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the API must not depend on the SQLite wrapper`);
+      }
+      if (file.startsWith('api/') && target.startsWith('caci/') && target !== 'caci/index') {
+        problems.push(`${file} imports ${specifier}: the API may use the CaCi controller only through caci/index`);
       }
       if (file.startsWith('api/') && target.startsWith('graph_store/') && target !== 'graph_store/index' && !(apiTest && /^graph_store\/adapters\/(?:memory|sqlite)\/index$/.test(target))) {
         problems.push(`${file} imports ${specifier}: the API may use the graph store only through graph_store/index (its tests may also use the adapters)`);
@@ -157,6 +163,8 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'caci/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
         'api/z.ts': `import { createCaciController } from '../caci/index.js';`,
         'service/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js'; import { createUserController } from '../users/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { createApiServer } from '../api/index.js'; import { ok } from '../graph_store/index.js'; import { y } from './y.js';`,
+        'api/c.ts': `import { createCaciController } from '../caci/index.js';`,
+        'api/c.test.ts': `import { createController } from '../app/index.js'; import { createLlm, createDemoModelClient } from '../llm/index.js';`,
         'api/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { runUserStoreConformance } from '../users/testing/index.js';`,
         'sqlite/y.ts': `import { z } from './x.js';`,
         'app/y.test.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';`,
@@ -186,8 +194,10 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the LLM component using the SQLite adapter', { 'llm/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
     ['the users component reaching into the graph store\'s internals', { 'users/x.ts': `import { x } from '../graph_store/write-plan.js';` }],
     ['the API reaching into the users component\'s internals', { 'api/x.ts': `import { x } from '../users/controller.js';` }],
-    ['the API using the LLM component', { 'api/x.ts': `import { createLlm } from '../llm/index.js';` }],
-    ['the API using the application', { 'api/x.ts': `import { createController } from '../app/index.js';` }],
+    ['production API code using the LLM component', { 'api/x.ts': `import { createLlm } from '../llm/index.js';` }],
+    ['production API code using the application', { 'api/x.ts': `import { createController } from '../app/index.js';` }],
+    ['an API test reaching into the LLM component\'s internals', { 'api/x.test.ts': `import { demoReply } from '../llm/demo-client.js';` }],
+    ['the API reaching into the CaCi controller\'s internals', { 'api/x.ts': `import { x } from '../caci/browse.js';` }],
     ['the API reaching into the graph store\'s internals', { 'api/x.ts': `import { x } from '../graph_store/write-plan.js';` }],
     ['production API code using a graph store adapter', { 'api/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
     ['the users component using the API', { 'users/x.ts': `import { createApiServer } from '../api/index.js';` }],
