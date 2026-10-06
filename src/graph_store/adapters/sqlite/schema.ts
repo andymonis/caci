@@ -20,6 +20,7 @@ export const APPLICATION_ID = 0x43614369;
  */
 const V1: Migration = Object.freeze({
   to: 1,
+  creates: Object.freeze(['graphs', 'nodes', 'edges']),
   sql: Object.freeze([
     `CREATE TABLE graphs (
        graph_id TEXT NOT NULL PRIMARY KEY
@@ -46,8 +47,6 @@ const V1: Migration = Object.freeze({
 
 export const MIGRATIONS: readonly Migration[] = Object.freeze([V1]);
 
-const TABLES: readonly string[] = Object.freeze(['graphs', 'nodes', 'edges']);
-
 export type { Migration, PrepareResult };
 
 export interface PrepareOptions {
@@ -57,5 +56,5 @@ export interface PrepareOptions {
 
 /** Makes sure the database is one of ours (a graph database) at the newest schema; see `prepareSchema`. */
 export function prepareDatabase(db: Db, options: PrepareOptions = {}): PrepareResult {
-  return prepareSchema(db, { applicationId: APPLICATION_ID, migrations: options.migrations ?? MIGRATIONS, tables: TABLES, foreignCode: 'NOT_A_GRAPH_DATABASE' });
+  return prepareSchema(db, { applicationId: APPLICATION_ID, migrations: options.migrations ?? MIGRATIONS, foreignCode: 'NOT_A_GRAPH_DATABASE' });
 }

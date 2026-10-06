@@ -4,6 +4,8 @@ import { DbError, type Db, type DbErrorCode } from './db.js';
 export interface Migration {
   readonly to: number;
   readonly sql: readonly string[];
+  /** The tables this step creates. A database at this version or later that lacks one is refused. */
+  readonly creates?: readonly string[];
 }
 
 export interface PrepareResult {
@@ -17,8 +19,6 @@ export interface SchemaSpec {
   readonly applicationId: number;
   /** The schema's history, oldest first and with no gaps. */
   readonly migrations: readonly Migration[];
-  /** Tables that must exist in a database of ours (a file missing one is refused). */
-  readonly tables: readonly string[];
   /** The error code for a database that is not ours. */
   readonly foreignCode: DbErrorCode;
 }
@@ -59,7 +59,9 @@ export function prepareSchema(db: Db, spec: SchemaSpec): PrepareResult {
       if (version < 1) {
         throw new DbError(spec.foreignCode, `"${db.path}" is marked as ours but has no schema version; it was left untouched`);
       }
-      for (const table of spec.tables) {
+      // only the tables the file's own version should have: a version 1 file has not got version 2's table yet
+      const expected = migrations.filter((m) => m.to <= version).flatMap((m) => m.creates ?? []);
+      for (const table of expected) {
         if (db.get("SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = ?", table) === undefined) {
           throw new DbError(spec.foreignCode, `"${db.path}" is missing its "${table}" table; it was left untouched`);
         }

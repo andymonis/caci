@@ -1,3 +1,4 @@
+import type { SessionOptions, SessionStore } from '../session-store.js';
 import type { UserStore } from '../store.js';
 
 /** The two functions of a test runner that the harness needs (Vitest's, Jest's and `node:test`'s fit). */
@@ -19,3 +20,11 @@ export interface UserStoreCase {
   /** Throws (an assertion error) when the store does not behave. `makeAnother` gives a further fresh store. */
   readonly run: (store: UserStore, makeAnother: () => Promise<UserStore>) => Promise<void>;
 }
+
+export interface SessionConformanceOptions {
+  /** Called after every test with each store it used. */
+  dispose?: (store: SessionStore) => Promise<void> | void;
+}
+
+/** Creates a fresh, empty session store with the given settings, sharing nothing with any other one it has made. */
+export type MakeSessionStore = (options: SessionOptions) => Promise<SessionStore> | SessionStore;

@@ -8,6 +8,9 @@
 export const COMMON_PASSWORDS: readonly string[];
 
 // @public
+export function createMemorySessionStore(options?: SessionOptions): SessionStore;
+
+// @public
 export function createMemoryUserStore(): UserStore;
 
 // @public (undocumented)
@@ -29,6 +32,14 @@ export interface Credential {
 // @public
 export const DEFAULT_SCRYPT: ScryptParams;
 
+// @public (undocumented)
+export const DEFAULT_SESSION_OPTIONS: Readonly<{
+    idleMs: number;
+    absoluteMs: number;
+    renewEveryMs: 60000;
+    maxPerUser: 20;
+}>;
+
 // @public
 export type Derive = (password: string, salt: Uint8Array, params: ScryptParams, keyBytes: number) => Promise<Uint8Array>;
 
@@ -43,8 +54,17 @@ export interface GuardOptions {
     readonly protectLastAdmin?: boolean;
 }
 
+// @public
+export const hashToken: (token: string) => string;
+
 // @public (undocumented)
 export const isUserId: (value: unknown) => value is string;
+
+// @public
+export const isWellFormedToken: (value: unknown) => value is string;
+
+// @public (undocumented)
+export function newSessionToken(random?: RandomBytes): string;
 
 // @public
 export function newUserId(random?: (length: number) => Uint8Array): string;
@@ -89,6 +109,26 @@ export interface PasswordHasherOptions {
 }
 
 // @public (undocumented)
+export type RandomBytes = (length: number) => Uint8Array;
+
+// @public (undocumented)
+export interface ResolvedSessionOptions {
+    // (undocumented)
+    readonly absoluteMs: number;
+    // (undocumented)
+    readonly idleMs: number;
+    // (undocumented)
+    readonly maxPerUser: number;
+    // (undocumented)
+    readonly randomBytes: RandomBytes | undefined;
+    // (undocumented)
+    readonly renewEveryMs: number;
+}
+
+// @public
+export function resolveSessionOptions(options?: SessionOptions): ResolvedSessionOptions;
+
+// @public (undocumented)
 export type Role = (typeof ROLES)[number];
 
 // @public (undocumented)
@@ -102,6 +142,26 @@ export interface ScryptParams {
     readonly p: number;
     // (undocumented)
     readonly r: number;
+}
+
+// @public (undocumented)
+export interface SessionOptions {
+    readonly absoluteMs?: number;
+    readonly idleMs?: number;
+    readonly maxPerUser?: number;
+    readonly randomBytes?: RandomBytes;
+    readonly renewEveryMs?: number;
+}
+
+// @public
+export interface SessionStore {
+    create(userId: string, now: number): Promise<string>;
+    purgeExpired(now: number): Promise<number>;
+    resolve(token: string, now: number): Promise<string | undefined>;
+    revoke(token: string): Promise<boolean>;
+    revokeAllFor(userId: string, options?: {
+        readonly except?: string;
+    }): Promise<number>;
 }
 
 // @public

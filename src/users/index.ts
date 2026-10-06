@@ -12,3 +12,8 @@ export { createPasswordHasher, DEFAULT_SCRYPT } from './password.js';
 export type { Derive, PasswordHasher, PasswordHasherOptions, ScryptParams } from './password.js';
 export { createMemoryUserStore } from './memory-store.js';
 export type { Credential, CreateOptions, GuardOptions, UserList, UserPage, UserPatch, UserRecord, UserStore } from './store.js';
+export { createMemorySessionStore } from './memory-session-store.js';
+export { DEFAULT_SESSION_OPTIONS, resolveSessionOptions } from './session-store.js';
+export type { ResolvedSessionOptions, SessionOptions, SessionStore } from './session-store.js';
+export { hashToken, isWellFormedToken, newSessionToken } from './tokens.js';
+export type { RandomBytes } from './tokens.js';

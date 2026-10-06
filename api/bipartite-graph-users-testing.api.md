@@ -10,11 +10,25 @@ export interface ConformanceOptions {
     dispose?: (store: UserStore) => Promise<void> | void;
 }
 
+// Warning: (ae-forgotten-export) The symbol "SessionOptions" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "SessionStore" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type MakeSessionStore = (options: SessionOptions) => Promise<SessionStore> | SessionStore;
+
 // @public
 export type MakeUserStore = () => Promise<UserStore> | UserStore;
 
 // @public
+export function runSessionStoreConformance(makeStore: MakeSessionStore, testApi: TestApi, options?: SessionConformanceOptions): void;
+
+// @public
 export function runUserStoreConformance(makeStore: MakeUserStore, testApi: TestApi, options?: ConformanceOptions): void;
+
+// @public (undocumented)
+export interface SessionConformanceOptions {
+    dispose?: (store: SessionStore) => Promise<void> | void;
+}
 
 // @public
 export interface TestApi {

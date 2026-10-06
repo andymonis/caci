@@ -148,6 +148,22 @@ describe('migrations', () => {
     expect(db.get<{ graph_id: string; note: null }>('SELECT graph_id, note FROM graphs')).toEqual({ graph_id: 'g', note: null });
   });
 
+  it('an upgrade that adds a table works: a version 1 file is not refused for lacking version 2\'s table', () => {
+    const db = open();
+    prepareDatabase(db);
+    const v2: Migration = { to: 2, creates: ['notes'], sql: ['CREATE TABLE notes (x INTEGER)'] };
+    expect(prepareDatabase(db, { migrations: [...MIGRATIONS, v2] })).toEqual({ from: 1, to: 2 });
+    expect(tables(db)).toContain('notes');
+  });
+
+  it('a file at version 2 that has lost the table version 2 created is refused', () => {
+    const db = open();
+    const v2: Migration = { to: 2, creates: ['notes'], sql: ['CREATE TABLE notes (x INTEGER)'] };
+    prepareDatabase(db, { migrations: [...MIGRATIONS, v2] });
+    db.exec('DROP TABLE notes');
+    expect(codeOf(() => prepareDatabase(db, { migrations: [...MIGRATIONS, v2] }))).toBe('NOT_A_GRAPH_DATABASE');
+  });
+
   it('a failing step rolls the whole upgrade back and says what went wrong', () => {
     const db = open();
     prepareDatabase(db);

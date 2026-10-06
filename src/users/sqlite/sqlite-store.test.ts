@@ -69,7 +69,7 @@ runUserStoreConformance(() => createSqliteUserStore(), { describe, it }, { dispo
 describe('the database itself enforces the rules (not only the store code)', () => {
   const raw = () => {
     const db = openDb();
-    prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, tables: ['users'], foreignCode: 'NOT_A_USERS_DATABASE' });
+    prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });
     return db;
   };
   const insert = (db: ReturnType<typeof raw>, id: string, username: string, role = 'user') =>
@@ -139,7 +139,7 @@ describe('the database file', () => {
     createSqliteUserStore({ path }).close();
     const db = openDb({ path });
     expect(db.pragma('application_id')).toBe(USERS_APPLICATION_ID);
-    expect(db.pragma('user_version')).toBe(1);
+    expect(db.pragma('user_version')).toBe(2);
     db.close();
   });
 
