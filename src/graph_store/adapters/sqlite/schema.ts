@@ -1,4 +1,4 @@
-import { DbError, type Db } from './db.js';
+import { DbError, type Db } from '../../../sqlite/db.js';
 
 /** The schema version this library writes. Recorded in the file with `PRAGMA user_version`. */
 export const SCHEMA_VERSION = 1;

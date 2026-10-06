@@ -227,7 +227,7 @@ describe('a path that cannot be used', () => {
   it('someone else\'s SQLite database is refused and left exactly as it was', async () => {
     const dir = tempDir();
     const path = join(dir, 'other.db');
-    const { openDb } = await import('./db.js');
+    const { openDb } = await import('../../../sqlite/db.js');
     const other = openDb({ path });
     other.exec('CREATE TABLE recipes (name TEXT)');
     other.close();
@@ -241,7 +241,7 @@ describe('a path that cannot be used', () => {
     const dir = tempDir();
     const path = join(dir, 'g.db');
     await adapterAt(path).close();
-    const { openDb } = await import('./db.js');
+    const { openDb } = await import('../../../sqlite/db.js');
     const db = openDb({ path });
     db.exec('PRAGMA user_version = 99');
     db.close();

@@ -1,5 +1,5 @@
 import type { AdapterTx, EdgeKey, EdgeRecord, JsonObject, NodeRecord, Page, Paged, Partition } from '../../adapter.js';
-import type { Db } from './db.js';
+import type { Db } from '../../../sqlite/db.js';
 import { decodeCursor, encodeCursor, fromKey, toKey } from './keys.js';
 
 /** Ids per `IN (...)` list: far under SQLite's limit of 32,766 variables per statement. */

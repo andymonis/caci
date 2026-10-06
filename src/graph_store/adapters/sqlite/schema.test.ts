@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DbError, openDb, type Db } from './db.js';
+import { DbError, openDb, type Db } from '../../../sqlite/db.js';
 import { APPLICATION_ID, MIGRATIONS, SCHEMA_VERSION, prepareDatabase, type Migration } from './schema.js';
 
 const dirs: string[] = [];

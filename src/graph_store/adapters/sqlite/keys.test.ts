@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { openDb } from './db.js';
+import { openDb } from '../../../sqlite/db.js';
 import { compareKeys, decodeCursor, encodeCursor, fromKey, toKey } from './keys.js';
 
 /** The order the adapter contract asks for: UTF-16 code units, which is JavaScript's `<`. */

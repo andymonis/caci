@@ -1,5 +1,5 @@
 import type { GraphId, Page, Paged, StorageAdapter } from '../../adapter.js';
-import { DbError, openDb } from './db.js';
+import { DbError, openDb } from '../../../sqlite/db.js';
 import { decodeCursor, encodeCursor, fromKey, toKey } from './keys.js';
 import { prepareDatabase } from './schema.js';
 import { makeSqliteTx } from './tx.js';

@@ -55,6 +55,12 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('llm/') && (target === 'app' || target.startsWith('app/'))) {
         problems.push(`${file} imports ${specifier}: the LLM component must not depend on the application`);
       }
+      if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/'))) {
+        problems.push(`${file} imports ${specifier}: only the graph store and the users component may use the shared SQLite driver wrapper`);
+      }
+      if (file.startsWith('sqlite/') && !target.startsWith('sqlite/')) {
+        problems.push(`${file} imports ${specifier}: the shared SQLite driver wrapper must not depend on any other component`);
+      }
       const own = /^llm\/capabilities\/([^/]+)\//.exec(file)?.[1];
       const other = /^llm\/capabilities\/([^/]+)(?:\/|$)/.exec(target)?.[1];
       if (own !== undefined && other !== undefined && other !== own) {
@@ -94,6 +100,9 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'llm/index.ts': `import { y } from './errors.js'; export { categorise } from './capabilities/categorise/index.js';`,
         'app/x.ts': `import { write } from '../graph_store/index.js'; import { createLlm } from '../llm/index.js'; import { y } from './y.js';`,
         'app/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createScriptedModelClient } from '../llm/testing/index.js';`,
+        'graph_store/adapters/sqlite/x.ts': `import { openDb } from '../../../sqlite/db.js';`,
+        'users/x.ts': `import { openDb } from '../sqlite/db.js';`,
+        'sqlite/y.ts': `import { z } from './x.js';`,
         'app/y.test.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';`,
         'app/helper.test-util.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';`,
         'llm/create-llm.ts': `import { categorise } from './capabilities/categorise/index.js';`,
@@ -119,6 +128,10 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['production application code using the SQLite adapter', { 'app/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
     ['the application reaching into the SQLite adapter\'s internals', { 'app/x.test.ts': `import { openDb } from '../graph_store/adapters/sqlite/db.js';` }],
     ['the LLM component using the SQLite adapter', { 'llm/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
+    ['the application using the shared SQLite wrapper', { 'app/x.ts': `import { openDb } from '../sqlite/db.js';` }],
+    ['the LLM component using the shared SQLite wrapper', { 'llm/x.ts': `import { openDb } from '../sqlite/db.js';` }],
+    ['the API using the shared SQLite wrapper', { 'api/x.ts': `import { openDb } from '../sqlite/db.js';` }],
+    ['the shared SQLite wrapper depending on the graph store', { 'sqlite/x.ts': `import { write } from '../graph_store/index.js';` }],
     ['production application code using the scripted model client', { 'app/x.ts': `import { createScriptedModelClient } from '../llm/testing/index.js';` }],
     ['an application test using the LLM component\'s internals', { 'app/x.test.ts': `import { guardReply } from '../llm/capabilities/categorise/guard.js';` }],
     ['the application using the conformance suite', { 'app/x.ts': `import { runAdapterConformance } from '../graph_store/testing/index.js';` }],
