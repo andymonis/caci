@@ -75,7 +75,8 @@
     "dev:explorer": "npm run build && node dev/graph-explorer/server.mjs",
     "llm:try": "npm run build && node scripts/llm-try.mjs",
     "dev:lab": "bash -c 'source ./set-key.sh && npm run build && node dev/llm-lab/server.mjs'",
-    "eval": "npm run build && node dev/eval/run.mjs"
+    "eval": "npm run build && node dev/eval/run.mjs",
+    "bench:sqlite": "npm run build && node dev/bench/run.mjs"
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.131.0"
