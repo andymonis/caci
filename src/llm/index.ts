@@ -7,6 +7,7 @@ export type { Llm, LlmInit } from './create-llm.js';
 export { CAPABILITIES, createLlmConfig, DEFAULT_ROUTES, DEFAULT_TIERS, MODEL_TIERS, resolveModel } from './config.js';
 export type { Capability, CapabilityRoute, LlmConfig, LlmConfigInput, ModelChoice, ModelTier } from './config.js';
 export { runWithDeadline } from './deadline.js';
+export { createDemoModelClient } from './demo-client.js';
 export type { DeadlineOptions } from './deadline.js';
 export { LLM_ERROR_CODES, llmError } from './errors.js';
 export type { LlmError, LlmErrorCode, LlmErrorOptions } from './errors.js';

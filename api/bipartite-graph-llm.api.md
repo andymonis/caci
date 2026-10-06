@@ -126,6 +126,9 @@ export interface ContextOptions {
 }
 
 // @public
+export function createDemoModelClient(): ModelClient;
+
+// @public
 export function createLlm(init: LlmInit): Llm;
 
 // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
