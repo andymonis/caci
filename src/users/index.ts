@@ -8,3 +8,5 @@ export { ROLES } from './types.js';
 export type { Role, User } from './types.js';
 export { isUserId, newUserId, USER_ID_PATTERN, userGraphId } from './ids.js';
 export { COMMON_PASSWORDS, DISPLAY_NAME_MAX, EMAIL_MAX, parseDisplayName, parseEmail, parsePassword, parseUsername, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from './validate.js';
+export { createPasswordHasher, DEFAULT_SCRYPT } from './password.js';
+export type { Derive, PasswordHasher, PasswordHasherOptions, ScryptParams } from './password.js';

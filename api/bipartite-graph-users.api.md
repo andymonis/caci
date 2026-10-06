@@ -7,6 +7,15 @@
 // @public
 export const COMMON_PASSWORDS: readonly string[];
 
+// @public
+export function createPasswordHasher(options?: PasswordHasherOptions): PasswordHasher;
+
+// @public
+export const DEFAULT_SCRYPT: ScryptParams;
+
+// @public
+export type Derive = (password: string, salt: Uint8Array, params: ScryptParams, keyBytes: number) => Promise<Uint8Array>;
+
 // @public (undocumented)
 export const DISPLAY_NAME_MAX = 80;
 
@@ -42,10 +51,37 @@ export const PASSWORD_MAX = 128;
 export const PASSWORD_MIN = 12;
 
 // @public (undocumented)
+export interface PasswordHasher {
+    hash(password: string): Promise<string>;
+    needsRehash(stored: string): boolean;
+    readonly params: ScryptParams;
+    verify(password: string, stored: string): Promise<boolean>;
+    verifyAbsent(password: string): Promise<false>;
+}
+
+// @public (undocumented)
+export interface PasswordHasherOptions {
+    // (undocumented)
+    readonly derive?: Derive;
+    readonly params?: ScryptParams;
+    readonly randomBytes?: (length: number) => Uint8Array;
+}
+
+// @public (undocumented)
 export type Role = (typeof ROLES)[number];
 
 // @public (undocumented)
 export const ROLES: readonly ["user", "admin"];
+
+// @public
+export interface ScryptParams {
+    // (undocumented)
+    readonly N: number;
+    // (undocumented)
+    readonly p: number;
+    // (undocumented)
+    readonly r: number;
+}
 
 // @public
 export interface User {
