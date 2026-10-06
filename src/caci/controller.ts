@@ -1,6 +1,7 @@
 import type { ControllerError, Controller, PendingProposal, ProposalSummary } from '../app/index.js';
-import { err, ok, type JsonValue, type Result } from '../graph_store/index.js';
+import { err, ok, type JsonValue, type Result, type StorageAdapter } from '../graph_store/index.js';
 import { createRegistrationThrottle as createWindowLimiter, type Authenticated, type UserController } from '../users/index.js';
+import { createBrowser, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
 
 /** The longest note accepted: the categoriser's own limit, so a refusal here is clear and costs no model call. */
@@ -19,6 +20,8 @@ export interface CaciLimits {
 export interface CaciControllerInit {
   /** Only `resolve` is used: a session token becomes a user and their graph. */
   readonly users: Pick<UserController, 'resolve'>;
+  /** Where the graphs are: browsing reads the signed-in person's graph from here, through the public `query`. */
+  readonly graphAdapter: StorageAdapter;
   /** The capture controller (`src/app/`), unchanged: it reads context, asks the model, holds the preview, and writes on approval. */
   readonly capture: Controller;
   /** Which model answers, for the person to see: `demo` or `anthropic`. Default `demo`. */
@@ -67,6 +70,14 @@ export interface CaciController {
    * proposal stays pending, so it can be tried again or rejected. Approving twice, or twice at once, writes once.
    */
   approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
+  /** Counts of items, categories and links in the caller's graph. */
+  summary(token: unknown): Promise<Result<GraphSummary, CaciError>>;
+  /** The caller's categories by id, a page at a time (`limit` 1 to 100, default 50), each with how many items are filed under it. */
+  categories(token: unknown, page?: PageInput): Promise<Result<CategoryPage, CaciError>>;
+  /** The items filed under one of the caller's categories. An id that is not one of theirs is `NOT_FOUND`, whatever other graphs hold. */
+  categoryItems(token: unknown, categoryId: unknown, page?: PageInput): Promise<Result<CategoryItemsPage, CaciError>>;
+  /** One of the caller's items, and the categories it is filed under. */
+  item(token: unknown, itemId: unknown): Promise<Result<ItemDetail, CaciError>>;
   /** Discards the owner's pending proposal. Nothing is written. */
   reject(token: unknown, proposalId: unknown): Promise<Result<{ readonly id: string }, CaciError>>;
 }
@@ -97,8 +108,9 @@ export function viewOf(proposal: PendingProposal, mode: 'demo' | 'anthropic'): P
 }
 
 export function createCaciController(init: CaciControllerInit): CaciController {
-  const { users, capture } = init;
-  if (users === undefined || capture === undefined) throw new TypeError('createCaciController needs users and capture');
+  const { users, capture, graphAdapter } = init;
+  if (users === undefined || capture === undefined || graphAdapter === undefined) throw new TypeError('createCaciController needs users, capture and graphAdapter');
+  const browser = createBrowser(graphAdapter);
   const mode = init.mode ?? 'demo';
   if (mode !== 'demo' && mode !== 'anthropic') throw new TypeError('createCaciController: mode must be demo or anthropic');
   const clock = init.clock ?? Date.now;
@@ -155,6 +167,26 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   };
 
   return {
+    async summary(token) {
+      const me = await whoIs(token);
+      return me.ok ? browser.summary(me.value.graphId) : me;
+    },
+
+    async categories(token, page) {
+      const me = await whoIs(token);
+      return me.ok ? browser.categories(me.value.graphId, page) : me;
+    },
+
+    async categoryItems(token, categoryId, page) {
+      const me = await whoIs(token);
+      return me.ok ? browser.categoryItems(me.value.graphId, categoryId, page) : me;
+    },
+
+    async item(token, itemId) {
+      const me = await whoIs(token);
+      return me.ok ? browser.item(me.value.graphId, itemId) : me;
+    },
+
     async get(token, proposalId) {
       const mine = await owned(token, proposalId);
       if (!mine.ok) return mine;

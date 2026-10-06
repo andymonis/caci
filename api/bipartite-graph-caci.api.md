@@ -22,7 +22,10 @@ export const CACI_ERROR_CODES: readonly ["UNAUTHENTICATED", "NOT_FOUND", "EXPIRE
 // @public (undocumented)
 export interface CaciController {
     approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
+    categories(token: unknown, page?: PageInput): Promise<Result<CategoryPage, CaciError>>;
+    categoryItems(token: unknown, categoryId: unknown, page?: PageInput): Promise<Result<CategoryItemsPage, CaciError>>;
     get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
+    item(token: unknown, itemId: unknown): Promise<Result<ItemDetail, CaciError>>;
     // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
     propose(token: unknown, input: {
         readonly text: unknown;
@@ -30,6 +33,7 @@ export interface CaciController {
     reject(token: unknown, proposalId: unknown): Promise<Result<{
         readonly id: string;
     }, CaciError>>;
+    summary(token: unknown): Promise<Result<GraphSummary, CaciError>>;
 }
 
 // @public (undocumented)
@@ -37,6 +41,8 @@ export interface CaciControllerInit {
     // Warning: (ae-forgotten-export) The symbol "Controller" needs to be exported by the entry point index.d.ts
     readonly capture: Controller;
     readonly clock?: () => number;
+    // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
+    readonly graphAdapter: StorageAdapter;
     // (undocumented)
     readonly limits?: CaciLimits;
     readonly mode?: 'demo' | 'anthropic';
@@ -77,11 +83,98 @@ export interface CaciOwnError {
     readonly retryAfterMs?: number;
 }
 
+// Warning: (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function capData(data: JsonObject | undefined): {
+    data: JsonObject;
+    truncated: boolean;
+};
+
+// @public (undocumented)
+export interface CategoryItemsPage {
+    // (undocumented)
+    readonly category: {
+        readonly id: string;
+        readonly name?: string;
+    };
+    // (undocumented)
+    readonly items: readonly ItemView[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+}
+
+// @public (undocumented)
+export interface CategoryPage {
+    // (undocumented)
+    readonly items: readonly CategoryView[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+}
+
+// @public (undocumented)
+export interface CategoryView {
+    // (undocumented)
+    readonly id: string;
+    readonly itemCount: number;
+    readonly itemCountCapped?: true;
+    readonly name?: string;
+}
+
 // @public (undocumented)
 export function createCaciController(init: CaciControllerInit): CaciController;
 
+// @public (undocumented)
+export const DEFAULT_PAGE = 50;
+
+// @public (undocumented)
+export interface GraphSummary {
+    // (undocumented)
+    readonly categoryCount: number;
+    // (undocumented)
+    readonly edgeCount: number;
+    // (undocumented)
+    readonly itemCount: number;
+}
+
+// @public (undocumented)
+export interface ItemDetail {
+    // (undocumented)
+    readonly categories: ReadonlyArray<{
+        readonly id: string;
+        readonly name?: string;
+        readonly weight: number;
+    }>;
+    // (undocumented)
+    readonly item: ItemView;
+    readonly moreCategories?: true;
+}
+
+// @public (undocumented)
+export interface ItemView {
+    // (undocumented)
+    readonly data: JsonObject;
+    readonly dataTruncated?: true;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public
+export const MAX_DATA_CHARS = 4096;
+
 // @public
 export const MAX_NOTE_CHARS = 8000;
+
+// @public (undocumented)
+export const MAX_PAGE = 100;
+
+// @public (undocumented)
+export interface PageInput {
+    // (undocumented)
+    readonly cursor?: unknown;
+    // (undocumented)
+    readonly limit?: unknown;
+}
 
 // @public
 export interface ProposalView {

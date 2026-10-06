@@ -37,7 +37,7 @@ export async function world(extra: { limits?: CaciLimits; client?: ModelClient; 
   const inner = extra.client ?? createDemoModelClient();
   const client: ModelClient = { complete: (request) => (modelCalls.push(request), inner.complete(request)) };
   const capture = createController({ adapter: extra.captureAdapter?.(graphs) ?? graphs, llm: createLlm({ client }), now: () => now.value + skew.value, ...(extra.capturePending === undefined ? {} : { maxPending: extra.capturePending }), ...(extra.ttlMs === undefined ? {} : { ttlMs: extra.ttlMs }) });
-  const caci = createCaciController({ users, capture, clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }), ...(extra.mode === undefined ? {} : { mode: extra.mode }) });
+  const caci = createCaciController({ users, capture, graphAdapter: graphs, clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }), ...(extra.mode === undefined ? {} : { mode: extra.mode }) });
   const tokens: Record<string, string> = {};
   const graphIds: Record<string, string> = {};
   for (const name of extra.people ?? ['ann', 'bob']) {

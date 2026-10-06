@@ -182,7 +182,7 @@ describe('the limits', () => {
     expect(ownErrorOf(await w.caci.propose(w.tokens.ann, { text: 'fourth' }))?.code).toBe('TOO_MANY_PENDING');
     for (const bad of [{ maxPendingPerUser: 0 }, { maxPendingPerUser: 1.5 }, { proposalsPerHour: -1 }, { proposalsPerHour: Number.NaN }]) {
       const base = await world();
-      expect(() => createCaciController({ users: base.users, capture: createController({ adapter: base.graphs, llm: createLlm({ client: createDemoModelClient() }) }), limits: bad })).toThrow(TypeError);
+      expect(() => createCaciController({ users: base.users, graphAdapter: base.graphs, capture: createController({ adapter: base.graphs, llm: createLlm({ client: createDemoModelClient() }) }), limits: bad })).toThrow(TypeError);
     }
   });
 
@@ -208,18 +208,19 @@ describe('failures keep their source', () => {
   it('a capture controller that throws leaves no place taken and lets the error out', async () => {
     const w = await world({ limits: { maxPendingPerUser: 1 } });
     const capture = { propose: async () => { throw new Error('boom'); } } as never;
-    const caci = createCaciController({ users: w.users, capture, clock: () => w.now.value, limits: { maxPendingPerUser: 1 } });
+    const caci = createCaciController({ users: w.users, graphAdapter: w.graphs, capture, clock: () => w.now.value, limits: { maxPendingPerUser: 1 } });
     await expect(caci.propose(w.tokens.ann, { text: 'a note' })).rejects.toThrow('boom');
     await expect(caci.propose(w.tokens.ann, { text: 'a note' })).rejects.toThrow('boom'); // the place was given back, so the limit did not answer instead
   });
 });
 
 describe('making a controller', () => {
-  it('needs the user controller and the capture controller, and a known mode', async () => {
+  it('needs the user controller, the capture controller, the graph adapter, and a known mode', async () => {
     const w = await world();
     const capture = createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }) });
-    expect(() => createCaciController({ users: undefined as never, capture })).toThrow(TypeError);
-    expect(() => createCaciController({ users: w.users, capture: undefined as never })).toThrow(TypeError);
-    expect(() => createCaciController({ users: w.users, capture, mode: 'other' as never })).toThrow(TypeError);
+    expect(() => createCaciController({ users: undefined as never, graphAdapter: w.graphs, capture })).toThrow(TypeError);
+    expect(() => createCaciController({ users: w.users, graphAdapter: w.graphs, capture: undefined as never })).toThrow(TypeError);
+    expect(() => createCaciController({ users: w.users, graphAdapter: w.graphs, capture, mode: 'other' as never })).toThrow(TypeError);
+    expect(() => createCaciController({ users: w.users, capture, graphAdapter: undefined as never })).toThrow(TypeError);
   });
 });

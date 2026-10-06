@@ -7,3 +7,5 @@ export { CACI_ERROR_CODES, caciError } from './errors.js';
 export type { CaciError, CaciErrorCode, CaciOwnError } from './errors.js';
 export { createCaciController, MAX_NOTE_CHARS, viewOf } from './controller.js';
 export type { ApprovedView, CaciControllerInit, CaciController, CaciLimits, ProposalView } from './controller.js';
+export { capData, DEFAULT_PAGE, MAX_DATA_CHARS, MAX_PAGE } from './browse.js';
+export type { CategoryItemsPage, CategoryPage, CategoryView, GraphSummary, ItemDetail, ItemView, PageInput } from './browse.js';

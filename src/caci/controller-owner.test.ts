@@ -245,7 +245,7 @@ describe('what a restart does', () => {
     const { createController } = await import('../app/index.js');
     const { createLlm } = await import('../llm/index.js');
     const { createCaciController } = await import('./index.js');
-    const after = createCaciController({ users: w.users, capture: createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }), now: () => w.now.value }), clock: () => w.now.value });
+    const after = createCaciController({ users: w.users, graphAdapter: w.graphs, capture: createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }), now: () => w.now.value }), clock: () => w.now.value });
     expect(ownErrorOf(await after.get(w.tokens.ann, pending.id))).toMatchObject({ code: 'NOT_FOUND' });
     expect(ownErrorOf(await after.approve(w.tokens.ann, pending.id))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await describeGraph(w.graphs, w.graphIds.ann as string)).toMatchObject({ value: { itemCount: 1 } });
