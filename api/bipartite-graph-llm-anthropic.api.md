@@ -4,7 +4,7 @@
 
 ```ts
 
-// @public (undocumented)
+// @public
 export const ANTHROPIC_KEY_VARIABLE = "ANTHROPIC_API_KEY";
 
 // @public (undocumented)

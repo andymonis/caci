@@ -71,7 +71,10 @@ export interface ServiceConfig {
     readonly bind: string;
     readonly cookieSecure: boolean;
     readonly dataDir: string;
+    readonly llm: 'demo' | 'anthropic';
+    readonly maxPendingPerUser: number;
     readonly port: number;
+    readonly proposalsPerHour: number;
     readonly trustedProxies: number;
 }
 

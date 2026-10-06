@@ -1,4 +1,5 @@
 import { err, ok, type Result } from '../graph_store/index.js';
+import { ANTHROPIC_KEY_VARIABLE, readAnthropicKey } from '../llm/index.js';
 
 export interface ServiceConfig {
   /** `CACI_PORT`: 0 to 65535 (0 picks a free one). Default 8080. */
@@ -17,6 +18,16 @@ export interface ServiceConfig {
   readonly allowedHosts?: readonly string[];
   /** `CACI_ALLOW_INSECURE`: accept a non-loopback address with plain cookies. Default false. */
   readonly allowInsecure: boolean;
+  /**
+   * `CACI_LLM`: which model files notes. `demo` (the default) is free and sends nothing anywhere; `anthropic` uses the real
+   * model and needs `ANTHROPIC_API_KEY`. The key itself is deliberately **not** part of this object (it would leak
+   * into anything that prints a config); whoever starts the model reads it from the environment at that moment.
+   */
+  readonly llm: 'demo' | 'anthropic';
+  /** `CACI_PROPOSALS_PER_HOUR`: new proposals one account may start in an hour, 1 to 10,000. Default 30. */
+  readonly proposalsPerHour: number;
+  /** `CACI_MAX_PENDING_PER_USER`: proposals one account may have waiting, 1 to 100. Default 10. */
+  readonly maxPendingPerUser: number;
 }
 
 /** One thing wrong with the settings: which variable, and what to do. Never the value given. */
@@ -34,6 +45,9 @@ export const VARIABLES: readonly string[] = Object.freeze([
   'CACI_TRUSTED_PROXIES',
   'CACI_ALLOWED_HOSTS',
   'CACI_ALLOW_INSECURE',
+  'CACI_LLM',
+  'CACI_PROPOSALS_PER_HOUR',
+  'CACI_MAX_PENDING_PER_USER',
 ]);
 
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -95,6 +109,20 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
   const cookieSecure = flag('CACI_COOKIE_SECURE', false);
   const trustedProxies = whole('CACI_TRUSTED_PROXIES', 0, 0, 5);
   const allowInsecure = flag('CACI_ALLOW_INSECURE', false);
+  const proposalsPerHour = whole('CACI_PROPOSALS_PER_HOUR', 30, 1, 10_000);
+  const maxPendingPerUser = whole('CACI_MAX_PENDING_PER_USER', 10, 1, 100);
+
+  let llm: 'demo' | 'anthropic' = 'demo';
+  const llmGiven = text('CACI_LLM');
+  if (llmGiven !== undefined) {
+    if (llmGiven === 'demo' || llmGiven === 'anthropic') llm = llmGiven;
+    else bad('CACI_LLM', 'must be demo or anthropic');
+  }
+  // the real model needs its key, checked here so a missing or malformed key stops the start, and never repeated in the message
+  if (llm === 'anthropic') {
+    const key = readAnthropicKey(env);
+    if (!key.ok) bad(ANTHROPIC_KEY_VARIABLE, key.error.message);
+  }
 
   let allowedHosts: string[] | undefined;
   const hostsGiven = text('CACI_ALLOWED_HOSTS');
@@ -108,5 +136,5 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
     bad('CACI_COOKIE_SECURE', 'must be true when CACI_BIND is not a loopback address (put HTTPS in front), or set CACI_ALLOW_INSECURE=true to accept sending session cookies in the clear');
   }
   if (errors.length > 0) return err(errors);
-  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure });
+  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser });
 }

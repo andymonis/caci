@@ -18,6 +18,9 @@ function section(title: string): string {
 }
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
+/** Settings that are read and checked but do nothing yet: T-093 wires them in and T-094 documents them, so the README does not describe them. Remove them from this list when it does (the test below fails if they are documented early or left out late). */
+const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_LLM', 'CACI_PROPOSALS_PER_HOUR', 'CACI_MAX_PENDING_PER_USER'];
+const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
 
 describe('the user accounts section of the README', () => {
   it('is there, and long enough to be the real thing', () => {
@@ -27,7 +30,7 @@ describe('the user accounts section of the README', () => {
 
   it('names every setting the service reads, and no other', () => {
     const named = new Set(accounts.match(/CACI_[A-Z_]+/g) ?? []);
-    expect([...named].sort()).toEqual([...VARIABLES].sort());
+    expect([...named].sort()).toEqual([...DOCUMENTED].sort());
   });
 
   it('gives the right default for each setting', () => {
@@ -49,7 +52,7 @@ describe('the user accounts section of the README', () => {
     });
     expect(rows.CACI_BIND).toContain(d.bind);
     expect(rows.CACI_ALLOWED_HOSTS).toBe('not set');
-    expect(Object.keys(rows).sort()).toEqual([...VARIABLES].sort());
+    expect(Object.keys(rows).sort()).toEqual([...DOCUMENTED].sort());
   });
 
   it('lists exactly the routes the server has', () => {

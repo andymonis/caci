@@ -14,7 +14,7 @@ const errorsOf = (env: Record<string, string | undefined>) => {
 
 describe('defaults', () => {
   it('an empty environment gives the safe local setup', () => {
-    expect(good({})).toEqual({ port: 8080, bind: '127.0.0.1', dataDir: './data', allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false });
+    expect(good({})).toEqual({ port: 8080, bind: '127.0.0.1', dataDir: './data', allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10 });
   });
 
   it('unset and empty are the same thing', () => {
@@ -69,6 +69,53 @@ describe('each setting', () => {
   });
 });
 
+describe('the model and the limits', () => {
+  const KEY = 'sk-ant-api03-THE-SECRET-KEY-0123456789';
+
+  it('CACI_LLM: demo (the default) or anthropic, nothing else', () => {
+    expect(good({}).llm).toBe('demo');
+    expect(good({ CACI_LLM: 'demo' }).llm).toBe('demo');
+    expect(good({ CACI_LLM: 'anthropic', ANTHROPIC_API_KEY: KEY }).llm).toBe('anthropic');
+    for (const bad of ['Anthropic', 'DEMO', 'openai', 'real', 'true', ' demo']) expect(errorsOf({ CACI_LLM: bad }).map((e) => e.variable), bad).toEqual(['CACI_LLM']);
+  });
+
+  it('the real model needs its key: missing, blank or malformed stops the start, naming ANTHROPIC_API_KEY', () => {
+    for (const env of [{}, { ANTHROPIC_API_KEY: '' }, { ANTHROPIC_API_KEY: '   ' }, { ANTHROPIC_API_KEY: 'short' }, { ANTHROPIC_API_KEY: 'has a space in the middle of it' }, { ANTHROPIC_API_KEY: 'x'.repeat(600) }]) {
+      expect(errorsOf({ CACI_LLM: 'anthropic', ...env }).map((e) => e.variable), JSON.stringify(env).slice(0, 40)).toEqual(['ANTHROPIC_API_KEY']);
+    }
+  });
+
+  it('the key is not part of the settings, and is never in a message, whatever is wrong with it', () => {
+    const config = good({ CACI_LLM: 'anthropic', ANTHROPIC_API_KEY: KEY });
+    expect(JSON.stringify(config)).not.toContain('THE-SECRET');
+    expect(Object.keys(config).some((k) => /key/i.test(k))).toBe(false);
+    const bad = errorsOf({ CACI_LLM: 'anthropic', ANTHROPIC_API_KEY: `${KEY} with spaces that make it wrong`, CACI_PORT: 'x' });
+    expect(JSON.stringify(bad)).not.toContain('THE-SECRET');
+    expect(JSON.stringify(bad)).not.toContain('sk-ant');
+  });
+
+  it('with the demo model the key is ignored, even a malformed one (it is not used)', () => {
+    expect(good({ ANTHROPIC_API_KEY: 'short' }).llm).toBe('demo');
+    expect(good({ CACI_LLM: 'demo', ANTHROPIC_API_KEY: 'a b' }).llm).toBe('demo');
+  });
+
+  it('the key and the model are checked together with every other setting: all problems at once', () => {
+    expect(errorsOf({ CACI_LLM: 'anthropic', CACI_PORT: 'x' }).map((e) => e.variable)).toEqual(['CACI_PORT', 'ANTHROPIC_API_KEY']);
+  });
+
+  it('CACI_PROPOSALS_PER_HOUR: 1 to 10,000, default 30', () => {
+    expect(good({ CACI_PROPOSALS_PER_HOUR: '1' }).proposalsPerHour).toBe(1);
+    expect(good({ CACI_PROPOSALS_PER_HOUR: '10000' }).proposalsPerHour).toBe(10_000);
+    for (const bad of ['0', '10001', '-1', '1.5', 'many', '1e3']) expect(errorsOf({ CACI_PROPOSALS_PER_HOUR: bad }).map((e) => e.variable), bad).toEqual(['CACI_PROPOSALS_PER_HOUR']);
+  });
+
+  it('CACI_MAX_PENDING_PER_USER: 1 to 100, default 10', () => {
+    expect(good({ CACI_MAX_PENDING_PER_USER: '1' }).maxPendingPerUser).toBe(1);
+    expect(good({ CACI_MAX_PENDING_PER_USER: '100' }).maxPendingPerUser).toBe(100);
+    for (const bad of ['0', '101', '-1', '2.5', 'lots']) expect(errorsOf({ CACI_MAX_PENDING_PER_USER: bad }).map((e) => e.variable), bad).toEqual(['CACI_MAX_PENDING_PER_USER']);
+  });
+});
+
 describe('the rule about plain cookies on a network', () => {
   it('a loopback address is fine with plain cookies (local use)', () => {
     for (const bind of ['127.0.0.1', '127.0.0.5', '::1', 'localhost']) expect(parseServiceConfig({ CACI_BIND: bind }).ok, bind).toBe(true);
@@ -108,13 +155,13 @@ describe('mistakes are reported, all of them, by variable name', () => {
 
   it('never repeats what was given in a message', () => {
     const odd = 'SECRET-LOOKING-VALUE-sk-ant-12345';
-    const all = errorsOf({ CACI_PORT: odd, CACI_BIND: odd, CACI_DATA_DIR: `${odd}\0`, CACI_ALLOW_REGISTRATION: odd, CACI_COOKIE_SECURE: odd, CACI_TRUSTED_PROXIES: odd, CACI_ALLOWED_HOSTS: odd + ' x', CACI_ALLOW_INSECURE: odd, CACI_ODD: odd });
-    expect(all.length).toBeGreaterThanOrEqual(9);
+    const all = errorsOf({ CACI_PORT: odd, CACI_BIND: odd, CACI_DATA_DIR: `${odd}\0`, CACI_ALLOW_REGISTRATION: odd, CACI_COOKIE_SECURE: odd, CACI_TRUSTED_PROXIES: odd, CACI_ALLOWED_HOSTS: odd + ' x', CACI_ALLOW_INSECURE: odd, CACI_LLM: odd, CACI_PROPOSALS_PER_HOUR: odd, CACI_MAX_PENDING_PER_USER: odd, CACI_ODD: odd });
+    expect(all.length).toBeGreaterThanOrEqual(12);
     expect(JSON.stringify(all)).not.toContain('SECRET');
     expect(JSON.stringify(all)).not.toContain('sk-ant');
   });
 
   it('the list of variables is the list the README will name', () => {
-    expect([...VARIABLES].sort()).toEqual(['CACI_ALLOWED_HOSTS', 'CACI_ALLOW_INSECURE', 'CACI_ALLOW_REGISTRATION', 'CACI_BIND', 'CACI_COOKIE_SECURE', 'CACI_DATA_DIR', 'CACI_PORT', 'CACI_TRUSTED_PROXIES']);
+    expect([...VARIABLES].sort()).toEqual(['CACI_ALLOWED_HOSTS', 'CACI_ALLOW_INSECURE', 'CACI_ALLOW_REGISTRATION', 'CACI_BIND', 'CACI_COOKIE_SECURE', 'CACI_DATA_DIR', 'CACI_LLM', 'CACI_MAX_PENDING_PER_USER', 'CACI_PORT', 'CACI_PROPOSALS_PER_HOUR', 'CACI_TRUSTED_PROXIES']);
   });
 });

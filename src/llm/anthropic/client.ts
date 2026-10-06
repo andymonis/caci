@@ -3,6 +3,7 @@ import { err, ok, type JsonValue, type Result } from '../../graph_store/index.js
 import { runWithDeadline } from '../deadline.js';
 import { llmError, type LlmError } from '../errors.js';
 import type { ModelClient, ModelRequest, ModelResponse } from '../model-client.js';
+import { ANTHROPIC_KEY_SHAPE, ANTHROPIC_KEY_VARIABLE, readAnthropicKey } from '../api-key.js';
 import { checkRequest } from '../request-check.js';
 import { mapProviderError, redact } from './errors.js';
 import { toProviderSchema } from './schema.js';
@@ -18,17 +19,9 @@ export interface AnthropicClientOptions {
   readonly maxRetries?: number;
 }
 
-export const ANTHROPIC_KEY_VARIABLE = 'ANTHROPIC_API_KEY';
 const DEFAULT_BASE_URL = 'https://api.anthropic.com';
-const KEY_SHAPE = /^[\x21-\x7e]{8,512}$/;
 
-/** Reads the key from an environment object the caller passes in (for example the process environment). The key is never echoed in an error. */
-export function readAnthropicKey(env: Readonly<Record<string, string | undefined>>): Result<string, LlmError> {
-  const value = env[ANTHROPIC_KEY_VARIABLE];
-  if (value === undefined || value.trim() === '') return err(llmError('CONFIG', `${ANTHROPIC_KEY_VARIABLE} is not set`));
-  const key = value.trim();
-  return KEY_SHAPE.test(key) ? ok(key) : err(llmError('CONFIG', `${ANTHROPIC_KEY_VARIABLE} does not look like an API key (printable characters, 8 to 512 of them, no spaces)`));
-}
+export { ANTHROPIC_KEY_VARIABLE, readAnthropicKey };
 
 function textOf(content: ReadonlyArray<{ type: string; text?: string }>): string {
   return content.filter((block) => block.type === 'text').map((block) => block.text ?? '').join('');
@@ -43,7 +36,7 @@ function textOf(content: ReadonlyArray<{ type: string; text?: string }>): string
  */
 export function createAnthropicClient(options: AnthropicClientOptions): ModelClient {
   const { apiKey } = options;
-  if (typeof apiKey !== 'string' || !KEY_SHAPE.test(apiKey)) throw new TypeError('createAnthropicClient: apiKey must be the API key as text (printable characters, 8 to 512 of them, no spaces)');
+  if (typeof apiKey !== 'string' || !ANTHROPIC_KEY_SHAPE.test(apiKey)) throw new TypeError('createAnthropicClient: apiKey must be the API key as text (printable characters, 8 to 512 of them, no spaces)');
   const sdk = new Anthropic({
     apiKey,
     authToken: null,

@@ -8,6 +8,12 @@
 export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage;
 
 // @public
+export const ANTHROPIC_KEY_SHAPE: RegExp;
+
+// @public
+export const ANTHROPIC_KEY_VARIABLE = "ANTHROPIC_API_KEY";
+
+// @public
 export const CAPABILITIES: readonly ["categorise"];
 
 // @public (undocumented)
@@ -279,6 +285,9 @@ export interface Proposal {
     readonly rationale?: string;
     readonly usage: TokenUsage;
 }
+
+// @public
+export function readAnthropicKey(env: Readonly<Record<string, string | undefined>>): Result<string, LlmError>;
 
 // @public
 export function resolveModel(config: LlmConfig, capability: Capability, choice?: ModelChoice): Result<string, LlmError>;
