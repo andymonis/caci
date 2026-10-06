@@ -8,3 +8,5 @@ export { matchRoute } from './router.js';
 export type { ApiResponse, Match, Method, Route, RouteContext } from './router.js';
 export { createApiServer } from './server.js';
 export type { ApiServer, ApiServerOptions } from './server.js';
+export { createAccountRoutes, errorResponse, STATUS_OF } from './routes.js';
+export type { AccountRoutesOptions } from './routes.js';

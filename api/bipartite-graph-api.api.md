@@ -6,6 +6,17 @@
 
 import { Server } from 'node:http';
 
+// @public (undocumented)
+export interface AccountRoutesOptions {
+    // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly controller: UserController;
+    readonly cookieMaxAgeSeconds?: number;
+    readonly cookieName?: string;
+    readonly secureCookies?: boolean;
+}
+
 // @public
 export interface ApiResponse {
     // Warning: (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
@@ -57,7 +68,15 @@ export interface CookieOptions {
 }
 
 // @public
+export function createAccountRoutes(options: AccountRoutesOptions): readonly Route[];
+
+// @public
 export function createApiServer(options: ApiServerOptions): ApiServer;
+
+// Warning: (ae-forgotten-export) The symbol "UsersError" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function errorResponse(error: UsersError, extra?: Pick<ApiResponse, 'cookies'>): ApiResponse;
 
 // @public
 export function isJsonContentType(value: string | undefined): boolean;
@@ -112,6 +131,9 @@ export interface RouteContext {
 
 // @public
 export function serialiseCookie(name: string, value: string, options: CookieOptions): string;
+
+// @public
+export const STATUS_OF: Readonly<Record<UsersError['code'], number>>;
 
 // (No @packageDocumentation comment for this package)
 
