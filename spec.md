@@ -29,7 +29,7 @@ Do not over optimise for a perceived market early. This is a core technology pla
 _Draft, domain-agnostic. Examples below are illustrative, not a market commitment._
 
 **Users**
-- **Host application developer:** embeds the library, owns auth and decides which `graphId` a caller may use.
+- **Host application developer:** embeds the library. May use the optional user controller (R-002) for accounts, login and per-user graphs, or bring their own authentication and decide which `graphId` a caller may use.
 - **End user of the host app:** never sees the library; their information is stored and retrieved through it, one isolated graph per user.
 - **LLM and comms integrations:** consume graph context and write back categorisations, via the host app.
 
@@ -44,6 +44,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 | ID | Link |
 |----|------|
 | R-001 | [Bipartite Graph Store — Library Specification](specs/R-001:%20Bipartite%20Graph%20Store%20%E2%80%94%20Library%20Specification.md) |
+| R-002 | [User Accounts and Login API — Specification](specs/R-002-user-accounts.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -79,8 +80,9 @@ Local-only development tools live under `dev/` and are never published: `dev/gra
 
 ## 8. Milestones
 - **Done:** M0 foundations, M1 contracts, M2 write path and memory adapter, M2b graph lifecycle, M3 conformance suite, M4a core reads, L1 the LLM categoriser core, A1 the controller with preview-then-approve, L2 the real Anthropic client, the LLM lab and the evaluation harness, A1b capture in the explorer and the end-to-end test (see `.gsd/PLAN.md` for the task history). The capture proof of concept is complete, on in-memory storage.
-- **Next:** P1 SQLite persistence (the plan is in `.gsd/PLAN.md`: spec, atomic graph creation, loop guards, the adapter, durability, the capture flow and the explorer on SQLite, an NFR-05 benchmark, optional export/import).
-- **After that, to be planned:** M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Roadmap items recorded in the Backlog, each needing its own spec first: a platform-level CaCi controller, user accounts, support circles, a PWA front end, and deployment to a Raspberry Pi.
+- **Done (2026-10):** P1 SQLite persistence: the adapter passes the shared conformance suite on memory and files, with durability, crash and two-process tests, the capture flow and the explorer on SQLite, and an NFR-05 benchmark (export/import was dropped as not needed).
+- **Next:** U1 user accounts and a login API, specified in R-002 (password login with server-side sessions, open registration, one graph per user, an admin role, an HTTP API); tasks T-070 onward in `.gsd/PLAN.md`.
+- **After that, to be planned:** M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Roadmap items recorded in the Backlog, each needing its own spec first: a platform-level CaCi controller, support circles, a PWA front end, and deployment to a Raspberry Pi.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
 
 GSD planning reference: [Bipartite Graph Store library specification](specs/R-001:%20Bipartite%20Graph%20Store%20%E2%80%94%20Library%20Specification.md#suggested-gsd-phase-breakdown).
