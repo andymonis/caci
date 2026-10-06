@@ -36,7 +36,7 @@ export function mapCaciError(error: CaciError): Mapped {
         case 'UNAUTHENTICATED':
           return fixed(401, 'UNAUTHENTICATED', 'not signed in');
         case 'NOT_FOUND':
-          return fixed(404, 'NOT_FOUND', 'no such proposal');
+          return fixed(404, 'NOT_FOUND', e.message); // the controller's own fixed words: no such proposal, category or item
         case 'EXPIRED':
           return fixed(410, 'EXPIRED', 'that proposal has expired: make it again');
         case 'THROTTLED':
@@ -92,7 +92,7 @@ export function mapCaciError(error: CaciError): Mapped {
   }
 }
 
-function respond(error: CaciError, cookies?: readonly string[]): ApiResponse {
+export function respond(error: CaciError, cookies?: readonly string[]): ApiResponse {
   const m = mapCaciError(error);
   return {
     status: m.status,

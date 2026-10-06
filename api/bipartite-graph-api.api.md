@@ -86,6 +86,9 @@ export function createApiServer(options: ApiServerOptions): ApiServer;
 // @public
 export function createCaptureRoutes(options: CaptureRoutesOptions): readonly Route[];
 
+// @public
+export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
+
 // Warning: (ae-forgotten-export) The symbol "UsersError" needs to be exported by the entry point index.d.ts
 //
 // @public
@@ -125,6 +128,14 @@ export function parseBody(raw: Uint8Array, contentType: string | undefined): Bod
 
 // @public
 export function parseCookies(header: string | undefined): Readonly<Record<string, string>>;
+
+// @public (undocumented)
+export interface ReadRoutesOptions {
+    // (undocumented)
+    readonly caci: CaciController;
+    readonly cookieName?: string;
+    readonly secureCookies?: boolean;
+}
 
 // @public (undocumented)
 export interface Route {
