@@ -397,6 +397,8 @@ export function circleStoreCases(): readonly CircleStoreCase[] {
         must(await store.createInvitation(invitation(1, 1, 'carol', 'member', { expiresAt: NOW + 50 }), LIMITS, NOW));
         assert.equal((await store.listInvitationsFor('carol', NOW + 49, { limit: 5, cursor: null })).items.length, 1);
         assert.equal((await store.listInvitationsFor('carol', NOW + 50, { limit: 5, cursor: null })).items.length, 0);
+        assert.equal((await store.listInvitationsOfCircle(cid(1), NOW + 49, { limit: 5, cursor: null })).items.length, 1);
+        assert.equal((await store.listInvitationsOfCircle(cid(1), NOW + 50, { limit: 5, cursor: null })).items.length, 0);
         assert.equal(code(await store.acceptInvitation(iid(1), uid(3), 'carol', NOW + 50, LIMITS)), 'NOT_FOUND');
         assert.equal(await store.membershipOf(cid(1), uid(3)), undefined);
         assert.equal(await store.getInvitation(iid(1)), undefined, 'an expired invitation is removed when it is met');

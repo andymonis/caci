@@ -136,7 +136,7 @@ describe('sessions in the database file', () => {
     const token = await sessions.create('u0000000000000001', T0);
     expect(await sessions.resolve(token, T0 + 1)).toBe('u0000000000000001');
     const after = openDb({ path });
-    expect(after.pragma('user_version')).toBe(2);
+    expect(after.pragma('user_version')).toBe(3);
     expect(after.get<{ username: string; role: string }>("SELECT username, role FROM users WHERE id = 'u0000000000000001'")).toEqual({ username: 'ann', role: 'admin' });
     after.close();
     expect((await usersAt(path).getByUsername('ann'))?.role).toBe('admin');

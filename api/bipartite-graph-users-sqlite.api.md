@@ -4,6 +4,9 @@
 
 ```ts
 
+import type { SQLInputValue } from 'node:sqlite';
+import type { SQLOutputValue } from 'node:sqlite';
+
 // @public
 export function createSqliteSessionStore(options?: SqliteSessionStoreOptions): SqliteSessionStore;
 
@@ -33,6 +36,12 @@ export type DbErrorCode =
 | 'NEWER_SCHEMA' | 'MIGRATION_FAILED'
 /** Another connection held the write lock for longer than the busy timeout. Nothing was changed by the failed statement. */
 | 'BUSY' | 'CLOSED';
+
+// Warning: (ae-forgotten-export) The symbol "Db" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "PrepareResult" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export function prepareUsersDatabase(db: Db): PrepareResult;
 
 // Warning: (ae-forgotten-export) The symbol "SessionStore" needs to be exported by the entry point index.d.ts
 //
@@ -68,7 +77,7 @@ export interface SqliteUserStoreOptions {
 export const USERS_APPLICATION_ID = 1130452339;
 
 // @public
-export const USERS_SCHEMA_VERSION = 2;
+export const USERS_SCHEMA_VERSION = 3;
 
 // (No @packageDocumentation comment for this package)
 

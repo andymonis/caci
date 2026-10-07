@@ -139,7 +139,7 @@ describe('the database file', () => {
     createSqliteUserStore({ path }).close();
     const db = openDb({ path });
     expect(db.pragma('application_id')).toBe(USERS_APPLICATION_ID);
-    expect(db.pragma('user_version')).toBe(2);
+    expect(db.pragma('user_version')).toBe(3);
     db.close();
   });
 

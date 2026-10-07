@@ -90,8 +90,9 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('circles/') && target.startsWith('graph_store/') && !(circlesTest && /^graph_store\/(?:index|adapters\/memory\/index)$/.test(target))) {
         problems.push(`${file} imports ${specifier}: the circles component must not use the graph store (only its tests may, to build a user controller)`);
       }
-      if (file.startsWith('circles/') && target.startsWith('users/') && !/^users\/index$/.test(target) && !(circlesTest && /^users\/(?:sqlite\/index|testing\/index)$/.test(target))) {
-        problems.push(`${file} imports ${specifier}: the circles component may use the users component only through users/index (its tests may also use the SQLite and testing entry points)`);
+      const circlesSqlite = file.startsWith('circles/sqlite/');
+      if (file.startsWith('circles/') && target.startsWith('users/') && !/^users\/index$/.test(target) && !(circlesTest && /^users\/(?:sqlite\/index|testing\/index)$/.test(target)) && !(circlesSqlite && target === 'users/sqlite/index')) {
+        problems.push(`${file} imports ${specifier}: the circles component may use the users component only through users/index (its SQLite store and its tests may also use users/sqlite/index, which owns the user database's schema)`);
       }
       if (/^(?:graph_store|llm|app|sqlite|users|caci)\//.test(file) && /^circles(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: only the API and the service may depend on the circles component`);
@@ -186,6 +187,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'api/z.ts': `import { createCaciController } from '../caci/index.js';`,
         'circles/x.ts': `import { parseUsername } from '../users/index.js'; import { openDb } from '../sqlite/db.js'; import { y } from './y.js';`,
         'circles/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createUserController } from '../users/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js';`,
+        'circles/sqlite/store.ts': `import { prepareUsersDatabase } from '../../users/sqlite/index.js'; import { openDb } from '../../sqlite/db.js'; import { c } from '../cursor.js';`,
         'api/circ.ts': `import { createCircleController } from '../circles/index.js';`,
         'api/circ.test.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';`,
         'service/circ.ts': `import { createCircleController } from '../circles/index.js'; import { createSqliteCircleStore } from '../circles/sqlite/index.js';`,
@@ -249,6 +251,8 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['production users code using the memory adapter', { 'users/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
     ['the users component using the LLM component', { 'users/x.ts': `import { createLlm } from '../llm/index.js';` }],
     ['the users component using the application', { 'users/x.ts': `import { createController } from '../app/index.js';` }],
+    ['the circles SQLite store reaching into the users component\'s schema file', { 'circles/sqlite/x.ts': `import { USERS_MIGRATIONS } from '../../users/sqlite/schema.js';` }],
+    ['circles code outside its SQLite store using the users SQLite entry point', { 'circles/controller.ts': `import { prepareUsersDatabase } from '../users/sqlite/index.js';` }],
     ['the circles component using the graph store in production', { 'circles/x.ts': `import { write } from '../graph_store/index.js';` }],
     ['the circles component reaching into the graph store\'s internals', { 'circles/x.test.ts': `import { x } from '../graph_store/write-plan.js';` }],
     ['the circles component reaching into the users component\'s internals', { 'circles/x.ts': `import { x } from '../users/controller.js';` }],

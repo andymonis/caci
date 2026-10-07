@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 2;
+export const USERS_SCHEMA_VERSION = 3;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -53,7 +53,50 @@ const V2: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2]);
+/**
+ * Version 3: circles (R-004). They live in this file, beside the accounts, so that deleting an
+ * account can remove its memberships in the same transaction. Memberships and invitations belong to
+ * a circle and go with it (`ON DELETE CASCADE`); they deliberately have no foreign key to `users`,
+ * so the circle store works without a user row (the controller is what knows about users).
+ * Invitation names are stored lower-cased and the database checks it, as for usernames. All ids are
+ * plain ASCII, so SQLite's binary text order is the code-unit order the stores promise.
+ */
+const V3: Migration = Object.freeze({
+  to: 3,
+  creates: Object.freeze(['circles', 'circle_members', 'circle_invitations']),
+  sql: Object.freeze([
+    `CREATE TABLE circles (
+       id TEXT NOT NULL PRIMARY KEY,
+       name TEXT NOT NULL,
+       description TEXT,
+       created_at INTEGER NOT NULL,
+       updated_at INTEGER NOT NULL
+     ) WITHOUT ROWID`,
+    `CREATE TABLE circle_members (
+       circle_id TEXT NOT NULL REFERENCES circles (id) ON DELETE CASCADE,
+       user_id TEXT NOT NULL,
+       role TEXT NOT NULL CHECK (role IN ('owner', 'manager', 'member', 'observer')),
+       joined_at INTEGER NOT NULL,
+       PRIMARY KEY (circle_id, user_id)
+     ) WITHOUT ROWID`,
+    'CREATE INDEX circle_members_by_user ON circle_members (user_id, circle_id)',
+    `CREATE TABLE circle_invitations (
+       id TEXT NOT NULL PRIMARY KEY,
+       circle_id TEXT NOT NULL REFERENCES circles (id) ON DELETE CASCADE,
+       username TEXT NOT NULL CHECK (username <> '' AND username = lower(username)),
+       role TEXT NOT NULL CHECK (role IN ('owner', 'manager', 'member', 'observer')),
+       invited_by TEXT NOT NULL,
+       created_at INTEGER NOT NULL,
+       expires_at INTEGER NOT NULL,
+       UNIQUE (circle_id, username)
+     ) WITHOUT ROWID`,
+    'CREATE INDEX circle_invitations_by_name ON circle_invitations (username, id)',
+    'CREATE INDEX circle_invitations_by_inviter ON circle_invitations (invited_by)',
+    'CREATE INDEX circle_invitations_by_expiry ON circle_invitations (expires_at)',
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });
