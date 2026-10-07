@@ -1,26 +1,30 @@
 C4Container
     title Container Diagram for CaCi
 
-    Person(customerA, "Banking Customer A", "A customer of the bank with personal accounts.")
+    Person(user, "User", "A person with an account: keeps their own brain graph and may belong to circles.")
     System_Ext(System_llm, "LLM", "Answers questions and categorises information using CaCi context.")
 
     Enterprise_Boundary(caci_platform, "CaCi Platform") {
         Container(api, "HTTP API", "Node.js (node:http)", "The only network code: account routes, and the capture and read routes of the CaCi controller. Same-origin JSON, session cookie, security headers, bounded requests. Code: src/api.")
         Container(service, "Service", "Node.js", "Reads the CACI_* settings, opens the two database files, wires everything, and runs npm run serve and npm run users. Code: src/service.")
         Container(user_controller, "User Controller", "TypeScript", "Accounts, passwords (scrypt), sessions, throttling and who may do what; gives each person exactly one graph. Code: src/users.")
-        Container(caci_controller, "CaCi Controller", "TypeScript", "Planned (R-003). Binds capture and browsing to the signed-in person: proposal ownership, per-account limits, the graph always from the session. Code: src/caci.")
+        Container(caci_controller, "CaCi Controller", "TypeScript", "Binds capture and browsing to the signed-in person: proposal ownership, per-account limits, the graph always from the session. Code: src/caci.")
+        Container(circle_controller, "Circle Controller", "TypeScript", "Planned (R-004, C2). Circles: groups of people with fixed roles (owner, manager, member, observer), invitations that must be accepted, and the rules for who may invite, remove and change roles. Membership only: it shares no graph data yet. Code: src/circles.")
         Container(caci_app, "CaCi Application", "TypeScript", "The capture controller: reads context, asks the categoriser, shows a preview, writes only after approval. Code: src/app.")
         Container(llm_adapter, "LLM Component", "TypeScript", "One method per capability, starting with categorise(): turns input into a proposed graph mutation under guardrails. The model is configurable per capability and sits behind a port. Code: src/llm.")
         Container(graph_store, "Bipartite Graph Store", "TypeScript library", "Stateless core that validates and plans graph reads and mutations. Code: src/graph_store.")
         Container(storage_adapter, "Storage Adapter", "TypeScript", "Executes storage primitives behind the graph-store adapter interface. Code: src/graph_store/adapters.")
         ContainerDb(caci_db, "CaCi Operational Store", "SQLite", "graphs.db: isolated bipartite graphs, nodes and edges.")
-        ContainerDb(users_db, "User Store", "SQLite", "users.db: accounts, password hashes, session fingerprints. Code: src/users/sqlite.")
+        ContainerDb(users_db, "User Store", "SQLite", "users.db: accounts, password hashes, session fingerprints and, from C2, circles, memberships and invitations. Code: src/users/sqlite.")
     }
 
-    Rel(customerA, api, "Uses over HTTP(S), through a reverse proxy when exposed")
+    Rel(user, api, "Uses over HTTP(S), through a reverse proxy when exposed")
     Rel(service, api, "Starts and configures")
     Rel(api, user_controller, "Register, sign in and out, account routes")
-    Rel(api, caci_controller, "Capture and browse (planned)")
+    Rel(api, caci_controller, "Capture and browse")
+    Rel(api, circle_controller, "Circles, members, roles and invitations (planned)")
+    Rel(circle_controller, user_controller, "Resolves the session to a user")
+    Rel(circle_controller, users_db, "Reads and writes circles, memberships and invitations (planned)")
     Rel(caci_controller, user_controller, "Resolves the session to a user and their graph")
     Rel(caci_controller, caci_app, "Propose, approve, reject")
     Rel(caci_app, llm_adapter, "Sends input to categorise; shows the proposal for approval")

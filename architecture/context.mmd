@@ -2,7 +2,7 @@
 C4Context
     title System Context Diagram for CaCi
     
-    Person(customerA, "Banking Customer A", "A customer of the bank, with personal bank accounts.")
+    Person(user, "User", "A person with an account, who may belong to circles of other people.")
 
     Enterprise_Boundary(b1, "CaCi Platform") {
         System(System_caci, "CaCi", "The core system of the CaCi platform.")
@@ -12,6 +12,6 @@ C4Context
     System_Ext(System_llm, "LLM", "Answers questions, categorises information based on context from CaCi")
     System_Ext(System_comms, "Comms", "Communicates with the user via Email, Txt, PushNotifications ...")
 
-    Rel(customerA, System_caci, "Uses")
+    Rel(user, System_caci, "Uses")
     Rel(System_caci, System_caci_db, "Reads/Writes to", "DB Specific")
     Rel(System_caci, System_llm, "Asks questions with embedded brain context")

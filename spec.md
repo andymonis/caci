@@ -46,6 +46,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-001 | [Bipartite Graph Store — Library Specification](specs/R-001:%20Bipartite%20Graph%20Store%20%E2%80%94%20Library%20Specification.md) |
 | R-002 | [User Accounts and Login API — Specification](specs/R-002-user-accounts.md) |
 | R-003 | [CaCi Controller — Specification](specs/R-003-caci-controller.md) |
+| R-004 | [Circles — Specification](specs/R-004-circles.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -72,7 +73,8 @@ Mapping from the container diagram to the code base:
 | CaCi Operational Store (SQLite) | provided by the SQLite adapter (planned as P1, the first persistent adapter); no code outside the adapter |
 | LLM component (the LLM adapter) | `src/llm/` (planned, L1 and L2): `createLlm({ client, config })` returns one method per capability, today `categorise()`, so new capabilities can be added beside it; the model is configurable per capability through tiers (`fast`, `balanced`, `deep`), and model access sits behind a `ModelClient` port, with the real Anthropic client as its own entry point |
 | CaCi Application (the capture controller) | `src/app/`: takes input, reads graph context, asks the categoriser, shows a preview, and writes only after approval |
-| CaCi Controller (the platform controller, R-003) | `src/caci/` (planned, C1): composes the user controller, the capture controller, the LLM component and the graph store; owns proposal ownership, per-account limits and "the graph comes from the session" |
+| Circle Controller (groups, roles, invitations, R-004) | `src/circles/` (planned, C2), stored in the user database; membership and roles only, no sharing of graphs |
+| CaCi Controller (the platform controller, R-003) | `src/caci/`: composes the user controller, the capture controller, the LLM component and the graph store; owns proposal ownership, per-account limits and "the graph comes from the session" |
 | User Controller (accounts, sessions, R-002) | `src/users/`, with its SQLite stores in `src/users/sqlite/` and its shared test suites in `src/users/testing/` |
 | Shared SQLite driver wrapper | `src/sqlite/` (the only code that imports `node:sqlite`) |
 | HTTP API (the only network code) | `src/api/`: the server kit, the account routes, and (planned) the capture and read routes |
@@ -87,8 +89,9 @@ Local-only development tools live under `dev/` and are never published: `dev/gra
 ## 8. Milestones
 - **Done:** M0 foundations, M1 contracts, M2 write path and memory adapter, M2b graph lifecycle, M3 conformance suite, M4a core reads, L1 the LLM categoriser core, A1 the controller with preview-then-approve, L2 the real Anthropic client, the LLM lab and the evaluation harness, A1b capture in the explorer and the end-to-end test (see `.gsd/PLAN.md` for the task history). The capture proof of concept is complete, on in-memory storage.
 - **Done (2026-10):** P1 SQLite persistence: the adapter passes the shared conformance suite on memory and files, with durability, crash and two-process tests, the capture flow and the explorer on SQLite, and an NFR-05 benchmark (export/import was dropped as not needed).
-- **Next:** U1 user accounts and a login API, specified in R-002 (password login with server-side sessions, open registration, one graph per user, an admin role, an HTTP API); tasks T-070 onward in `.gsd/PLAN.md`.
-- **After that, to be planned:** M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Roadmap items recorded in the Backlog, each needing its own spec first: a platform-level CaCi controller, support circles, a PWA front end, and deployment to a Raspberry Pi.
+- **Done (2026-10):** U1 user accounts and the login API (R-002: password login, server-side sessions, open registration, one graph per user, an admin role, a recovery command), and C1 the CaCi controller (R-003: authenticated capture with preview and approval, and read-only browsing of your own graph, over the user API, with the demo model by default).
+- **Next:** C2 circles (R-004): groups of people with fixed, setting-agnostic roles, invitations that must be accepted, and no sharing of graphs yet; tasks T-096 to T-108 in `.gsd/PLAN.md`.
+- **After that, to be planned:** restricted access between circle members (needs pseudonymisation and the legal groundwork first), a PWA front end, deployment to a Raspberry Pi, M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Each roadmap item in the Backlog needs its own spec first.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
 
 GSD planning reference: [Bipartite Graph Store library specification](specs/R-001:%20Bipartite%20Graph%20Store%20%E2%80%94%20Library%20Specification.md#suggested-gsd-phase-breakdown).
