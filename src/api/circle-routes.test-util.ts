@@ -3,6 +3,7 @@ import { createCircleController, createMemoryCircleStore, type CircleController,
 import { createLoginThrottle, createMemorySessionStore, createMemoryUserStore, createPasswordHasher, createRegistrationThrottle, createUserController } from '../users/index.js';
 import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';
 import { createCircleRoutes } from './circle-routes.js';
+import { createInvitationRoutes } from './invitation-routes.js';
 import { createAccountRoutes } from './routes.js';
 import { createApiServer, type ApiServer } from './server.js';
 import type { Route } from './router.js';
@@ -10,7 +11,7 @@ import type { Route } from './router.js';
 export const PW = 'correct horse 7 staple';
 export const COOKIE = 'caci_session';
 export const T0 = 1_700_000_000_000;
-/** Every response body of the circle routes, for the final scan. */
+/** Every response body of the circle and invitation routes, for the final scan. */
 export const seen: string[] = [];
 /** Things that must never appear in a response: passwords and session tokens. */
 export const secrets = new Set<string>([PW]);
@@ -40,7 +41,7 @@ export async function startCircleApp(extra: { store?: CircleStore; limits?: Para
   const store = extra.store ?? createMemoryCircleStore();
   const circles = createCircleController({ users, directory: userStore, store, clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }) });
   const secureCookies = extra.secure ?? false;
-  const api = createApiServer({ routes: [...createAccountRoutes({ controller: users, secureCookies }), ...createCircleRoutes({ circles, secureCookies }), ...(extra.more?.({ circles, now }) ?? [])] });
+  const api = createApiServer({ routes: [...createAccountRoutes({ controller: users, secureCookies }), ...createCircleRoutes({ circles, secureCookies }), ...createInvitationRoutes({ circles, secureCookies }), ...(extra.more?.({ circles, now }) ?? [])] });
   const port = await api.listen(0);
   return { api, port, now, store, circles, ids: {} };
 }
@@ -67,7 +68,7 @@ export function call(port: number, method: string, path: string, { body, token, 
       res.on('data', (c: Buffer) => chunks.push(c));
       res.on('end', () => {
         const text = Buffer.concat(chunks).toString('utf8');
-        if (path.startsWith('/api/circles')) seen.push(text);
+        if (path.startsWith('/api/circles') || path.startsWith('/api/invitations')) seen.push(text);
         const setCookie = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c) => c.startsWith(`${COOKIE}=`));
         const value = setCookie?.split(';')[0]?.slice(COOKIE.length + 1);
         if (value) secrets.add(value);

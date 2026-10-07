@@ -108,6 +108,9 @@ export function createCaptureRoutes(options: CaptureRoutesOptions): readonly Rou
 export function createCircleRoutes(options: CircleRoutesOptions): readonly Route[];
 
 // @public
+export function createInvitationRoutes(options: CircleRoutesOptions): readonly Route[];
+
+// @public
 export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
 
 // Warning: (ae-forgotten-export) The symbol "UsersError" needs to be exported by the entry point index.d.ts

@@ -16,3 +16,4 @@ export { createReadRoutes } from './read-routes.js';
 export type { ReadRoutesOptions } from './read-routes.js';
 export { CIRCLE_STATUS_OF, circleErrorResponse, createCircleRoutes } from './circle-routes.js';
 export type { CircleRoutesOptions } from './circle-routes.js';
+export { createInvitationRoutes } from './invitation-routes.js';
