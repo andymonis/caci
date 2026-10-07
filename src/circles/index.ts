@@ -11,3 +11,6 @@ export { parseCircleDescription, parseCircleName, parseCreateCircle, parseInvite
 export type { CreateCircleInput, InviteInput, UpdateCircleInput } from './validate.js';
 export { authorise, CIRCLE_ACTIONS } from './authorise.js';
 export type { AuthoriseContext, CircleAction } from './authorise.js';
+export type { Err, Ok, Result } from './result.js';
+export { createMemoryCircleStore } from './memory-store.js';
+export type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from './store.js';

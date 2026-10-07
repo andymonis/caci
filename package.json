@@ -42,6 +42,10 @@
       "types": "./dist/circles/index.d.ts",
       "import": "./dist/circles/index.js"
     },
+    "./circles/testing": {
+      "types": "./dist/circles/testing/index.d.ts",
+      "import": "./dist/circles/testing/index.js"
+    },
     "./service": {
       "types": "./dist/service/index.d.ts",
       "import": "./dist/service/index.js"
@@ -98,8 +102,8 @@
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "gate": "npm run typecheck && npm run lint && npm test && npm run api:check",
     "schema": "npm run build && node scripts/generate-json-schema.mjs",
-    "api": "npm run build && api-extractor run --local && api-extractor run --local -c api-extractor.memory.json && api-extractor run --local -c api-extractor.sqlite.json && api-extractor run --local -c api-extractor.testing.json && api-extractor run --local -c api-extractor.llm.json && api-extractor run --local -c api-extractor.llm-testing.json && api-extractor run --local -c api-extractor.app.json && api-extractor run --local -c api-extractor.users.json && api-extractor run --local -c api-extractor.api.json && api-extractor run --local -c api-extractor.service.json && api-extractor run --local -c api-extractor.caci.json && api-extractor run --local -c api-extractor.circles.json && api-extractor run --local -c api-extractor.users-testing.json && api-extractor run --local -c api-extractor.users-sqlite.json && api-extractor run --local -c api-extractor.llm-anthropic.json",
-    "api:check": "npm run build && api-extractor run && api-extractor run -c api-extractor.memory.json && api-extractor run -c api-extractor.sqlite.json && api-extractor run -c api-extractor.testing.json && api-extractor run -c api-extractor.llm.json && api-extractor run -c api-extractor.llm-testing.json && api-extractor run -c api-extractor.app.json && api-extractor run -c api-extractor.users.json && api-extractor run -c api-extractor.api.json && api-extractor run -c api-extractor.service.json && api-extractor run -c api-extractor.caci.json && api-extractor run -c api-extractor.circles.json && api-extractor run -c api-extractor.users-testing.json && api-extractor run -c api-extractor.users-sqlite.json && api-extractor run -c api-extractor.llm-anthropic.json",
+    "api": "npm run build && api-extractor run --local && api-extractor run --local -c api-extractor.memory.json && api-extractor run --local -c api-extractor.sqlite.json && api-extractor run --local -c api-extractor.testing.json && api-extractor run --local -c api-extractor.llm.json && api-extractor run --local -c api-extractor.llm-testing.json && api-extractor run --local -c api-extractor.app.json && api-extractor run --local -c api-extractor.users.json && api-extractor run --local -c api-extractor.api.json && api-extractor run --local -c api-extractor.service.json && api-extractor run --local -c api-extractor.caci.json && api-extractor run --local -c api-extractor.circles.json && api-extractor run --local -c api-extractor.circles-testing.json && api-extractor run --local -c api-extractor.users-testing.json && api-extractor run --local -c api-extractor.users-sqlite.json && api-extractor run --local -c api-extractor.llm-anthropic.json",
+    "api:check": "npm run build && api-extractor run && api-extractor run -c api-extractor.memory.json && api-extractor run -c api-extractor.sqlite.json && api-extractor run -c api-extractor.testing.json && api-extractor run -c api-extractor.llm.json && api-extractor run -c api-extractor.llm-testing.json && api-extractor run -c api-extractor.app.json && api-extractor run -c api-extractor.users.json && api-extractor run -c api-extractor.api.json && api-extractor run -c api-extractor.service.json && api-extractor run -c api-extractor.caci.json && api-extractor run -c api-extractor.circles.json && api-extractor run -c api-extractor.circles-testing.json && api-extractor run -c api-extractor.users-testing.json && api-extractor run -c api-extractor.users-sqlite.json && api-extractor run -c api-extractor.llm-anthropic.json",
     "dev:explorer": "npm run build && node dev/graph-explorer/server.mjs",
     "llm:try": "npm run build && node scripts/llm-try.mjs",
     "serve": "npm run build && node scripts/serve.mjs",

@@ -4,6 +4,14 @@
 
 ```ts
 
+// @public (undocumented)
+export interface AcceptLimits {
+    // (undocumented)
+    readonly maxCirclesPerUser: number;
+    // (undocumented)
+    readonly maxMembersPerCircle: number;
+}
+
 // @public
 export function authorise(actor: CircleRole | undefined, action: CircleAction, context?: AuthoriseContext): boolean;
 
@@ -46,6 +54,34 @@ export const CIRCLE_ROLES: readonly ["owner", "manager", "member", "observer"];
 export type CircleAction = (typeof CIRCLE_ACTIONS)[number];
 
 // @public (undocumented)
+export interface CirclePage {
+    readonly cursor: string | null;
+    // (undocumented)
+    readonly limit: number;
+}
+
+// @public
+export interface CirclePatch {
+    // (undocumented)
+    readonly description?: string | null;
+    // (undocumented)
+    readonly name?: string;
+    // (undocumented)
+    readonly updatedAt: number;
+}
+
+// @public
+export interface CircleRecord {
+    readonly createdAt: number;
+    // (undocumented)
+    readonly description?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
 export type CircleRole = (typeof CIRCLE_ROLES)[number];
 
 // @public
@@ -70,6 +106,43 @@ export function circlesError(code: CirclesErrorCode, message: string, extra?: {
 // @public (undocumented)
 export type CirclesErrorCode = (typeof CIRCLES_ERROR_CODES)[number];
 
+// @public
+export interface CircleStore {
+    acceptInvitation(invitationId: string, userId: string, username: string, now: number, limits: AcceptLimits): Promise<Result<Membership, CirclesError>>;
+    changeRole(circleId: string, userId: string, role: CircleRole): Promise<Result<Membership, CirclesError>>;
+    createCircle(record: CircleRecord, ownerId: string, limits: CreateCircleLimits): Promise<Result<Circle, CirclesError>>;
+    createInvitation(record: InvitationRecord, limits: InviteLimits, now: number): Promise<Result<Invitation, CirclesError>>;
+    declineInvitation(invitationId: string, username: string, now: number): Promise<boolean>;
+    deleteCircle(id: string): Promise<boolean>;
+    // (undocumented)
+    getCircle(id: string): Promise<Circle | undefined>;
+    // (undocumented)
+    getInvitation(id: string): Promise<Invitation | undefined>;
+    listCirclesOf(userId: string, page: CirclePage): Promise<Listing<CircleSummary>>;
+    listInvitationsFor(username: string, now: number, page: CirclePage): Promise<Listing<Invitation>>;
+    listInvitationsOfCircle(circleId: string, now: number, page: CirclePage): Promise<Listing<Invitation>>;
+    listMembers(circleId: string, page: CirclePage): Promise<Listing<Membership>>;
+    // (undocumented)
+    membershipOf(circleId: string, userId: string): Promise<Membership | undefined>;
+    purgeExpired(now: number): Promise<number>;
+    removeMember(circleId: string, userId: string): Promise<Result<boolean, CirclesError>>;
+    removeUser(userId: string, username: string): Promise<RemoveUserOutcome>;
+    revokeInvitation(invitationId: string, circleId: string, now: number): Promise<boolean>;
+    updateCircle(id: string, patch: CirclePatch): Promise<Result<Circle, CirclesError>>;
+}
+
+// @public
+export interface CircleSummary {
+    // (undocumented)
+    readonly circle: Circle;
+    // (undocumented)
+    readonly joinedAt: number;
+    // (undocumented)
+    readonly memberCount: number;
+    // (undocumented)
+    readonly role: CircleRole;
+}
+
 // @public (undocumented)
 export interface CreateCircleInput {
     // (undocumented)
@@ -79,13 +152,54 @@ export interface CreateCircleInput {
 }
 
 // @public (undocumented)
+export interface CreateCircleLimits {
+    // (undocumented)
+    readonly maxCirclesPerUser: number;
+}
+
+// @public
+export function createMemoryCircleStore(): CircleStore;
+
+// @public (undocumented)
+export type Err<E> = {
+    readonly ok: false;
+    readonly error: E;
+};
+
+// @public (undocumented)
+export type Invitation = InvitationRecord;
+
+// @public (undocumented)
 export const INVITATION_ID_PATTERN: RegExp;
+
+// @public
+export interface InvitationRecord {
+    // (undocumented)
+    readonly circleId: string;
+    // (undocumented)
+    readonly createdAt: number;
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly invitedBy: string;
+    // (undocumented)
+    readonly role: CircleRole;
+    // (undocumented)
+    readonly username: string;
+}
 
 // @public (undocumented)
 export interface InviteInput {
     // (undocumented)
     readonly role: CircleRole;
     readonly username: string;
+}
+
+// @public (undocumented)
+export interface InviteLimits {
+    // (undocumented)
+    readonly maxOpenInvitationsPerCircle: number;
 }
 
 // @public (undocumented)
@@ -97,6 +211,25 @@ export const isCircleRole: (value: unknown) => value is CircleRole;
 // @public (undocumented)
 export const isInvitationId: (value: unknown) => value is string;
 
+// @public (undocumented)
+export interface Listing<T> {
+    // (undocumented)
+    readonly items: readonly T[];
+    readonly nextCursor: string | null;
+}
+
+// @public
+export interface Membership {
+    // (undocumented)
+    readonly circleId: string;
+    // (undocumented)
+    readonly joinedAt: number;
+    // (undocumented)
+    readonly role: CircleRole;
+    // (undocumented)
+    readonly userId: string;
+}
+
 // Warning: (ae-forgotten-export) The symbol "Random" needs to be exported by the entry point index.d.ts
 //
 // @public (undocumented)
@@ -105,8 +238,12 @@ export const newCircleId: (random?: Random) => string;
 // @public (undocumented)
 export const newInvitationId: (random?: Random) => string;
 
-// Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
-//
+// @public (undocumented)
+export type Ok<T> = {
+    readonly ok: true;
+    readonly value: T;
+};
+
 // @public
 export function parseCircleDescription(raw: unknown): Result<string | undefined, CirclesError>;
 
@@ -127,6 +264,17 @@ export function parseRoleChange(input: unknown): Result<CircleRole, CirclesError
 
 // @public
 export function parseUpdateCircle(input: unknown): Result<UpdateCircleInput, CirclesError>;
+
+// @public
+export interface RemoveUserOutcome {
+    readonly dissolved: readonly string[];
+    readonly handedOver: readonly string[];
+    readonly invitationsRemoved: number;
+    readonly left: number;
+}
+
+// @public (undocumented)
+export type Result<T, E> = Ok<T> | Err<E>;
 
 // @public (undocumented)
 export interface UpdateCircleInput {
