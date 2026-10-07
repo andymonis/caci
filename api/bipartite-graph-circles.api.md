@@ -53,6 +53,39 @@ export const CIRCLE_ROLES: readonly ["owner", "manager", "member", "observer"];
 // @public (undocumented)
 export type CircleAction = (typeof CIRCLE_ACTIONS)[number];
 
+// @public
+export interface CircleController {
+    // (undocumented)
+    create(token: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
+    delete(token: unknown, circleId: unknown): Promise<Result<true, CirclesError>>;
+    // (undocumented)
+    get(token: unknown, circleId: unknown): Promise<Result<CircleView, CirclesError>>;
+    leave(token: unknown, circleId: unknown): Promise<Result<true, CirclesError>>;
+    list(token: unknown, page?: PageRequest): Promise<Result<Page<CircleView>, CirclesError>>;
+    // (undocumented)
+    members(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<MemberView>, CirclesError>>;
+    update(token: unknown, circleId: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
+}
+
+// @public (undocumented)
+export interface CircleControllerInit {
+    readonly clock?: () => number;
+    // Warning: (ae-forgotten-export) The symbol "UserStore" needs to be exported by the entry point index.d.ts
+    readonly directory: Pick<UserStore, 'get'>;
+    // (undocumented)
+    readonly limits?: CircleControllerLimits;
+    readonly newCircleId?: () => string;
+    // (undocumented)
+    readonly store: CircleStore;
+    // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
+    readonly users: Pick<UserController, 'resolve'>;
+}
+
+// @public (undocumented)
+export interface CircleControllerLimits {
+    readonly maxCirclesPerUser?: number;
+}
+
 // @public (undocumented)
 export interface CirclePage {
     readonly cursor: string | null;
@@ -143,6 +176,26 @@ export interface CircleSummary {
     readonly role: CircleRole;
 }
 
+// @public
+export interface CircleView {
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly description?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+    readonly role: CircleRole;
+    // (undocumented)
+    readonly updatedAt: number;
+}
+
+// @public (undocumented)
+export function createCircleController(init: CircleControllerInit): CircleController;
+
 // @public (undocumented)
 export interface CreateCircleInput {
     // (undocumented)
@@ -159,6 +212,14 @@ export interface CreateCircleLimits {
 
 // @public
 export function createMemoryCircleStore(): CircleStore;
+
+// @public (undocumented)
+export const DEFAULT_CIRCLE_LIMITS: Readonly<{
+    maxCirclesPerUser: 20;
+}>;
+
+// @public (undocumented)
+export const DEFAULT_PAGE_SIZE = 50;
 
 // @public (undocumented)
 export type Err<E> = {
@@ -218,6 +279,9 @@ export interface Listing<T> {
     readonly nextCursor: string | null;
 }
 
+// @public (undocumented)
+export const MAX_PAGE_SIZE = 100;
+
 // @public
 export interface Membership {
     // (undocumented)
@@ -228,6 +292,20 @@ export interface Membership {
     readonly role: CircleRole;
     // (undocumented)
     readonly userId: string;
+}
+
+// @public
+export interface MemberView {
+    // (undocumented)
+    readonly displayName?: string;
+    // (undocumented)
+    readonly joinedAt: number;
+    // (undocumented)
+    readonly role: CircleRole;
+    // (undocumented)
+    readonly userId: string;
+    // (undocumented)
+    readonly username?: string;
 }
 
 // Warning: (ae-forgotten-export) The symbol "Random" needs to be exported by the entry point index.d.ts
@@ -243,6 +321,22 @@ export type Ok<T> = {
     readonly ok: true;
     readonly value: T;
 };
+
+// @public (undocumented)
+export interface Page<T> {
+    // (undocumented)
+    readonly items: readonly T[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+}
+
+// @public (undocumented)
+export interface PageRequest {
+    // (undocumented)
+    readonly cursor?: string | null;
+    // (undocumented)
+    readonly limit?: number;
+}
 
 // @public
 export function parseCircleDescription(raw: unknown): Result<string | undefined, CirclesError>;
