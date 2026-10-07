@@ -12,6 +12,7 @@ const REFERENCE = /`(src\/[\w/.-]+\.ts)` — "([^"]+)"/g;
 const SPECS = [
   { name: 'R-002', file: 'specs/R-002-user-accounts.md', minReferences: 45, minThreats: 14, criteria: 12, prefix: 'UA-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 8 },
   { name: 'R-003', file: 'specs/R-003-caci-controller.md', minReferences: 30, minThreats: 10, criteria: 10, prefix: 'CC-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 7 },
+  { name: 'R-004', file: 'specs/R-004-circles.md', minReferences: 45, minThreats: 11, criteria: 12, prefix: 'CR-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
 ] as const;
 
 for (const info of SPECS) {
