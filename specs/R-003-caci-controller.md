@@ -79,20 +79,20 @@ The first four rows are answers given by the owner; D4 to D7 are proposals that 
 
 ## Threats and controls
 
-Each row gets, in T-094, the test that covers it.
+Each row names the tests that cover it. `src/service/review.test.ts` fails the build if a named test file or test disappears.
 
-| Threat | Control |
-|--------|---------|
-| Approving or reading another person's proposal | Ownership recorded on every proposal; every non-owner gets the answer for a missing proposal (CC-FR-07); admins have no exception |
-| Probing which proposal ids exist | The same answer for a missing proposal and someone else's (CC-FR-07); ids are random and unguessable |
-| Filling the shared pending store so others cannot capture | Per-account pending limit (CC-FR-03) below the global one |
-| Running up the model bill | Per-account hourly limit checked before the model is called (CC-FR-03); the registration throttle (R-002) bounds how many accounts one client can make |
-| Reading another account's graph by guessing ids | The graph is the session's only (CC-FR-02); ids are looked up inside that graph (CC-FR-13) |
-| Prompt injection in a note reaching other accounts | A note is only ever shown to the model together with its own owner's categories; the output guard allows only two operations on the owner's graph (CC-NFR-02); a hostile note can at worst file itself badly |
-| Notes leaving the machine unexpectedly | Demo model by default (CC-NFR-04); the real model needs two environment variables; the mode is reported on every proposal and documented (CC-FR-15) |
-| The key in a log, response, file or error | CC-NFR-01 and CC-NFR-03, tested by scanning everything a test run produces |
-| A huge or hostile response size | Pages are bounded; item data is cut (CC-FR-14) |
-| Half-written filing | The capture controller's all-or-nothing write; a failed write keeps the proposal (CC-FR-05) |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| Approving or reading another person's proposal | Ownership recorded on every proposal; every non-owner gets the answer for a missing proposal (CC-FR-07); admins have no exception | `src/caci/controller-owner.test.ts` — "an admin has no extra power"; `src/caci/controller-owner.test.ts` — "cannot be used by someone else"; `src/api/capture-routes.test.ts` — "another account, an admin, a made-up id and a strange id all get the same 404"; `src/service/capture-end-to-end.test.ts` — "2. bob and the admin get exactly the answer for a made-up id" |
+| Probing which proposal ids exist | The same answer for a missing proposal and someone else's (CC-FR-07); ids are random and unguessable | `src/caci/controller-owner.test.ts` — "anyone else gets exactly the answer a missing proposal gets"; `src/caci/controller-owner.test.ts` — "cannot be fetched, approved or rejected under any id"; `src/app/controller.test.ts` — "gives each proposal its own id, with the prop prefix" |
+| Filling the shared pending store so others cannot capture | Per-account pending limit (CC-FR-03) below the global one | `src/caci/controller.test.ts` — "an account may have 10 proposals waiting"; `src/caci/controller.test.ts` — "of 15 simultaneous proposals with room for 10, exactly 10 reach the model"; `src/caci/controller.test.ts` — "own global limit still applies" |
+| Running up the model bill | Per-account hourly limit checked before the model is called (CC-FR-03); the registration throttle (R-002) bounds how many accounts one client can make | `src/caci/controller.test.ts` — "30 new proposals an hour: the 31st is THROTTLED"; `src/caci/controller.test.ts` — "a proposal whose model call fails still counts for the hour"; `src/service/capture.test.ts` — "the hourly limit comes from the settings too"; `src/users/throttle.test.ts` — "registration" |
+| Reading another account's graph by guessing ids | The graph is the session's only (CC-FR-02); ids are looked up inside that graph (CC-FR-13) | `src/caci/browse.test.ts` — "two accounts with the same ids see their own data"; `src/caci/browse.test.ts` — "there is no way to ask for another graph"; `src/api/read-routes.test.ts` — "two people with the same ids see their own data"; `src/service/capture-end-to-end.test.ts` — "4. bob sees an empty graph, cannot reach ann" |
+| Prompt injection in a note reaching other accounts | A note is only ever shown to the model together with its own owner's categories; the output guard allows only two operations on the owner's graph (CC-NFR-02); a hostile note can at worst file itself badly | `src/caci/controller.test.ts` — "the graph is the session"; `src/app/capture-flow.test.ts` — "a hostile note is only text"; `src/api/capture-routes.test.ts` — "a note that gives orders is only ever filed"; `src/llm/capabilities/categorise/guard.test.ts` — "refuses mode and ensureNodes on operations"; `src/service/capture-end-to-end.test.ts` — "7. a note full of instructions and markup changes nothing but its own filing" |
+| Notes leaving the machine unexpectedly | Demo model by default (CC-NFR-04); the real model needs two environment variables; the mode is reported on every proposal and documented (CC-FR-15) | `src/service/capture.test.ts` — "the demo model never loads the provider"; `src/service/capture.test.ts` — "the demo model: nothing leaves this machine"; `src/service/capture.test.ts` — "the real model: says so, says what is sent, says nothing is anonymised"; `src/service/config.test.ts` — "the real model needs its key"; `src/caci/controller.test.ts` — "reports the mode it was given" |
+| The key in a log, response, file or error | CC-NFR-01 and CC-NFR-03, tested by scanning everything a test run produces | `src/service/capture.test.ts` — "the note and the category names go to the provider, the key goes only in its header"; `src/service/capture.test.ts` — "failures reach the person as fixed messages"; `src/service/config.test.ts` — "the key is not part of the settings"; `src/llm/anthropic/errors.test.ts` — "removes the key wherever it appears"; `src/llm/api-key.test.ts` — "refuses a key of the wrong shape, without repeating it" |
+| A huge or hostile response size | Pages are bounded; item data is cut (CC-FR-14) | `src/caci/browse.test.ts` — "is returned whole up to the cap, and above it long text is cut and flagged"; `src/caci/browse.test.ts` — "lists at most 200 categories and says there are more"; `src/caci/browse.test.ts` — "a page is 50 by default"; `src/caci/controller.test.ts` — "is at most 8,000 characters" |
+| Half-written filing | The capture controller's all-or-nothing write; a failed write keeps the proposal (CC-FR-05) | `src/app/capture-flow.test.ts` — "the store fails part-way through the write: everything is rolled back"; `src/caci/controller-owner.test.ts` — "a failed write changes nothing and leaves the proposal pending"; `src/app/capture-flow.test.ts` — "whatever fails, the graph is never left with a link" |
 
 ## Errors
 
@@ -144,6 +144,31 @@ A proposal in a response is `{ id, createdAt, expiresAt, mode, text, summary, op
 | CC-AC-08 | A note that contains instructions or markup changes nothing except its own filing. |
 | CC-AC-09 | A failed write keeps the proposal pending; approving twice writes once. |
 | CC-AC-10 | No response contains a prompt, a raw model output, a key, a token count or a cost. |
+
+### Where each criterion is checked (T-094)
+
+| ID | Checked by |
+|----|------------|
+| CC-AC-01 | `src/service/capture-end-to-end.test.ts` — "two accounts propose, preview, approve and browse"; `src/service/capture.test.ts` — "propose, preview, approve, browse: the whole path over HTTP" |
+| CC-AC-02 | `src/service/capture-end-to-end.test.ts` — "2. bob and the admin get exactly the answer for a made-up id"; `src/caci/controller-owner.test.ts` — "an admin has no extra power"; `src/api/capture-routes.test.ts` — "another account, an admin, a made-up id and a strange id all get the same 404" |
+| CC-AC-03 | `src/service/capture-end-to-end.test.ts` — "5. limits: the 11th pending proposal is refused before the model is asked"; `src/service/capture-end-to-end.test.ts` — "6. the hourly limit"; `src/caci/controller.test.ts` — "an account may have 10 proposals waiting"; `src/caci/controller.test.ts` — "30 new proposals an hour: the 31st is THROTTLED" |
+| CC-AC-04 | `src/caci/browse.test.ts` — "two accounts with the same ids see their own data"; `src/api/read-routes.test.ts` — "two people with the same ids see their own data"; `src/service/capture.test.ts` — "two accounts are kept apart all the way through" |
+| CC-AC-05 | `src/api/read-routes.test.ts` — "every kind of id round-trips"; `src/caci/browse.test.ts` — "every kind of id works for a category, its items and an item" |
+| CC-AC-06 | `src/caci/controller-owner.test.ts` — "tells the owner when it has expired"; `src/caci/controller-owner.test.ts` — "forgets every pending proposal and keeps everything approved"; `src/service/capture.test.ts` — "a restart keeps what was approved and forgets what was pending"; `src/service/capture-end-to-end.test.ts` — "8. a restart keeps what was approved and forgets what was pending" |
+| CC-AC-07 | `src/service/capture.test.ts` — "the demo model never loads the provider"; `src/service/capture.test.ts` — "the note and the category names go to the provider, the key goes only in its header"; `src/service/capture.test.ts` — "the demo model: nothing leaves this machine" |
+| CC-AC-08 | `src/app/capture-flow.test.ts` — "a hostile note is only text"; `src/api/capture-routes.test.ts` — "a note that gives orders is only ever filed"; `src/service/capture-end-to-end.test.ts` — "7. a note full of instructions and markup changes nothing but its own filing" |
+| CC-AC-09 | `src/caci/controller-owner.test.ts` — "a failed write changes nothing and leaves the proposal pending"; `src/caci/controller-owner.test.ts` — "a second approval, or one at the same moment, writes once"; `src/service/capture-end-to-end.test.ts` — "approving twice writes once" |
+| CC-AC-10 | `src/caci/controller.test.ts` — "shows only what a person needs: no prompt, no raw output, no usage"; `src/api/capture-routes.test.ts` — "shows no prompt, no raw output, no usage, no model, no graph id"; `src/api/read-routes.test.ts` — "nothing in any response of this file holds a session token or a password"; `src/service/capture.test.ts` — "failures reach the person as fixed messages" |
+
+### Residual risks (not covered, with the reason)
+
+1. **With the real model on, every account's notes go to Anthropic, unanonymised.** This is a documented decision, not a defect (CC-FR-15); the service says so when it starts. It is the first thing to plan (pseudonymisation) before anyone but the owner has an account on a service with the real model switched on.
+2. **Model spending is bounded per account, not in total.** A crowd of accounts, each within its 30 an hour, can still run up a bill; the registration throttle bounds one client, not many. There is no global budget or spending cap yet (Backlog).
+3. **Pending proposals, and the hourly and pending counts, live in memory.** A restart forgets pending proposals (by design) and resets the hourly window, so a restart is a way to make another 30 proposals; acceptable for a household service.
+4. **The demo model is not a classifier.** Its filings can be poor; they are still only `upsertNode` and `link` on the owner's own graph, so the harm is limited to a badly filed note the person can see before approving.
+5. **Quality of real-model filings is judged on a small invented set** (see the T-048 evaluation); a preview, then approval, is the control, not the model.
+6. **The races are tested at the controller, not over HTTP.** Requests over HTTP arrive one at a time in a test, so the simultaneous approve, reject and propose cases live in the controller tests (named above); the end-to-end test proves the sequence, not the race.
+7. **Stand-in provider only.** The real provider has been exercised by the evaluation (T-048), not through the service; the service's use of it is tested against a stand-in answering the real client.
 
 ## Build order
 
