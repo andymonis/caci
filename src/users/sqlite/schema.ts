@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 3;
+export const USERS_SCHEMA_VERSION = 4;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -96,7 +96,41 @@ const V3: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3]);
+/**
+ * Version 4: when an account is deleted, whoever deletes it, its place in every circle goes with it
+ * in the same transaction. This is the same thing as the circle store's `removeUser` (the two are
+ * tested against each other): a circle the person solely owned passes to its longest-standing
+ * manager, else member, else observer (the earliest join, then the lowest user id) or, if nobody
+ * else is in it, ceases to exist; their memberships go; and so do the invitations addressed to their
+ * username or sent by them. The steps run in this order, and the order matters: the heir is chosen
+ * while the person is still a member, and the circle is dissolved while they are still its only one.
+ */
+const V4: Migration = Object.freeze({
+  to: 4,
+  creates: Object.freeze([]),
+  sql: Object.freeze([
+    `CREATE TRIGGER circles_leave_with_user AFTER DELETE ON users
+     BEGIN
+       UPDATE circle_members SET role = 'owner'
+        WHERE (circle_id, user_id) IN (
+          SELECT m.circle_id,
+                 (SELECT h.user_id FROM circle_members h
+                   WHERE h.circle_id = m.circle_id AND h.user_id <> old.id
+                   ORDER BY CASE h.role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 WHEN 'member' THEN 2 ELSE 3 END, h.joined_at, h.user_id
+                   LIMIT 1)
+            FROM circle_members m
+           WHERE m.user_id = old.id AND m.role = 'owner'
+             AND (SELECT count(*) FROM circle_members o WHERE o.circle_id = m.circle_id AND o.role = 'owner') = 1);
+       DELETE FROM circles
+        WHERE id IN (SELECT circle_id FROM circle_members WHERE user_id = old.id)
+          AND NOT EXISTS (SELECT 1 FROM circle_members o WHERE o.circle_id = circles.id AND o.user_id <> old.id);
+       DELETE FROM circle_members WHERE user_id = old.id;
+       DELETE FROM circle_invitations WHERE username = old.username OR invited_by = old.id;
+     END`,
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });

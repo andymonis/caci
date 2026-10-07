@@ -7,7 +7,7 @@ import { prepareSchema } from '../../sqlite/prepare.js';
 import type { SessionStore } from '../session-store.js';
 import { runSessionStoreConformance } from '../testing/index.js';
 import { hashToken } from '../tokens.js';
-import { USERS_APPLICATION_ID, USERS_MIGRATIONS } from './schema.js';
+import { USERS_APPLICATION_ID, USERS_MIGRATIONS, USERS_SCHEMA_VERSION } from './schema.js';
 import { createSqliteSessionStore, type SqliteSessionStore } from './sqlite-session-store.js';
 import { createSqliteUserStore } from './sqlite-store.js';
 
@@ -136,7 +136,7 @@ describe('sessions in the database file', () => {
     const token = await sessions.create('u0000000000000001', T0);
     expect(await sessions.resolve(token, T0 + 1)).toBe('u0000000000000001');
     const after = openDb({ path });
-    expect(after.pragma('user_version')).toBe(3);
+    expect(after.pragma('user_version')).toBe(USERS_SCHEMA_VERSION);
     expect(after.get<{ username: string; role: string }>("SELECT username, role FROM users WHERE id = 'u0000000000000001'")).toEqual({ username: 'ann', role: 'admin' });
     after.close();
     expect((await usersAt(path).getByUsername('ann'))?.role).toBe('admin');

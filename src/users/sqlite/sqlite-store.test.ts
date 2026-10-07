@@ -10,7 +10,7 @@ import { DbError, openDb } from '../../sqlite/db.js';
 import { prepareSchema } from '../../sqlite/prepare.js';
 import type { UserRecord, UserStore } from '../store.js';
 import { runUserStoreConformance } from '../testing/index.js';
-import { USERS_APPLICATION_ID, USERS_MIGRATIONS } from './schema.js';
+import { USERS_APPLICATION_ID, USERS_MIGRATIONS, USERS_SCHEMA_VERSION } from './schema.js';
 import { createSqliteUserStore, type SqliteUserStore } from './sqlite-store.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -139,7 +139,7 @@ describe('the database file', () => {
     createSqliteUserStore({ path }).close();
     const db = openDb({ path });
     expect(db.pragma('application_id')).toBe(USERS_APPLICATION_ID);
-    expect(db.pragma('user_version')).toBe(3);
+    expect(db.pragma('user_version')).toBe(USERS_SCHEMA_VERSION);
     db.close();
   });
 
