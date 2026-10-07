@@ -14,3 +14,5 @@ export { createCaptureRoutes, mapCaciError } from './capture-routes.js';
 export type { CaptureRoutesOptions } from './capture-routes.js';
 export { createReadRoutes } from './read-routes.js';
 export type { ReadRoutesOptions } from './read-routes.js';
+export { CIRCLE_STATUS_OF, circleErrorResponse, createCircleRoutes } from './circle-routes.js';
+export type { CircleRoutesOptions } from './circle-routes.js';

@@ -66,6 +66,24 @@ export interface CaptureRoutesOptions {
     readonly secureCookies?: boolean;
 }
 
+// Warning: (ae-forgotten-export) The symbol "CirclesError" needs to be exported by the entry point index.d.ts
+//
+// @public
+export const CIRCLE_STATUS_OF: Readonly<Record<CirclesError['code'], number>>;
+
+// @public
+export function circleErrorResponse(error: CirclesError, cookies?: readonly string[]): ApiResponse;
+
+// @public (undocumented)
+export interface CircleRoutesOptions {
+    // Warning: (ae-forgotten-export) The symbol "CircleController" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly circles: CircleController;
+    readonly cookieName?: string;
+    readonly secureCookies?: boolean;
+}
+
 // @public
 export function clearCookie(name: string, options: {
     readonly secure: boolean;
@@ -85,6 +103,9 @@ export function createApiServer(options: ApiServerOptions): ApiServer;
 
 // @public
 export function createCaptureRoutes(options: CaptureRoutesOptions): readonly Route[];
+
+// @public
+export function createCircleRoutes(options: CircleRoutesOptions): readonly Route[];
 
 // @public
 export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
