@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { createAccountRoutes, STATUS_OF } from '../api/index.js';
+import { createAccountRoutes, createCaptureRoutes, createReadRoutes, mapCaciError, STATUS_OF } from '../api/index.js';
+import { CACI_ERROR_CODES, caciError, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
+import { DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
 import { parseServiceConfig, VARIABLES } from './config.js';
 
@@ -18,9 +20,7 @@ function section(title: string): string {
 }
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
-/** Settings that are read and checked but do nothing yet: T-093 wires them in and T-094 documents them, so the README does not describe them. Remove them from this list when it does (the test below fails if they are documented early or left out late). */
-const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_LLM', 'CACI_PROPOSALS_PER_HOUR', 'CACI_MAX_PENDING_PER_USER'];
-const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
+const DOCUMENTED = [...VARIABLES];
 
 describe('the user accounts section of the README', () => {
   it('is there, and long enough to be the real thing', () => {
@@ -49,6 +49,9 @@ describe('the user accounts section of the README', () => {
       CACI_TRUSTED_PROXIES: `\`${d.trustedProxies}\``,
       CACI_ALLOW_INSECURE: `\`${d.allowInsecure}\``,
       CACI_DATA_DIR: `\`${d.dataDir}\``,
+      CACI_LLM: `\`${d.llm}\``,
+      CACI_PROPOSALS_PER_HOUR: `\`${d.proposalsPerHour}\``,
+      CACI_MAX_PENDING_PER_USER: `\`${d.maxPendingPerUser}\``,
     });
     expect(rows.CACI_BIND).toContain(d.bind);
     expect(rows.CACI_ALLOWED_HOSTS).toBe('not set');
@@ -89,5 +92,55 @@ describe('the user accounts section of the README', () => {
     for (const phrase of ['Register yourself first', 'first account ever created becomes the admin', 'not encrypted', 'No HTTPS here', 'there is no emailed reset', 'never takes the password as an argument', 'only credential']) {
       expect(accounts, phrase).toContain(phrase);
     }
+  });
+});
+
+const capture = section('Capturing notes through the API');
+
+describe('the capturing section of the README', () => {
+  it('is there, with its parts', () => {
+    expect(capture.length).toBeGreaterThan(3000);
+    for (const heading of ['### Which model files the notes', '### The routes', '### Limits and lifetimes', '### What is not protected']) expect(capture).toContain(heading);
+  });
+
+  it('lists exactly the capture and read routes the server has', () => {
+    const real = [...createCaptureRoutes({ caci: {} as never }), ...createReadRoutes({ caci: {} as never })].map((r) => `${r.method} ${r.path}`);
+    const documented = [...capture.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented.sort()).toEqual([...real].sort());
+  });
+
+  it('mentions exactly the statuses the error mapping produces', () => {
+    const samples = [
+      ...CACI_ERROR_CODES.map((code) => caciError(code, 'x', code === 'INVALID_INPUT' ? { field: 'text' } : {})),
+      { source: 'llm', error: { code: 'RATE_LIMITED', retryable: true, message: 'x' } },
+      { source: 'llm', error: { code: 'TIMEOUT', retryable: true, message: 'x' } },
+      { source: 'llm', error: { code: 'REFUSED', retryable: false, message: 'x' } },
+      { source: 'graph', error: { code: 'NODE_NOT_FOUND', message: 'x' } },
+      { source: 'graph', error: { code: 'STORAGE_ERROR', message: 'x' } },
+    ];
+    const produced = new Set(samples.map((e) => mapCaciError(e as never).status));
+    const line = capture.match(/Failures are[^\n]*/)?.[0] ?? '';
+    const mentioned = [...line.matchAll(/\b([45]\d\d)\b/g)].map((m) => Number(m[1]));
+    expect(mentioned.sort()).toEqual([401, 404, 409, 410, 422, 429, 500, 502, 503]);
+    expect([...produced].sort()).toEqual(mentioned.sort());
+  });
+
+  it('states the numbers that are in the code', () => {
+    expect(capture).toContain(`at most ${MAX_NOTE_CHARS.toLocaleString('en-US')} characters`);
+    expect(capture).toContain(`${MAX_DATA_CHARS.toLocaleString('en-US')} characters is shortened`);
+    expect(capture).toContain(`(1 to ${MAX_PAGE}, default ${DEFAULT_PAGE})`);
+    expect(capture).toContain(`expires after ${DEFAULT_CONTROLLER_OPTIONS.ttlMs / 60_000} minutes`);
+    expect(capture).toContain(`**${defaults.ok ? defaults.value.maxPendingPerUser : 0} pending and ${defaults.ok ? defaults.value.proposalsPerHour : 0} an hour per account**`);
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['nothing is written until the person approves', '`ANTHROPIC_API_KEY`', 'every account at once', 'nothing is anonymised or pseudonymised', 'nothing leaves this machine', 'There is no per-account consent', 'Pending proposals live in memory', 'plain text', 'never contains the prompt', 'identical to the one for a made-up id']) {
+      expect(capture.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+
+  it('every command and every setting it names exists', () => {
+    for (const v of capture.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+    for (const c of [...capture.matchAll(/npm run ([a-z:]+)/g)].map((m) => m[1] as string)) expect(pkg.scripts[c], c).toBeDefined();
   });
 });

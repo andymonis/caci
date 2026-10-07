@@ -285,6 +285,9 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_TRUSTED_PROXIES` | Reverse proxies in front, 0 to 5 | `0` |
 | `CACI_ALLOWED_HOSTS` | Comma separated host names the server answers to | not set |
 | `CACI_ALLOW_INSECURE` | Accept a non-loopback address with plain cookies | `false` |
+| `CACI_LLM` | Which model files notes: `demo` or `anthropic` (see [Capturing notes through the API](#capturing-notes-through-the-api)) | `demo` |
+| `CACI_PROPOSALS_PER_HOUR` | Proposals one account may start in an hour (1 to 10,000) | `30` |
+| `CACI_MAX_PENDING_PER_USER` | Proposals one account may have waiting (1 to 100) | `10` |
 
 Listening on anything but this machine (`CACI_BIND=0.0.0.0`, say) is refused unless `CACI_COOKIE_SECURE=true`, or you also set `CACI_ALLOW_INSECURE=true` to say you accept that session cookies cross the network in the clear.
 
@@ -326,6 +329,48 @@ npm run users -- recover-admin <username>
 ```
 
 It asks for the new password on the terminal (not shown, typed twice), or reads it from standard input (`echo ... | npm run users -- recover-admin ann`). It never takes the password as an argument, so it is not in your shell history or the process list. It works only for an admin account, ends that account's sessions, and changes nothing else. Being able to run it is the proof of access: whoever can read the data folder can already read everything in it.
+
+## Capturing notes through the API
+
+Once signed in (see above), a person can file a note and browse their own graph over HTTP. It is specified in `specs/R-003-caci-controller.md`. The flow is **propose, preview, approve**: a note is sent to a model, which suggests how to file it; **nothing is written until the person approves**. The same session cookie is used, the graph is always the signed-in person's own (no request can name another), and an administrator has no access to other people's graphs through these routes.
+
+### Which model files the notes
+
+- **`demo` (the default).** A small built-in stand-in that files by matching words. It is free, it is not a classifier, and **nothing leaves this machine**.
+- **`anthropic`.** Set `CACI_LLM=anthropic` and put your key in the environment as `ANTHROPIC_API_KEY`. It applies to **every account at once**. Then **every account's notes, and the names of that account's existing categories, are sent to Anthropic, and nothing is anonymised or pseudonymised.** There is no per-account consent. Use it only when everyone with an account accepts that. Without a valid key the service refuses to start, naming `ANTHROPIC_API_KEY`; the key is read once, kept in memory, and never printed, logged, written to a file or put in a response. The provider's SDK is an optional dependency, loaded only in this mode.
+
+Every proposal reports its `mode`. When the service starts it says which model is in use.
+
+### The routes
+
+All need the session cookie. Ids travel in the query string (`?id=`), never in the path, because ids are opaque text: spaces, capitals, non-Latin characters and 128-character ids all work.
+
+| Route | What it does |
+|---|---|
+| `POST /api/capture/propose` | Body `{ "text" }`, at most 8,000 characters. 201 with the proposal. Nothing is written. |
+| `GET /api/capture/proposals/:id` | The pending proposal (yours only). |
+| `POST /api/capture/proposals/:id/approve` | Writes it in one all-or-nothing step. 200 with what was written. |
+| `POST /api/capture/proposals/:id/reject` | Discards it. 204. |
+| `GET /api/graph` | Counts of items, categories and links. |
+| `GET /api/graph/categories` | Your categories with item counts; `limit` (1 to 100, default 50) and `cursor`. |
+| `GET /api/graph/category` | The items under the category `id`; `limit` and `cursor`. |
+| `GET /api/graph/item` | The item `id` and the categories it is filed under. |
+
+A proposal is `{ id, createdAt, expiresAt, mode, text, summary, operations, rationale? }`: `text` is a plain-text preview, `summary` lists new and reused categories, links and any problems, and `operations` are exactly what you would be approving. It never contains the prompt, the model's raw output, a token count or a cost. Unknown fields and unknown query parameters are refused by name. Item data over 4,096 characters is shortened and flagged.
+
+Failures are `{ error: { code, message } }` with these statuses: 401 not signed in, 404 not found (including a proposal that is not yours: the answer is identical to the one for a made-up id), 409 the write was refused (the proposal stays pending), 410 the proposal expired, 422 bad input, 429 over a limit (with `Retry-After`), 502 the model failed, refused or timed out, 503 the provider is rate limiting (with `Retry-After`), 500 anything else. Messages are fixed per kind: no provider text, path or stack.
+
+### Limits and lifetimes
+
+- **10 pending and 30 an hour per account**, both settable (`CACI_MAX_PENDING_PER_USER`, `CACI_PROPOSALS_PER_HOUR`). They are checked before the model is asked, so a refusal costs nothing.
+- A proposal expires after 15 minutes. **Pending proposals live in memory**: a restart forgets them (and the hourly count), and keeps everything already approved.
+- Each proposal costs one model call. Spending is limited per account, not in total.
+
+### What is not protected
+
+- Notes and categories are stored in `graphs.db` as plain text, readable only by the file's owner; see the warning about encryption above.
+- With `anthropic`, see the paragraph above: nothing is anonymised. The proof of concept was built for its owner's own data; do not put other people's on a service with the real model switched on until pseudonymisation exists (it is in the plan's Backlog).
+- A note is data, never instructions: the model can only propose `upsertNode` and `link` on your own graph, and you see them before they are written.
 
 ## Writing a storage adapter
 
