@@ -5,7 +5,7 @@ import { circlesError, type CirclesError } from './errors.js';
 import { err, ok, type Result } from './result.js';
 import type { CirclePage, CircleStore, CircleSummary, Invitation, Membership } from './store.js';
 import type { Circle, CircleRole } from './types.js';
-import { parseCreateCircle, parseInvite, parseUpdateCircle } from './validate.js';
+import { parseCreateCircle, parseInvite, parseRoleChange, parseUpdateCircle } from './validate.js';
 
 /** A circle as a signed-in member sees it: with their own role and how many people are in it. */
 export interface CircleView {
@@ -120,6 +120,14 @@ export interface CircleController {
   /** Joins the circle with the offered role. Anything but the caller's own open invitation is `NOT_FOUND`. */
   accept(token: unknown, invitationId: unknown): Promise<Result<CircleView, CirclesError>>;
   decline(token: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
+
+  /**
+   * Owners change anyone else's role to any role; managers only move a `member` or `observer` between those
+   * two. Nobody changes their own role. `{ role }`. Returns the person as the roster shows them.
+   */
+  changeRole(token: unknown, circleId: unknown, userId: unknown, input: unknown): Promise<Result<MemberView, CirclesError>>;
+  /** Owners remove anyone else but the last owner; managers only a `member` or `observer`. Leaving is `leave`. */
+  removeMember(token: unknown, circleId: unknown, userId: unknown): Promise<Result<true, CirclesError>>;
 }
 
 export const DEFAULT_CIRCLE_LIMITS = Object.freeze({ maxCirclesPerUser: 20, maxMembersPerCircle: 50, maxOpenInvitationsPerCircle: 50, invitationsPerHour: 30, invitationDays: 7 });
@@ -131,6 +139,7 @@ const ID_ATTEMPTS = 3;
 
 const STORAGE = 'the circle service could not complete the request';
 const notFound = (): CirclesError => circlesError('NOT_FOUND', 'no such circle');
+const noMember = (): CirclesError => circlesError('NOT_FOUND', 'no such member');
 const noInvitation = (): CirclesError => circlesError('NOT_FOUND', 'no such invitation');
 const INVITED = Object.freeze({ invited: true as const });
 const forbidden = (): CirclesError => circlesError('FORBIDDEN', 'your role in this circle does not allow that');
@@ -206,6 +215,12 @@ export function createCircleController(init: CircleControllerInit): CircleContro
       if (cursor === null) return total;
     }
     return total;
+  }
+
+  const LAST_OWNER = 'a circle must keep an owner: make someone else an owner first, or delete the circle';
+  async function memberView(membership: Membership): Promise<MemberView> {
+    const person = await directory.get(membership.userId);
+    return Object.freeze({ userId: membership.userId, ...(person === undefined ? {} : { username: person.username, displayName: person.displayName }), role: membership.role, joinedAt: membership.joinedAt });
   }
 
   const view = (circle: Circle, role: CircleRole, memberCount: number): CircleView =>
@@ -297,10 +312,7 @@ export function createCircleController(init: CircleControllerInit): CircleContro
           throw cause;
         }
         const items: MemberView[] = [];
-        for (const membership of listed.items) {
-          const person = await directory.get(membership.userId);
-          items.push(Object.freeze({ userId: membership.userId, ...(person === undefined ? {} : { username: person.username, displayName: person.displayName }), role: membership.role, joinedAt: membership.joinedAt }));
-        }
+        for (const membership of listed.items) items.push(await memberView(membership));
         return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor }));
       }),
 
@@ -419,6 +431,42 @@ export function createCircleController(init: CircleControllerInit): CircleContro
         if (!who.ok) return who;
         if (typeof invitationId !== 'string' || invitationId === '') return err(noInvitation());
         return (await store.declineInvitation(invitationId, who.value.username, clock())) ? ok(true as const) : err(noInvitation());
+      }),
+
+    changeRole: (token, circleId, userId, input) =>
+      guarded(async () => {
+        const m = await member(token, circleId);
+        if (!m.ok) return m;
+        // owners and managers may change roles at all; which changes depends on who and to what, so that comes next
+        if (!authorise(m.value.role, 'changeRole', { target: 'member', role: 'member', self: false })) return err(forbidden());
+        const parsed = parseRoleChange(input);
+        if (!parsed.ok) return parsed;
+        if (typeof userId !== 'string' || userId === '') return err(noMember());
+        const target = await store.membershipOf(m.value.circleId, userId);
+        if (target === undefined) return err(noMember());
+        if (userId === m.value.userId) return err(circlesError('FORBIDDEN', 'nobody changes their own role: ask another owner'));
+        if (!authorise(m.value.role, 'changeRole', { target: target.role, role: parsed.value, self: false })) return err(forbidden());
+        const changed = await store.changeRole(m.value.circleId, userId, parsed.value);
+        if (!changed.ok) {
+          if (changed.error.code === 'LAST_OWNER') return err(circlesError('LAST_OWNER', LAST_OWNER));
+          return changed.error.code === 'NOT_FOUND' ? err(noMember()) : changed;
+        }
+        return ok(await memberView(changed.value));
+      }),
+
+    removeMember: (token, circleId, userId) =>
+      guarded(async () => {
+        const m = await member(token, circleId);
+        if (!m.ok) return m;
+        if (!authorise(m.value.role, 'removeMember', { target: 'member', self: false })) return err(forbidden());
+        if (typeof userId !== 'string' || userId === '') return err(noMember());
+        const target = await store.membershipOf(m.value.circleId, userId);
+        if (target === undefined) return err(noMember());
+        if (userId === m.value.userId) return err(circlesError('FORBIDDEN', 'to leave a circle, leave it; nobody removes themselves'));
+        if (!authorise(m.value.role, 'removeMember', { target: target.role, self: false })) return err(forbidden());
+        const removed = await store.removeMember(m.value.circleId, userId);
+        if (!removed.ok) return removed.error.code === 'LAST_OWNER' ? err(circlesError('LAST_OWNER', LAST_OWNER)) : removed;
+        return removed.value ? ok(true as const) : err(noMember());
       }),
   };
 }

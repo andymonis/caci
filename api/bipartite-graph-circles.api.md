@@ -56,6 +56,7 @@ export type CircleAction = (typeof CIRCLE_ACTIONS)[number];
 // @public
 export interface CircleController {
     accept(token: unknown, invitationId: unknown): Promise<Result<CircleView, CirclesError>>;
+    changeRole(token: unknown, circleId: unknown, userId: unknown, input: unknown): Promise<Result<MemberView, CirclesError>>;
     // (undocumented)
     create(token: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
     // (undocumented)
@@ -72,6 +73,7 @@ export interface CircleController {
     // (undocumented)
     members(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<MemberView>, CirclesError>>;
     myInvitations(token: unknown, page?: PageRequest): Promise<Result<Page<MyInvitationView>, CirclesError>>;
+    removeMember(token: unknown, circleId: unknown, userId: unknown): Promise<Result<true, CirclesError>>;
     revokeInvitation(token: unknown, circleId: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
     update(token: unknown, circleId: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
 }
