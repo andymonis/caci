@@ -29,7 +29,7 @@ const tmp = (): string => {
   dirs.push(dir);
   return dir;
 };
-const config = (dataDir: string, extra: Partial<ServiceConfig> = {}): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, ...extra });
+const config = (dataDir: string, extra: Partial<ServiceConfig> = {}): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, ...extra });
 async function start(dataDir: string, extra: Partial<ServiceConfig> = {}, options: ServiceOptions = {}): Promise<RunningService> {
   const service = await startService(config(dataDir, extra), { log: (e) => everythingSeen.push(JSON.stringify(e)), ...options });
   running.push(service);
@@ -140,7 +140,7 @@ describe('capture through the running service, with the demo model', () => {
   }, 30_000);
 
   it('the hourly limit comes from the settings too: the third proposal in an hour is 429 THROTTLED', async () => {
-    const service = await start(tmp(), { proposalsPerHour: 2, maxPendingPerUser: 10 });
+    const service = await start(tmp(), { proposalsPerHour: 2, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7 });
     const web = browser(service.port);
     await web.signIn('ann');
     expect((await web.call('POST', '/api/capture/propose', { text: 'first note' })).status).toBe(201);

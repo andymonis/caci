@@ -14,7 +14,7 @@ const errorsOf = (env: Record<string, string | undefined>) => {
 
 describe('defaults', () => {
   it('an empty environment gives the safe local setup', () => {
-    expect(good({})).toEqual({ port: 8080, bind: '127.0.0.1', dataDir: './data', allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10 });
+    expect(good({})).toEqual({ port: 8080, bind: '127.0.0.1', dataDir: './data', allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7 });
   });
 
   it('unset and empty are the same thing', () => {
@@ -109,6 +109,24 @@ describe('the model and the limits', () => {
     for (const bad of ['0', '10001', '-1', '1.5', 'many', '1e3']) expect(errorsOf({ CACI_PROPOSALS_PER_HOUR: bad }).map((e) => e.variable), bad).toEqual(['CACI_PROPOSALS_PER_HOUR']);
   });
 
+  it('CACI_MAX_CIRCLES_PER_USER: 1 to 1,000, default 20', () => {
+    expect(good({ CACI_MAX_CIRCLES_PER_USER: '1' }).maxCirclesPerUser).toBe(1);
+    expect(good({ CACI_MAX_CIRCLES_PER_USER: '1000' }).maxCirclesPerUser).toBe(1000);
+    for (const bad of ['0', '1001', '-1', '1.5', 'many', '1e3', '10000']) expect(errorsOf({ CACI_MAX_CIRCLES_PER_USER: bad }).map((e) => e.variable), bad).toEqual(['CACI_MAX_CIRCLES_PER_USER']);
+  });
+
+  it('CACI_MAX_MEMBERS_PER_CIRCLE: 1 to 1,000, default 50', () => {
+    expect(good({ CACI_MAX_MEMBERS_PER_CIRCLE: '1' }).maxMembersPerCircle).toBe(1);
+    expect(good({ CACI_MAX_MEMBERS_PER_CIRCLE: '1000' }).maxMembersPerCircle).toBe(1000);
+    for (const bad of ['0', '1001', '-1', '2.5', 'lots']) expect(errorsOf({ CACI_MAX_MEMBERS_PER_CIRCLE: bad }).map((e) => e.variable), bad).toEqual(['CACI_MAX_MEMBERS_PER_CIRCLE']);
+  });
+
+  it('CACI_INVITATION_DAYS: 1 to 365, default 7', () => {
+    expect(good({ CACI_INVITATION_DAYS: '1' }).invitationDays).toBe(1);
+    expect(good({ CACI_INVITATION_DAYS: '365' }).invitationDays).toBe(365);
+    for (const bad of ['0', '366', '-1', '1.5', 'week']) expect(errorsOf({ CACI_INVITATION_DAYS: bad }).map((e) => e.variable), bad).toEqual(['CACI_INVITATION_DAYS']);
+  });
+
   it('CACI_MAX_PENDING_PER_USER: 1 to 100, default 10', () => {
     expect(good({ CACI_MAX_PENDING_PER_USER: '1' }).maxPendingPerUser).toBe(1);
     expect(good({ CACI_MAX_PENDING_PER_USER: '100' }).maxPendingPerUser).toBe(100);
@@ -155,13 +173,13 @@ describe('mistakes are reported, all of them, by variable name', () => {
 
   it('never repeats what was given in a message', () => {
     const odd = 'SECRET-LOOKING-VALUE-sk-ant-12345';
-    const all = errorsOf({ CACI_PORT: odd, CACI_BIND: odd, CACI_DATA_DIR: `${odd}\0`, CACI_ALLOW_REGISTRATION: odd, CACI_COOKIE_SECURE: odd, CACI_TRUSTED_PROXIES: odd, CACI_ALLOWED_HOSTS: odd + ' x', CACI_ALLOW_INSECURE: odd, CACI_LLM: odd, CACI_PROPOSALS_PER_HOUR: odd, CACI_MAX_PENDING_PER_USER: odd, CACI_ODD: odd });
+    const all = errorsOf({ CACI_PORT: odd, CACI_BIND: odd, CACI_DATA_DIR: `${odd}\0`, CACI_ALLOW_REGISTRATION: odd, CACI_COOKIE_SECURE: odd, CACI_TRUSTED_PROXIES: odd, CACI_ALLOWED_HOSTS: odd + ' x', CACI_ALLOW_INSECURE: odd, CACI_LLM: odd, CACI_PROPOSALS_PER_HOUR: odd, CACI_MAX_PENDING_PER_USER: odd, CACI_MAX_CIRCLES_PER_USER: odd, CACI_MAX_MEMBERS_PER_CIRCLE: odd, CACI_INVITATION_DAYS: odd, CACI_ODD: odd });
     expect(all.length).toBeGreaterThanOrEqual(12);
     expect(JSON.stringify(all)).not.toContain('SECRET');
     expect(JSON.stringify(all)).not.toContain('sk-ant');
   });
 
   it('the list of variables is the list the README will name', () => {
-    expect([...VARIABLES].sort()).toEqual(['CACI_ALLOWED_HOSTS', 'CACI_ALLOW_INSECURE', 'CACI_ALLOW_REGISTRATION', 'CACI_BIND', 'CACI_COOKIE_SECURE', 'CACI_DATA_DIR', 'CACI_LLM', 'CACI_MAX_PENDING_PER_USER', 'CACI_PORT', 'CACI_PROPOSALS_PER_HOUR', 'CACI_TRUSTED_PROXIES']);
+    expect([...VARIABLES].sort()).toEqual(['CACI_ALLOWED_HOSTS', 'CACI_ALLOW_INSECURE', 'CACI_ALLOW_REGISTRATION', 'CACI_BIND', 'CACI_COOKIE_SECURE', 'CACI_DATA_DIR', 'CACI_INVITATION_DAYS', 'CACI_LLM', 'CACI_MAX_CIRCLES_PER_USER', 'CACI_MAX_MEMBERS_PER_CIRCLE', 'CACI_MAX_PENDING_PER_USER', 'CACI_PORT', 'CACI_PROPOSALS_PER_HOUR', 'CACI_TRUSTED_PROXIES']);
   });
 });

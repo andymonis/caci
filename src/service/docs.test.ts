@@ -20,7 +20,9 @@ function section(title: string): string {
 }
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
-const DOCUMENTED = [...VARIABLES];
+/** Settings that are read and checked but not yet in the README: T-106 wires the circles in and T-108 documents them. Empty this list then (the tests below fail if one is documented early or left out late). */
+const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_MAX_CIRCLES_PER_USER', 'CACI_MAX_MEMBERS_PER_CIRCLE', 'CACI_INVITATION_DAYS'];
+const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
 
 describe('the user accounts section of the README', () => {
   it('is there, and long enough to be the real thing', () => {

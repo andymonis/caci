@@ -1,8 +1,10 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createAccountRoutes, createApiServer, createCaptureRoutes, createReadRoutes } from '../api/index.js';
+import { createAccountRoutes, createApiServer, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
 import { createCaciController } from '../caci/index.js';
+import { createCircleController } from '../circles/index.js';
+import { createSqliteCircleStore } from '../circles/sqlite/index.js';
 import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';
 import { createDemoModelClient, createLlm, type ModelClient } from '../llm/index.js';
 import { createUserController } from '../users/index.js';
@@ -40,7 +42,7 @@ async function modelFor(config: ServiceConfig, options: ServiceOptions): Promise
 }
 
 /**
- * Starts the service: opens (creating, owner-only) the two databases in the data folder, builds the
+ * Starts the service: opens (creating, owner-only) the two databases (`users.db` holds the accounts, the sessions and the circles) in the data folder, builds the
  * stores, the controller and the HTTP server, and listens. If anything fails part-way everything
  * already opened is closed again, and the error says what was wrong.
  */
@@ -65,6 +67,8 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     closers.push(() => users.close());
     const sessions = createSqliteSessionStore({ path: join(dataDir, 'users.db') });
     closers.push(() => sessions.close());
+    const circleStore = createSqliteCircleStore({ path: join(dataDir, 'users.db') }); // circles live beside the accounts, so deleting an account can remove its places in the same transaction
+    closers.push(() => circleStore.close());
 
     const controller = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration } });
     const capture = createController({ adapter: graphs, llm: createLlm({ client }) });
@@ -75,10 +79,18 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       mode: config.llm,
       limits: { maxPendingPerUser: config.maxPendingPerUser, proposalsPerHour: config.proposalsPerHour },
     });
+    const circles = createCircleController({
+      users: controller,
+      directory: users,
+      store: circleStore,
+      limits: { maxCirclesPerUser: config.maxCirclesPerUser, maxMembersPerCircle: config.maxMembersPerCircle, invitationDays: config.invitationDays },
+    });
     const routes = [
       ...createAccountRoutes({ controller, secureCookies: config.cookieSecure }),
       ...createCaptureRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createReadRoutes({ caci, secureCookies: config.cookieSecure }),
+      ...createCircleRoutes({ circles, secureCookies: config.cookieSecure }),
+      ...createInvitationRoutes({ circles, secureCookies: config.cookieSecure }),
     ];
     const api = createApiServer({
       routes,
