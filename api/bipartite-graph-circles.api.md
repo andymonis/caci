@@ -55,15 +55,24 @@ export type CircleAction = (typeof CIRCLE_ACTIONS)[number];
 
 // @public
 export interface CircleController {
+    accept(token: unknown, invitationId: unknown): Promise<Result<CircleView, CirclesError>>;
     // (undocumented)
     create(token: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
+    // (undocumented)
+    decline(token: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
     delete(token: unknown, circleId: unknown): Promise<Result<true, CirclesError>>;
     // (undocumented)
     get(token: unknown, circleId: unknown): Promise<Result<CircleView, CirclesError>>;
+    invitations(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<InvitationView>, CirclesError>>;
+    invite(token: unknown, circleId: unknown, input: unknown): Promise<Result<{
+        readonly invited: true;
+    }, CirclesError>>;
     leave(token: unknown, circleId: unknown): Promise<Result<true, CirclesError>>;
     list(token: unknown, page?: PageRequest): Promise<Result<Page<CircleView>, CirclesError>>;
     // (undocumented)
     members(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<MemberView>, CirclesError>>;
+    myInvitations(token: unknown, page?: PageRequest): Promise<Result<Page<MyInvitationView>, CirclesError>>;
+    revokeInvitation(token: unknown, circleId: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
     update(token: unknown, circleId: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
 }
 
@@ -75,6 +84,7 @@ export interface CircleControllerInit {
     // (undocumented)
     readonly limits?: CircleControllerLimits;
     readonly newCircleId?: () => string;
+    readonly newInvitationId?: () => string;
     // (undocumented)
     readonly store: CircleStore;
     // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
@@ -83,7 +93,11 @@ export interface CircleControllerInit {
 
 // @public (undocumented)
 export interface CircleControllerLimits {
+    readonly invitationDays?: number;
+    readonly invitationsPerHour?: number;
     readonly maxCirclesPerUser?: number;
+    readonly maxMembersPerCircle?: number;
+    readonly maxOpenInvitationsPerCircle?: number;
 }
 
 // @public (undocumented)
@@ -216,6 +230,10 @@ export function createMemoryCircleStore(): CircleStore;
 // @public (undocumented)
 export const DEFAULT_CIRCLE_LIMITS: Readonly<{
     maxCirclesPerUser: 20;
+    maxMembersPerCircle: 50;
+    maxOpenInvitationsPerCircle: 50;
+    invitationsPerHour: 30;
+    invitationDays: 7;
 }>;
 
 // @public (undocumented)
@@ -247,6 +265,24 @@ export interface InvitationRecord {
     // (undocumented)
     readonly role: CircleRole;
     // (undocumented)
+    readonly username: string;
+}
+
+// @public
+export interface InvitationView {
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly invitedBy: {
+        readonly userId: string;
+        readonly displayName?: string;
+    };
+    // (undocumented)
+    readonly role: CircleRole;
     readonly username: string;
 }
 
@@ -306,6 +342,27 @@ export interface MemberView {
     readonly userId: string;
     // (undocumented)
     readonly username?: string;
+}
+
+// @public
+export interface MyInvitationView {
+    // (undocumented)
+    readonly circle: {
+        readonly id: string;
+        readonly name: string;
+    };
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly invitedBy: {
+        readonly displayName?: string;
+    };
+    // (undocumented)
+    readonly role: CircleRole;
 }
 
 // Warning: (ae-forgotten-export) The symbol "Random" needs to be exported by the entry point index.d.ts

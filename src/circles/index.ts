@@ -15,4 +15,4 @@ export type { Err, Ok, Result } from './result.js';
 export { createMemoryCircleStore } from './memory-store.js';
 export type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from './store.js';
 export { createCircleController, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './controller.js';
-export type { CircleController, CircleControllerInit, CircleControllerLimits, CircleView, MemberView, Page, PageRequest } from './controller.js';
+export type { CircleController, CircleControllerInit, CircleControllerLimits, CircleView, InvitationView, MemberView, MyInvitationView, Page, PageRequest } from './controller.js';

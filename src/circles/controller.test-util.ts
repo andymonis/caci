@@ -25,16 +25,19 @@ export interface World {
   forget(name: string): void;
   /** Every token the controller was asked to resolve (for "was the session even looked at"). */
   resolved: unknown[];
+  /** Every user id the controller looked up in the directory. */
+  lookups: string[];
 }
 
 const NAMES = ['ann', 'bob', 'cat', 'dan', 'eve', 'fay', 'gus', 'hal', 'ivy', 'jon'];
 
-export function world(extra: { store?: CircleStore; limits?: CircleControllerInit['limits']; newCircleId?: () => string; people?: readonly string[] } = {}): World {
+export function world(extra: { store?: CircleStore; limits?: CircleControllerInit['limits']; newCircleId?: () => string; newInvitationId?: () => string; people?: readonly string[] } = {}): World {
   const store = extra.store ?? createMemoryCircleStore();
   const now = { value: T0 };
   const people = new Map<string, Person>();
   for (const [index, name] of (extra.people ?? NAMES).entries()) people.set(name, { id: `u${String(index + 1).padStart(16, '0')}`, username: name, displayName: `Display ${name}`.toUpperCase() });
   const resolved: unknown[] = [];
+  const lookups: string[] = [];
   const controller = createCircleController({
     users: {
       resolve: async (token: unknown): Promise<Result<never, never>> => {
@@ -48,6 +51,7 @@ export function world(extra: { store?: CircleStore; limits?: CircleControllerIni
     },
     directory: {
       get: async (id: string) => {
+        lookups.push(id);
         const person = [...people.values()].find((p) => p.id === id);
         return person === undefined ? undefined : ({ ...person, email: `${person.username}@example.com`, role: 'user', createdAt: 1, updatedAt: 1 } as never);
       },
@@ -56,6 +60,7 @@ export function world(extra: { store?: CircleStore; limits?: CircleControllerIni
     ...(extra.limits === undefined ? {} : { limits: extra.limits }),
     clock: () => now.value,
     ...(extra.newCircleId === undefined ? {} : { newCircleId: extra.newCircleId }),
+    ...(extra.newInvitationId === undefined ? {} : { newInvitationId: extra.newInvitationId }),
   });
   return {
     controller,
@@ -65,6 +70,7 @@ export function world(extra: { store?: CircleStore; limits?: CircleControllerIni
     id: (name) => (people.get(name) as Person).id,
     forget: (name) => void people.delete(name),
     resolved,
+    lookups,
   };
 }
 
@@ -83,7 +89,7 @@ let invitationCounter = 0;
 export async function addMember(w: World, circleId: string, name: string, role: 'owner' | 'manager' | 'member' | 'observer', at = T0 + 1): Promise<void> {
   const id = `i${String(++invitationCounter).padStart(16, '0')}`;
   const limits = { maxCirclesPerUser: 1000, maxMembersPerCircle: 1000, maxOpenInvitationsPerCircle: 1000 };
-  const made = await w.store.createInvitation({ id, circleId, username: name, role, invitedBy: w.id('ann'), createdAt: at, expiresAt: at + 1_000_000 }, limits, at);
+  const made = await w.store.createInvitation({ id, circleId, username: name, role, invitedBy: w.id(name), createdAt: at, expiresAt: at + 1_000_000 }, limits, at);
   if (!made.ok) throw new Error(JSON.stringify(made.error));
   const joined = await w.store.acceptInvitation(id, w.id(name), name, at, limits);
   if (!joined.ok) throw new Error(JSON.stringify(joined.error));
