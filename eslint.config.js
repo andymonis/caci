@@ -53,6 +53,18 @@ export default tseslint.config(
     },
   },
   {
+    // The web app's browser code (shipped), and its tests (Node, not shipped).
+    files: ['web/**/*.js'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: { document: 'readonly', window: 'readonly', fetch: 'readonly', console: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly' },
+    },
+  },
+  {
+    files: ['web/**/*.mjs'],
+    languageOptions: { globals: { console: 'readonly', process: 'readonly', URL: 'readonly', Buffer: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly' } },
+  },
+  {
     files: ['scripts/**/*.mjs'],
     languageOptions: { globals: { URL: 'readonly', console: 'readonly', process: 'readonly', AbortSignal: 'readonly' } },
   },
