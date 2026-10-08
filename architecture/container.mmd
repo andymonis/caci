@@ -5,7 +5,7 @@ C4Container
     System_Ext(System_llm, "LLM", "Answers questions and categorises information using CaCi context.")
 
     Enterprise_Boundary(caci_platform, "CaCi Platform") {
-        Container(web_app, "Web App", "HTML, CSS, JavaScript", "Planned (R-005, W1). A small browser app, served by the API from the same address: register, sign in and out, and a temporary home page. No build step and no dependency; builds its screens from text only under a strict Content-Security-Policy. Code: web/.")
+        Container(web_app, "Web App", "HTML, CSS, JavaScript", "A small browser app, served by the API from the same address: register, sign in and out, and a temporary home page. No build step and no dependency; builds its screens from text only under a strict Content-Security-Policy. Code: web/.")
         Container(api, "HTTP API", "Node.js (node:http)", "The only network code: account routes, and the capture and read routes of the CaCi controller. Same-origin JSON, session cookie, security headers, bounded requests. Code: src/api.")
         Container(service, "Service", "Node.js", "Reads the CACI_* settings, opens the two database files, wires everything, and runs npm run serve and npm run users. Code: src/service.")
         Container(user_controller, "User Controller", "TypeScript", "Accounts, passwords (scrypt), sessions, throttling and who may do what; gives each person exactly one graph. Code: src/users.")
@@ -20,8 +20,8 @@ C4Container
     }
 
     Rel(user, web_app, "Uses in a browser, over HTTP(S) through a reverse proxy when exposed")
-    Rel(web_app, api, "Calls the account routes from the same address (planned)")
-    Rel(api, web_app, "Serves its files (planned)")
+    Rel(web_app, api, "Calls the account routes from the same address")
+    Rel(api, web_app, "Serves its files")
     Rel(service, api, "Starts and configures")
     Rel(api, user_controller, "Register, sign in and out, account routes")
     Rel(api, caci_controller, "Capture and browse")

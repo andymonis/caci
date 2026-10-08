@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>CaCi</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>CaCi</h1>
+
+    <noscript><p class="notice">This app needs JavaScript. Please turn it on and reload the page.</p></noscript>
+
+    <section id="screen-loading" hidden>
+      <p role="status">Loading…</p>
+    </section>
+
+    <section id="screen-unreachable" hidden>
+      <h2>Cannot reach the service</h2>
+      <p id="unreachable-message" role="alert"></p>
+      <button type="button" id="retry">Try again</button>
+    </section>
+
+    <section id="screen-signed-out" hidden>
+      <section id="signin-section" hidden>
+        <h2>Sign in</h2>
+        <form id="signin-form" method="post" novalidate>
+          <p id="signin-error" class="error" role="alert" tabindex="-1" hidden></p>
+          <div class="field">
+            <label for="signin-username">Username</label>
+            <input id="signin-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="signin-username-error" required>
+            <p id="signin-username-error" class="error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="signin-password">Password</label>
+            <input id="signin-password" name="password" type="password" autocomplete="current-password" aria-describedby="signin-password-error" required>
+            <p id="signin-password-error" class="error" hidden></p>
+          </div>
+          <button type="submit" id="signin-submit">Sign in</button>
+        </form>
+        <p class="switch">New here? <button type="button" id="show-register" class="link">Create an account</button></p>
+      </section>
+
+      <section id="register-section" hidden>
+        <h2>Create an account</h2>
+        <p class="note">The first account created on a new installation becomes the administrator.</p>
+        <form id="register-form" method="post" novalidate>
+          <p id="register-error" class="error" role="alert" tabindex="-1" hidden></p>
+          <div class="field">
+            <label for="register-username">Username</label>
+            <input id="register-username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="register-username-hint register-username-error" required>
+            <p id="register-username-hint" class="hint">3 to 32 characters: letters, digits, “.”, “_” and “-”.</p>
+            <p id="register-username-error" class="error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="register-displayName">Name to show</label>
+            <input id="register-displayName" name="displayName" type="text" autocomplete="name" aria-describedby="register-displayName-error" required>
+            <p id="register-displayName-error" class="error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="register-email">Email <span class="optional">(optional)</span></label>
+            <input id="register-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" aria-describedby="register-email-hint register-email-error">
+            <p id="register-email-hint" class="hint">Only kept as a contact detail. Nothing is ever sent to it.</p>
+            <p id="register-email-error" class="error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="register-password">Password</label>
+            <input id="register-password" name="password" type="password" autocomplete="new-password" aria-describedby="register-password-hint register-password-error" required>
+            <p id="register-password-hint" class="hint">12 to 128 characters. A long phrase is best.</p>
+            <p id="register-password-error" class="error" hidden></p>
+          </div>
+          <button type="submit" id="register-submit">Create account</button>
+        </form>
+        <p class="switch">Already have an account? <button type="button" id="show-signin" class="link">Sign in</button></p>
+      </section>
+    </section>
+
+    <section id="screen-signed-in" hidden>
+      <h2>Home</h2>
+      <p class="notice">This is a temporary home page. More will arrive here later.</p>
+      <p id="signed-in-notice" class="error" role="alert" hidden></p>
+      <dl>
+        <dt>Name</dt>
+        <dd id="user-display-name"></dd>
+        <dt>Username</dt>
+        <dd id="user-username"></dd>
+      </dl>
+      <button type="button" id="signout">Sign out</button>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
