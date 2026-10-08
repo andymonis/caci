@@ -451,3 +451,174 @@ describe('one circle\'s logic against the real service (three accounts)', () => 
     expect(hostile.getState().status).toBe('gone');
   });
 });
+
+describe('the whole circles journey through the pages\' own code, against the real service', () => {
+  /** One person\'s browser: its own cookie jar, address bar and page, mounted on the real service. */
+  function browser(port, jar = browserFetch(port), hash = '') {
+    const page = fakePage();
+    let current = hash;
+    const listeners = [];
+    const env = { getHash: () => current, setHash: (h) => { current = h; for (const l of listeners) l(); }, onHashChange: (fn) => listeners.push(fn) };
+    mount(page.document, jar, env);
+    return { page, jar, env, hash: () => current, go: (h) => env.setHash(h), reload: () => browser(port, jar, current) };
+  }
+  const el = (b, id) => b.page.el(id);
+  const rows = (b, list) => el(b, list).children;
+  const slot = (row, name) => row.querySelector(`[data-slot="${name}"]`);
+  const view = (b) => ['home', 'circles', 'circle', 'invitations'].find((v) => !b.page.el(`view-${v}`).hidden);
+  const submit = (b, form) => b.page.el(`${form}-form`).fire('submit');
+
+  async function register(port, name) {
+    const b = browser(port);
+    await waitFor(() => !el(b, 'signin-section').hidden && visibleScreens(b.page)[0] === 'signed-out');
+    el(b, 'show-register').fire('click');
+    fill(b.page, 'register', { username: name, displayName: `Display ${name}`, email: '', password: PW });
+    submit(b, 'register');
+    await waitFor(() => visibleScreens(b.page)[0] === 'signed-in');
+    return b;
+  }
+
+  it('create, invite, see the count, accept, invite as a manager, change a role, remove, leave, delete, a stranger, a hostile address and a reload', async () => {
+    const { port } = await start();
+    await register(port, 'root'); // the first account is the administrator and not part of the story
+    const ann = await register(port, 'ann');
+    const bob = await register(port, 'bob');
+    const cat = await register(port, 'cat');
+    await waitFor(() => el(bob, 'home-invitations-count').textContent === 'You have no open invitations.');
+
+    // ann makes a circle and lands on it as its owner
+    ann.go('#/circles');
+    await waitFor(() => view(ann) === 'circles' && !el(ann, 'circles-empty').hidden);
+    fill(ann.page, 'create', { name: 'Neighbours', description: 'Next door' });
+    submit(ann, 'create');
+    await waitFor(() => view(ann) === 'circle' && el(ann, 'circle-heading').textContent === 'Neighbours');
+    const id = /^#\/circles\/(c[a-z0-9]{16})$/.exec(ann.hash())?.[1];
+    expect(id).toBeTruthy();
+    expect(el(ann, 'circle-role').textContent).toBe('Your role: owner');
+    expect(rows(ann, 'members-list')).toHaveLength(1);
+    expect(ann.page.document.title).toBe('Circle – CaCi');
+    expect(ann.page.focused().id).toBe('circle-heading');
+
+    // she invites bob as a manager; the page never says whether the account exists
+    fill(ann.page, 'invite', { username: 'BOB' });
+    el(ann, 'invite-role').value = 'manager';
+    submit(ann, 'invite');
+    await waitFor(() => !el(ann, 'invite-notice').hidden);
+    expect(el(ann, 'invite-notice').textContent).toBe('Invitation recorded for "bob".');
+    fill(ann.page, 'invite', { username: 'nobody.at.all' });
+    el(ann, 'invite-role').value = 'member';
+    submit(ann, 'invite');
+    await waitFor(() => el(ann, 'invite-notice').textContent === 'Invitation recorded for "nobody.at.all".');
+    await waitFor(() => rows(ann, 'circle-invitations-list').length === 2);
+
+    // bob\'s count is as old as his last look; Refresh shows the invitation; he accepts and lands on the circle
+    expect(el(bob, 'home-invitations-count').textContent).toBe('You have no open invitations.');
+    el(bob, 'home-refresh').fire('click');
+    await waitFor(() => el(bob, 'home-invitations-count').textContent === 'You have 1 open invitation.');
+    bob.go('#/invitations');
+    await waitFor(() => view(bob) === 'invitations' && rows(bob, 'invitations-list').length === 1 && !slot(rows(bob, 'invitations-list')[0], 'accept').disabled);
+    const row = rows(bob, 'invitations-list')[0];
+    expect(slot(row, 'circle').textContent).toBe('Neighbours');
+    expect(slot(row, 'meta').textContent).toBe('You would be: Manager');
+    expect(slot(row, 'from').textContent).toBe('Invited by Display ann');
+    slot(row, 'accept').fire('click');
+    await waitFor(() => view(bob) === 'circle' && el(bob, 'circle-heading').textContent === 'Neighbours');
+    expect(bob.hash()).toBe(`#/circles/${id}`);
+    expect(el(bob, 'circle-role').textContent).toBe('Your role: manager');
+    expect(el(bob, 'home-invitations-count').textContent).toBe('You have no open invitations.');
+    await waitFor(() => rows(bob, 'members-list').length === 2);
+
+    // as a manager he may invite members and observers only, and invites cat
+    expect(el(bob, 'invite-section').hidden).toBe(false);
+    expect(el(bob, 'invite-role-owner').hidden).toBe(true);
+    expect(el(bob, 'invite-role-manager').hidden).toBe(true);
+    expect(el(bob, 'delete-button').hidden).toBe(true);
+    fill(bob.page, 'invite', { username: 'cat' });
+    el(bob, 'invite-role').value = 'member';
+    submit(bob, 'invite');
+    await waitFor(() => !el(bob, 'invite-notice').hidden);
+    cat.go('#/invitations');
+    await waitFor(() => view(cat) === 'invitations' && rows(cat, 'invitations-list').length === 1 && !slot(rows(cat, 'invitations-list')[0], 'accept').disabled);
+    slot(rows(cat, 'invitations-list')[0], 'accept').fire('click');
+    await waitFor(() => view(cat) === 'circle' && el(cat, 'circle-role').textContent === 'Your role: member');
+    expect(el(cat, 'rename-section').hidden).toBe(true);
+    expect(el(cat, 'invite-section').hidden).toBe(true);
+    expect(el(cat, 'leave-button').hidden).toBe(false);
+
+    // a reload on the circle stays on the circle
+    const reloaded = ann.reload();
+    await waitFor(() => visibleScreens(reloaded.page)[0] === 'signed-in' && view(reloaded) === 'circle' && rows(reloaded, 'members-list').length === 3);
+    expect(reloaded.hash()).toBe(`#/circles/${id}`);
+    expect(el(reloaded, 'circle-heading').textContent).toBe('Neighbours');
+
+    // ann changes cat to observer, bob (a manager) removes cat after being asked
+    const catRow = () => rows(reloaded, 'members-list').find((r) => slot(r, 'name').textContent === 'Display cat');
+    slot(catRow(), 'role').value = 'observer';
+    slot(catRow(), 'save').fire('click');
+    await waitFor(() => /Observer/.test(slot(catRow(), 'meta').textContent));
+    el(bob, 'circle-refresh').fire('click');
+    await waitFor(() => rows(bob, 'members-list').length === 3 && /Observer/.test(slot(rows(bob, 'members-list').find((r) => slot(r, 'name').textContent === 'Display cat'), 'meta').textContent));
+    const bobCatRow = () => rows(bob, 'members-list').find((r) => slot(r, 'name').textContent === 'Display cat');
+    slot(bobCatRow(), 'remove').fire('click');
+    expect(slot(bobCatRow(), 'removeAsk').hidden).toBe(false);
+    slot(bobCatRow(), 'removeNo').fire('click');
+    expect(rows(bob, 'members-list')).toHaveLength(3); // cancelled: nothing happened
+    slot(bobCatRow(), 'remove').fire('click');
+    slot(bobCatRow(), 'removeYes').fire('click');
+    await waitFor(() => rows(bob, 'members-list').length === 2);
+
+    // cat is now a stranger to the circle: "no such circle", same words as for a made-up one
+    el(cat, 'circle-refresh').fire('click');
+    await waitFor(() => !el(cat, 'circle-gone').hidden);
+    expect(el(cat, 'circle-gone').textContent).toBe('No such circle, or you are not in it.');
+    const madeUp = cat.reload();
+    madeUp.go('#/circles/c0000000000000000');
+    await waitFor(() => view(madeUp) === 'circle' && !el(madeUp, 'circle-gone').hidden);
+    expect(el(madeUp, 'circle-gone').textContent).toBe('No such circle, or you are not in it.');
+
+    // the only owner may not leave, in the service\'s words; make bob an owner and then she may
+    el(reloaded, 'leave-button').fire('click');
+    expect(el(reloaded, 'leave-confirm').hidden).toBe(false);
+    el(reloaded, 'leave-yes').fire('click');
+    await waitFor(() => !el(reloaded, 'circle-error').hidden);
+    expect(el(reloaded, 'circle-error').textContent.toLowerCase()).toContain('only owner');
+    expect(reloaded.hash()).toBe(`#/circles/${id}`);
+    const bobRow = () => rows(reloaded, 'members-list').find((r) => slot(r, 'name').textContent === 'Display bob');
+    slot(bobRow(), 'role').value = 'owner';
+    slot(bobRow(), 'save').fire('click');
+    await waitFor(() => /Owner/.test(slot(bobRow(), 'meta').textContent));
+    el(reloaded, 'leave-button').fire('click');
+    el(reloaded, 'leave-yes').fire('click');
+    await waitFor(() => reloaded.hash() === '#/circles' && view(reloaded) === 'circles');
+    await waitFor(() => rows(reloaded, 'circles-list').length === 0);
+
+    // bob, now the owner, deletes the circle after being asked
+    el(bob, 'circle-refresh').fire('click');
+    await waitFor(() => !el(bob, 'delete-button').hidden);
+    el(bob, 'delete-button').fire('click');
+    expect(el(bob, 'delete-confirm-text').textContent).toContain('removes the circle, its members and its invitations');
+    el(bob, 'delete-yes').fire('click');
+    await waitFor(() => bob.hash() === '#/circles' && view(bob) === 'circles');
+    await waitFor(() => rows(bob, 'circles-list').length === 0 && !el(bob, 'circles-empty').hidden);
+
+    // a hostile address lands on home
+    const hostile = ann.reload();
+    hostile.go('#/circles/..%2f..');
+    await waitFor(() => view(hostile) === 'home');
+    expect(hostile.hash()).toBe('#/circles/..%2f..'); // the page does not rewrite the address; it just shows home
+  });
+
+  it('markup in names stays text across the whole journey', async () => {
+    const { port } = await start();
+    await register(port, 'root');
+    const ann = await register(port, 'ann');
+    ann.go('#/circles');
+    await waitFor(() => view(ann) === 'circles' && !el(ann, 'create-submit').disabled);
+    fill(ann.page, 'create', { name: '<img src=x onerror=alert(1)>', description: '<script>x</script>' });
+    submit(ann, 'create');
+    await waitFor(() => view(ann) === 'circle' && el(ann, 'circle-heading').textContent === '<img src=x onerror=alert(1)>');
+    expect(el(ann, 'circle-description').textContent).toBe('<script>x</script>');
+    await waitFor(() => rows(ann, 'members-list').length === 1);
+    expect(slot(rows(ann, 'members-list')[0], 'name').children).toEqual([]);
+  });
+});
