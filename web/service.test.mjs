@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { startService } from '../src/service/service.ts';
 import { createApiClient } from './api-client.js';
 import { createCirclesClient } from './circles-client.js';
+import { createCirclesSession } from './circles-session.js';
 import { fakePage, fill, visibleScreens, waitFor } from './fake-page.test-util.mjs';
 import { mount } from './mount.js';
 import { createSession } from './session.js';
@@ -239,5 +240,93 @@ describe('the circles client against the real service', () => {
     expect(circle).toMatchObject({ id, name: hostile, description: hostile });
     expect((await eve.listMembers(id)).value.items[0].displayName).toBe(hostile);
     expect(ann).toBeDefined();
+  });
+});
+
+describe('the circles list and invitations logic against the real service', () => {
+  const person = async (port, name) => {
+    const jar = browserFetch(port);
+    const session = createSession({ api: createApiClient({ fetchFn: jar }) });
+    expect(await session.register({ username: name, displayName: `Display ${name}`, password: PW })).toEqual({ ok: true });
+    const circles = createCirclesClient({ fetchFn: jar });
+    return { circles, view: createCirclesSession({ client: circles }) };
+  };
+
+  it('create, list with show more, invite, count, refresh, accept, decline, leave', async () => {
+    const { port } = await start();
+    await person(port, 'root'); // the first account is the administrator
+    const ann = await person(port, 'ann');
+    const bob = await person(port, 'bob');
+
+    expect(await ann.view.loadCircles()).toEqual({ ok: true });
+    expect(ann.view.getState().circles).toMatchObject({ status: 'loaded', items: [] });
+    expect(await ann.view.createCircle({ name: '' })).toMatchObject({ kind: 'invalid' });
+    const made = [];
+    for (const name of ['One', 'Two', 'Three']) made.push((await ann.view.createCircle({ name, description: `About ${name}` })).circle);
+    expect(made[0]).toMatchObject({ name: 'One', role: 'owner', memberCount: 1 });
+    expect(ann.view.getState().circles.stale).toBe(true);
+    await ann.view.loadCircles();
+    expect(ann.view.getState().circles).toMatchObject({ stale: false, nextCursor: null });
+    expect(ann.view.getState().circles.items.map((c) => c.name)).toHaveLength(3);
+
+    // show more: a real second page, by asking the client for one item at a time through the session's cursor
+    const paged = createCirclesSession({ client: { ...ann.circles, listCircles: (p) => ann.circles.listCircles({ ...p, limit: 2 }) } });
+    await paged.loadCircles();
+    expect(paged.getState().circles.items).toHaveLength(2);
+    expect(paged.getState().circles.nextCursor).not.toBeNull();
+    await paged.moreCircles();
+    expect(paged.getState().circles.items).toHaveLength(3);
+    expect(paged.getState().circles.nextCursor).toBeNull();
+
+    // nobody has invited bob yet
+    await bob.view.loadInvitations();
+    expect(bob.view.getState().invitations).toMatchObject({ count: 0, atLeast: false });
+    for (const c of made) expect((await ann.circles.invite(c.id, { username: 'BOB', role: 'member' })).ok).toBe(true);
+    expect(bob.view.getState().invitations.count).toBe(0); // not live: only as old as the last load
+    await bob.view.refreshCount();
+    expect(bob.view.getState().invitations).toMatchObject({ count: 3, atLeast: false });
+    expect(bob.view.getState().invitations.items[0]).toMatchObject({ role: 'member', invitedBy: { displayName: 'Display ann' } });
+
+    const [first, second, third] = bob.view.getState().invitations.items;
+    const accepted = await bob.view.acceptInvitation(first.id);
+    expect(accepted.ok).toBe(true);
+    expect(accepted.circle).toMatchObject({ role: 'member', memberCount: 2 });
+    expect(bob.view.getState().invitations.count).toBe(2);
+    expect(bob.view.getState().circles.stale).toBe(true);
+    await bob.view.loadCircles();
+    expect(bob.view.getState().circles.items.map((c) => c.id)).toEqual([accepted.circle.id]);
+
+    expect(await bob.view.declineInvitation(second.id)).toEqual({ ok: true });
+    expect(bob.view.getState().invitations).toMatchObject({ count: 1 });
+    expect(await bob.view.declineInvitation(second.id)).toMatchObject({ ok: false, kind: 'not-found', what: 'invitation' });
+    expect(await bob.view.acceptInvitation(second.id)).toMatchObject({ kind: 'not-found', message: 'No such invitation: it may have been withdrawn, used or expired.' });
+
+    // withdrawn behind his back: accepting says so and the list catches up
+    const open = (await ann.circles.listInvitations(made.find((c) => c.id === third.circle.id).id)).value.items[0];
+    await ann.circles.withdrawInvitation(third.circle.id, open.id);
+    expect(await bob.view.acceptInvitation(third.id)).toMatchObject({ ok: false, kind: 'not-found', what: 'invitation' });
+    expect(bob.view.getState().invitations.count).toBe(0);
+
+    // leave: the list reloads; a circle that has gone says so
+    expect(await bob.view.leaveCircle(accepted.circle.id)).toEqual({ ok: true });
+    expect(bob.view.getState().circles.items).toEqual([]);
+    expect(await bob.view.leaveCircle(accepted.circle.id)).toMatchObject({ ok: false, kind: 'not-found', what: 'circle', message: 'No such circle, or you are not in it.' });
+    const only = await ann.view.leaveCircle(made[0].id);
+    expect(only).toMatchObject({ ok: false, kind: 'last-owner' });
+    expect(only.message.toLowerCase()).toContain('only owner');
+  });
+
+  it('the service\'s refusals show in its words: the most circles allowed, and a signed-out request', async () => {
+    const { port } = await start({ maxCirclesPerUser: 1 });
+    await person(port, 'root');
+    const ann = await person(port, 'ann');
+    expect((await ann.view.createCircle({ name: 'One' })).ok).toBe(true);
+    const second = await ann.view.createCircle({ name: 'Two' });
+    expect(second).toMatchObject({ ok: false, kind: 'limit' });
+    expect(second.message.length).toBeGreaterThan(5);
+    const stranger = createCirclesSession({ client: createCirclesClient({ fetchFn: browserFetch(port) }) });
+    expect(await stranger.loadCircles()).toMatchObject({ ok: false, kind: 'signed-out', message: 'Your session has ended. Sign in again.' });
+    expect(await stranger.loadInvitations()).toMatchObject({ kind: 'signed-out' });
+    expect(stranger.getState().invitations.count).toBeNull();
   });
 });

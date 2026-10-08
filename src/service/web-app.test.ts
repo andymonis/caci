@@ -38,7 +38,7 @@ describe('the list of files', () => {
   });
 
   it('serves the page at / and each other file at its own name', () => {
-    expect(WEB_FILE_SPECS.map((s) => s.path).sort()).toEqual(['/', '/api-client.js', '/app.js', '/circles-client.js', '/forms.js', '/mount.js', '/permissions.js', '/router.js', '/session.js', '/style.css', '/view.js']);
+    expect(WEB_FILE_SPECS.map((s) => s.path).sort()).toEqual(['/', '/api-client.js', '/app.js', '/circles-client.js', '/circles-session.js', '/forms.js', '/mount.js', '/permissions.js', '/router.js', '/session.js', '/style.css', '/view.js']);
     for (const spec of WEB_FILE_SPECS) {
       if (spec.path === '/') expect(spec.file).toBe('index.html');
       else expect(spec.path).toBe(`/${spec.file}`);
