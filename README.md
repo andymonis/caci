@@ -333,6 +333,55 @@ npm run users -- recover-admin <username>
 
 It asks for the new password on the terminal (not shown, typed twice), or reads it from standard input (`echo ... | npm run users -- recover-admin ann`). It never takes the password as an argument, so it is not in your shell history or the process list. It works only for an admin account, ends that account's sessions, and changes nothing else. Being able to run it is the proof of access: whoever can read the data folder can already read everything in it.
 
+## Using the web app
+
+The service also serves a small web app from the same address as the API. This first version does **three things**: you can **register**, **sign in and out**, and visit a **temporary home page** that shows your name and username. **Nothing else is built yet**: the app does not capture notes, does not browse a graph and does not use circles (the API has those; the app does not use them). It is specified in `specs/R-005-web-app.md`.
+
+### Open it
+
+Run `npm run serve` and open the address it prints (by default `http://127.0.0.1:8080/`). **Register yourself first**: the first account created on a new installation becomes the administrator, and the create-account form says so. After registering you are signed in with the same values and land on the home page; reloading keeps you signed in until you sign out or the session ends, and signing out ends the session on the service as well as in the page.
+
+It is a plain web page, not an installable app: there is no manifest, no service worker and no offline use, so it needs the service to be reachable (it says so, with a button to try again).
+
+### What it is made of
+
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these eight, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+
+| File | Does |
+|---|---|
+| `index.html` | the page: the sign-in and create-account forms and the home page |
+| `style.css` | the look, light and dark by the system setting |
+| `app.js` | starts the page |
+| `mount.js` | puts the session on the page |
+| `view.js` | works out what to show |
+| `session.js` | what the page is doing: loading, signed out, signed in |
+| `forms.js` | early checks of the forms (the service has the last word) |
+| `api-client.js` | the only code that talks to the service |
+
+A file you add to `web/` is not served until you list it, and the tests fail if the list and the folder disagree. Change a file and restart the service to see it.
+
+### What it sends and keeps
+
+- It talks only to the account routes on the same address: `POST /api/register`, `POST /api/login`, `POST /api/logout` and `GET /api/me`. Nothing goes anywhere else, and nothing is loaded from anywhere else (no fonts, scripts or images from other sites).
+- It keeps **nothing in the browser**: no local or session storage, and it never reads the session cookie, which the browser holds and the page cannot see (`HttpOnly`). The password lives only in the form field and the one request, and the fields are emptied once it is used.
+- Everything the service says (your name, an error message) is shown **as text, never as markup**.
+
+### The policy on every page
+
+Every page and file is sent with this Content-Security-Policy, so the browser refuses any script or style that is not one of the files above, any request to another address, and any framing of the page:
+
+```
+default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+```
+
+They also carry `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. API answers stay JSON and keep `default-src 'none'`.
+
+**Behind a reverse proxy**: pass the service's headers through unchanged (a proxy that adds or replaces `Content-Security-Policy` can stop the page working or weaken it), and send the page and `/api/` to the same address, because the session cookie is `SameSite=Strict` and cross-origin writes are refused on purpose (there is no CORS). The service has no HTTPS of its own: see **User accounts and the login API** for the proxy recipe and `Secure` cookies.
+
+### Browsers and limits
+
+It needs a current browser (ES modules and `fetch`). It works with the keyboard alone, at phone width and in light and dark, but it was only looked at by hand in one browser, and nothing here was tried with a screen reader. The form checks are early feedback only, and a password manager may behave differently from one browser to the next.
+
 ## Capturing notes through the API
 
 Once signed in (see above), a person can file a note and browse their own graph over HTTP. It is specified in `specs/R-003-caci-controller.md`. The flow is **propose, preview, approve**: a note is sent to a model, which suggests how to file it; **nothing is written until the person approves**. The same session cookie is used, the graph is always the signed-in person's own (no request can name another), and an administrator has no access to other people's graphs through these routes.

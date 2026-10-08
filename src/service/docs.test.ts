@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CIRCLE_STATUS_OF, createAccountRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, mapCaciError, STATUS_OF } from '../api/index.js';
+import { CIRCLE_STATUS_OF, createAccountRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
 import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
 import { CACI_ERROR_CODES, caciError, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
 import { parseServiceConfig, VARIABLES } from './config.js';
+import { WEB_FILE_SPECS } from './web-app.js';
 
 // The README says what the service does. These checks make it fail the build when the README and the
 // code disagree: every variable, route, command and number it names must be real.
@@ -196,5 +197,46 @@ describe('the circles section of the README', () => {
     for (const v of circlesSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
     for (const v of ['CACI_MAX_CIRCLES_PER_USER', 'CACI_MAX_MEMBERS_PER_CIRCLE', 'CACI_INVITATION_DAYS']) expect(accounts, v).toContain(`| \`${v}\` |`);
     for (const c of [...circlesSection.matchAll(/npm run ([a-z:]+)/g)].map((m) => m[1] as string)) expect(pkg.scripts[c], c).toBeDefined();
+  });
+});
+
+const webSection = section('Using the web app');
+
+describe('the web app section of the README', () => {
+  it('is there, with its parts', () => {
+    expect(webSection.length).toBeGreaterThan(3000);
+    for (const heading of ['### Open it', '### What it is made of', '### What it sends and keeps', '### The policy on every page', '### Browsers and limits']) expect(webSection).toContain(heading);
+  });
+
+  it('lists exactly the files the service serves, each by its own name', () => {
+    const documented = [...webSection.matchAll(/^\| `([a-z-]+\.(?:html|js|css))` \|/gm)].map((m) => m[1] as string);
+    expect(documented.sort()).toEqual(WEB_FILE_SPECS.map((s) => s.file).sort());
+    expect(documented).toHaveLength(8);
+    expect(webSection).toContain('only these eight');
+  });
+
+  it('prints exactly the policy the service sends, and its other headers', () => {
+    expect(webSection).toContain(`\`\`\`\n${WEB_POLICY}\n\`\`\``);
+    for (const header of ['Cache-Control: no-store', 'X-Content-Type-Options: nosniff', 'Referrer-Policy: no-referrer']) expect(webSection, header).toContain(header);
+  });
+
+  it('names exactly the four account routes the page uses, and they exist', () => {
+    const named = [...webSection.matchAll(/`((?:GET|POST) \/api\/[a-z]+)`/g)].map((m) => m[1] as string).sort();
+    expect(named).toEqual(['GET /api/me', 'POST /api/login', 'POST /api/logout', 'POST /api/register']);
+    const real = createAccountRoutes({ controller: {} as never }).map((r) => `${r.method} ${r.path}`);
+    for (const route of named) expect(real, route).toContain(route);
+  });
+
+  it('every command and setting it names exists, and there is no build step for the web files', () => {
+    for (const c of [...webSection.matchAll(/npm run ([a-z:]+)/g)].map((m) => m[1] as string)) expect(pkg.scripts[c], c).toBeDefined();
+    for (const v of webSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+    expect(Object.keys(pkg.scripts).filter((name) => /web|bundle|vite|webpack/i.test(name) || /\b(vite|webpack|esbuild|rollup)\b/.test(pkg.scripts[name] ?? ''))).toEqual([]);
+    expect(webSection).toContain('no build step and no dependency');
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['Nothing else is built yet', 'does not use circles', 'Register yourself first', 'becomes the administrator', 'not an installable app', 'no service worker', 'as text, never as markup', 'Nothing in the browser', 'to the same address, because the session cookie', 'no HTTPS of its own', 'pass the service\'s headers through unchanged']) {
+      expect(webSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
   });
 });
