@@ -78,19 +78,19 @@ D1 to D3 are the owner's answers; D4 to D13 are proposals that stand unless chan
 
 ## Threats and controls
 
-Each row gets, in T-115, the test that covers it.
+Each row names the tests that cover it. `src/service/review.test.ts` fails the build if a named test file or test disappears.
 
-| Threat | Control |
-|--------|---------|
-| Script injection through text the server returns (a display name, an error message) | Elements are built with `textContent` only (D7, WA-NFR-03); a strict CSP stops anything that gets through (D6) |
-| The page framed by another site to trick a click (clickjacking) | `frame-ancestors 'none'` (WA-NFR-01) |
-| The password or session kept somewhere it can be read later | No storage, no cookie access, the token is `HttpOnly` (D8, D9, WA-NFR-04) |
-| Personal data cached by a browser or proxy | `Cache-Control: no-store` on every reply (WA-NFR-01) |
-| Reaching files that are not part of the app | A fixed list of files, no directory serving (D5, WA-FR-01) |
-| Use of the API from another site | Unchanged: same-origin only, `Origin` checked, `SameSite=Strict`, no CORS (R-002) |
-| A hostile or broken `web/` file (for example an inline script added by mistake) | Tests fail on inline code, off-origin references and unlisted ids (WA-NFR-02) |
-| Someone registering as administrator by surprise | The administrator note on the form (D11, WA-FR-03) |
-| A password manager or browser filling the wrong field | Correct `autocomplete` values and field names (WA-NFR-05) |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| Script injection through text the server returns (a display name, an error message) | Elements are built with `textContent` only (D7, WA-NFR-03); a strict CSP stops anything that gets through (D6) | `web/mount.test.mjs` — "a hostile display name is set as text and nothing else about the page changes"; `web/mount.test.mjs` — "an error message from the service is set as text"; `web/service.test.mjs` — "a display name made of markup is stored and returned as the text it is, and shown only as text"; `web/api-client.test.mjs` — "markup in a message stays markup"; `web/pages.test.mjs` — "no script uses %s"; `src/api/web-routes.test.ts` — "is exactly the one the spec names" |
+| The page framed by another site to trick a click (clickjacking) | `frame-ancestors 'none'` (WA-NFR-01) | `src/api/web-routes.test.ts` — "is exactly the one the spec names"; `src/service/web-app.test.ts` — "sends each file with exactly its bytes, its type and the web policy" |
+| The password or session kept somewhere it can be read later | No storage, no cookie access, the token is `HttpOnly` (D8, D9, WA-NFR-04) | `web/pages.test.mjs` — "nothing is kept in the browser and nothing is sent anywhere else"; `web/session.test.mjs` — "the password is in no state, no snapshot and no result, whatever happens"; `web/mount.test.mjs` — "sends the form, shows the holding page, and leaves nothing typed on the page"; `src/api/cookies.test.ts` — "is HttpOnly, SameSite=Strict and Path=/ always" |
+| Personal data cached by a browser or proxy | `Cache-Control: no-store` on every reply (WA-NFR-01) | `src/service/web-app.test.ts` — "sends each file with exactly its bytes, its type and the web policy"; `src/service/web-app.test.ts` — "API routes are unchanged: signed out is still a JSON 401 and the API keeps the lock-down" |
+| Reaching files that are not part of the app | A fixed list of files, no directory serving (D5, WA-FR-01) | `src/api/web-routes.test.ts` — "nothing else is served: unlisted names, other cases, folders, dot segments, encodings and tricks are plain JSON 404s"; `src/service/web-files.test.ts` — "never reads or returns anything that is not listed, whatever else is in the folder"; `src/service/web-app.test.ts` — "serves only the listed files from it, whatever else is there"; `src/service/web-app.test.ts` — "anything else is still a plain JSON 404" |
+| Use of the API from another site | Unchanged: same-origin only, `Origin` checked, `SameSite=Strict`, no CORS (R-002) | `src/api/server.test.ts` — "refuses a cross-origin write with 403"; `web/pages.test.mjs` — "the only requests are to the four account routes, by path"; `web/api-client.test.mjs` — "every request goes to the same address by path only" |
+| A hostile or broken `web/` file (for example an inline script added by mistake) | Tests fail on inline code, off-origin references and unlisted ids (WA-NFR-02) | `web/pages.test.mjs` — "has one script, a module, from the same address, and no inline code"; `web/pages.test.mjs` — "has no inline style, no style element, and no event-handler attribute"; `web/pages.test.mjs` — "refers to nothing but files of the app by absolute path, plus the empty icon"; `web/pages.test.mjs` — "imports nothing and loads nothing from anywhere"; `src/service/web-app.test.ts` — "is exactly the files in web/ that are not tests" |
+| Someone registering as administrator by surprise | The administrator note on the form (D11, WA-FR-03) | `web/pages.test.mjs` — "tells the person the first account becomes the administrator, and that the email is never mailed" |
+| A password manager or browser filling the wrong field | Correct `autocomplete` values and field names (WA-NFR-05) | `web/pages.test.mjs` — "gives every field a visible label, a name and the right autocomplete value" |
 
 ## What the person is told
 
@@ -123,6 +123,36 @@ A fixed list under `web/`, served at the root of the same origin: the page (`/`)
 | WA-AC-08 | A closed registration, a taken username, a bad password and an unreachable service each show the message in the table above. |
 | WA-AC-09 | The page can be used with the keyboard alone, at 320 px wide, and in light and dark. |
 | WA-AC-10 | A clean stop of the service after a session of registering and signing in leaves only the two database files. |
+
+### Where each criterion is checked (T-115)
+
+| ID | Checked by |
+|----|------------|
+| WA-AC-01 | `src/service/web-app.test.ts` — "sends each file with exactly its bytes, its type and the web policy"; `src/service/web-app.test.ts` — "anything else is still a plain JSON 404"; `src/api/web-routes.test.ts` — "serves each listed file at its path with exactly its bytes" |
+| WA-AC-02 | `web/service.test.mjs` — "the whole page, run against the real service: create an account, land on the holding page, sign out, sign in"; `web/mount.test.mjs` — "creates the account, signs in with the same values and shows the holding page, with nothing left in the fields" |
+| WA-AC-03 | `web/mount.test.mjs` — "a wrong password shows the one message at the top"; `web/mount.test.mjs` — "being held back shows the wait"; `web/service.test.mjs` — "being held back after too many wrong passwords shows the wait"; `web/service.test.mjs` — "tells a person what went wrong in the service" |
+| WA-AC-04 | `web/service.test.mjs` — "starts signed out, registers (and is signed in by it), reloads still signed in, signs out, and signs in again"; `web/mount.test.mjs` — "returns to the signed-out screen" |
+| WA-AC-05 | `web/service.test.mjs` — "a display name made of markup is stored and returned as the text it is, and shown only as text"; `web/mount.test.mjs` — "a hostile display name is set as text and nothing else about the page changes" |
+| WA-AC-06 | `web/pages.test.mjs` — "nothing is kept in the browser and nothing is sent anywhere else"; `web/pages.test.mjs` — "no script uses %s" |
+| WA-AC-07 | `web/pages.test.mjs` — "has one script, a module, from the same address, and no inline code"; `web/pages.test.mjs` — "has no inline style, no style element, and no event-handler attribute"; `web/pages.test.mjs` — "imports nothing and loads nothing from anywhere"; `src/api/web-routes.test.ts` — "is exactly the one the spec names" |
+| WA-AC-08 | `web/api-client.test.mjs` — "403 on register is closed registration; 403 elsewhere is a plain refusal"; `web/api-client.test.mjs` — "409 on register is a taken username on the username field"; `web/api-client.test.mjs` — "a service that cannot be reached, or whose answer cannot be read, is kind network"; `web/mount.test.mjs` — "closed registration says so and shows the sign-in form"; `web/mount.test.mjs` — "a taken username is shown beside the username field with the focus there" |
+| WA-AC-09 | `web/pages.test.mjs` — "follows the system theme, shows keyboard focus, respects reduced motion, and copes with a narrow window"; `web/pages.test.mjs` — "gives every field a visible label, a name and the right autocomplete value"; `web/pages.test.mjs` — "marks the places that report problems so they are announced" |
+| WA-AC-10 | `src/service/web-app.test.ts` — "a clean stop after serving the app leaves only the two database files" |
+
+The first slice was also looked at by hand in Chrome against the real service (recorded in `.gsd/STATE.md`, T-114): the sign-in page, the create-account form with its messages and focus, a display name made of markup shown as text with the tab title unchanged, a reload that stays signed in, signing out, a wrong password, and the browser refusing an injected script and a cross-origin image.
+
+### Residual risks (not covered, with the reason)
+
+These are real and known; the ones that can be acted on are in the PLAN Backlog.
+
+1. **There is no HTTPS here.** The service speaks plain HTTP; the policy does not protect a password on the wire. Run it behind a proxy that does HTTPS and set the cookie to `Secure` (README, R-002); an exposed service without that is refused to start unless the operator says otherwise.
+2. **Policy violations are not reported to the operator.** There is no report endpoint, so a blocked injection shows only in the browser's console; the policy stops it, nobody is told it was tried.
+3. **The first account is the administrator.** The form says so, but whoever reaches an unregistered service first becomes its administrator; the operator must register first (the start-up message and the README say so).
+4. **Browsers and password managers differ.** The page gives them the right hints (`autocomplete` values, names, labels) and cannot control what they do; there is no show-password control and pasting is allowed.
+5. **Very old browsers ignore the policy.** The page does not depend on it (it builds from text only), but the protection against framing relies on the `frame-ancestors` directive; no `X-Frame-Options` header is sent. Nothing here supports a browser that old.
+6. **Early checks mirror the server's visible rules.** If the service's rules for names or passwords were loosened, the form would still refuse what the service would accept until the page is updated; the service stays the authority and refuses what is wrong.
+7. **What was looked at by eye is one browser on one machine.** Narrow windows (below the media query), dark mode, and a screen reader were not tried by hand; they are covered by checks on the files and structure, not by assistive technology.
+8. **The files are read once at start and sent without caching.** A change to the web files needs a restart, and every load fetches all eight files again; acceptable for a household service, and a cost the installable version (Backlog item 9) will revisit.
 
 ## Build order
 

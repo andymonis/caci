@@ -7,12 +7,13 @@ import { describe, expect, it } from 'vitest';
 // the review is brought up to date. One block per spec.
 
 const root = new URL('../../', import.meta.url);
-const REFERENCE = /`(src\/[\w/.-]+\.ts)` — "([^"]+)"/g;
+const REFERENCE = /`((?:src|web)\/[\w/.-]+\.(?:ts|mjs))` — "([^"]+)"/g;
 
 const SPECS = [
   { name: 'R-002', file: 'specs/R-002-user-accounts.md', minReferences: 45, minThreats: 14, criteria: 12, prefix: 'UA-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 8 },
   { name: 'R-003', file: 'specs/R-003-caci-controller.md', minReferences: 30, minThreats: 10, criteria: 10, prefix: 'CC-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 7 },
   { name: 'R-004', file: 'specs/R-004-circles.md', minReferences: 45, minThreats: 11, criteria: 12, prefix: 'CR-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
+  { name: 'R-005', file: 'specs/R-005-web-app.md', minReferences: 35, minThreats: 9, criteria: 10, prefix: 'WA-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 8 },
 ] as const;
 
 for (const info of SPECS) {
