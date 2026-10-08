@@ -288,6 +288,9 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_LLM` | Which model files notes: `demo` or `anthropic` (see [Capturing notes through the API](#capturing-notes-through-the-api)) | `demo` |
 | `CACI_PROPOSALS_PER_HOUR` | Proposals one account may start in an hour (1 to 10,000) | `30` |
 | `CACI_MAX_PENDING_PER_USER` | Proposals one account may have waiting (1 to 100) | `10` |
+| `CACI_MAX_CIRCLES_PER_USER` | Circles one person may be in (1 to 1,000) | `20` |
+| `CACI_MAX_MEMBERS_PER_CIRCLE` | People one circle may hold (1 to 1,000) | `50` |
+| `CACI_INVITATION_DAYS` | How long an invitation to a circle stays open (1 to 365) | `7` |
 
 Listening on anything but this machine (`CACI_BIND=0.0.0.0`, say) is refused unless `CACI_COOKIE_SECURE=true`, or you also set `CACI_ALLOW_INSECURE=true` to say you accept that session cookies cross the network in the clear.
 
@@ -371,6 +374,68 @@ Failures are `{ error: { code, message } }` with these statuses: 401 not signed 
 - Notes and categories are stored in `graphs.db` as plain text, readable only by the file's owner; see the warning about encryption above.
 - With `anthropic`, see the paragraph above: nothing is anonymised. The proof of concept was built for its owner's own data; do not put other people's on a service with the real model switched on until pseudonymisation exists (it is in the plan's Backlog).
 - A note is data, never instructions: the model can only propose `upsertNode` and `link` on your own graph, and you see them before they are written.
+
+## Circles
+
+A **circle** is a group of people, each with a role in it. A person can be in several circles in different roles (a helper in one, helped in another), and everyone keeps their own graph. It is specified in `specs/R-004-circles.md`.
+
+**Circles share no data yet.** Being in a circle does not let anyone see, or change, anyone's graph: that is deliberately left for later, after pseudonymisation and the legal groundwork (see the plan's Backlog). Today a circle is only a group, its roles and its invitations. The platform admin has no power over circles either: an admin who is not in a circle is a stranger to it.
+
+### Roles
+
+The four roles say nothing about any setting, so the same platform can serve a household, a team or a club.
+
+| Role | May do |
+|---|---|
+| `owner` | everything: rename, delete, invite and remove anyone, give anyone any role, including `owner` |
+| `manager` | rename; invite `member` and `observer`; withdraw their invitations; move people between `member` and `observer`; remove `member` and `observer`. Never touches an owner or another manager |
+| `member` | see the circle and who is in it; leave |
+| `observer` | the same as `member` for now (the difference is kept for the later sharing work) |
+
+A circle always has an owner: the only owner cannot leave, be removed or be demoted, and is told to make someone else an owner first, or delete the circle. Nobody changes their own role, and nobody removes themselves (that is leaving). Your role is looked at on every request, so a demotion takes effect at once.
+
+### Invitations
+
+You invite a **username** with a role; nothing happens until that person accepts. An invitation lasts 7 days (`CACI_INVITATION_DAYS`) and can be declined, withdrawn, or left to expire. The answer to an invitation is **the same whether or not that account exists**, whether or not they are already in, and whether or not it is a repeat, so inviting cannot be used to find out who has an account. (Registration already says when a username is taken, so this is one less way to find out, not a secret.) The invitation is kept for a name even when nobody has it: whoever registers that name within 7 days would see it, and still has to accept it.
+
+### The routes
+
+All need the session cookie, with the same rules as the other routes.
+
+| Route | What it does |
+|---|---|
+| `POST /api/circles` | `{ name, description? }`; 201 with the circle; you are its owner |
+| `GET /api/circles` | The circles you are in, with your role in each; `limit` and `cursor` |
+| `GET /api/circles/:id` | One circle |
+| `PATCH /api/circles/:id` | Rename or describe (owner, manager) |
+| `DELETE /api/circles/:id` | Delete it (owner); 204 |
+| `GET /api/circles/:id/members` | Who is in it: user id, username, display name, role, when they joined |
+| `PATCH /api/circles/:id/members/:userId` | `{ role }`: change someone's role |
+| `DELETE /api/circles/:id/members/:userId` | Remove someone; 204 |
+| `POST /api/circles/:id/leave` | Leave; 204 |
+| `POST /api/circles/:id/invitations` | `{ username, role }`; 202 `{ "invited": true }` for every target |
+| `GET /api/circles/:id/invitations` | The circle's open invitations (owner, manager) |
+| `DELETE /api/circles/:id/invitations/:invitationId` | Withdraw one; 204 |
+| `GET /api/invitations` | Invitations addressed to you |
+| `POST /api/invitations/:id/accept` | Join with the offered role; 200 with the circle |
+| `POST /api/invitations/:id/decline` | Decline; 204 |
+
+Failures are `{ error: { code, message } }` with these statuses: 401 not signed in, 403 your role does not allow that, 404 not found (**someone who is not in a circle gets exactly the answer for a circle that does not exist**, from every route, and an invitation that is not yours, expired, withdrawn or used is "no such invitation"), 409 the only owner cannot go, 422 bad input (with `field`; unknown fields and query parameters are refused by name), 429 a limit (with `Retry-After` when there is a wait), 500 anything else, with a fixed message.
+
+### Limits
+
+- A person may be in **20 circles** (`CACI_MAX_CIRCLES_PER_USER`); a circle holds **50 people** (`CACI_MAX_MEMBERS_PER_CIRCLE`) and **50 open invitations** (fixed); a person may send **30 invitations an hour** (fixed, kept in memory, so a restart resets it). A circle name is 1 to 80 characters and a description up to 500.
+- Accepting into a full circle, or when you are already in the most circles allowed, is refused and leaves the invitation open.
+
+### When an account is deleted
+
+Deleting an account (your own, or by an admin) takes the person out of every circle and removes the invitations sent to them or by them, in the same step. A circle they solely owned passes to its longest-standing manager, else member, else observer; a circle they were alone in no longer exists.
+
+### What is not protected
+
+- Everyone in a circle sees every other member's **username and display name**. Nothing is hidden from members.
+- Nobody is told about an invitation: nothing is sent anywhere, so people have to look at `GET /api/invitations`.
+- Circles, memberships and invitations are stored in `users.db` as plain text, readable only by the file's owner; see the warning about encryption above. Leaving a circle ends access from then on, but cannot unsee what was already read.
 
 ## Writing a storage adapter
 

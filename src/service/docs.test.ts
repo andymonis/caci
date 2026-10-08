@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { createAccountRoutes, createCaptureRoutes, createReadRoutes, mapCaciError, STATUS_OF } from '../api/index.js';
+import { CIRCLE_STATUS_OF, createAccountRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, mapCaciError, STATUS_OF } from '../api/index.js';
+import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
 import { CACI_ERROR_CODES, caciError, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
@@ -20,9 +21,7 @@ function section(title: string): string {
 }
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
-/** Settings that are read and checked but not yet in the README: T-106 wires the circles in and T-108 documents them. Empty this list then (the tests below fail if one is documented early or left out late). */
-const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_MAX_CIRCLES_PER_USER', 'CACI_MAX_MEMBERS_PER_CIRCLE', 'CACI_INVITATION_DAYS'];
-const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
+const DOCUMENTED = [...VARIABLES];
 
 describe('the user accounts section of the README', () => {
   it('is there, and long enough to be the real thing', () => {
@@ -54,6 +53,9 @@ describe('the user accounts section of the README', () => {
       CACI_LLM: `\`${d.llm}\``,
       CACI_PROPOSALS_PER_HOUR: `\`${d.proposalsPerHour}\``,
       CACI_MAX_PENDING_PER_USER: `\`${d.maxPendingPerUser}\``,
+      CACI_MAX_CIRCLES_PER_USER: `\`${d.maxCirclesPerUser}\``,
+      CACI_MAX_MEMBERS_PER_CIRCLE: `\`${d.maxMembersPerCircle}\``,
+      CACI_INVITATION_DAYS: `\`${d.invitationDays}\``,
     });
     expect(rows.CACI_BIND).toContain(d.bind);
     expect(rows.CACI_ALLOWED_HOSTS).toBe('not set');
@@ -144,5 +146,55 @@ describe('the capturing section of the README', () => {
   it('every command and every setting it names exists', () => {
     for (const v of capture.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
     for (const c of [...capture.matchAll(/npm run ([a-z:]+)/g)].map((m) => m[1] as string)) expect(pkg.scripts[c], c).toBeDefined();
+  });
+});
+
+const circlesSection = section('Circles');
+
+describe('the circles section of the README', () => {
+  it('is there, with its parts', () => {
+    expect(circlesSection.length).toBeGreaterThan(3500);
+    for (const heading of ['### Roles', '### Invitations', '### The routes', '### Limits', '### When an account is deleted', '### What is not protected']) expect(circlesSection).toContain(heading);
+  });
+
+  it('lists exactly the circle and invitation routes the server has', () => {
+    const real = [...createCircleRoutes({ circles: {} as never }), ...createInvitationRoutes({ circles: {} as never })].map((r) => `${r.method} ${r.path}`);
+    const documented = [...circlesSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented.sort()).toEqual([...real].sort());
+    expect(real).toHaveLength(15);
+  });
+
+  it('names exactly the roles there are, each in the roles table', () => {
+    const table = circlesSection.slice(circlesSection.indexOf('### Roles'), circlesSection.indexOf('### Invitations'));
+    const named = [...table.matchAll(/^\| `([a-z]+)` \|/gm)].map((m) => m[1]);
+    expect(named).toEqual([...CIRCLE_ROLES]);
+  });
+
+  it('mentions exactly the statuses the circle routes can send', () => {
+    const line = circlesSection.match(/Failures are[^\n]*/)?.[0] ?? '';
+    const mentioned = [...line.matchAll(/\b([45]\d\d)\b/g)].map((m) => Number(m[1]));
+    expect(mentioned.sort()).toEqual([...new Set(Object.values(CIRCLE_STATUS_OF))].sort());
+  });
+
+  it('states the numbers that are in the code', () => {
+    expect(circlesSection).toContain(`**${DEFAULT_CIRCLE_LIMITS.maxCirclesPerUser} circles**`);
+    expect(circlesSection).toContain(`**${DEFAULT_CIRCLE_LIMITS.maxMembersPerCircle} people**`);
+    expect(circlesSection).toContain(`**${DEFAULT_CIRCLE_LIMITS.maxOpenInvitationsPerCircle} open invitations**`);
+    expect(circlesSection).toContain(`**${DEFAULT_CIRCLE_LIMITS.invitationsPerHour} invitations an hour**`);
+    expect(circlesSection).toContain(`An invitation lasts ${DEFAULT_CIRCLE_LIMITS.invitationDays} days`);
+    expect(circlesSection).toContain(`1 to ${CIRCLE_NAME_MAX} characters and a description up to ${CIRCLE_DESCRIPTION_MAX}`);
+    expect(CIRCLE_PAGE).toBe(50);
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['Circles share no data yet', 'no power over circles', 'nothing happens until that person accepts', 'the same whether or not that account exists', 'exactly the answer for a circle that does not exist', 'A circle always has an owner', 'Nobody changes their own role', 'plain text', 'Nobody is told about an invitation']) {
+      expect(circlesSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+
+  it('every setting and command it names exists, and the settings table has them', () => {
+    for (const v of circlesSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+    for (const v of ['CACI_MAX_CIRCLES_PER_USER', 'CACI_MAX_MEMBERS_PER_CIRCLE', 'CACI_INVITATION_DAYS']) expect(accounts, v).toContain(`| \`${v}\` |`);
+    for (const c of [...circlesSection.matchAll(/npm run ([a-z:]+)/g)].map((m) => m[1] as string)) expect(pkg.scripts[c], c).toBeDefined();
   });
 });
