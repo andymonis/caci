@@ -148,3 +148,7 @@ a.row-title { color: var(--accent); }
 .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
 button.secondary { color: var(--fg); background: transparent; border: 1px solid var(--line); }
 textarea { width: 100%; font: inherit; }
+
+select { min-height: 2.75rem; padding: 0.5rem; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 0.375rem; max-width: 100%; }
+.row label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-weight: 600; margin: 0; }
+div.notice { margin: 0.5rem 0; }

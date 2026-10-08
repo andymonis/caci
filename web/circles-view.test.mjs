@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { circleRow, countText, EMPTY_CIRCLES, EMPTY_INVITATIONS, formatDate, headingIdFor, invitationRow, navFor, peopleText, roleName, titleFor } from './circles-view.js';
+import { circleInvitationRow, circleRow, countText, DELETE_TEXT, LEAVE_TEXT, memberRow, EMPTY_CIRCLES, EMPTY_INVITATIONS, formatDate, headingIdFor, invitationRow, navFor, peopleText, roleName, titleFor } from './circles-view.js';
 import { ROLE_WORDS } from './permissions.js';
 
 const C = 'c0123456789abcdef';
@@ -67,5 +67,43 @@ describe('the invitation count sentence', () => {
   });
   it('has a sentence for an empty circle list', () => {
     expect(EMPTY_CIRCLES).toContain('Make one below');
+  });
+});
+
+describe('the circle screen\'s words', () => {
+  const m = { userId: 'u0000000000000002', username: 'bob', displayName: 'Bob B', role: 'manager', joinedAt: Date.UTC(2026, 0, 5) };
+  it('a roster row', () => {
+    expect(memberRow(m, false)).toEqual({
+      name: 'Bob B',
+      meta: '@bob · Manager · joined 2026-01-05',
+      roleWords: ROLE_WORDS.manager,
+      removeText: 'Remove Bob B from this circle? They will lose their place in it.',
+      saveLabel: 'Save the role for Bob B',
+      removeLabel: 'Remove Bob B',
+      roleLabel: 'Role for Bob B',
+    });
+    expect(memberRow(m, true).name).toBe('Bob B (you)');
+  });
+  it('a person without a display name is shown by username, and one with neither as "Someone"', () => {
+    expect(memberRow({ ...m, displayName: '' }, false).name).toBe('bob');
+    expect(memberRow({ ...m, displayName: undefined }, false).name).toBe('bob');
+    const bare = memberRow({ userId: m.userId, role: 'member', joinedAt: -1 }, false);
+    expect(bare.name).toBe('Someone');
+    expect(bare.meta).toBe('Member');
+    expect(bare.saveLabel).toBe('Save the role for Someone');
+    expect(memberRow({ ...m, username: '' }, false).meta).toBe('Manager · joined 2026-01-05');
+    expect(memberRow({ ...m, role: 'nope' }, false).roleWords).toBe('');
+    expect(memberRow({ ...m, role: '__proto__' }, false).roleWords).toBe('');
+  });
+  it('an open invitation row', () => {
+    const inv = { id: 'i0000000000000001', username: 'guest', role: 'observer', invitedBy: { displayName: 'Ann' }, expiresAt: Date.UTC(2026, 0, 9) };
+    expect(circleInvitationRow(inv)).toEqual({ who: 'For guest', meta: 'They would be: Observer', from: 'Invited by Ann', ends: 'Ends 2026-01-09', withdrawLabel: 'Withdraw the invitation for guest' });
+    expect(circleInvitationRow({ ...inv, invitedBy: {}, expiresAt: -1 })).toMatchObject({ from: 'Invited by someone', ends: '' });
+    expect(circleInvitationRow({ ...inv, invitedBy: undefined }).from).toBe('Invited by someone');
+    expect(circleInvitationRow({ ...inv, invitedBy: { displayName: '' } }).from).toBe('Invited by someone');
+  });
+  it('the two questions say what will happen', () => {
+    expect(LEAVE_TEXT).toContain('no longer see it');
+    expect(DELETE_TEXT).toBe('Delete this circle? This removes the circle, its members and its invitations. It cannot be undone.');
   });
 });

@@ -65,3 +65,38 @@ export function countText(invitations) {
   if (invitations.count === 0) return EMPTY_INVITATIONS;
   return `You have ${invitations.count} open ${invitations.count === 1 ? 'invitation' : 'invitations'}.`;
 }
+
+// --- the circle screen ---
+
+export const LEAVE_TEXT = 'Leave this circle? You will no longer see it or who is in it, and you need a new invitation to come back.';
+export const DELETE_TEXT = 'Delete this circle? This removes the circle, its members and its invitations. It cannot be undone.';
+export const NO_INVITATIONS_HERE = 'There are no open invitations.';
+
+const nameOf = (person) => (typeof person.displayName === 'string' && person.displayName !== '' ? person.displayName : typeof person.username === 'string' && person.username !== '' ? person.username : 'Someone');
+
+/** What a row of the roster says. `self` marks the signed-in person's own row. */
+export function memberRow(member, self) {
+  const joined = formatDate(member.joinedAt);
+  const handle = typeof member.username === 'string' && member.username !== '' ? `@${member.username}` : '';
+  return Object.freeze({
+    name: self ? `${nameOf(member)} (you)` : nameOf(member),
+    meta: [handle, roleName(member.role), joined === '' ? '' : `joined ${joined}`].filter((part) => part !== '').join(' · '),
+    roleWords: typeof member.role === 'string' && Object.hasOwn(ROLE_WORDS, member.role) ? ROLE_WORDS[member.role] : '',
+    removeText: `Remove ${nameOf(member)} from this circle? They will lose their place in it.`,
+    saveLabel: `Save the role for ${nameOf(member)}`,
+    removeLabel: `Remove ${nameOf(member)}`,
+    roleLabel: `Role for ${nameOf(member)}`,
+  });
+}
+
+/** What a row of the circle's open invitations says. */
+export function circleInvitationRow(invitation) {
+  const ends = formatDate(invitation.expiresAt);
+  return Object.freeze({
+    who: `For ${invitation.username}`,
+    meta: `They would be: ${roleName(invitation.role)}`,
+    from: `Invited by ${invitation.invitedBy && typeof invitation.invitedBy.displayName === 'string' && invitation.invitedBy.displayName !== '' ? invitation.invitedBy.displayName : 'someone'}`,
+    ends: ends === '' ? '' : `Ends ${ends}`,
+    withdrawLabel: `Withdraw the invitation for ${invitation.username}`,
+  });
+}

@@ -133,8 +133,95 @@
 
       <section id="view-circle" hidden>
         <h2 id="circle-heading" tabindex="-1">Circle</h2>
-        <p class="note">This screen is being built.</p>
-        <p><a href="#/circles">Back to your circles</a></p>
+        <p id="circle-status" role="status" hidden></p>
+        <p id="circle-error" class="error" role="alert" tabindex="-1" hidden></p>
+        <p id="circle-gone" class="notice" hidden></p>
+        <p><a href="#/circles">Back to your circles</a> · <button type="button" id="circle-refresh" class="link">Refresh this page</button></p>
+
+        <div id="circle-body" hidden>
+          <p id="circle-description"></p>
+          <p id="circle-role"></p>
+          <p id="circle-role-words" class="hint"></p>
+          <p class="note">Circles share no data yet: being in one only lets people see who else is in it. Everyone in a circle can see everyone's username and display name.</p>
+
+          <section id="rename-section" hidden>
+            <h3>Rename or describe</h3>
+            <form id="rename-form" method="post" novalidate>
+              <p id="rename-error" class="error" role="alert" tabindex="-1" hidden></p>
+              <div class="field">
+                <label for="rename-name">Name</label>
+                <input id="rename-name" name="name" type="text" autocomplete="off" aria-describedby="rename-name-error" required>
+                <p id="rename-name-error" class="error" hidden></p>
+              </div>
+              <div class="field">
+                <label for="rename-description">Description <span class="optional">(optional)</span></label>
+                <input id="rename-description" name="description" type="text" autocomplete="off" aria-describedby="rename-description-error">
+                <p id="rename-description-error" class="error" hidden></p>
+              </div>
+              <button type="submit" id="rename-submit">Save</button>
+              <p id="rename-notice" role="status" tabindex="-1" hidden></p>
+            </form>
+          </section>
+
+          <h3 id="members-heading" tabindex="-1">People in this circle</h3>
+          <p id="members-error" class="error" role="alert" tabindex="-1" hidden></p>
+          <ul id="members-list" class="rows"></ul>
+          <button type="button" id="members-more" hidden>Show more</button>
+
+          <section id="invite-section" hidden>
+            <h3>Invite someone</h3>
+            <form id="invite-form" method="post" novalidate>
+              <p id="invite-error" class="error" role="alert" tabindex="-1" hidden></p>
+              <div class="field">
+                <label for="invite-username">Username</label>
+                <input id="invite-username" name="username" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="invite-username-hint invite-username-error" required>
+                <p id="invite-username-hint" class="hint">The invitation is recorded for this username. This page does not say whether such an account exists.</p>
+                <p id="invite-username-error" class="error" hidden></p>
+              </div>
+              <div class="field">
+                <label for="invite-role">Role</label>
+                <select id="invite-role" name="role" aria-describedby="invite-role-words invite-role-error">
+                  <option id="invite-role-owner" value="owner">Owner</option>
+                  <option id="invite-role-manager" value="manager">Manager</option>
+                  <option id="invite-role-member" value="member">Member</option>
+                  <option id="invite-role-observer" value="observer">Observer</option>
+                </select>
+                <p id="invite-role-words" class="hint"></p>
+                <p id="invite-role-error" class="error" hidden></p>
+              </div>
+              <button type="submit" id="invite-submit">Invite</button>
+              <p id="invite-notice" role="status" tabindex="-1" hidden></p>
+            </form>
+          </section>
+
+          <section id="circle-invitations-section" hidden>
+            <h3 id="circle-invitations-heading" tabindex="-1">Open invitations</h3>
+            <p id="circle-invitations-error" class="error" role="alert" tabindex="-1" hidden></p>
+            <p id="circle-invitations-empty" hidden></p>
+            <ul id="circle-invitations-list" class="rows" hidden></ul>
+            <button type="button" id="circle-invitations-more" hidden>Show more</button>
+          </section>
+
+          <section>
+            <h3>Leave or delete</h3>
+            <p><button type="button" id="leave-button" class="secondary">Leave this circle</button></p>
+            <div id="leave-confirm" class="notice" hidden>
+              <p id="leave-confirm-text"></p>
+              <div class="actions">
+                <button type="button" id="leave-yes">Yes, leave</button>
+                <button type="button" id="leave-no" class="secondary">Cancel</button>
+              </div>
+            </div>
+            <p><button type="button" id="delete-button" class="secondary" hidden>Delete this circle</button></p>
+            <div id="delete-confirm" class="notice" hidden>
+              <p id="delete-confirm-text"></p>
+              <div class="actions">
+                <button type="button" id="delete-yes">Yes, delete</button>
+                <button type="button" id="delete-no" class="secondary">Cancel</button>
+              </div>
+            </div>
+          </section>
+        </div>
       </section>
 
       <section id="view-invitations" hidden>
@@ -152,6 +239,41 @@
       <li class="row">
         <a data-slot="link" class="row-title"></a>
         <span data-slot="meta" class="meta"></span>
+      </li>
+    </template>
+
+    <template id="member-row-template">
+      <li class="row">
+        <span data-slot="name" class="row-title"></span>
+        <span data-slot="meta" class="meta"></span>
+        <span data-slot="roleWords" class="hint"></span>
+        <div data-slot="manage" class="actions" hidden>
+          <label>Role
+            <select data-slot="role">
+              <option data-slot="opt-owner" value="owner">Owner</option>
+              <option data-slot="opt-manager" value="manager">Manager</option>
+              <option data-slot="opt-member" value="member">Member</option>
+              <option data-slot="opt-observer" value="observer">Observer</option>
+            </select>
+          </label>
+          <button type="button" data-slot="save">Save role</button>
+          <button type="button" data-slot="remove" class="secondary">Remove</button>
+        </div>
+        <div data-slot="removeAsk" class="actions" hidden>
+          <span data-slot="removeText"></span>
+          <button type="button" data-slot="removeYes">Yes, remove</button>
+          <button type="button" data-slot="removeNo" class="secondary">Cancel</button>
+        </div>
+      </li>
+    </template>
+
+    <template id="circle-invitation-row-template">
+      <li class="row">
+        <span data-slot="who" class="row-title"></span>
+        <span data-slot="meta" class="meta"></span>
+        <span data-slot="from" class="meta"></span>
+        <span data-slot="ends" class="meta"></span>
+        <span class="actions"><button type="button" data-slot="withdraw" class="secondary">Withdraw</button></span>
       </li>
     </template>
 

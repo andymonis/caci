@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -152,7 +152,7 @@ describe('the page', () => {
 
   it('every form is a post with browser validation off, so a failed script can never put a password in an address', () => {
     const forms = tags.filter((t) => t.name === 'form');
-    expect(forms).toHaveLength(3);
+    expect(forms).toHaveLength(5);
     for (const f of forms) {
       expect(attr(f, 'method')).toBe('post');
       expect(f.attrs).toMatch(/\bnovalidate\b/);
@@ -181,7 +181,7 @@ describe('the page', () => {
   it('gives every field a visible label, a name and the right autocomplete value', () => {
     const labels = new Set(tags.filter((t) => t.name === 'label').map((t) => attr(t, 'for')));
     const inputs = tags.filter((t) => t.name === 'input');
-    expect(inputs).toHaveLength(8);
+    expect(inputs).toHaveLength(11);
     const expected = {
       'signin-username': ['text', 'username'],
       'signin-password': ['password', 'current-password'],
@@ -191,6 +191,9 @@ describe('the page', () => {
       'register-password': ['password', 'new-password'],
       'create-name': ['text', 'off'],
       'create-description': ['text', 'off'],
+      'rename-name': ['text', 'off'],
+      'rename-description': ['text', 'off'],
+      'invite-username': ['text', 'off'],
     };
     for (const input of inputs) {
       const id = attr(input, 'id');
@@ -227,8 +230,8 @@ describe('the page', () => {
 describe('the templates and the address bar', () => {
   const templates = [...html.matchAll(/<template\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/template>/g)].map((m) => ({ id: m[1], body: m[2] }));
 
-  it('there are two row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
-    expect(templates.map((t) => t.id).sort()).toEqual(['circle-row-template', 'invitation-row-template']);
+  it('there are four row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
+    expect(templates.map((t) => t.id).sort()).toEqual(['circle-invitation-row-template', 'circle-row-template', 'invitation-row-template', 'member-row-template']);
     for (const t of templates) {
       expect(t.body, t.id).not.toMatch(/\sid\s*=/i);
       expect(t.body, t.id).not.toMatch(/<script|\son[a-z]+\s*=|\sstyle\s*=|\shref\s*=|\ssrc\s*=/i);
@@ -236,8 +239,11 @@ describe('the templates and the address bar', () => {
   });
 
   it('every slot the script fills exists in its template, and the other way round', () => {
-    const used = new Set([...code(read('circles-pages.js')).matchAll(/slot\(row, '(\w+)'\)/g)].map((m) => m[1]));
-    const inTemplates = new Set(templates.flatMap((t) => [...t.body.matchAll(/data-slot="(\w+)"/g)].map((m) => m[1])));
+    const sources = ['circles-pages.js', 'circle-page.js'].map((f) => code(read(f))).join('\n');
+    const used = new Set([...sources.matchAll(/slot\(row, '([\w-]+)'\)/g)].map((m) => m[1]));
+    expect(sources).toContain('slot(row, `opt-${r}`)'); // the four role options are filled in a loop
+    for (const r of ['owner', 'manager', 'member', 'observer']) used.add(`opt-${r}`);
+    const inTemplates = new Set(templates.flatMap((t) => [...t.body.matchAll(/data-slot="([\w-]+)"/g)].map((m) => m[1])));
     expect([...used].sort()).toEqual([...inTemplates].sort());
   });
 

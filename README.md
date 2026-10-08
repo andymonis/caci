@@ -345,7 +345,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these fifteen, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these sixteen, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -359,6 +359,7 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `api-client.js` | the code that talks to the account routes, and the one way every request is sent |
 | `circles-client.js` | the code that talks to the circle and invitation routes |
 | `router.js` | which screen the address names; anything unknown is the home screen |
+| `circle-page.js` | puts one circle's screen on the page: details, the people, and the forms and buttons for the person's role (each destructive step asks first) |
 | `circles-pages.js` | puts the circles list, the create form, the invitations and the home page's invitation count on the page (rows cloned from templates, text only) |
 | `circles-view.js` | the words behind those screens: titles, row text, the invitation count sentence |
 | `circle-session.js` | what one circle's screen shows and does: roster, invitations, managing it, and the two-step questions |
