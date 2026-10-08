@@ -1,6 +1,6 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createAccountRoutes, createApiServer, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes } from '../api/index.js';
+import { createAccountRoutes, createApiServer, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
 import { createCaciController } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
@@ -10,6 +10,8 @@ import { createDemoModelClient, createLlm, type ModelClient } from '../llm/index
 import { createUserController } from '../users/index.js';
 import { createSqliteSessionStore, createSqliteUserStore } from '../users/sqlite/index.js';
 import type { ServiceConfig } from './config.js';
+import { defaultWebDir, WEB_FILE_SPECS } from './web-app.js';
+import { loadWebFiles } from './web-files.js';
 
 export interface RunningService {
   /** The port actually listening (useful when 0 was asked for). */
@@ -30,6 +32,8 @@ export interface ServiceOptions {
   readonly anthropic?: { readonly fetch?: typeof fetch };
   /** For tests: a model client to use instead of the demo or the Anthropic one. */
   readonly llmClient?: ModelClient;
+  /** For tests: the folder to read the web app's files from, instead of `web/` beside the code. */
+  readonly webDir?: string;
 }
 
 /** The model that files notes: the one given, the free demo one, or (only when asked for, so the provider's SDK is not needed otherwise) the real one. */
@@ -48,6 +52,7 @@ async function modelFor(config: ServiceConfig, options: ServiceOptions): Promise
  */
 export async function startService(config: ServiceConfig, options: ServiceOptions = {}): Promise<RunningService> {
   const client = await modelFor(config, options); // first, before any folder or file is made: a missing key must leave nothing behind
+  const webFiles = loadWebFiles(options.webDir ?? defaultWebDir(), WEB_FILE_SPECS); // also before any file is made: a missing web file must leave nothing behind
   const dataDir = resolve(config.dataDir);
   try {
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -91,6 +96,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       ...createReadRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createCircleRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createInvitationRoutes({ circles, secureCookies: config.cookieSecure }),
+      ...createWebRoutes({ files: webFiles }),
     ];
     const api = createApiServer({
       routes,

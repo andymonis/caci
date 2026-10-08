@@ -16,7 +16,7 @@ const devSources = () => walk(dev).filter((file) => /\.mjs$/.test(file) && !/\.t
 describe('the dev tools are never part of a release', () => {
   it('the package only publishes an allow-list that does not include dev/', () => {
     const { files, private: isPrivate } = read('package.json');
-    expect(files).toEqual(['dist', 'schema']);
+    expect(files).toEqual(['dist', 'schema', 'web/*.html', 'web/*.js', 'web/*.css']);
     expect(isPrivate).toBe(true);
   });
 
@@ -24,9 +24,15 @@ describe('the dev tools are never part of a release', () => {
     const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8' });
     const paths = JSON.parse(out)[0].files.map((f) => f.path);
     expect(paths.length).toBeGreaterThan(0);
-    const allowed = (path) => path === 'package.json' || /^(README\.md|LICENSE.*)$/i.test(path) || path.startsWith('dist/') || path.startsWith('schema/');
+    const allowed = (path) => path === 'package.json' || /^(README\.md|LICENSE.*)$/i.test(path) || path.startsWith('dist/') || path.startsWith('schema/') || /^web\/[a-z-]+\.(html|js|css)$/.test(path);
     expect(paths.filter((p) => !allowed(p))).toEqual([]);
     expect(paths.filter((p) => /explorer|lab|server-kit|^dev\//.test(p))).toEqual([]);
+  });
+
+  it('the web app is published as its eight files and none of its tests', () => {
+    const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8' });
+    const web = JSON.parse(out)[0].files.map((f) => f.path).filter((p) => p.startsWith('web/')).sort();
+    expect(web).toEqual(['web/api-client.js', 'web/app.js', 'web/forms.js', 'web/index.html', 'web/mount.js', 'web/session.js', 'web/style.css', 'web/view.js']);
   });
 
   it('the library build only compiles src/, so dev code cannot end up in dist/', () => {

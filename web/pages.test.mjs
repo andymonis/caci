@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 // files, so a careless edit breaks the build.
 
 const dir = dirname(fileURLToPath(import.meta.url));
-const files = readdirSync(dir).filter((f) => !f.endsWith('.test.mjs'));
+const files = readdirSync(dir).filter((f) => !f.endsWith('.test.mjs') && !f.endsWith('.test-util.mjs'));
 const read = (name) => readFileSync(join(dir, name), 'utf8');
 const scripts = files.filter((f) => f.endsWith('.js'));
 const html = read('index.html');

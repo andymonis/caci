@@ -81,7 +81,10 @@
   },
   "files": [
     "dist",
-    "schema"
+    "schema",
+    "web/*.html",
+    "web/*.js",
+    "web/*.css"
   ],
   "dependencies": {
     "zod": "^4.6.5"

@@ -226,6 +226,7 @@ describe('serve (what npm run serve does)', () => {
     if (result.code === 0) {
       running.push(result.service);
       expect(out.join('')).toMatch(/Listening on http:\/\/\[::1\]:\d+/);
+      expect(out.join('')).toMatch(/Open http:\/\/\[::1\]:\d+\/ in a browser/);
     }
   });
 

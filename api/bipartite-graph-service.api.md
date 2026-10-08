@@ -95,6 +95,7 @@ export interface ServiceOptions {
         readonly status: number;
         readonly ms: number;
     }) => void;
+    readonly webDir?: string;
 }
 
 // @public

@@ -29,6 +29,7 @@ export async function serve(env: Readonly<Record<string, string | undefined>>, i
     const service = await startService(config.value, key?.ok === true ? { apiKey: key.value } : {});
     const shown = service.host.includes(':') ? `[${service.host}]` : service.host;
     io.stdout(`Listening on http://${shown}:${service.port}\n`);
+    io.stdout(`Open http://${shown}:${service.port}/ in a browser to register and sign in.\n`);
     io.stdout(`Data is kept in ${service.dataDir} (graphs.db and users.db, not encrypted).\n`);
     io.stdout(
       config.value.llm === 'anthropic'
