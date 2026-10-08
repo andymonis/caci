@@ -16,7 +16,7 @@ describe('the container diagram', () => {
   });
 
   it.each(containers.map((c) => [c.name, c] as const))('%s: its code folder exists, unless it is marked planned', (_name, c) => {
-    const folders = [...c.text.matchAll(/Code: (src\/[\w/.-]+?)\.(?:\s|$)/g)].map((m) => m[1] as string);
+    const folders = [...c.text.matchAll(/Code: ((?:src|web)\/[\w/.-]*?)\.(?:\s|$)/g)].map((m) => m[1] as string);
     if (/\bPlanned\b/.test(c.text)) return;
     for (const folder of folders) expect(existsSync(new URL(folder, root)), `${folder} does not exist`).toBe(true);
   });
