@@ -106,19 +106,19 @@ D1 to D3 are the owner's answers; D4 to D16 are proposals that stand unless chan
 
 ## Threats and controls
 
-Each row gets, in T-126, the test that covers it.
+Each row names the tests that cover it. `src/service/review.test.ts` fails the build if a named test file or test disappears.
 
-| Threat | Control |
-|--------|---------|
-| A crafted address (`#/circles/..%2f..`, markup, a very long hash) making the page request something else | Routes are parsed strictly; an id must match its exact shape; anything else is home (D6, WC-NFR-01) |
-| An id in an answer used to build a path | Ids from answers are checked against their shape again before use (D6) |
-| Text written by other people (a display name, a circle name or description, an invitation's sender) run as code | Text only through templates and `textContent`; the strict policy as the second line (D15, WC-NFR-02) |
-| A person acting on a stale view (a role changed, a circle deleted by someone else) | Every action reloads what it changed; a refusal that shows staleness reloads the view; the service re-checks everything (D14) |
-| A double click sending an action twice | One request at a time and disabled controls (WC-FR-15) |
-| A role hint hiding a control that is allowed, or showing one that never is | The hint table is tested against the service's own permission function (D7, WC-NFR-09) |
-| The page revealing whether an account exists | The invitation wording never says (D11) |
-| An irreversible action taken by accident | Two-step confirmation for delete, remove and leave (D8) |
-| Circle data kept where it can be read later | Memory only; no storage (D16, WC-NFR-04) |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| A crafted address (`#/circles/..%2f..`, markup, a very long hash) making the page request something else | Routes are parsed strictly; an id must match its exact shape; anything else is home (D6, WC-NFR-01) | `web/router.test.mjs` — "anything that is not exactly one of ours is home"; `web/router.test.mjs` — "whatever is typed, what comes out is one of our addresses"; `web/circles-pages.test.mjs` — "a hostile or unknown address lands on home and nothing odd is asked for"; `web/circle-page.test.mjs` — "a bad id in the address never reaches a path"; `web/pages.test.mjs` — "only the entry point touches the address bar" |
+| An id in an answer used to build a path | Ids from answers are checked against their shape again before use (D6) | `web/circles-client.test.mjs` — "are recognised only in the exact shapes the service makes"; `web/circles-client.test.mjs` — "a circle id is not accepted where an invitation id goes"; `web/circles-client.test.mjs` — "one item that is not shaped right refuses the whole page"; `web/circles-client.test.mjs` — "answers that are not shaped right are server problems, never crashes" |
+| Text written by other people (a display name, a circle name or description, an invitation sender) run as code | Text only through templates and `textContent`; the strict policy as the second line (D15, WC-NFR-02) | `web/circles-pages.test.mjs` — "markup in a circle name or a sender"; `web/circle-page.test.mjs` — "names and descriptions made of markup stay text"; `web/service.test.mjs` — "markup in names stays text across the whole journey"; `web/pages.test.mjs` — "no script uses %s"; `web/pages.test.mjs` — "there are four row templates"; `web/pages.test.mjs` — "every slot the script fills exists in its template" |
+| A person acting on a stale view (a role changed, a circle deleted by someone else) | Every action reloads what it changed; a refusal that shows staleness reloads the view; the service re-checks everything (D14) | `web/circle-session.test.mjs` — "a refusal for lack of rights shows the service"; `web/circle-session.test.mjs` — "forbidden refreshes everything"; `web/circle-session.test.mjs` — "a person who has left"; `web/circles-session.test.mjs` — "an invitation that has gone is"; `web/circle-page.test.mjs` — "a refusal for rights shows the service" |
+| A double click sending an action twice | One request at a time and disabled controls (WC-FR-15) | `web/circles-session.test.mjs` — "a second call in the same area sends nothing"; `web/circle-session.test.mjs` — "a second call while one is out sends nothing"; `web/circles-pages.test.mjs` — "controls are disabled while a request is out and enabled again after"; `web/circle-page.test.mjs` — "controls are disabled while a request is out" |
+| A role hint hiding a control that is allowed, or showing one that never is | The hint table is tested against the service's own permission function (D7, WC-NFR-09) | `web/permissions.test.mjs` — "change a role, for every actor, target, new role and self flag"; `web/permissions.test.mjs` — "remove, for every actor, target and self flag"; `web/permissions.test.mjs` — "invite and withdraw, for every actor and every offered role"; `web/circle-page.test.mjs` — "may invite members and observers only, and manage only members and observers" |
+| The page revealing whether an account exists | The invitation wording never says (D11) | `web/circle-page.test.mjs` — "the notice is the same for a name with no account"; `web/circle-session.test.mjs` — "the answer is the same for every name"; `web/circles-client.test.mjs` — "an invitation answer is the same whatever the username was"; `web/service.test.mjs` — "create, invite, see the count, accept" |
+| An irreversible action taken by accident | Two-step confirmation for delete, remove and leave (D8) | `web/circle-session.test.mjs` — "asking sends nothing and the state says what is asked"; `web/circle-page.test.mjs` — "asking shows the question in that row with the focus on Cancel"; `web/circle-page.test.mjs` — "leaving asks first; Cancel changes nothing"; `web/circle-page.test.mjs` — "deleting says what it removes, needs Yes, and goes to the list" |
+| Circle data kept where it can be read later | Memory only; no storage (D16, WC-NFR-04) | `web/pages.test.mjs` — "nothing is kept in the browser and nothing is sent anywhere else"; `web/circle-page.test.mjs` — "signing out clears the circle, and its screen is not shown"; `web/circles-pages.test.mjs` — "signing out forgets the lists; signing in again starts clean" |
 
 ## What the person is told
 
@@ -155,6 +155,39 @@ The new files are chosen in T-118 to T-124 (a circles client, a router, the role
 | WC-AC-10 | The page's role table equals the service's over every combination. |
 | WC-AC-11 | After inviting, nothing on the page tells whether the username has an account. |
 | WC-AC-12 | The main heading takes the focus and the title follows on each change of screen; every control can be used from the keyboard; the browser reports no policy violation. |
+
+### Where each criterion is checked (T-126)
+
+| ID | Covered by |
+|----|------------|
+| WC-AC-01 | `web/service.test.mjs` — "create, invite, see the count, accept"; `web/circles-pages.test.mjs` — "sends the clean values, goes to the new circle, and empties the form"; `web/circles-pages.test.mjs` — "lists the circles with the person" |
+| WC-AC-02 | `web/service.test.mjs` — "create, invite, see the count, accept"; `web/circles-pages.test.mjs` — "accepting goes to that circle; the home count follows"; `web/circles-pages.test.mjs` — "Refresh asks again and shows the new number" |
+| WC-AC-03 | `web/circles-pages.test.mjs` — "declining removes the row, updates the count and keeps the focus on the heading"; `web/circles-session.test.mjs` — "declining removes the row and the count follows" |
+| WC-AC-04 | `web/circle-page.test.mjs` — "may invite members and observers only, and manage only members and observers"; `web/circle-page.test.mjs` — "only the circle, the people and a way to leave"; `web/permissions.test.mjs` — "person controls: nothing beside your own row" |
+| WC-AC-05 | `web/service.test.mjs` — "create, invite, see the count, accept"; `web/circle-page.test.mjs` — "leaving asks first; Cancel changes nothing"; `web/circle-page.test.mjs` — "deleting says what it removes, needs Yes, and goes to the list"; `web/circle-page.test.mjs` — "confirming removes, reloads the people and moves the focus to their heading"; `web/circle-page.test.mjs` — "sends the chosen role, reloads the people and puts the focus on their heading" |
+| WC-AC-06 | `web/circle-page.test.mjs` — "the only owner is told in the service"; `web/circle-session.test.mjs` — "the only owner is told in the service"; `web/service.test.mjs` — "create, invite, see the count, accept" |
+| WC-AC-07 | `web/circles-pages.test.mjs` — "follows the address, the back button and a pasted address"; `web/circles-pages.test.mjs` — "a hostile or unknown address lands on home and nothing odd is asked for"; `web/circles-pages.test.mjs` — "while signed out the address is kept, and applies after signing in"; `web/router.test.mjs` — "anything that is not exactly one of ours is home" |
+| WC-AC-08 | `web/circle-page.test.mjs` — "is "no such circle" for a stranger and for a made-up one, with a way back"; `web/service.test.mjs` — "create, invite, see the count, accept"; `web/service.test.mjs` — "a circle that is not yours and one that never existed read the same" |
+| WC-AC-09 | `web/service.test.mjs` — "markup in names stays text across the whole journey"; `web/circle-page.test.mjs` — "names and descriptions made of markup stay text"; `web/circles-pages.test.mjs` — "markup in a circle name or a sender" |
+| WC-AC-10 | `web/permissions.test.mjs` — "change a role, for every actor, target, new role and self flag"; `web/permissions.test.mjs` — "rename, delete and leave, for every actor"; `web/permissions.test.mjs` — "remove, for every actor, target and self flag"; `web/permissions.test.mjs` — "invite and withdraw, for every actor and every offered role" |
+| WC-AC-11 | `web/circle-page.test.mjs` — "the notice is the same for a name with no account"; `web/circle-session.test.mjs` — "the answer is the same for every name" |
+| WC-AC-12 | `web/circles-pages.test.mjs` — "follows the address, the back button and a pasted address"; `web/circle-page.test.mjs` — "asking shows the question in that row with the focus on Cancel"; `web/pages.test.mjs` — "the navigation and heading elements exist"; `web/pages.test.mjs` — "gives every field a visible label, a name and the right autocomplete value"; `web/pages.test.mjs` — "follows the system theme, shows keyboard focus, respects reduced motion, and copes with a narrow window" |
+
+The whole journey was also looked at by hand in Chrome against the real service (recorded in `.gsd/STATE.md`, T-125): the address, title and focus following each screen, a circle named with markup shown as text, an invitation by username, the count on the invited person's home page, accepting with the keyboard, the manager's reduced controls, the leave question's focus, the hostile address, Back, a reload, and an injected script and image being blocked.
+
+### Residual risks (not covered, with the reason)
+
+These are real and known; the ones that can be acted on are in the PLAN Backlog.
+
+1. **A view is only as new as its last load.** Nothing is pushed: if another person changes a role or removes someone, this page learns it on its next load or when one of its own actions is refused. The service re-checks every action, so the effect is a wrong button for a while, never a wrong result.
+2. **The invitation count is not live.** It is fetched when the home page opens and when Refresh is pressed, and shows no number if the last attempt failed; a person who does not press it can miss an invitation until the next visit.
+3. **Role hints can lag behind the service.** The table is tested against the service's function today, but the page and the service are separate files: a change to the rules in `src/circles/authorise.ts` makes the test fail until the page follows, and a browser holding an old copy of the page would show the old hints (every action is still checked by the service).
+4. **Usernames and display names are visible to every member of a circle.** The page says so on the circle and invitations screens; that is the design of circles for now (R-004), not something the page can limit.
+5. **Nobody is notified.** An invitation is found only by looking; there is no email, push or badge outside the page.
+6. **An invitation to a name nobody has can reach whoever registers it within the invitation's life.** The page deliberately never says whether an account exists (R-004 D9), which is why the invitation is held by name; the registrant still has to accept and sees who invited them.
+7. **A role chosen in a row but not saved is lost when another action redraws the people**, and the roster arrives in user-id order, not by name. Both are small and harmless; neither loses data.
+8. **What was looked at by eye is one browser on one machine.** Narrow and dark layouts and a screen reader were not tried by hand; they are covered by checks on the structure, not by assistive technology. The policy-violation console was read after the journey, not during page load.
+9. **Two tabs of the same person do not know about each other.** Each is a view as old as its last load; the service stays the authority.
 
 ## Build order
 
