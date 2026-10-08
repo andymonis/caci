@@ -40,7 +40,7 @@ export function checkCircle(input) {
 
 const emptyList = () => ({ status: 'idle', items: [], nextCursor: null, error: null, stale: false });
 const BUSY = Object.freeze({ ok: false, kind: 'busy', message: 'Please wait: the last request is still being sent.' });
-const failed = (error) => ({ ok: false, kind: error.kind, message: error.message, ...(error.what === undefined ? {} : { what: error.what }), ...(error.field === undefined ? {} : { field: error.field }), ...(error.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: error.retryAfterSeconds }) });
+export const failed = (error) => ({ ok: false, kind: error.kind, message: error.message, ...(error.what === undefined ? {} : { what: error.what }), ...(error.field === undefined ? {} : { field: error.field }), ...(error.retryAfterSeconds === undefined ? {} : { retryAfterSeconds: error.retryAfterSeconds }) });
 
 export function createCirclesSession({ client, onSignedOut }) {
   if (!client || typeof client.listCircles !== 'function') throw new TypeError('createCirclesSession needs a circles client');
