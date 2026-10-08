@@ -29,10 +29,10 @@ describe('the dev tools are never part of a release', () => {
     expect(paths.filter((p) => /explorer|lab|server-kit|^dev\//.test(p))).toEqual([]);
   });
 
-  it('the web app is published as its eight files and none of its tests', () => {
+  it('the web app is published as its files and none of its tests', () => {
     const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8' });
     const web = JSON.parse(out)[0].files.map((f) => f.path).filter((p) => p.startsWith('web/')).sort();
-    expect(web).toEqual(['web/api-client.js', 'web/app.js', 'web/forms.js', 'web/index.html', 'web/mount.js', 'web/session.js', 'web/style.css', 'web/view.js']);
+    expect(web).toEqual(['web/api-client.js', 'web/app.js', 'web/circles-client.js', 'web/forms.js', 'web/index.html', 'web/mount.js', 'web/session.js', 'web/style.css', 'web/view.js']);
   });
 
   it('the library build only compiles src/, so dev code cannot end up in dist/', () => {

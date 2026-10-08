@@ -32,11 +32,11 @@ export function parseRetryAfter(value) {
   return Math.min(seconds, 86_400);
 }
 
-const fail = (error) => ({ ok: false, error: Object.freeze(error) });
-const ok = (value) => ({ ok: true, value });
+export const fail = (error) => ({ ok: false, error: Object.freeze(error) });
+export const ok = (value) => ({ ok: true, value });
 
-const NETWORK = 'Cannot reach the service. Check your connection and try again.';
-const SERVER = 'Something went wrong on the service. Try again in a moment.';
+export const NETWORK = 'Cannot reach the service. Check your connection and try again.';
+export const SERVER = 'Something went wrong on the service. Try again in a moment.';
 
 /** The user as the app uses them, or `undefined` if the answer is not shaped like one. */
 function userFrom(json) {
@@ -69,13 +69,14 @@ function errorFor(operation, status, json, retryAfter) {
 }
 
 /**
- * `fetchFn` is the browser's `fetch` (or a stand-in in tests). Nothing is read from the page or from
- * storage; the session cookie is the browser's business.
+ * One way of sending a request and reading the answer, shared by every client of the service: the same
+ * address, JSON, the cookie left to the browser, never throwing. `errorOf(status, json, retryAfter)` says
+ * what a refusal means for the call being made; `parse(json)` turns a good answer into the value the app
+ * uses (or `undefined` if it is not shaped right, which is a server problem).
  */
-export function createApiClient({ fetchFn }) {
-  if (typeof fetchFn !== 'function') throw new TypeError('createApiClient needs a fetch function');
-
-  async function request(operation, method, path, body, parse) {
+export function createRequester(fetchFn) {
+  if (typeof fetchFn !== 'function') throw new TypeError('createRequester needs a fetch function');
+  return async function request(method, path, body, parse, errorOf) {
     let response;
     try {
       response = await fetchFn(path, {
@@ -114,8 +115,18 @@ export function createApiClient({ fetchFn }) {
     } catch {
       retryAfter = undefined;
     }
-    return fail(errorFor(operation, response.status, json, retryAfter));
-  }
+    return fail(errorOf(response.status, json, retryAfter));
+  };
+}
+
+/**
+ * `fetchFn` is the browser's `fetch` (or a stand-in in tests). Nothing is read from the page or from
+ * storage; the session cookie is the browser's business.
+ */
+export function createApiClient({ fetchFn }) {
+  if (typeof fetchFn !== 'function') throw new TypeError('createApiClient needs a fetch function');
+  const send = createRequester(fetchFn);
+  const request = (operation, method, path, body, parse) => send(method, path, body, parse, (status, json, retryAfter) => errorFor(operation, status, json, retryAfter));
 
   return Object.freeze({
     /** Who is signed in, if anyone: `ok` with the user, or the error `signed-out`. */

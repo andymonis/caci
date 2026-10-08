@@ -211,8 +211,8 @@ describe('the web app section of the README', () => {
   it('lists exactly the files the service serves, each by its own name', () => {
     const documented = [...webSection.matchAll(/^\| `([a-z-]+\.(?:html|js|css))` \|/gm)].map((m) => m[1] as string);
     expect(documented.sort()).toEqual(WEB_FILE_SPECS.map((s) => s.file).sort());
-    expect(documented).toHaveLength(8);
-    expect(webSection).toContain('only these eight');
+    expect(documented).toHaveLength(WEB_FILE_SPECS.length);
+    expect(webSection).toContain(`only these ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen'][WEB_FILE_SPECS.length]}`);
   });
 
   it('prints exactly the policy the service sends, and its other headers', () => {

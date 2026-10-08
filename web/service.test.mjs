@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startService } from '../src/service/service.ts';
 import { createApiClient } from './api-client.js';
+import { createCirclesClient } from './circles-client.js';
 import { fakePage, fill, visibleScreens, waitFor } from './fake-page.test-util.mjs';
 import { mount } from './mount.js';
 import { createSession } from './session.js';
@@ -139,5 +140,104 @@ describe('the page\'s own logic against the real service', () => {
     fill(page, 'signin', { username: 'ann', password: PW });
     page.el('signin-form').fire('submit');
     await waitFor(() => visibleScreens(page)[0] === 'signed-in');
+  });
+});
+
+describe('the circles client against the real service', () => {
+  const people = async (port, names) => {
+    const out = {};
+    for (const name of names) {
+      const jar = browserFetch(port);
+      const session = createSession({ api: createApiClient({ fetchFn: jar }) });
+      expect(await session.register({ username: name, displayName: `Display ${name}`, password: PW })).toEqual({ ok: true });
+      out[name] = { circles: createCirclesClient({ fetchFn: jar }), id: session.getState().user.id };
+    }
+    return out;
+  };
+
+  it('a whole circle: create, invite, accept, roles, remove, leave, the only owner refused, delete', async () => {
+    const { port } = await start();
+    const { root, ann, bob, cat } = await people(port, ['root', 'ann', 'bob', 'cat']);
+    expect(root).toBeDefined(); // the first account is the administrator and not part of the story
+    const made = await ann.circles.createCircle({ name: ' Neighbours ', description: 'Next door' });
+    expect(made.value).toMatchObject({ name: 'Neighbours', description: 'Next door', role: 'owner', memberCount: 1 });
+    const id = made.value.id;
+    expect((await ann.circles.listCircles()).value.items.map((c) => c.id)).toEqual([id]);
+
+    for (const [who, role] of [[bob, 'manager'], [cat, 'member']]) {
+      const name = who === bob ? 'bob' : 'cat';
+      expect(await ann.circles.invite(id, { username: name.toUpperCase(), role })).toEqual({ ok: true, value: { invited: true } });
+    }
+    const [forBob] = (await bob.circles.myInvitations()).value.items;
+    expect(forBob).toMatchObject({ circle: { id, name: 'Neighbours' }, role: 'manager', invitedBy: { displayName: 'Display ann' } });
+    expect((await bob.circles.acceptInvitation(forBob.id)).value).toMatchObject({ id, role: 'manager', memberCount: 2 });
+    const [forCat] = (await cat.circles.myInvitations()).value.items;
+    expect((await cat.circles.declineInvitation(forCat.id)).ok).toBe(true);
+    expect((await cat.circles.myInvitations()).value.items).toEqual([]);
+
+    const open = await ann.circles.listInvitations(id);
+    expect(open.value.items.map((i) => i.username)).toEqual([]); // both are gone: one accepted, one declined
+    await ann.circles.invite(id, { username: 'cat', role: 'observer' });
+    const [again] = (await ann.circles.listInvitations(id)).value.items;
+    expect(again).toMatchObject({ username: 'cat', role: 'observer' });
+    expect((await ann.circles.withdrawInvitation(id, again.id)).ok).toBe(true);
+    expect((await cat.circles.myInvitations()).value.items).toEqual([]);
+    await ann.circles.invite(id, { username: 'cat', role: 'member' });
+    expect((await cat.circles.acceptInvitation((await cat.circles.myInvitations()).value.items[0].id)).ok).toBe(true);
+
+    const roster = (await bob.circles.listMembers(id)).value.items;
+    expect(Object.fromEntries(roster.map((m) => [m.username, m.role]))).toEqual({ ann: 'owner', bob: 'manager', cat: 'member' });
+    expect((await bob.circles.changeRole(id, cat.id, 'observer')).value).toMatchObject({ role: 'observer', username: 'cat' });
+    expect((await bob.circles.changeRole(id, ann.id, 'member')).error).toEqual({ kind: 'forbidden', message: 'Your role in this circle does not allow that.' });
+    expect((await ann.circles.changeRole(id, bob.id, 'owner')).value.role).toBe('owner');
+    expect((await bob.circles.removeMember(id, cat.id)).ok).toBe(true);
+    expect((await cat.circles.getCircle(id)).error).toEqual({ kind: 'not-found', what: 'circle', message: 'No such circle, or you are not in it.' });
+    expect((await ann.circles.leaveCircle(id)).ok).toBe(true);
+    const only = await bob.circles.leaveCircle(id);
+    expect(only.error.kind).toBe('last-owner');
+    expect(only.error.message.toLowerCase()).toContain('only owner');
+    expect((await bob.circles.deleteCircle(id)).ok).toBe(true);
+    expect((await bob.circles.getCircle(id)).error.kind).toBe('not-found');
+  });
+
+  it('a circle the person is not in, and one that does not exist, read the same; a hostile id never leaves the page', async () => {
+    const { port } = await start();
+    const { root, ann, bob } = await people(port, ['root', 'ann', 'bob']);
+    expect(root).toBeDefined();
+    const id = (await ann.circles.createCircle({ name: 'Private' })).value.id;
+    const stranger = await bob.circles.getCircle(id);
+    const missing = await bob.circles.getCircle('c0000000000000000');
+    expect(stranger).toEqual(missing);
+    expect((await bob.circles.getCircle('../../etc/passwd')).error.kind).toBe('not-found');
+  });
+
+  it('limits and field problems come back in the service\'s words, beside the field it names', async () => {
+    const { port } = await start({ maxCirclesPerUser: 1 });
+    const { root, ann } = await people(port, ['root', 'ann']);
+    expect(root).toBeDefined();
+    expect(await ann.circles.createCircle({ name: '' })).toMatchObject({ ok: false, error: { kind: 'invalid', field: 'name' } });
+    expect((await ann.circles.createCircle({ name: 'x'.repeat(81) })).error.field).toBe('name');
+    expect((await ann.circles.createCircle({ name: 'One' })).ok).toBe(true);
+    const over = await ann.circles.createCircle({ name: 'Two' });
+    expect(over.error.kind).toBe('limit');
+    expect(over.error.message).toMatch(/at most 1 circles?/);
+    const circle = (await ann.circles.listCircles()).value.items[0];
+    expect((await ann.circles.invite(circle.id, { username: 'x', role: 'member' })).error).toMatchObject({ kind: 'invalid', field: 'username' });
+    expect((await ann.circles.invite(circle.id, { username: 'someone', role: 'boss' })).error).toMatchObject({ kind: 'invalid', field: 'role' });
+  });
+
+  it('a markup display name comes back as the text it is', async () => {
+    const { port } = await start();
+    const { ann } = await people(port, ['ann']);
+    const hostile = '<img src=x onerror=alert(1)>';
+    const jar = browserFetch(port);
+    const registered = createSession({ api: createApiClient({ fetchFn: jar }) });
+    await registered.register({ username: 'eve', displayName: hostile, password: PW });
+    const eve = createCirclesClient({ fetchFn: jar });
+    const id = (await eve.createCircle({ name: hostile, description: hostile })).value.id;
+    const [circle] = (await eve.listCircles()).value.items;
+    expect(circle).toMatchObject({ id, name: hostile, description: hostile });
+    expect((await eve.listMembers(id)).value.items[0].displayName).toBe(hostile);
+    expect(ann).toBeDefined();
   });
 });
