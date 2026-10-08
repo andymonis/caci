@@ -115,6 +115,9 @@ export function createInvitationRoutes(options: CircleRoutesOptions): readonly R
 export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
 
 // @public
+export function createWebRoutes(options: WebRoutesOptions): readonly Route[];
+
+// @public
 export const DOCUMENT_TYPES: Readonly<{
     html: "text/html; charset=utf-8";
     js: "text/javascript; charset=utf-8";
@@ -216,6 +219,24 @@ export function serialiseCookie(name: string, value: string, options: CookieOpti
 
 // @public
 export const STATUS_OF: Readonly<Record<UsersError['code'], number>>;
+
+// @public
+export const WEB_POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+
+// @public
+export interface WebFile {
+    // (undocumented)
+    readonly kind: DocumentKind;
+    readonly path: string;
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public (undocumented)
+export interface WebRoutesOptions {
+    // (undocumented)
+    readonly files: readonly WebFile[];
+}
 
 // (No @packageDocumentation comment for this package)
 

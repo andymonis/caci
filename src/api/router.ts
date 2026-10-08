@@ -107,6 +107,7 @@ const PARAM = /^[A-Za-z0-9_.-]{1,128}$/;
 /** The segments of a request path, or `undefined` if the path is not one we would ever serve (so it is a 404, never matched loosely). */
 export function segmentsOf(path: string): string[] | undefined {
   if (typeof path !== 'string' || path.length > 1024 || !PATH.test(path)) return undefined;
+  if (path === '/') return []; // the root is the one path with nothing after the slash
   const segments = path.slice(1).split('/');
   if (segments.length > MAX_SEGMENTS) return undefined;
   for (const segment of segments) {
@@ -119,7 +120,8 @@ export function segmentsOf(path: string): string[] | undefined {
 export function checkRoutes(routes: readonly Route[]): void {
   const seen = new Set<string>();
   for (const route of routes) {
-    if (!/^\/[A-Za-z0-9_/:-]*$/.test(route.path) || route.path.includes('//')) throw new TypeError(`bad route path: ${route.path}`);
+    if (!/^\/[A-Za-z0-9_/:.-]*$/.test(route.path) || route.path.includes('//') || (route.path !== '/' && route.path.endsWith('/'))) throw new TypeError(`bad route path: ${route.path}`);
+    if (route.path.split('/').some((segment) => segment === '.' || segment === '..' || (segment.startsWith(':') && segment.includes('.')))) throw new TypeError(`bad route path: ${route.path}`);
     const names = route.path.split('/').filter((s) => s.startsWith(':')).map((s) => s.slice(1));
     if (names.some((n) => !/^[A-Za-z][A-Za-z0-9]*$/.test(n)) || new Set(names).size !== names.length) throw new TypeError(`bad route parameter in ${route.path}`);
     const shape = `${route.method} ${route.path.replace(/:[A-Za-z0-9]+/g, ':')}`;
@@ -134,7 +136,7 @@ export function matchRoute(routes: readonly Route[], method: string, path: strin
   if (segments === undefined) return { kind: 'none' };
   const allow: Method[] = [];
   for (const route of routes) {
-    const pattern = route.path.slice(1).split('/');
+    const pattern = route.path === '/' ? [] : route.path.slice(1).split('/');
     if (pattern.length !== segments.length) continue;
     const params: Record<string, string> = Object.create(null) as Record<string, string>;
     let fits = true;

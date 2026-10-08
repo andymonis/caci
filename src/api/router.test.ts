@@ -89,7 +89,8 @@ describe('segmentsOf', () => {
   it('splits a good path and refuses a bad one', () => {
     expect(segmentsOf('/api/me')).toEqual(['api', 'me']);
     expect(segmentsOf('/a.b/c-d/e_f/g~h')).toEqual(['a.b', 'c-d', 'e_f', 'g~h']);
-    expect(segmentsOf('/')).toBeUndefined();
+    expect(segmentsOf('/')).toEqual([]); // the root, and only the root, has no segments
+    expect(segmentsOf('//')).toBeUndefined();
     expect(segmentsOf(5 as never)).toBeUndefined();
     expect(segmentsOf('/' + Array.from({ length: 8 }, () => 'a').join('/'))).toHaveLength(8);
     expect(segmentsOf('/' + Array.from({ length: 9 }, () => 'a').join('/'))).toBeUndefined();
@@ -108,6 +109,11 @@ describe('checkRoutes', () => {
     expect(bad([{ path: '/a b' }])).toThrow(TypeError);
     expect(bad([{ path: '/a/:1x' }])).toThrow(TypeError);
     expect(bad([{ path: '/a/:id/:id' }])).toThrow(TypeError);
+    expect(bad([{ path: '/a/' }])).toThrow(TypeError);
+    expect(bad([{ path: '/a/../b' }])).toThrow(TypeError);
+    expect(bad([{ path: '/./b' }])).toThrow(TypeError);
+    expect(bad([{ path: '/a/:id.js' }])).toThrow(TypeError);
+    expect(bad([{ path: '/' }, { path: '/app.js' }, { path: '/style.v2.css' }])).not.toThrow();
     expect(bad([{ path: '/a/:id' }, { path: '/a/:other' }])).toThrow(/two routes/);
     expect(bad([{ path: '/a/:id' }, { path: '/a/:id', method: 'POST' }])).not.toThrow();
   });
