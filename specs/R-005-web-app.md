@@ -26,7 +26,7 @@ It is a plain web app first: **no manifest, no service worker and no offline beh
 | D10 | **Proposed:** after registering, the page **signs the person in** with the same values | Registration alone leaves no cookie (R-002); asking someone to type it all again is friction for no safety |
 | D11 | **Proposed:** the register form says plainly that **the first account created on an installation becomes the administrator** | It is true (R-002), and a surprise there is a real harm |
 | D12 | **Proposed:** the holding page is **clearly marked temporary** and shows only the person's **display name and username**, with a sign-out button | It proves the sign-in worked without inventing features, and shows nothing about anyone else |
-| D13 | **Proposed:** the app is one page at `/`; its screens are states of that page, not separate addresses | Fewer files to serve and nothing for a link to expose; deep links are not needed for three screens |
+| D13 | **Proposed:** the app is one page at `/`; its screens are states of that page, not separate addresses | Fewer files to serve and nothing for a link to expose; deep links are not needed for three screens. **Replaced by R-006 (D2):** once there are several levels of screen they get hash-route addresses; the page is still the one at `/` and the hash never goes to the server |
 
 D1 to D3 are the owner's answers; D4 to D13 are proposals that stand unless changed.
 
