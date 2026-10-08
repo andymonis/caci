@@ -345,7 +345,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these nine, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these ten, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -358,6 +358,7 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `forms.js` | early checks of the forms (the service has the last word) |
 | `api-client.js` | the code that talks to the account routes, and the one way every request is sent |
 | `circles-client.js` | the code that talks to the circle and invitation routes |
+| `router.js` | which screen the address names; anything unknown is the home screen |
 
 A file you add to `web/` is not served until you list it, and the tests fail if the list and the folder disagree. Change a file and restart the service to see it.
 
