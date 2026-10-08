@@ -121,3 +121,30 @@ dd { margin: 0 0 0.75rem; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0 0 1rem; padding: 0 0 0.5rem; border-bottom: 1px solid var(--line); }
+nav a { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--accent); }
+nav a[aria-current="page"] { color: var(--fg); font-weight: 700; text-decoration: none; border-bottom: 3px solid var(--accent); }
+
+h3 { font-size: 1.0625rem; margin: 1.25rem 0 0.5rem; }
+h2:focus, h3:focus { outline: none; }
+h2:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+
+.rows { list-style: none; margin: 0.5rem 0; padding: 0; }
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin: 0 0 0.5rem;
+  overflow-wrap: anywhere;
+}
+.row-title { font-weight: 700; color: var(--fg); }
+a.row-title { color: var(--accent); }
+.meta { color: var(--muted); font-size: 0.9375rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+button.secondary { color: var(--fg); background: transparent; border: 1px solid var(--line); }
+textarea { width: 100%; font: inherit; }

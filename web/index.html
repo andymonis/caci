@@ -79,17 +79,95 @@
     </section>
 
     <section id="screen-signed-in" hidden>
-      <h2>Home</h2>
-      <p class="notice">This is a temporary home page. More will arrive here later.</p>
+      <nav id="nav" aria-label="Main">
+        <a id="nav-home" href="#/">Home</a>
+        <a id="nav-circles" href="#/circles">Circles</a>
+        <a id="nav-invitations" href="#/invitations">Invitations</a>
+      </nav>
       <p id="signed-in-notice" class="error" role="alert" hidden></p>
-      <dl>
-        <dt>Name</dt>
-        <dd id="user-display-name"></dd>
-        <dt>Username</dt>
-        <dd id="user-username"></dd>
-      </dl>
-      <button type="button" id="signout">Sign out</button>
+
+      <section id="view-home" hidden>
+        <h2 id="home-heading" tabindex="-1">Home</h2>
+        <p class="notice">This is a temporary home page. More will arrive here later.</p>
+        <dl>
+          <dt>Name</dt>
+          <dd id="user-display-name"></dd>
+          <dt>Username</dt>
+          <dd id="user-username"></dd>
+        </dl>
+        <h3>Invitations</h3>
+        <p id="home-invitations-count" role="status"></p>
+        <p class="hint">This is checked when the page opens or when you press Refresh. It does not update by itself.</p>
+        <button type="button" id="home-refresh">Refresh</button>
+        <p><a href="#/invitations">See your invitations</a> · <a href="#/circles">See your circles</a></p>
+        <button type="button" id="signout">Sign out</button>
+      </section>
+
+      <section id="view-circles" hidden>
+        <h2 id="circles-heading" tabindex="-1">Your circles</h2>
+        <p class="note">A circle is a group of people. Circles share no data yet: being in one only lets people see who else is in it.</p>
+        <p id="circles-status" role="status" hidden></p>
+        <p id="circles-error" class="error" role="alert" tabindex="-1" hidden></p>
+        <p id="circles-empty" hidden></p>
+        <ul id="circles-list" class="rows" hidden></ul>
+        <button type="button" id="circles-more" hidden>Show more</button>
+
+        <h3>Make a circle</h3>
+        <form id="create-form" method="post" novalidate>
+          <p id="create-error" class="error" role="alert" tabindex="-1" hidden></p>
+          <div class="field">
+            <label for="create-name">Name</label>
+            <input id="create-name" name="name" type="text" autocomplete="off" aria-describedby="create-name-hint create-name-error" required>
+            <p id="create-name-hint" class="hint">Up to 80 characters.</p>
+            <p id="create-name-error" class="error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="create-description">Description <span class="optional">(optional)</span></label>
+            <input id="create-description" name="description" type="text" autocomplete="off" aria-describedby="create-description-hint create-description-error">
+            <p id="create-description-hint" class="hint">Up to 500 characters.</p>
+            <p id="create-description-error" class="error" hidden></p>
+          </div>
+          <button type="submit" id="create-submit">Make the circle</button>
+        </form>
+      </section>
+
+      <section id="view-circle" hidden>
+        <h2 id="circle-heading" tabindex="-1">Circle</h2>
+        <p class="note">This screen is being built.</p>
+        <p><a href="#/circles">Back to your circles</a></p>
+      </section>
+
+      <section id="view-invitations" hidden>
+        <h2 id="invitations-heading" tabindex="-1">Your invitations</h2>
+        <p class="note">Accepting an invitation puts you in the circle. Everyone in a circle can see everyone's username and display name.</p>
+        <p id="invitations-status" role="status" hidden></p>
+        <p id="invitations-error" class="error" role="alert" tabindex="-1" hidden></p>
+        <p id="invitations-empty" hidden></p>
+        <ul id="invitations-list" class="rows" hidden></ul>
+        <button type="button" id="invitations-more" hidden>Show more</button>
+      </section>
     </section>
+
+    <template id="circle-row-template">
+      <li class="row">
+        <a data-slot="link" class="row-title"></a>
+        <span data-slot="meta" class="meta"></span>
+      </li>
+    </template>
+
+    <template id="invitation-row-template">
+      <li class="row">
+        <span data-slot="circle" class="row-title"></span>
+        <span data-slot="meta" class="meta"></span>
+        <span data-slot="roleWords" class="hint"></span>
+        <span data-slot="from" class="meta"></span>
+        <span data-slot="ends" class="meta"></span>
+        <span class="actions">
+          <button type="button" data-slot="accept">Accept</button>
+          <button type="button" data-slot="decline" class="secondary">Decline</button>
+        </span>
+      </li>
+    </template>
   </main>
   <script type="module" src="/app.js"></script>
 </body>

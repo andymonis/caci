@@ -4,18 +4,41 @@
 // thing runs against a stand-in page in tests.
 
 import { createApiClient } from './api-client.js';
+import { mountCirclesPages } from './circles-pages.js';
+import { createCirclesClient } from './circles-client.js';
+import { headingIdFor, navFor, titleFor } from './circles-view.js';
+import { hashFor, parseHash } from './router.js';
 import { createSession } from './session.js';
 import { FORMS, formFeedback, viewOf } from './view.js';
 
 const SCREENS = ['loading', 'unreachable', 'signed-out', 'signed-in'];
+const VIEWS = ['home', 'circles', 'circle', 'invitations'];
+const NAV = ['home', 'circles', 'invitations'];
+const NO_ENV = Object.freeze({ getHash: () => '', setHash: () => {}, onHashChange: () => {} });
 
-export function mount(document, fetchFn) {
+/**
+ * `env` is how the page reaches the address bar: `getHash()`, `setHash(hash)` and `onHashChange(listener)`.
+ * It is given (not looked up) so the whole thing runs against a stand-in page; without it the app stays on home.
+ */
+export function mount(document, fetchFn, env = NO_ENV) {
   const $ = (id) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`the page has no element "${id}"`);
     return element;
   };
   const session = createSession({ api: createApiClient({ fetchFn }) });
+  const views = Object.fromEntries(VIEWS.map((name) => [name, $(`view-${name}`)]));
+  const navLinks = Object.fromEntries(NAV.map((name) => [name, $(`nav-${name}`)]));
+  const go = (route) => env.setHash(hashFor(route));
+  const pages = mountCirclesPages(document, { client: createCirclesClient({ fetchFn }), go, onSignedOut: recheck });
+  let shown = null; // the address of the signed-in screen being shown
+  let rechecked = false;
+  /** A circle request says the session ended: ask the service once who is signed in. Once only per sign-in, so a service that contradicts itself cannot make a loop. */
+  function recheck() {
+    if (rechecked) return;
+    rechecked = true;
+    void session.start();
+  }
 
   const screens = Object.fromEntries(SCREENS.map((name) => [name, $(`screen-${name}`)]));
   const forms = Object.fromEntries(
@@ -68,6 +91,31 @@ export function mount(document, fetchFn) {
       // the person is in: nothing typed stays on the page
       for (const parts of Object.values(forms)) for (const { input } of Object.values(parts.fields)) input.value = '';
     }
+    if (view.screen === 'signed-out') rechecked = false;
+    renderRoute(view.screen === 'signed-in');
+  }
+
+  /** Shows the screen the address names (anything unknown is home); a change of screen moves the focus to its heading and sets the title. */
+  function renderRoute(signedIn) {
+    if (!signedIn) {
+      if (shown !== null) pages.reset();
+      shown = null;
+      document.title = 'CaCi';
+      return;
+    }
+    const route = parseHash(env.getHash());
+    for (const name of VIEWS) views[name].hidden = name !== route.name;
+    const current = navFor(route);
+    for (const name of NAV) {
+      if (name === current) navLinks[name].setAttribute('aria-current', 'page');
+      else navLinks[name].removeAttribute('aria-current');
+    }
+    const key = hashFor(route);
+    if (key === shown) return;
+    shown = key;
+    document.title = titleFor(route);
+    pages.show(route);
+    $(headingIdFor(route)).focus();
   }
 
   function show(form, feedback) {
@@ -117,6 +165,7 @@ export function mount(document, fetchFn) {
   signOut.addEventListener('click', () => void session.signOut());
 
   session.subscribe(render);
+  env.onHashChange(() => renderRoute(session.getState().screen === 'signed-in'));
   render(session.getState());
   showForm('signin');
   void session.start();

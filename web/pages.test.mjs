@@ -13,6 +13,8 @@ const read = (name) => readFileSync(join(dir, name), 'utf8');
 const scripts = files.filter((f) => f.endsWith('.js'));
 const html = read('index.html');
 const css = read('style.css');
+const tags = [...html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*)>/gi)].map((m) => ({ name: m[1].toLowerCase(), attrs: m[2], text: m[0] }));
+const attr = (tag, name) => new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"`, 'i').exec(tag.attrs)?.[1];
 
 /** Source with comments removed, so a sentence in a comment is not mistaken for code. */
 function code(text) {
@@ -21,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'circle-session.js', 'circles-client.js', 'circles-session.js', 'forms.js', 'index.html', 'mount.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -106,8 +108,6 @@ describe('nothing is kept in the browser and nothing is sent anywhere else', () 
 });
 
 describe('the page', () => {
-  const tags = [...html.matchAll(/<([a-z][a-z0-9]*)\b([^>]*)>/gi)].map((m) => ({ name: m[1].toLowerCase(), attrs: m[2], text: m[0] }));
-  const attr = (tag, name) => new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"`, 'i').exec(tag.attrs)?.[1];
 
   it('is a complete, labelled document', () => {
     expect(html.startsWith('<!doctype html>')).toBe(true);
@@ -138,7 +138,7 @@ describe('the page', () => {
   });
 
   it('refers to nothing but files of the app by absolute path, plus the empty icon', () => {
-    const served = new Set(['/app.js', '/style.css']);
+    const served = new Set(['/app.js', '/style.css', '#/', '#/circles', '#/invitations']);
     for (const t of tags) {
       for (const name of ['src', 'href', 'action', 'formaction', 'poster', 'data', 'srcset', 'ping', 'cite', 'longdesc']) {
         const value = attr(t, name);
@@ -152,7 +152,7 @@ describe('the page', () => {
 
   it('every form is a post with browser validation off, so a failed script can never put a password in an address', () => {
     const forms = tags.filter((t) => t.name === 'form');
-    expect(forms).toHaveLength(2);
+    expect(forms).toHaveLength(3);
     for (const f of forms) {
       expect(attr(f, 'method')).toBe('post');
       expect(f.attrs).toMatch(/\bnovalidate\b/);
@@ -181,7 +181,7 @@ describe('the page', () => {
   it('gives every field a visible label, a name and the right autocomplete value', () => {
     const labels = new Set(tags.filter((t) => t.name === 'label').map((t) => attr(t, 'for')));
     const inputs = tags.filter((t) => t.name === 'input');
-    expect(inputs).toHaveLength(6);
+    expect(inputs).toHaveLength(8);
     const expected = {
       'signin-username': ['text', 'username'],
       'signin-password': ['password', 'current-password'],
@@ -189,6 +189,8 @@ describe('the page', () => {
       'register-displayName': ['text', 'name'],
       'register-email': ['email', 'email'],
       'register-password': ['password', 'new-password'],
+      'create-name': ['text', 'off'],
+      'create-description': ['text', 'off'],
     };
     for (const input of inputs) {
       const id = attr(input, 'id');
@@ -219,6 +221,47 @@ describe('the page', () => {
 
   it('every button says whether it submits', () => {
     for (const b of tags.filter((t) => t.name === 'button')) expect(['button', 'submit'], b.text).toContain(attr(b, 'type'));
+  });
+});
+
+describe('the templates and the address bar', () => {
+  const templates = [...html.matchAll(/<template\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/template>/g)].map((m) => ({ id: m[1], body: m[2] }));
+
+  it('there are two row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
+    expect(templates.map((t) => t.id).sort()).toEqual(['circle-row-template', 'invitation-row-template']);
+    for (const t of templates) {
+      expect(t.body, t.id).not.toMatch(/\sid\s*=/i);
+      expect(t.body, t.id).not.toMatch(/<script|\son[a-z]+\s*=|\sstyle\s*=|\shref\s*=|\ssrc\s*=/i);
+    }
+  });
+
+  it('every slot the script fills exists in its template, and the other way round', () => {
+    const used = new Set([...code(read('circles-pages.js')).matchAll(/slot\(row, '(\w+)'\)/g)].map((m) => m[1]));
+    const inTemplates = new Set(templates.flatMap((t) => [...t.body.matchAll(/data-slot="(\w+)"/g)].map((m) => m[1])));
+    expect([...used].sort()).toEqual([...inTemplates].sort());
+  });
+
+  it('only the entry point touches the address bar', () => {
+    for (const name of scripts) {
+      if (name === 'app.js') continue;
+      expect(code(read(name)), name).not.toMatch(/\blocation\b|\bhistory\b|\bhashchange\b/);
+    }
+    expect(code(read('app.js'))).toMatch(/window\.location\.hash/);
+  });
+
+  it('the navigation and heading elements exist, and each heading can take the focus', () => {
+    for (const id of ['home-heading', 'circles-heading', 'circle-heading', 'invitations-heading']) {
+      const tag = tags.find((t) => attr(t, 'id') === id);
+      expect(tag, id).toBeDefined();
+      expect(attr(tag, 'tabindex'), id).toBe('-1');
+    }
+    expect(tags.find((t) => t.name === 'nav' && attr(t, 'aria-label') === 'Main')).toBeDefined();
+  });
+
+  it('says that circles share no data and that members see each other\'s names', () => {
+    expect(html).toContain('Circles share no data yet');
+    expect(html).toContain("Everyone in a circle can see everyone's username and display name.");
+    expect(html).toContain('It does not update by itself.');
   });
 });
 

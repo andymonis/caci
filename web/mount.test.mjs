@@ -11,7 +11,8 @@ function service(table = {}) {
   const fetchFn = async (path, init) => {
     const key = `${init.method} ${path}`;
     calls.push({ key, body: init.body === undefined ? undefined : JSON.parse(init.body) });
-    const entry = table[key] ?? { status: 401, body: { error: { code: 'UNAUTHENTICATED', message: 'not signed in' } } };
+    const empty = { status: 200, body: { items: [], nextCursor: null } };
+    const entry = table[key] ?? (/^GET \/api\/(invitations|circles)/.test(key) ? empty : { status: 401, body: { error: { code: 'UNAUTHENTICATED', message: 'not signed in' } } });
     const a = typeof entry === 'function' ? entry(calls.length) : entry;
     if (a instanceof Error) throw a;
     return { status: a.status, headers: { get: (n) => (a.headers && a.headers[n]) ?? null }, text: async () => (a.body === undefined ? '' : JSON.stringify(a.body)) };
@@ -262,6 +263,8 @@ describe('the entry point', () => {
     const page = fakePage();
     const seen = [];
     const win = {
+      location: { hash: '' },
+      addEventListener() {},
       fetch(path, init) {
         if (this !== win) throw new TypeError('Illegal invocation');
         seen.push([init.method, path]);
@@ -308,7 +311,7 @@ describe('registering', () => {
     fill(page, 'register', { username: 'Ann', displayName: 'Ann A', email: '', password: PW });
     page.el('register-form').fire('submit');
     await settle();
-    expect(calls.filter((c) => c.key !== 'GET /api/me').map((c) => [c.key, c.body])).toEqual([
+    expect(calls.filter((c) => !c.key.startsWith('GET /api/')).map((c) => [c.key, c.body])).toEqual([
       ['POST /api/register', { username: 'ann', displayName: 'Ann A', password: PW }],
       ['POST /api/login', { username: 'ann', password: PW }],
     ]);
@@ -388,7 +391,7 @@ describe('signing out', () => {
     await settle();
     page.el('signout').fire('click');
     await settle();
-    expect(calls.map((c) => c.key)).toEqual(['GET /api/me', 'POST /api/logout']);
+    expect(calls.map((c) => c.key)).toEqual(['GET /api/me', 'GET /api/invitations?limit=100', 'POST /api/logout']);
     expect(visibleScreens(page)).toEqual(['signed-out']);
     expect(page.el('user-display-name').textContent).toBe('');
     expect(page.el('user-username').textContent).toBe('');
