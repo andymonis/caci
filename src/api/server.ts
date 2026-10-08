@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { parseBody } from './body.js';
 import { parseCookies } from './cookies.js';
-import { checkRoutes, matchRoute, type ApiResponse, type Method, type Route } from './router.js';
+import { checkRoutes, DOCUMENT_TYPES, matchRoute, policyProblem, type ApiResponse, type Method, type Route } from './router.js';
 
 export interface ApiServerOptions {
   readonly routes: readonly Route[];
@@ -126,6 +126,19 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
   function send(res: ServerResponse, response: ApiResponse & { readonly allow?: readonly Method[] }): void {
     if (res.headersSent) return;
     const headers: Record<string, string | string[]> = { ...SECURITY_HEADERS };
+    const document = response.document;
+    if (document !== undefined) {
+      // a page, script or style sheet: its kind picks a fixed content type; a bad one is our mistake, never sent
+      const bad = response.body !== undefined || !Object.hasOwn(DOCUMENT_TYPES, document.kind) || typeof document.text !== 'string' || response.status === 204 || (document.policy !== undefined && policyProblem(document.policy) !== undefined);
+      if (bad) return send(res, { status: 500, body: errorBody(500, 'internal error') });
+      headers['content-type'] = DOCUMENT_TYPES[document.kind];
+      headers['content-length'] = String(Buffer.byteLength(document.text));
+      if (document.policy !== undefined) headers['content-security-policy'] = document.policy;
+      if (response.cookies !== undefined && response.cookies.length > 0) headers['set-cookie'] = [...response.cookies];
+      res.writeHead(response.status, headers);
+      res.end(document.text);
+      return;
+    }
     const hasBody = response.body !== undefined && response.status !== 204;
     if (hasBody) headers['content-type'] = 'application/json; charset=utf-8';
     if (response.cookies !== undefined && response.cookies.length > 0) headers['set-cookie'] = [...response.cookies];

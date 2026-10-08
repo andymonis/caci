@@ -4,8 +4,8 @@
 export { clearCookie, parseCookies, serialiseCookie } from './cookies.js';
 export type { CookieOptions } from './cookies.js';
 export { isJsonContentType, parseBody } from './body.js';
-export { matchRoute } from './router.js';
-export type { ApiResponse, Match, Method, Route, RouteContext } from './router.js';
+export { DOCUMENT_TYPES, documentResponse, matchRoute, policyProblem } from './router.js';
+export type { ApiResponse, DocumentBody, DocumentKind, Match, Method, Route, RouteContext } from './router.js';
 export { createApiServer } from './server.js';
 export type { ApiServer, ApiServerOptions } from './server.js';
 export { createAccountRoutes, errorResponse, STATUS_OF } from './routes.js';

@@ -22,6 +22,7 @@ export interface ApiResponse {
     // Warning: (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
     readonly body?: JsonValue;
     readonly cookies?: readonly string[];
+    readonly document?: DocumentBody;
     readonly retryAfterSeconds?: number;
     // (undocumented)
     readonly status: number;
@@ -113,6 +114,30 @@ export function createInvitationRoutes(options: CircleRoutesOptions): readonly R
 // @public
 export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
 
+// @public
+export const DOCUMENT_TYPES: Readonly<{
+    html: "text/html; charset=utf-8";
+    js: "text/javascript; charset=utf-8";
+    css: "text/css; charset=utf-8";
+    text: "text/plain; charset=utf-8";
+    json: "application/json; charset=utf-8";
+}>;
+
+// @public
+export interface DocumentBody {
+    // (undocumented)
+    readonly kind: DocumentKind;
+    readonly policy?: string;
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public (undocumented)
+export type DocumentKind = keyof typeof DOCUMENT_TYPES;
+
+// @public
+export function documentResponse(document: DocumentBody, status?: number): ApiResponse;
+
 // Warning: (ae-forgotten-export) The symbol "UsersError" needs to be exported by the entry point index.d.ts
 //
 // @public
@@ -152,6 +177,9 @@ export function parseBody(raw: Uint8Array, contentType: string | undefined): Bod
 
 // @public
 export function parseCookies(header: string | undefined): Readonly<Record<string, string>>;
+
+// @public
+export function policyProblem(policy: unknown): string | undefined;
 
 // @public (undocumented)
 export interface ReadRoutesOptions {

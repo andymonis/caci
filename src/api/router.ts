@@ -18,11 +18,68 @@ export interface RouteContext {
   readonly clientKey: string;
 }
 
+/**
+ * The kinds of non-JSON content a route may send, each with its one fixed `Content-Type`. A route
+ * names a kind, never a header value, so a content type cannot be made up from anything a request said.
+ */
+export const DOCUMENT_TYPES = Object.freeze({
+  html: 'text/html; charset=utf-8',
+  js: 'text/javascript; charset=utf-8',
+  css: 'text/css; charset=utf-8',
+  text: 'text/plain; charset=utf-8',
+  json: 'application/json; charset=utf-8',
+});
+export type DocumentKind = keyof typeof DOCUMENT_TYPES;
+
+/** A reply that is text but not an API answer: a page, a script, a style sheet. */
+export interface DocumentBody {
+  readonly kind: DocumentKind;
+  readonly text: string;
+  /**
+   * The `Content-Security-Policy` for this reply, chosen by the route. It must begin with `default-src 'none'`
+   * (so it can only allow more by naming what it allows), must not allow inline or evaluated code or any
+   * origin by wildcard, and must be plain printable text. Left out, the API's own `default-src 'none'` stands.
+   */
+  readonly policy?: string;
+}
+
+const POLICY_MAX = 2048;
+const POLICY_START = "default-src 'none'";
+
+/** Why a policy is not acceptable, or `undefined` if it is. */
+export function policyProblem(policy: unknown): string | undefined {
+  if (typeof policy !== 'string') return 'the policy must be text';
+  if (policy.length === 0 || policy.length > POLICY_MAX) return `the policy must be 1 to ${POLICY_MAX} characters`;
+  if (!/^[\x20-\x7e]+$/.test(policy)) return 'the policy must be plain printable ASCII (no new lines or control characters)';
+  if (policy !== POLICY_START && !policy.startsWith(`${POLICY_START};`)) return `the policy must begin with ${POLICY_START}`;
+  if (/'unsafe-(inline|eval|hashes)'|'wasm-unsafe-eval'/i.test(policy)) return 'the policy must not allow inline or evaluated code';
+  if (/(^|[\s;])\*(\s|;|$)|\bhttps?:(\s|;|$)|\*\./i.test(policy)) return 'the policy must not allow origins by wildcard or whole scheme';
+  return undefined;
+}
+
+/**
+ * Builds a non-JSON reply and checks it now, so a mistake in a route stops the program when the route is
+ * made rather than when someone asks for the page. `TypeError` for a kind that does not exist, text that
+ * is not a string, or a policy `policyProblem` refuses.
+ */
+export function documentResponse(document: DocumentBody, status = 200): ApiResponse {
+  if (!Object.hasOwn(DOCUMENT_TYPES, document.kind)) throw new TypeError(`documentResponse: unknown kind "${String(document.kind)}"`);
+  if (typeof document.text !== 'string') throw new TypeError('documentResponse: the text must be a string');
+  if (document.policy !== undefined) {
+    const problem = policyProblem(document.policy);
+    if (problem !== undefined) throw new TypeError(`documentResponse: ${problem}`);
+  }
+  if (!Number.isInteger(status) || status < 200 || status > 599 || status === 204 || status === 304) throw new TypeError('documentResponse: the status must be a whole number from 200 to 599 that carries a body');
+  return Object.freeze({ status, document: Object.freeze({ ...document }) });
+}
+
 /** What a handler returns. The kit turns it into the reply and adds the security headers. */
 export interface ApiResponse {
   readonly status: number;
   /** Sent as JSON. Leave out for no body. */
   readonly body?: JsonValue;
+  /** Sent as text of a fixed kind (see `documentResponse`). Not together with `body`. */
+  readonly document?: DocumentBody;
   /** Complete `Set-Cookie` values (see `serialiseCookie`). */
   readonly cookies?: readonly string[];
   /** For `429`: seconds to wait. */
