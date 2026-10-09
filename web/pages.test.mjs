@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'capture-session.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-session.js', 'capture-session.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {

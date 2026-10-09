@@ -2,10 +2,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createSqliteAdapter } from '../src/graph_store/adapters/sqlite/index.ts';
+import { write } from '../src/graph_store/index.ts';
 import { startService } from '../src/service/service.ts';
 import { createApiClient } from './api-client.js';
 import { createCircleSession } from './circle-session.js';
 import { createCirclesClient } from './circles-client.js';
+import { createBrainSession } from './brain-session.js';
 import { createCaptureSession } from './capture-session.js';
 import { createNotesClient, isProposalId } from './notes-client.js';
 import { createCirclesSession } from './circles-session.js';
@@ -774,5 +777,101 @@ describe('the capture logic against the real service (demo model)', () => {
     expect(out).toBe(1);
     expect(ann.capture.getState().phase).toBe('preview');
     expect(await ann.capture.propose('a second note')).toMatchObject({ ok: false, kind: 'pending' });
+  });
+});
+
+describe('the brain logic against the real service, with awkward ids and more than a page', () => {
+  const AWKWARD = ['a/b?c=d&e#f %é😀<b>..', ' spaces ', 'Capitals', '日本語', 'x'.repeat(256)];
+
+  it('categories (paged), a category\'s items, one item, with every awkward id round-tripping, and a stranger sees none of it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'caci-brain-'));
+    dirs.push(dir);
+    const service = await startService(config(dir));
+    running.push(service);
+    const port = service.port;
+    const person = async (name) => {
+      const jar = browserFetch(port);
+      const session = createSession({ api: createApiClient({ fetchFn: jar }) });
+      expect(await session.register({ username: name, displayName: name, password: PW })).toEqual({ ok: true });
+      return { id: session.getState().user.id, brain: createBrainSession({ client: createNotesClient({ fetchFn: jar }) }) };
+    };
+    await person('root');
+    const ann = await person('ann');
+    const bob = await person('bob');
+
+    // seed ann's graph through a second connection: 60 plain categories, five awkward ones, each with two items
+    const graphs = createSqliteAdapter({ path: join(dir, 'graphs.db') });
+    const ops = [];
+    const plain = Array.from({ length: 60 }, (_, i) => `cat-${String(i).padStart(2, '0')}`);
+    for (const id of [...plain, ...AWKWARD]) ops.push({ op: 'upsertNode', partition: 'category', id, data: { name: `Name of ${id.slice(0, 20)}` } });
+    for (const [i, id] of AWKWARD.entries()) {
+      for (const n of [1, 2]) {
+        const item = `item${n}:${id}`.slice(0, 256);
+        ops.push({ op: 'upsertNode', partition: 'item', id: item, data: { title: `Title ${i}-${n}`, summary: 'S' } }, { op: 'link', item, category: id, weight: 0.5 });
+      }
+    }
+    for (let at = 0; at < ops.length; at += 100) {
+      const w = await write(graphs, { version: 1, kind: 'mutation', graphId: `user-${ann.id}`, ops: ops.slice(at, at + 100) });
+      expect(w.ok ? true : JSON.stringify(w.error)).toBe(true);
+    }
+    await graphs.close();
+
+    expect(await ann.brain.load()).toEqual({ ok: true });
+    expect(ann.brain.getState().categories.items).toHaveLength(50);
+    expect(ann.brain.getState().categories.nextCursor).not.toBeNull();
+    expect(await ann.brain.moreCategories()).toEqual({ ok: true });
+    expect(ann.brain.getState().categories.items).toHaveLength(65);
+    expect(ann.brain.getState().categories.nextCursor).toBeNull();
+    expect(new Set(ann.brain.getState().categories.items.map((c) => c.id)).size).toBe(65);
+
+    for (const id of AWKWARD) {
+      expect(await ann.brain.selectCategory(id), id.slice(0, 12)).toEqual({ ok: true });
+      const c = ann.brain.getState().category;
+      expect(c).toMatchObject({ id, status: 'loaded' });
+      expect(c.items).toHaveLength(2);
+      const itemId = c.items[0].id;
+      expect(await ann.brain.selectItem(itemId)).toEqual({ ok: true });
+      const d = ann.brain.getState().item.detail;
+      expect(d.item.id).toBe(itemId);
+      expect(d.categories.map((x) => x.id)).toEqual([id]);
+      expect(d.categories[0].weight).toBe(0.5);
+      expect(ann.brain.back()).toBe(true);
+      expect(ann.brain.back()).toBe(true);
+    }
+
+    // another person sees an empty brain and gets "not found" for every one of ann's ids
+    expect(await bob.brain.load()).toEqual({ ok: true });
+    expect(bob.brain.getState().categories.items).toEqual([]);
+    for (const id of AWKWARD) {
+      expect(await bob.brain.selectCategory(id)).toMatchObject({ ok: false, kind: 'not-found' });
+      expect(bob.brain.getState().category).toMatchObject({ status: 'gone', error: 'Not found: it may have been removed.' });
+      expect(await bob.brain.selectItem(`item1:${id}`.slice(0, 256))).toMatchObject({ ok: false, kind: 'not-found' });
+      expect(bob.brain.getState().item.status).toBe('gone');
+      bob.brain.back();
+      bob.brain.back();
+    }
+  }, 60_000);
+
+  it('an approved note appears after the brain is marked out of date and loaded again', async () => {
+    const { port } = await start();
+    const jar = browserFetch(port);
+    const session = createSession({ api: createApiClient({ fetchFn: jar }) });
+    await session.register({ username: 'root', displayName: 'Root', password: PW });
+    const jar2 = browserFetch(port);
+    const s2 = createSession({ api: createApiClient({ fetchFn: jar2 }) });
+    await s2.register({ username: 'ann', displayName: 'Ann', password: PW });
+    const notes = createNotesClient({ fetchFn: jar2 });
+    const brain = createBrainSession({ client: notes });
+    await brain.load();
+    expect(brain.getState().categories.items).toEqual([]);
+    const capture = createCaptureSession({ client: notes, onWritten: () => brain.markStale() });
+    await capture.loadMode();
+    await capture.propose('Dr Patel booked my blood test');
+    expect(brain.getState().needsLoad).toBe(false);
+    await capture.approve();
+    expect(brain.getState().needsLoad).toBe(true);
+    await brain.load();
+    expect(brain.getState().categories.items).toHaveLength(1);
+    expect(brain.getState().needsLoad).toBe(false);
   });
 });
