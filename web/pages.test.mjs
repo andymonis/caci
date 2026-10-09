@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-session.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -247,8 +247,8 @@ describe('the page', () => {
 describe('the templates and the address bar', () => {
   const templates = [...html.matchAll(/<template\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/template>/g)].map((m) => ({ id: m[1], body: m[2] }));
 
-  it('there are six row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
-    expect(templates.map((t) => t.id).sort()).toEqual(['capture-line-template', 'capture-op-template', 'circle-invitation-row-template', 'circle-row-template', 'invitation-row-template', 'member-row-template']);
+  it('there are ten row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
+    expect(templates.map((t) => t.id).sort()).toEqual(['capture-line-template', 'capture-op-template', 'category-row-template', 'circle-invitation-row-template', 'circle-row-template', 'data-row-template', 'invitation-row-template', 'item-category-row-template', 'item-row-template', 'member-row-template']);
     for (const t of templates) {
       expect(t.body, t.id).not.toMatch(/\sid\s*=/i);
       expect(t.body, t.id).not.toMatch(/<script|\son[a-z]+\s*=|\sstyle\s*=|\shref\s*=|\ssrc\s*=/i);
@@ -256,7 +256,7 @@ describe('the templates and the address bar', () => {
   });
 
   it('every slot the script fills exists in its template, and the other way round', () => {
-    const sources = ['circles-pages.js', 'circle-page.js', 'capture-page.js'].map((f) => code(read(f))).join('\n');
+    const sources = ['circles-pages.js', 'circle-page.js', 'capture-page.js', 'brain-page.js'].map((f) => code(read(f))).join('\n');
     const used = new Set([...sources.matchAll(/slot\(row, '([\w-]+)'\)/g)].map((m) => m[1]));
     expect(sources).toContain('slot(row, `opt-${r}`)'); // the four role options are filled in a loop
     expect(sources).toContain('[data-slot="text"]'); // the capture rows have one text slot, looked up by that name

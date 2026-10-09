@@ -4,6 +4,7 @@
 // thing runs against a stand-in page in tests.
 
 import { createApiClient } from './api-client.js';
+import { mountBrainPage } from './brain-page.js';
 import { mountCapturePage } from './capture-page.js';
 import { createNotesClient } from './notes-client.js';
 import { mountCirclePage } from './circle-page.js';
@@ -37,9 +38,8 @@ export function mount(document, fetchFn, env = NO_ENV) {
   const pages = mountCirclesPages(document, { client: circlesClient, go, onSignedOut: recheck });
   const circlePage = mountCirclePage(document, { client: circlesClient, go, onSignedOut: recheck });
   const notesClient = createNotesClient({ fetchFn });
-  /** Called when a note was written, so a screen showing the brain can reload; the Brain screen sets it. */
-  let noteWritten = () => {};
-  const capturePage = mountCapturePage(document, { client: notesClient, onWritten: () => noteWritten(), onSignedOut: recheck });
+  const brainPage = mountBrainPage(document, { client: notesClient, onSignedOut: recheck });
+  const capturePage = mountCapturePage(document, { client: notesClient, onWritten: () => brainPage.markStale(), onSignedOut: recheck });
   let shown = null; // the address of the signed-in screen being shown
   let rechecked = false;
   /** A circle request says the session ended: ask the service once who is signed in. Once only per sign-in, so a service that contradicts itself cannot make a loop. */
@@ -111,6 +111,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
         pages.reset();
         circlePage.reset();
         capturePage.reset();
+        brainPage.reset();
       }
       shown = null;
       document.title = 'CaCi';
@@ -132,6 +133,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
     else circlePage.reset();
     if (route.name === 'capture') capturePage.show();
     else capturePage.reset();
+    if (route.name === 'brain') brainPage.show();
     $(headingIdFor(route)).focus();
   }
 

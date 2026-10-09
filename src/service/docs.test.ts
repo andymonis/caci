@@ -216,7 +216,7 @@ describe('the web app section of the README', () => {
     const documented = [...webSection.matchAll(/^\| `([a-z-]+\.(?:html|js|css))` \|/gm)].map((m) => m[1] as string);
     expect(documented.sort()).toEqual(WEB_FILE_SPECS.map((s) => s.file).sort());
     expect(documented).toHaveLength(WEB_FILE_SPECS.length);
-    expect(webSection).toContain(`only these ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one'][WEB_FILE_SPECS.length]}`);
+    expect(webSection).toContain(`only these ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three'][WEB_FILE_SPECS.length]}`);
   });
 
   it('prints exactly the policy the service sends, and its other headers', () => {
