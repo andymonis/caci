@@ -6,6 +6,7 @@ import { startService } from '../src/service/service.ts';
 import { createApiClient } from './api-client.js';
 import { createCircleSession } from './circle-session.js';
 import { createCirclesClient } from './circles-client.js';
+import { createNotesClient, isProposalId } from './notes-client.js';
 import { createCirclesSession } from './circles-session.js';
 import { fakePage, fill, visibleScreens, waitFor } from './fake-page.test-util.mjs';
 import { mount } from './mount.js';
@@ -620,5 +621,92 @@ describe('the whole circles journey through the pages\' own code, against the re
     expect(el(ann, 'circle-description').textContent).toBe('<script>x</script>');
     await waitFor(() => rows(ann, 'members-list').length === 1);
     expect(slot(rows(ann, 'members-list')[0], 'name').children).toEqual([]);
+  });
+});
+
+const NOTE_LIMIT = 8000;
+
+describe('the notes client against the real service (demo model, two accounts)', () => {
+  const person = async (port, name) => {
+    const jar = browserFetch(port);
+    const session = createSession({ api: createApiClient({ fetchFn: jar }) });
+    expect(await session.register({ username: name, displayName: `Display ${name}`, password: PW })).toEqual({ ok: true });
+    return createNotesClient({ fetchFn: jar });
+  };
+
+  it('mode, propose, look, approve, browse, and nobody else can reach any of it', async () => {
+    const { port } = await start();
+    await person(port, 'root'); // the first account is the administrator
+    const ann = await person(port, 'ann');
+    const bob = await person(port, 'bob');
+
+    expect((await ann.mode()).value).toEqual({ mode: 'demo' });
+    expect((await ann.categories()).value.items).toEqual([]);
+
+    const made = await ann.propose('  Dr Patel booked my blood test  ');
+    expect(made.ok).toBe(true);
+    const p = made.value;
+    expect(isProposalId(p.id)).toBe(true);
+    expect(p).toMatchObject({ mode: 'demo' });
+    expect(p.expiresAt - p.createdAt).toBe(15 * 60_000);
+    expect(p.summary.newItems).toHaveLength(1);
+    expect(p.operations.map((o) => o.op)).toEqual(['upsertNode', 'upsertNode', 'link']);
+    expect(Object.keys(p).sort()).toEqual(['createdAt', 'expiresAt', 'id', 'mode', 'operations', 'rationale', 'summary', 'text']);
+    expect((await ann.getProposal(p.id)).value).toEqual(p);
+    expect((await ann.categories()).value.items).toEqual([]); // nothing written yet
+
+    // bob can reach none of it, and gets what a made-up proposal gets
+    const mine = await bob.getProposal(p.id);
+    expect(mine.error).toEqual({ kind: 'not-found', what: 'proposal', message: 'That proposal is gone or has expired. Make it again.' });
+    expect((await bob.approve(p.id)).error).toEqual(mine.error);
+    expect((await bob.reject(p.id)).error).toEqual(mine.error);
+    expect((await bob.getProposal('prop-0000000000-00-aaaaaa')).error).toEqual(mine.error);
+
+    const done = await ann.approve(p.id);
+    expect(done.value).toMatchObject({ id: p.id, applied: 3 });
+    expect((await ann.approve(p.id)).error.kind).toBe('not-found'); // once only
+
+    const cats = (await ann.categories()).value;
+    expect(cats.items).toHaveLength(1);
+    expect(cats.items[0]).toMatchObject({ itemCount: 1 });
+    expect(cats.nextCursor).toBeNull();
+    const categoryId = cats.items[0].id;
+    const inCategory = (await ann.categoryItems(categoryId)).value;
+    expect(inCategory.category.id).toBe(categoryId);
+    expect(inCategory.items).toHaveLength(1);
+    const itemId = inCategory.items[0].id;
+    const detail = (await ann.item(itemId)).value;
+    expect(detail.item.id).toBe(itemId);
+    expect(detail.categories.map((c) => c.id)).toEqual([categoryId]);
+    expect(typeof detail.categories[0].weight).toBe('number');
+
+    // bob sees an empty brain and cannot reach ann's ids, which read exactly like made-up ones
+    expect((await bob.categories()).value.items).toEqual([]);
+    expect((await bob.categoryItems(categoryId)).error).toEqual({ kind: 'not-found', what: 'category', message: 'Not found: it may have been removed.' });
+    expect((await bob.item(itemId)).error).toEqual({ kind: 'not-found', what: 'item', message: 'Not found: it may have been removed.' });
+    for (const awkward of ['a/b?c=d&e#f %é😀<b>..', ' ', 'x'.repeat(256)]) {
+      expect((await ann.categoryItems(awkward)).error.kind, awkward.slice(0, 10)).toBe('not-found');
+      expect((await ann.item(awkward)).error.kind).toBe('not-found');
+    }
+  });
+
+  it('rejecting writes nothing; a refused note and a full pending list are in the service\'s words', async () => {
+    const { port } = await start({ maxPendingPerUser: 1 });
+    await person(port, 'root');
+    const ann = await person(port, 'ann');
+    const first = (await ann.propose('a note about boats')).value;
+    const second = await ann.propose('another note about sailing');
+    expect(second.error).toMatchObject({ kind: 'limit', message: 'you have too many proposals waiting: approve or reject one first' });
+    expect(await ann.reject(first.id)).toEqual({ ok: true, value: true });
+    expect((await ann.getProposal(first.id)).error.kind).toBe('not-found');
+    expect((await ann.categories()).value.items).toEqual([]);
+    expect((await ann.propose('x'.repeat(NOTE_LIMIT + 1))).error).toMatchObject({ kind: 'invalid', field: 'text' });
+    expect((await ann.propose('a third note about gardens')).ok).toBe(true);
+  });
+
+  it('a signed-out client is told so on every call', async () => {
+    const { port } = await start();
+    const stranger = createNotesClient({ fetchFn: browserFetch(port) });
+    for (const r of [await stranger.mode(), await stranger.propose('a note'), await stranger.categories(), await stranger.categoryItems('c'), await stranger.item('i')]) expect(r.error).toEqual({ kind: 'signed-out', message: 'Your session has ended. Sign in again.' });
   });
 });

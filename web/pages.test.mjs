@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -89,6 +89,11 @@ describe('nothing is kept in the browser and nothing is sent anywhere else', () 
     const paths = new Set();
     for (const name of scripts) for (const m of code(read(name)).matchAll(/['"`](\/[^'"`\s]*)['"`]/g)) paths.add(m[1]);
     expect([...paths].sort()).toEqual([
+      '/api/capture/mode',
+      '/api/capture/proposals/${p}',
+      '/api/capture/proposals/${p}/approve',
+      '/api/capture/proposals/${p}/reject',
+      '/api/capture/propose',
       '/api/circles',
       '/api/circles/${c}',
       '/api/circles/${c}/invitations',
@@ -96,6 +101,9 @@ describe('nothing is kept in the browser and nothing is sent anywhere else', () 
       '/api/circles/${c}/leave',
       '/api/circles/${c}/members',
       '/api/circles/${c}/members/${u}',
+      '/api/graph/categories',
+      '/api/graph/category',
+      '/api/graph/item',
       '/api/invitations',
       '/api/invitations/${i}/accept',
       '/api/invitations/${i}/decline',

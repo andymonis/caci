@@ -345,7 +345,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these sixteen, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these seventeen, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -364,6 +364,7 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `circles-view.js` | the words behind those screens: titles, row text, the invitation count sentence |
 | `circle-session.js` | what one circle's screen shows and does: roster, invitations, managing it, and the two-step questions |
 | `circles-session.js` | what the circles list, creating a circle and my invitations show (one request at a time, a count that is only ever a number the service gave) |
+| `notes-client.js` | the code that talks to the note capture and browsing routes |
 | `permissions.js` | what each role may do in a circle, as a hint for which buttons to show |
 
 A file you add to `web/` is not served until you list it, and the tests fail if the list and the folder disagree. Change a file and restart the service to see it.
