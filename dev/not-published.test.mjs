@@ -32,7 +32,7 @@ describe('the dev tools are never part of a release', () => {
   it('the web app is published as its files and none of its tests', () => {
     const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8' });
     const web = JSON.parse(out)[0].files.map((f) => f.path).filter((p) => p.startsWith('web/')).sort();
-    expect(web).toEqual(['web/api-client.js', 'web/app.js', 'web/brain-session.js', 'web/capture-session.js', 'web/circle-page.js', 'web/circle-session.js', 'web/circles-client.js', 'web/circles-pages.js', 'web/circles-session.js', 'web/circles-view.js', 'web/forms.js', 'web/index.html', 'web/mount.js', 'web/notes-client.js', 'web/permissions.js', 'web/router.js', 'web/session.js', 'web/style.css', 'web/view.js']);
+    expect(web).toEqual(['web/api-client.js', 'web/app.js', 'web/brain-session.js', 'web/capture-page.js', 'web/capture-session.js', 'web/capture-view.js', 'web/circle-page.js', 'web/circle-session.js', 'web/circles-client.js', 'web/circles-pages.js', 'web/circles-session.js', 'web/circles-view.js', 'web/forms.js', 'web/index.html', 'web/mount.js', 'web/notes-client.js', 'web/permissions.js', 'web/router.js', 'web/session.js', 'web/style.css', 'web/view.js']);
   });
 
   it('the library build only compiles src/, so dev code cannot end up in dist/', () => {

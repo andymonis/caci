@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-session.js', 'capture-session.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-session.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -160,7 +160,7 @@ describe('the page', () => {
 
   it('every form is a post with browser validation off, so a failed script can never put a password in an address', () => {
     const forms = tags.filter((t) => t.name === 'form');
-    expect(forms).toHaveLength(5);
+    expect(forms).toHaveLength(6);
     for (const f of forms) {
       expect(attr(f, 'method')).toBe('post');
       expect(f.attrs).toMatch(/\bnovalidate\b/);
@@ -184,6 +184,15 @@ describe('the page', () => {
       const forId = attr(t, 'for');
       if (forId !== undefined) expect(ids, `label for ${forId}`).toContain(forId);
     }
+  });
+
+  it('the note box is a labelled text area with a name and a count that describes it', () => {
+    const area = tags.find((t) => t.name === 'textarea');
+    expect(area).toBeDefined();
+    expect(attr(area, 'id')).toBe('capture-note');
+    expect(attr(area, 'name')).toBeTruthy();
+    expect(tags.some((t) => t.name === 'label' && attr(t, 'for') === 'capture-note')).toBe(true);
+    expect(attr(area, 'aria-describedby')).toBe('capture-count capture-note-error');
   });
 
   it('gives every field a visible label, a name and the right autocomplete value', () => {
@@ -238,8 +247,8 @@ describe('the page', () => {
 describe('the templates and the address bar', () => {
   const templates = [...html.matchAll(/<template\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/template>/g)].map((m) => ({ id: m[1], body: m[2] }));
 
-  it('there are four row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
-    expect(templates.map((t) => t.id).sort()).toEqual(['circle-invitation-row-template', 'circle-row-template', 'invitation-row-template', 'member-row-template']);
+  it('there are six row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
+    expect(templates.map((t) => t.id).sort()).toEqual(['capture-line-template', 'capture-op-template', 'circle-invitation-row-template', 'circle-row-template', 'invitation-row-template', 'member-row-template']);
     for (const t of templates) {
       expect(t.body, t.id).not.toMatch(/\sid\s*=/i);
       expect(t.body, t.id).not.toMatch(/<script|\son[a-z]+\s*=|\sstyle\s*=|\shref\s*=|\ssrc\s*=/i);
@@ -247,9 +256,11 @@ describe('the templates and the address bar', () => {
   });
 
   it('every slot the script fills exists in its template, and the other way round', () => {
-    const sources = ['circles-pages.js', 'circle-page.js'].map((f) => code(read(f))).join('\n');
+    const sources = ['circles-pages.js', 'circle-page.js', 'capture-page.js'].map((f) => code(read(f))).join('\n');
     const used = new Set([...sources.matchAll(/slot\(row, '([\w-]+)'\)/g)].map((m) => m[1]));
     expect(sources).toContain('slot(row, `opt-${r}`)'); // the four role options are filled in a loop
+    expect(sources).toContain('[data-slot="text"]'); // the capture rows have one text slot, looked up by that name
+    used.add('text');
     for (const r of ['owner', 'manager', 'member', 'observer']) used.add(`opt-${r}`);
     const inTemplates = new Set(templates.flatMap((t) => [...t.body.matchAll(/data-slot="([\w-]+)"/g)].map((m) => m[1])));
     expect([...used].sort()).toEqual([...inTemplates].sort());

@@ -228,7 +228,48 @@
 
       <section id="view-capture" hidden>
         <h2 id="capture-heading" tabindex="-1">Capture a note</h2>
-        <p class="note">This screen is being built.</p>
+        <p id="capture-mode-notice" class="notice" role="status"></p>
+        <button type="button" id="capture-mode-retry" class="secondary" hidden>Try again</button>
+        <p><a href="#/brain">Browse your notes</a></p>
+
+        <section id="capture-form-section" hidden>
+          <form id="capture-form" method="post" novalidate>
+            <p id="capture-error" class="error" role="alert" tabindex="-1" hidden></p>
+            <div class="field">
+              <label for="capture-note">Your note</label>
+              <textarea id="capture-note" name="note" rows="6" autocomplete="off" aria-describedby="capture-count capture-note-error"></textarea>
+              <p id="capture-count" class="hint"></p>
+              <p id="capture-note-error" class="error" hidden></p>
+            </div>
+            <button type="submit" id="capture-submit">Propose a filing</button>
+            <p class="hint">Nothing is written until you approve the proposal.</p>
+          </form>
+        </section>
+
+        <section id="capture-preview" hidden>
+          <h3 id="capture-preview-heading" tabindex="-1">Proposed filing</h3>
+          <p id="capture-preview-notice" class="notice"></p>
+          <pre id="capture-text" class="preview"></pre>
+          <h4>What approving would write</h4>
+          <ul id="capture-ops" class="plain"></ul>
+          <p id="capture-rationale" class="hint"></p>
+          <ul id="capture-lines" class="plain"></ul>
+          <p id="capture-expires" class="hint"></p>
+          <p id="capture-action-error" class="error" role="alert" tabindex="-1" hidden></p>
+          <div class="actions">
+            <button type="button" id="capture-approve">Approve and write</button>
+            <button type="button" id="capture-reject" class="secondary">Reject</button>
+          </div>
+        </section>
+
+        <section id="capture-outcome" hidden>
+          <h3 id="capture-outcome-heading" tabindex="-1">Done</h3>
+          <p id="capture-outcome-text" role="status"></p>
+          <div class="actions">
+            <button type="button" id="capture-again">File another note</button>
+            <a href="#/brain">Browse your notes</a>
+          </div>
+        </section>
       </section>
 
       <section id="view-brain" hidden>
@@ -252,6 +293,14 @@
         <a data-slot="link" class="row-title"></a>
         <span data-slot="meta" class="meta"></span>
       </li>
+    </template>
+
+    <template id="capture-op-template">
+      <li><span data-slot="text"></span></li>
+    </template>
+
+    <template id="capture-line-template">
+      <li><span data-slot="text"></span></li>
     </template>
 
     <template id="member-row-template">
