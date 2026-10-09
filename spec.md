@@ -49,6 +49,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-004 | [Circles — Specification](specs/R-004-circles.md) |
 | R-005 | [Web App (first slice) — Specification](specs/R-005-web-app.md) |
 | R-006 | [Web App: Circles — Specification](specs/R-006-web-circles.md) |
+| R-007 | [Web App: Notes — Specification](specs/R-007-web-notes.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -75,7 +76,7 @@ Mapping from the container diagram to the code base:
 | CaCi Operational Store (SQLite) | provided by the SQLite adapter (planned as P1, the first persistent adapter); no code outside the adapter |
 | LLM component (the LLM adapter) | `src/llm/` (planned, L1 and L2): `createLlm({ client, config })` returns one method per capability, today `categorise()`, so new capabilities can be added beside it; the model is configurable per capability through tiers (`fast`, `balanced`, `deep`), and model access sits behind a `ModelClient` port, with the real Anthropic client as its own entry point |
 | CaCi Application (the capture controller) | `src/app/`: takes input, reads graph context, asks the categoriser, shows a preview, and writes only after approval |
-| Web App (register, sign in, a temporary home page, R-005; circles, R-006) | `web/` (W1 done; circles planned, W2): plain HTML, CSS and JavaScript served by the service from the same address; no build step |
+| Web App (register, sign in, a temporary home page, R-005; circles, R-006; notes, R-007) | `web/` (W1 and W2 done; notes planned, W3): plain HTML, CSS and JavaScript served by the service from the same address; no build step |
 | Circle Controller (groups, roles, invitations, R-004) | `src/circles/` (C2), stored in the user database; membership and roles only, no sharing of graphs |
 | CaCi Controller (the platform controller, R-003) | `src/caci/`: composes the user controller, the capture controller, the LLM component and the graph store; owns proposal ownership, per-account limits and "the graph comes from the session" |
 | User Controller (accounts, sessions, R-002) | `src/users/`, with its SQLite stores in `src/users/sqlite/` and its shared test suites in `src/users/testing/` |
@@ -95,7 +96,8 @@ Local-only development tools live under `dev/` and are never published: `dev/gra
 - **Done (2026-10):** U1 user accounts and the login API (R-002: password login, server-side sessions, open registration, one graph per user, an admin role, a recovery command), and C1 the CaCi controller (R-003: authenticated capture with preview and approval, and read-only browsing of your own graph, over the user API, with the demo model by default).
 - **Done (2026-10):** C2 circles (R-004): groups of people with four fixed, setting-agnostic roles, invitations that must be accepted, the last-owner rule, account deletion handing circles on, routes, settings, an end-to-end test and a security review. Circles share no data yet.
 - **Done (2026-10):** W1 the web app, first slice (R-005): register, sign in and out and a temporary home page, in plain HTML, CSS and JavaScript served by the service from the same address under a strict Content-Security-Policy. Nothing else is in the app yet.
-- **Next, to be planned:** the web app with circles and with note capture (Backlog items 6 and 7), restricted access between circle members (needs pseudonymisation and the legal groundwork first).
+- **Done (2026-10):** W2 the web app with circles (R-006): screens with addresses for creating, joining, leaving, viewing and managing circles, role hints tested against the service, two-step confirmations, an end-to-end test and a security review.
+- **Next (planned as W3):** the web app with note capture and read-only browsing of your own brain (R-007, Backlog item 7), which shows which model files the note. After it: restricted access between circle members (needs pseudonymisation and the legal groundwork first).
 - **After that, to be planned:** making the web app installable, deployment to a Raspberry Pi, M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Each roadmap item in the Backlog needs its own spec first.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
 
