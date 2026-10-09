@@ -8,7 +8,7 @@ export const EMPTY_CIRCLES = 'You are not in any circle yet. Make one below, or 
 export const EMPTY_INVITATIONS = 'You have no open invitations.';
 
 const ROLE_NAMES = Object.freeze({ owner: 'Owner', manager: 'Manager', member: 'Member', observer: 'Observer' });
-const TITLES = Object.freeze({ home: 'CaCi', circles: 'Circles – CaCi', circle: 'Circle – CaCi', invitations: 'Invitations – CaCi' });
+const TITLES = Object.freeze({ home: 'CaCi', circles: 'Circles – CaCi', circle: 'Circle – CaCi', invitations: 'Invitations – CaCi', capture: 'Capture – CaCi', brain: 'Brain – CaCi' });
 
 /** The name of a screen, or home for anything that is not one of the four (own keys only, so `toString` is not a screen). */
 const screenOf = (route) => (route !== null && typeof route === 'object' && typeof route.name === 'string' && Object.hasOwn(TITLES, route.name) ? route.name : 'home');

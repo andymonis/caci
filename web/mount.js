@@ -13,8 +13,8 @@ import { createSession } from './session.js';
 import { FORMS, formFeedback, viewOf } from './view.js';
 
 const SCREENS = ['loading', 'unreachable', 'signed-out', 'signed-in'];
-const VIEWS = ['home', 'circles', 'circle', 'invitations'];
-const NAV = ['home', 'circles', 'invitations'];
+const VIEWS = ['home', 'circles', 'circle', 'invitations', 'capture', 'brain'];
+const NAV = ['home', 'capture', 'brain', 'circles', 'invitations'];
 const NO_ENV = Object.freeze({ getHash: () => '', setHash: () => {}, onHashChange: () => {} });
 
 /**

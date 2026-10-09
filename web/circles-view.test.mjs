@@ -10,14 +10,20 @@ describe('titles, headings and the current link', () => {
     expect(titleFor({ name: 'circles' })).toBe('Circles – CaCi');
     expect(titleFor({ name: 'circle', id: C })).toBe('Circle – CaCi');
     expect(titleFor({ name: 'invitations' })).toBe('Invitations – CaCi');
+    expect(titleFor({ name: 'capture' })).toBe('Capture – CaCi');
+    expect(titleFor({ name: 'brain' })).toBe('Brain – CaCi');
     expect(headingIdFor({ name: 'home' })).toBe('home-heading');
     expect(headingIdFor({ name: 'circles' })).toBe('circles-heading');
     expect(headingIdFor({ name: 'circle' })).toBe('circle-heading');
     expect(headingIdFor({ name: 'invitations' })).toBe('invitations-heading');
+    expect(headingIdFor({ name: 'capture' })).toBe('capture-heading');
+    expect(headingIdFor({ name: 'brain' })).toBe('brain-heading');
     expect(navFor({ name: 'home' })).toBe('home');
     expect(navFor({ name: 'circles' })).toBe('circles');
     expect(navFor({ name: 'circle' })).toBe('circles');
     expect(navFor({ name: 'invitations' })).toBe('invitations');
+    expect(navFor({ name: 'capture' })).toBe('capture');
+    expect(navFor({ name: 'brain' })).toBe('brain');
     for (const odd of [undefined, null, {}, { name: 'admin' }, { name: '__proto__' }, { name: 'toString' }, 5]) {
       expect(titleFor(odd), String(odd)).toBe('CaCi');
       expect(headingIdFor(odd), String(odd)).toBe('home-heading');

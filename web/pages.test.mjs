@@ -146,7 +146,7 @@ describe('the page', () => {
   });
 
   it('refers to nothing but files of the app by absolute path, plus the empty icon', () => {
-    const served = new Set(['/app.js', '/style.css', '#/', '#/circles', '#/invitations']);
+    const served = new Set(['/app.js', '/style.css', '#/', '#/circles', '#/invitations', '#/capture', '#/brain']);
     for (const t of tags) {
       for (const name of ['src', 'href', 'action', 'formaction', 'poster', 'data', 'srcset', 'ping', 'cite', 'longdesc']) {
         const value = attr(t, name);
@@ -264,7 +264,7 @@ describe('the templates and the address bar', () => {
   });
 
   it('the navigation and heading elements exist, and each heading can take the focus', () => {
-    for (const id of ['home-heading', 'circles-heading', 'circle-heading', 'invitations-heading']) {
+    for (const id of ['home-heading', 'capture-heading', 'brain-heading', 'circles-heading', 'circle-heading', 'invitations-heading']) {
       const tag = tags.find((t) => attr(t, 'id') === id);
       expect(tag, id).toBeDefined();
       expect(attr(tag, 'tabindex'), id).toBe('-1');

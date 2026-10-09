@@ -40,7 +40,7 @@ const gate = () => {
 };
 
 const ME = { 'GET /api/me': { status: 200, body: { user: USER } } };
-const views = (page) => ['home', 'circles', 'circle', 'invitations'].filter((v) => !page.el(`view-${v}`).hidden);
+const views = (page) => ['home', 'circles', 'circle', 'invitations', 'capture', 'brain'].filter((v) => !page.el(`view-${v}`).hidden);
 async function start(table = {}, hash = '') {
   const page = fakePage();
   const svc = service({ ...ME, ...table });
@@ -294,7 +294,7 @@ describe('the address drives the screen', () => {
   it('follows the address, the back button and a pasted address; the heading takes the focus and the title follows each time', async () => {
     const { page, addr } = await start();
     const seen = [];
-    for (const hash of ['#/circles', '#/invitations', `#/circles/${C(1)}`, '#/']) {
+    for (const hash of ['#/circles', '#/invitations', '#/capture', '#/brain', `#/circles/${C(1)}`, '#/']) {
       addr.change(hash);
       await settle();
       seen.push([views(page)[0], page.document.title, page.focused().id]);
@@ -302,9 +302,22 @@ describe('the address drives the screen', () => {
     expect(seen).toEqual([
       ['circles', 'Circles – CaCi', 'circles-heading'],
       ['invitations', 'Invitations – CaCi', 'invitations-heading'],
+      ['capture', 'Capture – CaCi', 'capture-heading'],
+      ['brain', 'Brain – CaCi', 'brain-heading'],
       ['circle', 'Circle – CaCi', 'circle-heading'],
       ['home', 'CaCi', 'home-heading'],
     ]);
+  });
+
+  it('the navigation marks the current link for every screen, and home links to the two new ones', async () => {
+    const { page, addr } = await start();
+    for (const [hash, current] of [['#/', 'home'], ['#/capture', 'capture'], ['#/brain', 'brain'], ['#/circles', 'circles'], ['#/invitations', 'invitations']]) {
+      addr.change(hash);
+      await settle();
+      for (const name of ['home', 'capture', 'brain', 'circles', 'invitations']) expect(page.el(`nav-${name}`).getAttribute('aria-current'), `${hash} ${name}`).toBe(name === current ? 'page' : null);
+    }
+    expect(page.el('nav-capture').getAttribute('href')).toBe('#/capture');
+    expect(page.el('nav-brain').getAttribute('href')).toBe('#/brain');
   });
 
   it('a circle address keeps "Circles" as the current link', async () => {

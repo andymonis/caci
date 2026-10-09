@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { hashFor, normalise, parseHash, sameRoute } from './router.js';
 
 const C = 'c0123456789abcdef';
-const OURS = /^#\/(circles(\/c[a-z0-9]{16})?|invitations)?$/;
+const OURS = /^#\/(circles(\/c[a-z0-9]{16})?|invitations|capture|brain)?$/;
 
 describe('reading an address', () => {
   it('knows the four screens, and nothing is needed for home', () => {
@@ -12,10 +12,12 @@ describe('reading an address', () => {
     expect(parseHash('#/circles')).toEqual({ name: 'circles' });
     expect(parseHash('#/invitations')).toEqual({ name: 'invitations' });
     expect(parseHash(`#/circles/${C}`)).toEqual({ name: 'circle', id: C });
+    expect(parseHash('#/capture')).toEqual({ name: 'capture' });
+    expect(parseHash('#/brain')).toEqual({ name: 'brain' });
   });
 
   it('routes are frozen, and the same screen is the same object for the fixed ones', () => {
-    for (const hash of ['#/', '#/circles', '#/invitations', `#/circles/${C}`]) expect(Object.isFrozen(parseHash(hash)), hash).toBe(true);
+    for (const hash of ['#/', '#/circles', '#/invitations', '#/capture', '#/brain', `#/circles/${C}`]) expect(Object.isFrozen(parseHash(hash)), hash).toBe(true);
     expect(parseHash('#/circles')).toBe(parseHash('#/circles'));
   });
 
@@ -23,6 +25,7 @@ describe('reading an address', () => {
     const hostile = [
       '#/circle', '#/Circles', '#/CIRCLES', '#/circles/', '#/circles//', `#/circles/${C}/`, `#/circles/${C}/members`, `#/circles/${C}/../x`, '#/invitations/', '#/invitations/x', '#/circles?x=1', `#/circles/${C}?x=1`, `#/circles/${C}#more`, '#circles', 'circles', '/circles', '#//circles', '# /circles', '#/ circles', '#/circles ', ' #/circles', '#/circles\n', '#/circles\0', '#/circles%20', '#/%63ircles', '#/circles%2fx', `#/circles/${C.replace('c0', '%630')}`,
       '#/circles/..', '#/circles/../..', '#/circles/..%2f..', '#/circles/%2e%2e', '#/circles/../../etc/passwd', '#/circles/c', '#/circles/c0123456789abcde', `#/circles/${C}0`, '#/circles/C0123456789abcdef', '#/circles/c0123456789ABCDEF', '#/circles/i0123456789abcdef', '#/circles/u0123456789abcdef', '#/circles/c0123456789abcdé', `#/circles/${C} `, `#/circles/ ${C}`,
+      '#/capture/', '#/brain/', '#/Capture', '#/BRAIN', '#/capture?x=1', '#/brain#x', '#/capture/x', '#/brain/c1', '#/capture ', '#/brain%2f', '#/%62rain', '#/notes', '#/capture/../brain',
       '#/<script>alert(1)</script>', '#/circles/<img src=x onerror=alert(1)>', '#javascript:alert(1)', '#/circles/javascript:alert(1)', 'http://evil.example/#/circles', '#http://evil.example', '#/\\evil', '#/circles/\\',
       '#/' + 'a'.repeat(1000), '#/circles/' + 'c'.repeat(1000), `#/circles/${C}` + ' '.repeat(100),
     ];
@@ -39,6 +42,8 @@ describe('making an address', () => {
     expect(hashFor({ name: 'home' })).toBe('#/');
     expect(hashFor({ name: 'circles' })).toBe('#/circles');
     expect(hashFor({ name: 'invitations' })).toBe('#/invitations');
+    expect(hashFor({ name: 'capture' })).toBe('#/capture');
+    expect(hashFor({ name: 'brain' })).toBe('#/brain');
     expect(hashFor({ name: 'circle', id: C })).toBe(`#/circles/${C}`);
   });
 
@@ -56,7 +61,7 @@ describe('making an address', () => {
 
 describe('both ways', () => {
   it('every route survives a round trip', () => {
-    for (const route of [{ name: 'home' }, { name: 'circles' }, { name: 'invitations' }, { name: 'circle', id: C }, { name: 'circle', id: 'cabcdefghij012345' }]) {
+    for (const route of [{ name: 'home' }, { name: 'circles' }, { name: 'invitations' }, { name: 'capture' }, { name: 'brain' }, { name: 'circle', id: C }, { name: 'circle', id: 'cabcdefghij012345' }]) {
       expect(parseHash(hashFor(route))).toEqual(route);
       expect(hashFor(parseHash(hashFor(route)))).toBe(hashFor(route));
     }
@@ -68,7 +73,7 @@ describe('both ways', () => {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff;
       return seed / 0x7fffffff;
     };
-    const pieces = ['#', '/', 'circles', 'invitations', C, '..', '%2f', '%2e', ' ', '\n', '?', '&', '=', '<', '>', '"', "'", '\\', 'é', '😀', '\0', 'c', 'i', 'u', '0123456789abcdef'];
+    const pieces = ['#', '/', 'circles', 'invitations', 'capture', 'brain', C, '..', '%2f', '%2e', ' ', '\n', '?', '&', '=', '<', '>', '"', "'", '\\', 'é', '😀', '\0', 'c', 'i', 'u', '0123456789abcdef'];
     for (let i = 0; i < 200; i++) {
       let hash = '';
       for (let n = Math.floor(next() * 8); n >= 0; n--) hash += pieces[Math.floor(next() * pieces.length)];
@@ -92,6 +97,8 @@ describe('comparing', () => {
     expect(sameRoute({ name: 'circle', id: C }, { name: 'circle', id: C })).toBe(true);
     expect(sameRoute({ name: 'circle', id: C }, { name: 'circle', id: 'cabcdefghij012345' })).toBe(false);
     expect(sameRoute({ name: 'circles' }, { name: 'invitations' })).toBe(false);
+    expect(sameRoute({ name: 'capture' }, { name: 'brain' })).toBe(false);
+    expect(sameRoute({ name: 'capture' }, { name: 'capture', junk: 1 })).toBe(true);
     expect(sameRoute({ name: 'circle', id: 'bad' }, { name: 'home' })).toBe(true); // a bad id is the home screen
   });
 });

@@ -8,12 +8,16 @@
 //   #/circles           the person's circles
 //   #/circles/<id>      one circle (the id must be exactly the shape the service makes)
 //   #/invitations       invitations addressed to the person
+//   #/capture           file a note
+//   #/brain             browse your own categories and items
 
 import { isCircleId } from './circles-client.js';
 
 const HOME = Object.freeze({ name: 'home' });
 const CIRCLES = Object.freeze({ name: 'circles' });
 const INVITATIONS = Object.freeze({ name: 'invitations' });
+const CAPTURE = Object.freeze({ name: 'capture' });
+const BRAIN = Object.freeze({ name: 'brain' });
 const CIRCLE_PREFIX = '#/circles/';
 
 /** The route an address hash names; anything that is not exactly one of ours is home. */
@@ -21,6 +25,8 @@ export function parseHash(hash) {
   if (typeof hash !== 'string') return HOME;
   if (hash === '#/circles') return CIRCLES;
   if (hash === '#/invitations') return INVITATIONS;
+  if (hash === '#/capture') return CAPTURE;
+  if (hash === '#/brain') return BRAIN;
   if (hash.startsWith(CIRCLE_PREFIX)) {
     const id = hash.slice(CIRCLE_PREFIX.length);
     return isCircleId(id) ? Object.freeze({ name: 'circle', id }) : HOME;
@@ -33,6 +39,8 @@ export function hashFor(route) {
   if (!route || typeof route !== 'object') return '#/';
   if (route.name === 'circles') return '#/circles';
   if (route.name === 'invitations') return '#/invitations';
+  if (route.name === 'capture') return '#/capture';
+  if (route.name === 'brain') return '#/brain';
   if (route.name === 'circle' && isCircleId(route.id)) return `${CIRCLE_PREFIX}${route.id}`;
   return '#/';
 }

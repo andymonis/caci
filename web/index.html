@@ -81,6 +81,8 @@
     <section id="screen-signed-in" hidden>
       <nav id="nav" aria-label="Main">
         <a id="nav-home" href="#/">Home</a>
+        <a id="nav-capture" href="#/capture">Capture</a>
+        <a id="nav-brain" href="#/brain">Brain</a>
         <a id="nav-circles" href="#/circles">Circles</a>
         <a id="nav-invitations" href="#/invitations">Invitations</a>
       </nav>
@@ -99,7 +101,7 @@
         <p id="home-invitations-count" role="status"></p>
         <p class="hint">This is checked when the page opens or when you press Refresh. It does not update by itself.</p>
         <button type="button" id="home-refresh">Refresh</button>
-        <p><a href="#/invitations">See your invitations</a> · <a href="#/circles">See your circles</a></p>
+        <p><a href="#/capture">File a note</a> · <a href="#/brain">Browse your notes</a> · <a href="#/invitations">See your invitations</a> · <a href="#/circles">See your circles</a></p>
         <button type="button" id="signout">Sign out</button>
       </section>
 
@@ -222,6 +224,16 @@
             </div>
           </section>
         </div>
+      </section>
+
+      <section id="view-capture" hidden>
+        <h2 id="capture-heading" tabindex="-1">Capture a note</h2>
+        <p class="note">This screen is being built.</p>
+      </section>
+
+      <section id="view-brain" hidden>
+        <h2 id="brain-heading" tabindex="-1">Your notes</h2>
+        <p class="note">This screen is being built.</p>
       </section>
 
       <section id="view-invitations" hidden>
