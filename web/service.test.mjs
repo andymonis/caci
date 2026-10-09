@@ -6,6 +6,7 @@ import { startService } from '../src/service/service.ts';
 import { createApiClient } from './api-client.js';
 import { createCircleSession } from './circle-session.js';
 import { createCirclesClient } from './circles-client.js';
+import { createCaptureSession } from './capture-session.js';
 import { createNotesClient, isProposalId } from './notes-client.js';
 import { createCirclesSession } from './circles-session.js';
 import { fakePage, fill, visibleScreens, waitFor } from './fake-page.test-util.mjs';
@@ -708,5 +709,70 @@ describe('the notes client against the real service (demo model, two accounts)',
     const { port } = await start();
     const stranger = createNotesClient({ fetchFn: browserFetch(port) });
     for (const r of [await stranger.mode(), await stranger.propose('a note'), await stranger.categories(), await stranger.categoryItems('c'), await stranger.item('i')]) expect(r.error).toEqual({ kind: 'signed-out', message: 'Your session has ended. Sign in again.' });
+  });
+});
+
+describe('the capture logic against the real service (demo model)', () => {
+  const person = async (port, name, options) => {
+    const jar = browserFetch(port);
+    const session = createSession({ api: createApiClient({ fetchFn: jar }) });
+    expect(await session.register({ username: name, displayName: `Display ${name}`, password: PW })).toEqual({ ok: true });
+    const notes = createNotesClient({ fetchFn: jar });
+    return { notes, capture: createCaptureSession({ client: notes, ...options }) };
+  };
+
+  it('mode, propose, preview, reject (nothing written), propose again, approve (written, brain changed), and a second approval is gone', async () => {
+    const { port } = await start();
+    await person(port, 'root');
+    let written = 0;
+    const ann = await person(port, 'ann', { onWritten: () => written++ });
+    expect(ann.capture.getState().canPropose).toBe(false);
+    expect(await ann.capture.loadMode()).toEqual({ ok: true });
+    expect(ann.capture.getState()).toMatchObject({ mode: { status: 'known', value: 'demo' }, canPropose: true });
+
+    const first = await ann.capture.propose('Dr Patel booked my blood test');
+    expect(first.ok).toBe(true);
+    expect(ann.capture.getState().phase).toBe('preview');
+    expect((await ann.notes.categories()).value.items).toEqual([]); // nothing written
+    expect(await ann.capture.reject()).toEqual({ ok: true });
+    expect(ann.capture.getState()).toMatchObject({ phase: 'done', outcome: { kind: 'rejected' } });
+    expect((await ann.notes.categories()).value.items).toEqual([]);
+    expect(written).toBe(0);
+
+    expect(ann.capture.startAgain()).toBe(true);
+    const second = await ann.capture.propose('Flight to Lisbon on Friday');
+    const heldId = second.proposal.id;
+    const done = await ann.capture.approve();
+    expect(done).toMatchObject({ ok: true, applied: 3 });
+    expect(written).toBe(1);
+    expect(ann.capture.getState().outcome).toMatchObject({ kind: 'written', applied: 3 });
+    expect((await ann.notes.categories()).value.items).toHaveLength(1);
+    expect((await ann.notes.getProposal(heldId)).error.kind).toBe('not-found');
+  });
+
+  it('a proposal the service no longer has ends in words, and nothing is written', async () => {
+    const { port } = await start();
+    await person(port, 'root');
+    const ann = await person(port, 'ann');
+    await ann.capture.loadMode();
+    const made = await ann.capture.propose('a note about boats');
+    await ann.notes.reject(made.proposal.id); // gone behind the page's back (as after a restart)
+    expect(await ann.capture.approve()).toMatchObject({ ok: false, kind: 'not-found' });
+    expect(ann.capture.getState()).toMatchObject({ proposal: null, outcome: { kind: 'gone', message: 'That proposal is gone or has expired. Make it again.' } });
+    expect((await ann.notes.categories()).value.items).toEqual([]);
+  });
+
+  it('a signed-out session is reported, and a held proposal is untouched by it', async () => {
+    const { port } = await start({ maxPendingPerUser: 1 });
+    await person(port, 'root');
+    let out = 0;
+    const ann = await person(port, 'ann');
+    await ann.capture.loadMode();
+    await ann.capture.propose('first note about boats');
+    const jarless = createCaptureSession({ client: createNotesClient({ fetchFn: browserFetch(port) }), onSignedOut: () => out++ });
+    expect(await jarless.loadMode()).toMatchObject({ ok: false, kind: 'signed-out' });
+    expect(out).toBe(1);
+    expect(ann.capture.getState().phase).toBe('preview');
+    expect(await ann.capture.propose('a second note')).toMatchObject({ ok: false, kind: 'pending' });
   });
 });
