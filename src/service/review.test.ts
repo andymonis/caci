@@ -15,6 +15,7 @@ const SPECS = [
   { name: 'R-004', file: 'specs/R-004-circles.md', minReferences: 45, minThreats: 11, criteria: 12, prefix: 'CR-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
   { name: 'R-005', file: 'specs/R-005-web-app.md', minReferences: 35, minThreats: 9, criteria: 10, prefix: 'WA-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 8 },
   { name: 'R-006', file: 'specs/R-006-web-circles.md', minReferences: 60, minThreats: 9, criteria: 12, prefix: 'WC-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 8 },
+  { name: 'R-007', file: 'specs/R-007-web-notes.md', minReferences: 55, minThreats: 8, criteria: 10, prefix: 'WN-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 8 },
 ] as const;
 
 for (const info of SPECS) {

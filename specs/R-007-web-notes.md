@@ -106,18 +106,18 @@ The notice is shown on the capture screen before anything is sent, and again on 
 
 ## Threats and controls
 
-Each row gets, in T-137, the test that covers it.
+Each row names the tests that cover it. `src/service/review.test.ts` fails the build if a named test file or test disappears.
 
-| Threat | Control |
-|--------|---------|
-| The note, the model's rationale, a category or item name or data run as code | Text only through templates and `textContent`; the strict policy as the second line (D8, WN-NFR-01) |
-| A proposal id, category id or item id used to build a path | Exact shape for proposal ids; category and item ids only in the encoded query string, never in a path or the address (D4, WN-NFR-02) |
-| A notice that misleads about where the note goes | The notice comes from the service's `mode`, is shown before sending and again on the preview, and Propose is disabled until it is known (D2, D6, WN-FR-01) |
-| Approving twice, or approving a stale preview | One request at a time; the service takes the proposal out on approval; a gone or expired proposal is said in words (D10, WN-FR-12) |
-| A note sent when the person did not mean to | Nothing is sent until Propose; nothing is written until Approve; Reject discards (WN-FR-02, WN-FR-04) |
-| A request naming someone else's graph or proposal | The page never sends a graph or user id; a proposal that is not yours is the same 404 as a made-up one (WN-NFR-03, R-003) |
-| Notes or categories kept where they can be read later | Memory only; forgotten on sign-out and on leaving the capture screen (D11, D14, WN-NFR-04) |
-| A model failure or limit exposing inside detail | Only the service's fixed words are shown, never a provider's text (D9) |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| The note, the model's rationale, a category or item name or data run as code | Text only through templates and `textContent`; the strict policy as the second line (D8, WN-NFR-01) | `web/capture-page.test.mjs` — "markup in the note, the model"; `web/brain-page.test.mjs` — "markup in names and titles stays text"; `web/brain-view.test.mjs` — "is key and value in order, text as it is and anything else as JSON"; `web/pages.test.mjs` — "no script uses %s"; `web/pages.test.mjs` — "there are ten row templates"; `web/service.test.mjs` — "the notice first, a preview that writes nothing" |
+| A proposal id, category id or item id used to build a path | Exact shape for proposal ids; category and item ids only in the encoded query string, never in a path or the address (D4, WN-NFR-02) | `web/notes-client.test.mjs` — "a proposal id has the shape the service makes and nothing else"; `web/notes-client.test.mjs` — "a bad proposal id is"; `web/notes-client.test.mjs` — "category and item ids go only in the query string, encoded"; `web/service.test.mjs` — "with awkward ids and more than a page"; `web/brain-page.test.mjs` — "an awkward id is sent in the query string, encoded" |
+| A notice that misleads about where the note goes | The notice comes from the service's `mode`, is shown before sending and again on the preview, and Propose is disabled until it is known (D2, D6, WN-FR-01) | `web/capture-view.test.mjs` — "says each mode in the words the spec gives"; `web/capture-view.test.mjs` — "the preview uses the mode the proposal carries"; `web/capture-page.test.mjs` — "says which model files notes before a note is sent"; `web/capture-page.test.mjs` — "while the mode is unknown nothing can be proposed"; `web/capture-session.test.mjs` — "starts unknown and nothing can be proposed" |
+| Approving twice, or approving a stale preview | One request at a time; the service takes the proposal out on approval; a gone or expired proposal is said in words (D10, WN-FR-12) | `web/capture-session.test.mjs` — "a second proposal is refused while one is pending"; `web/capture-session.test.mjs` — "every action is refused while one is out"; `web/capture-session.test.mjs` — "end in words and nothing is written"; `web/capture-page.test.mjs` — "while a request is out the controls are disabled and a second submit does nothing"; `web/service.test.mjs` — "the notice first, a preview that writes nothing" |
+| A note sent when the person did not mean to | Nothing is sent until Propose; nothing is written until Approve; Reject discards (WN-FR-02, WN-FR-04) | `web/capture-session.test.mjs` — "holds the one current proposal and shows the preview; nothing is approved"; `web/capture-page.test.mjs` — "shows the preview as text"; `web/capture-page.test.mjs` — "rejecting writes nothing, says so, and keeps the note for editing"; `web/service.test.mjs` — "mode, propose, preview, reject (nothing written)" |
+| A request naming someone else's graph or proposal | The page never sends a graph or user id; a proposal that is not yours is the same 404 as a made-up one (WN-NFR-03, R-003) | `web/service.test.mjs` — "mode, propose, look, approve, browse, and nobody else can reach any of it"; `web/service.test.mjs` — "a stranger sees none of it"; `web/notes-client.test.mjs` — "a proposal keeps only its own fields"; `web/notes-client.test.mjs` — "only a trimmed note is sent in propose, and nothing else" |
+| Notes or categories kept where they can be read later | Memory only; forgotten on sign-out and on leaving the capture screen (D11, D14, WN-NFR-04) | `web/pages.test.mjs` — "nothing is kept in the browser and nothing is sent anywhere else"; `web/capture-page.test.mjs` — "going to another screen forgets the proposal and the typed note"; `web/capture-page.test.mjs` — "signing out forgets everything, and signing in as someone else starts clean"; `web/brain-page.test.mjs` — "signing out forgets the brain" |
+| A model failure or limit exposing inside detail | Only the service's fixed words are shown, never a provider's text (D9) | `web/notes-client.test.mjs` — "failures are kind model with a reason"; `web/notes-client.test.mjs` — "anything else, an unreachable service and a broken answer"; `web/capture-page.test.mjs` — "refusals show at the top in its words"; `web/service.test.mjs` — "a refused note and a full pending list" |
 
 ## What the person is told
 
@@ -151,6 +151,38 @@ The new files are chosen in T-130 to T-135 (a notes client, the capture and brai
 | WN-AC-08 | The Brain screen lists categories with counts, then a category's items, then one item with its categories, each with a way back; awkward ids (spaces, markup, slashes, emoji, 256 characters) work. |
 | WN-AC-09 | A note, a category name or a rationale made of markup is shown as plain text and nothing runs; a hostile hash is home. |
 | WN-AC-10 | Each screen's heading takes the focus and the title follows; every control works from the keyboard; the browser reports no policy violation. |
+
+### Where each criterion is checked (T-137)
+
+| ID | Covered by |
+|----|------------|
+| WN-AC-01 | `web/capture-page.test.mjs` — "says which model files notes before a note is sent"; `web/capture-page.test.mjs` — "while the mode is unknown nothing can be proposed"; `web/service.test.mjs` — "the notice first, a preview that writes nothing" |
+| WN-AC-02 | `web/capture-page.test.mjs` — "shows the preview as text"; `web/capture-session.test.mjs` — "holds the one current proposal and shows the preview; nothing is approved"; `web/service.test.mjs` — "the notice first, a preview that writes nothing" |
+| WN-AC-03 | `web/capture-page.test.mjs` — "rejecting writes nothing, says so, and keeps the note for editing"; `web/service.test.mjs` — "mode, propose, preview, reject (nothing written)"; `web/service.test.mjs` — "the notice first, a preview that writes nothing" |
+| WN-AC-04 | `web/capture-page.test.mjs` — "approving writes, says how many operations"; `web/brain-page.test.mjs` — "an approved note makes the next visit reload the categories"; `web/service.test.mjs` — "mode, propose, look, approve, browse, and nobody else can reach any of it"; `web/service.test.mjs` — "the notice first, a preview that writes nothing" |
+| WN-AC-05 | `web/service.test.mjs` — "a stranger sees none of it"; `web/service.test.mjs` — "mode, propose, look, approve, browse, and nobody else can reach any of it"; `web/brain-page.test.mjs` — "signing out forgets the brain" |
+| WN-AC-06 | `web/capture-page.test.mjs` — "an expired proposal and one the service forgot end in words and write nothing"; `web/capture-session.test.mjs` — "end in words and nothing is written"; `web/service.test.mjs` — "a proposal the service no longer has ends in words, and nothing is written"; `web/service.test.mjs` — "the notice first, a preview that writes nothing" |
+| WN-AC-07 | `web/capture-page.test.mjs` — "refusals show at the top in its words"; `web/capture-session.test.mjs` — "a refusal shows the service"; `web/notes-client.test.mjs` — "failures are kind model with a reason"; `web/service.test.mjs` — "a refused note and a full pending list" |
+| WN-AC-08 | `web/brain-page.test.mjs` — "opens with its items (title, summary, shortened mark)"; `web/brain-page.test.mjs` — "shows its data as text and the categories it is filed under with weights"; `web/brain-session.test.mjs` — "keeps the shortened mark on an item"; `web/service.test.mjs` — "with awkward ids and more than a page" |
+| WN-AC-09 | `web/capture-page.test.mjs` — "markup in the note, the model"; `web/brain-page.test.mjs` — "markup in names and titles stays text"; `web/service.test.mjs` — "the notice first, a preview that writes nothing" |
+| WN-AC-10 | `web/capture-page.test.mjs` — "takes the focus and the title"; `web/brain-page.test.mjs` — "shows the screen with the focus and the title"; `web/pages.test.mjs` — "the navigation and heading elements exist"; `web/pages.test.mjs` — "the note box is a labelled text area"; `web/pages.test.mjs` — "follows the system theme, shows keyboard focus, respects reduced motion, and copes with a narrow window" |
+
+The whole journey was also looked at by hand in Chrome against the real service (recorded in `.gsd/STATE.md`, T-136): registering and landing on the requested Capture screen, the notice, a note made of markup proposed by keyboard, the preview with its operations, reason and expiry as text, reject, file another, approve, the Brain loaded afresh after the write, a category, an item with its data and weight, Back at each level with the focus, a hostile hash, and an injected script being blocked.
+
+### Residual risks (not covered, with the reason)
+
+These are real and known; the ones that can be acted on are in the PLAN Backlog.
+
+1. **The notice cannot know what the operator changes later.** The mode is read each time the capture screen is shown, so a change while a person is on it is seen only on their next visit; the preview repeats the mode its own proposal carries, which is the one that was used.
+2. **In `anthropic` mode every note and the names of the person's categories go to Anthropic, unanonymised.** The page says so, in the words above, but offers no way to decline for one note and no consent step (the owner chose a notice only); the pseudonymisation work in the Backlog is what would change this.
+3. **A pending proposal is held only in memory, for 15 minutes.** A restart, an expiry or leaving the screen forgets it; the page says so and keeps the note in the box when it can, but a long wait costs the person the preview, and the model call.
+4. **The demo model is not a classifier.** It files by word overlap; the preview is where a person catches a poor filing, and approving a poor one is the person's choice. A real-model evaluation is in the Backlog.
+5. **Times are the service's clock, shown in UTC.** A person whose own clock differs may see an expiry that does not match their watch; the service decides, and the page never acts on its own clock.
+6. **A selected category or item is page state, not an address.** A person cannot copy a link to one, and a reload returns to the list; chosen deliberately because node ids are opaque.
+7. **The Brain is kept while a person moves between screens, so it can be as old as its last load.** It reloads after the person's own approved notes and on Refresh, but not after a write made elsewhere (another tab, another device); the service stays the authority and every open reads the current data.
+8. **Two tabs of the same person do not know about each other**, so approving a note in one does not update the other's Brain until Refresh.
+9. **Per-hour and pending limits are counted in memory by the service.** A restart resets them (R-003 residual risk), and the page only shows the service's answer.
+10. **What was looked at by eye is one browser on one machine.** Narrow and dark layouts and a screen reader were not tried by hand, and the real model path was not exercised through the page (it needs a key and sends notes out); they are covered by checks on the structure and by the earlier real-model evaluation of the service, not by assistive technology or a live provider.
 
 ## Build order
 
