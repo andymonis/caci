@@ -209,7 +209,7 @@ type Route = { name: string };
 describe('the web app section of the README', () => {
   it('is there, with its parts', () => {
     expect(webSection.length).toBeGreaterThan(3000);
-    for (const heading of ['### Open it', '### What it is made of', '### What it sends and keeps', '### Circles in the web app', '### The policy on every page', '### Browsers and limits']) expect(webSection).toContain(heading);
+    for (const heading of ['### Open it', '### What it is made of', '### What it sends and keeps', '### Circles in the web app', '### Notes in the web app', '### The policy on every page', '### Browsers and limits']) expect(webSection).toContain(heading);
   });
 
   it('lists exactly the files the service serves, each by its own name', () => {
@@ -237,10 +237,12 @@ describe('the web app section of the README', () => {
     expect(webSection).toContain('the fifteen circle and invitation routes');
   });
 
-  it('lists exactly the four addresses the router knows, and each one is a screen the router returns', async () => {
+  it('lists exactly the six addresses the router knows, and each one is a screen the router returns', async () => {
     const { parseHash } = await loadWeb<{ parseHash: (hash: string) => Route }>('router.js');
     const documented = [...webSection.matchAll(/^\| `(#\/[^`]*)` \|/gm)].map((m) => m[1] as string);
-    expect(documented).toEqual(['#/', '#/circles', '#/circles/<id>', '#/invitations']);
+    expect(documented).toEqual(['#/', '#/circles', '#/circles/<id>', '#/invitations', '#/capture', '#/brain']);
+    expect(parseHash('#/capture')).toEqual({ name: 'capture' });
+    expect(parseHash('#/brain')).toEqual({ name: 'brain' });
     expect(parseHash('#/')).toEqual({ name: 'home' });
     expect(parseHash('#/circles')).toEqual({ name: 'circles' });
     expect(parseHash('#/circles/c0123456789abcdef')).toMatchObject({ name: 'circle' });
@@ -256,6 +258,26 @@ describe('the web app section of the README', () => {
     expect(Object.keys(ROLE_WORDS).sort()).toEqual(['manager', 'member', 'observer', 'owner']);
   });
 
+  it('names exactly the capture and browse routes the page uses, and they all exist', () => {
+    const real = [...createCaptureRoutes({ caci: {} as never }), ...createReadRoutes({ caci: {} as never })].map((r) => `${r.method} ${r.path}`);
+    const named = [...new Set([...webSection.matchAll(/`((?:GET|POST) \/api\/(?:capture|graph)[^`\s]*)`/g)].map((m) => m[1] as string))].sort();
+    expect(named).toEqual(['GET /api/capture/mode', 'GET /api/graph/categories', 'GET /api/graph/category', 'GET /api/graph/item', 'POST /api/capture/propose', 'POST /api/capture/proposals/:id/approve', 'POST /api/capture/proposals/:id/reject', 'GET /api/capture/proposals/:id'].sort());
+    for (const route of named) expect(real, route).toContain(route);
+  });
+
+  it('prints the model notice in exactly the words the page uses, for both modes and for not known', async () => {
+    const { MODE_WORDS, MODE_UNKNOWN } = await loadWeb<{ MODE_WORDS: Record<string, string>; MODE_UNKNOWN: string }>('capture-view.js');
+    const rows = [...webSection.matchAll(/^\| `(demo|anthropic)` \| (.+) \|$/gm)].map((m) => [m[1], m[2]]);
+    expect(rows.map((r) => r[0])).toEqual(['demo', 'anthropic']);
+    for (const [mode, words] of rows) expect(words, String(mode)).toBe(MODE_WORDS[mode as string]);
+    expect(webSection).toContain(`| not known | ${MODE_UNKNOWN} |`);
+  });
+
+  it('the note limit it states is the one the page enforces', async () => {
+    const { NOTE_MAX } = await loadWeb<{ NOTE_MAX: number }>('notes-client.js');
+    expect(webSection).toContain(`1 to ${NOTE_MAX.toLocaleString('en-GB')} characters`);
+  });
+
   it('every command and setting it names exists, and there is no build step for the web files', () => {
     for (const c of [...webSection.matchAll(/npm run ([a-z:]+)/g)].map((m) => m[1] as string)) expect(pkg.scripts[c], c).toBeDefined();
     for (const v of webSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
@@ -264,7 +286,7 @@ describe('the web app section of the README', () => {
   });
 
   it('says the things a reader must not miss', () => {
-    for (const phrase of ['Nothing else is built yet', 'does not capture notes', 'does not browse a graph', 'use circles', 'Register yourself first', 'becomes the administrator', 'not an installable app', 'no service worker', 'as text, never as markup', 'Nothing in the browser', 'to the same address, because the session cookie', 'no HTTPS of its own', 'pass the service\'s headers through unchanged', 'the main heading takes the focus', 'The **service decides**', 'Leaving, deleting a circle and removing someone ask first', 'never a browser dialog', 'never says whether such an account exists', 'No such circle, or you are not in it.', 'circles share no data yet', 'everyone in a circle sees everyone\'s username and display name', 'nobody is notified of an invitation', 'nothing is live', 'two tabs do not know about each other']) {
+    for (const phrase of ['Nothing else is built yet', 'cannot edit, delete or search what you filed', 'file notes and look through them', 'use circles', 'Register yourself first', 'becomes the administrator', 'not an installable app', 'no service worker', 'as text, never as markup', 'Nothing in the browser', 'to the same address, because the session cookie', 'no HTTPS of its own', 'pass the service\'s headers through unchanged', 'the main heading takes the focus', 'The **service decides**', 'Leaving, deleting a circle and removing someone ask first', 'never a browser dialog', 'never says whether such an account exists', 'No such circle, or you are not in it.', 'circles share no data yet', 'everyone in a circle sees everyone\'s username and display name', 'nobody is notified of an invitation', 'nothing is live', 'two tabs do not know about each other', 'The page says which model files the note, before it is sent', 'keeps the Propose button disabled until it knows', 'nothing is written until you press Approve', 'the note stays in the box', 'Browsing is read-only', 'page state, not part of the address', 'it does not update by itself', 'hold more than one proposal at a time', 'specs/R-007-web-notes.md', 'the capture and browse routes listed under **Notes in the web app**']) {
       expect(webSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
     }
   });

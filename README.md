@@ -335,7 +335,7 @@ It asks for the new password on the terminal (not shown, typed twice), or reads 
 
 ## Using the web app
 
-The service also serves a small web app from the same address as the API. It lets you **register**, **sign in and out**, visit a **temporary home page** (your name, your username and how many invitations are waiting for you), and **use circles**: create one, accept or decline an invitation, leave, look at who is in a circle and manage it. **Nothing else is built yet**: the app does not capture notes and does not browse a graph (the API has those; the app does not use them). It is specified in `specs/R-005-web-app.md` (the first slice) and `specs/R-006-web-circles.md` (circles).
+The service also serves a small web app from the same address as the API. It lets you **register**, **sign in and out**, visit a **temporary home page** (your name, your username and how many invitations are waiting for you), **use circles** (create one, accept or decline an invitation, leave, look at who is in a circle and manage it), and **file notes and look through them**: type a note, see the model's proposed filing as a preview, approve or reject it, and browse your own categories and items (read-only). **Nothing else is built yet**: the app cannot edit, delete or search what you filed, cannot take pictures or voice, and cannot answer questions from your notes. It is specified in `specs/R-005-web-app.md` (the first slice), `specs/R-006-web-circles.md` (circles) and `specs/R-007-web-notes.md` (notes).
 
 ### Open it
 
@@ -377,7 +377,7 @@ A file you add to `web/` is not served until you list it, and the tests fail if 
 
 ### What it sends and keeps
 
-- It talks only to the account routes on the same address (`POST /api/register`, `POST /api/login`, `POST /api/logout` and `GET /api/me`) and to the fifteen circle and invitation routes listed under **Circles**. Nothing goes anywhere else, and nothing is loaded from anywhere else (no fonts, scripts or images from other sites).
+- It talks only to the account routes on the same address (`POST /api/register`, `POST /api/login`, `POST /api/logout` and `GET /api/me`) to the fifteen circle and invitation routes listed under **Circles**, and to the capture and browse routes listed under **Notes in the web app**. Nothing goes anywhere else, and nothing is loaded from anywhere else (no fonts, scripts or images from other sites).
 - It keeps **nothing in the browser**: no local or session storage (circle data lives in memory while the page is open and is dropped when you leave a screen or sign out), and it never reads the session cookie, which the browser holds and the page cannot see (`HttpOnly`). The password lives only in the form field and the one request, and the fields are emptied once it is used.
 - Everything the service says (your name, an error message) is shown **as text, never as markup**.
 
@@ -408,6 +408,31 @@ The buttons follow the role as a **hint**: the page shows only what your role al
 **Leaving, deleting a circle and removing someone ask first**, in the page, with a confirm and a cancel (never a browser dialog); cancelling changes nothing. After inviting, the page says only that the invitation was recorded for that username; it never says whether such an account exists. A circle that is not yours and one that does not exist read the same: "No such circle, or you are not in it."
 
 What the web app does **not** do with circles: circles share no data yet, and everyone in a circle sees everyone's username and display name (the pages say so); nobody is notified of an invitation, so you find out by looking; the invitation count is fetched when the home page opens and when you press Refresh, and **nothing is live** (a view is as old as its last load, and every action reloads what it changed); two tabs do not know about each other.
+
+### Notes in the web app
+
+Two more screens, with the same address rules as the rest (anything that is not exactly one of these is the home screen):
+
+| Address | Screen |
+|---|---|
+| `#/capture` | file a note: which model files it, the note box, the preview, approve or reject |
+| `#/brain` | browse your own notes: the categories, the items in one, one item (read-only) |
+
+**The page says which model files the note, before it is sent.** It asks the service (`GET /api/capture/mode`) when the capture screen opens, shows the answer, and keeps the Propose button disabled until it knows. In the default mode nothing leaves the machine; with the real model the note and the names of your categories are sent to Anthropic and are not anonymised (the operator chooses this for every account at once; see **Capturing notes through the API**). The words are these, and the preview repeats the mode its own proposal carries:
+
+| Mode | Words |
+|---|---|
+| `demo` | Filed by the free demo model: nothing leaves this machine. |
+| `anthropic` | Filed by Anthropic's model: your note and the names of your categories are sent to Anthropic and are not anonymised. |
+| not known | Could not tell which model files your notes. |
+
+The routes it uses are `GET /api/capture/mode`, `POST /api/capture/propose`, `GET /api/capture/proposals/:id`, `POST /api/capture/proposals/:id/approve` and `POST /api/capture/proposals/:id/reject` for capturing, and `GET /api/graph/categories`, `GET /api/graph/category` and `GET /api/graph/item` for browsing (ids go in the query string, never in a path).
+
+**The flow is propose, preview, approve.** A note is checked first (1 to 8,000 characters); nothing is written until you press Approve; Reject discards it and writes nothing. The preview shows the service's own text, the operations it would write, the model's reason and when the proposal expires (15 minutes), all as plain text. Failures and limits (the model timing out, refusing or being busy, too many proposals in an hour or waiting) are shown in the service's own words with the wait when it gives one, and **the note stays in the box** so it can be sent again. A refused write keeps the proposal; a proposal that has expired, or that the service no longer has after a restart, says so and writes nothing.
+
+**Browsing is read-only.** The categories show how many items each holds ("at least" when the service capped the count), a category shows its items, an item shows its data as text and the categories it is filed under with their weights; a value the service shortened is marked as shortened. Which category or item you opened is **page state, not part of the address** (node ids are opaque text), so a reload returns to the list. What was loaded stays while you move between screens and is reloaded after you approve a note, or when you press Refresh; it does not update by itself.
+
+What it does **not** do: edit, delete, move or search what you filed; hold more than one proposal at a time; take pictures or voice; work offline. A proposal and the typed note are forgotten when you leave the capture screen or sign out, and nothing is kept in the browser.
 
 ### The policy on every page
 
