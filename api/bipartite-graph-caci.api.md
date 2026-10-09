@@ -26,6 +26,9 @@ export interface CaciController {
     categoryItems(token: unknown, categoryId: unknown, page?: PageInput): Promise<Result<CategoryItemsPage, CaciError>>;
     get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
     item(token: unknown, itemId: unknown): Promise<Result<ItemDetail, CaciError>>;
+    mode(token: unknown): Promise<Result<{
+        readonly mode: 'demo' | 'anthropic';
+    }, CaciError>>;
     // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
     propose(token: unknown, input: {
         readonly text: unknown;

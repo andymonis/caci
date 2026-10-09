@@ -435,6 +435,7 @@ All need the session cookie. Ids travel in the query string (`?id=`), never in t
 
 | Route | What it does |
 |---|---|
+| `GET /api/capture/mode` | `{ "mode": "demo" }` or `{ "mode": "anthropic" }` and nothing else: which model files the notes, so a page can say so before a note is sent. |
 | `POST /api/capture/propose` | Body `{ "text" }`, at most 8,000 characters. 201 with the proposal. Nothing is written. |
 | `GET /api/capture/proposals/:id` | The pending proposal (yours only). |
 | `POST /api/capture/proposals/:id/approve` | Writes it in one all-or-nothing step. 200 with what was written. |

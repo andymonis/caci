@@ -31,7 +31,7 @@ afterEach(async () => {
   app = undefined;
 });
 
-async function start(extra: { client?: ModelClient; limits?: { maxPendingPerUser?: number; proposalsPerHour?: number }; secure?: boolean } = {}): Promise<App> {
+async function start(extra: { mode?: 'demo' | 'anthropic'; client?: ModelClient; limits?: { maxPendingPerUser?: number; proposalsPerHour?: number }; secure?: boolean } = {}): Promise<App> {
   const now = { value: T0 };
   const graphs = createMemoryAdapter();
   const users = createUserController({
@@ -47,7 +47,7 @@ async function start(extra: { client?: ModelClient; limits?: { maxPendingPerUser
   const state = { calls: 0 };
   const client: ModelClient = { complete: (request) => (state.calls++, inner.complete(request)) };
   const capture = createController({ adapter: graphs, llm: createLlm({ client }), now: () => now.value });
-  const caci = createCaciController({ users, capture, graphAdapter: graphs, clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }) });
+  const caci = createCaciController({ users, capture, graphAdapter: graphs, clock: () => now.value, ...(extra.mode === undefined ? {} : { mode: extra.mode }), ...(extra.limits === undefined ? {} : { limits: extra.limits }) });
   const secureCookies = extra.secure ?? false;
   const api = createApiServer({ routes: [...createAccountRoutes({ controller: users, secureCookies }), ...createCaptureRoutes({ caci, secureCookies })] });
   const port = await api.listen(0);
@@ -96,6 +96,54 @@ async function signIn(a: App, name: string): Promise<string> {
 }
 const propose = (a: App, token: string | undefined, text = 'Dr Patel booked my blood test') => call(a.port, 'POST', '/api/capture/propose', { token, body: { text } });
 const failing = (code: LlmErrorCode, message = 'provider said sk-ant-api03-PROVIDER-SECRET-123 at /var/provider/log'): ModelClient => ({ complete: async () => ({ ok: false, error: llmError(code, message, code === 'RATE_LIMITED' ? { retryAfterMs: 7000 } : {}) }) });
+
+describe('mode', () => {
+  it('200 with the mode and nothing else, for demo and for anthropic', async () => {
+    const a = await start();
+    const token = await signIn(a, 'ann');
+    const r = await call(a.port, 'GET', '/api/capture/mode', { token });
+    expect(r.status).toBe(200);
+    expect(r.json).toEqual({ mode: 'demo' });
+    expect(a.modelCalls).toBe(0);
+    await a.api.close();
+    const real = await start({ mode: 'anthropic' });
+    const t2 = await signIn(real, 'bob');
+    expect((await call(real.port, 'GET', '/api/capture/mode', { token: t2 })).json).toEqual({ mode: 'anthropic' });
+  });
+
+  it('401 without a session or with a made-up one, and a stale cookie is cleared', async () => {
+    const a = await start();
+    const none = await call(a.port, 'GET', '/api/capture/mode');
+    expect(none.status).toBe(401);
+    expect(none.json.error.code).toBe('UNAUTHENTICATED');
+    expect(none.cookie).toBeUndefined(); // nothing stale to clear
+    const stale = await call(a.port, 'GET', '/api/capture/mode', { token: 'x'.repeat(43) });
+    expect(stale.status).toBe(401);
+    expect(stale.cookie).toMatch(/Max-Age=0/);
+  });
+
+  it('refuses any query parameter by name, and any other method is 405 with Allow: GET', async () => {
+    const a = await start();
+    const token = await signIn(a, 'ann');
+    for (const q of ['?mode=anthropic', '?graphId=x', '?x=1']) {
+      const r = await call(a.port, 'GET', `/api/capture/mode${q}`, { token });
+      expect(r.status, q).toBe(422);
+      expect(r.json.error.code).toBe('INVALID_INPUT');
+    }
+    for (const method of ['POST', 'PATCH', 'DELETE', 'PUT']) {
+      const r = await call(a.port, method, '/api/capture/mode', { token, body: method === 'DELETE' ? undefined : {} });
+      expect(r.status, method).toBe(405);
+      expect(r.headers.allow).toBe('GET');
+    }
+  });
+
+  it('says nothing about the model, the limits or the person', async () => {
+    const a = await start();
+    const token = await signIn(a, 'ann');
+    const r = await call(a.port, 'GET', '/api/capture/mode', { token });
+    for (const leak of ['usage', 'token', 'user-u', 'graphId', 'limit', 'claude', 'haiku', 'sk-ant']) expect(r.text.toLowerCase(), leak).not.toContain(leak);
+  });
+});
 
 describe('propose', () => {
   it('201 with the proposal: id, times, mode, preview, summary, operations; and nothing written', async () => {

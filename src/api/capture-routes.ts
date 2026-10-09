@@ -131,6 +131,19 @@ export function createCaptureRoutes(options: CaptureRoutesOptions): readonly Rou
 
   return [
     {
+      method: 'GET',
+      path: '/api/capture/mode',
+      handler: async (ctx) => {
+        const token = ctx.cookies[cookieName];
+        if (token === undefined) return respond({ source: 'caci', error: { code: 'UNAUTHENTICATED', message: 'not signed in' } });
+        const stray = Object.keys(ctx.query)[0];
+        if (stray !== undefined) return respond({ source: 'caci', error: { code: 'INVALID_INPUT', message: `${stray} is not accepted here`, field: stray } });
+        const done = await caci.mode(token);
+        if (done.ok) return { status: 200, body: { mode: done.value.mode } };
+        return respond(done.error, done.error.source === 'caci' && done.error.error.code === 'UNAUTHENTICATED' ? [clearCookie(cookieName, { secure })] : undefined);
+      },
+    },
+    {
       method: 'POST',
       path: '/api/capture/propose',
       handler: signedIn(['text'], async (ctx, token) => {

@@ -70,6 +70,8 @@ export interface CaciController {
    * proposal stays pending, so it can be tried again or rejected. Approving twice, or twice at once, writes once.
    */
   approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
+  /** Which model files this person's notes: `demo` (nothing leaves the machine) or `anthropic` (the note and category names go to Anthropic). Nothing else is said. */
+  mode(token: unknown): Promise<Result<{ readonly mode: 'demo' | 'anthropic' }, CaciError>>;
   /** Counts of items, categories and links in the caller's graph. */
   summary(token: unknown): Promise<Result<GraphSummary, CaciError>>;
   /** The caller's categories by id, a page at a time (`limit` 1 to 100, default 50), each with how many items are filed under it. */
@@ -167,6 +169,11 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   };
 
   return {
+    async mode(token) {
+      const me = await whoIs(token);
+      return me.ok ? ok(Object.freeze({ mode })) : me;
+    },
+
     async summary(token) {
       const me = await whoIs(token);
       return me.ok ? browser.summary(me.value.graphId) : me;

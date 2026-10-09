@@ -82,6 +82,7 @@ describe('capture through the running service, with the demo model', () => {
     const service = await start(tmp());
     const web = browser(service.port);
     await web.signIn('ann');
+    expect((await web.call('GET', '/api/capture/mode')).json).toEqual({ mode: 'demo' });
     const proposed = await web.call('POST', '/api/capture/propose', { text: 'Dr Patel booked my blood test' });
     expect(proposed.status).toBe(201);
     expect(proposed.json.proposal.mode).toBe('demo');
@@ -184,6 +185,7 @@ describe('the real model, through a stand-in provider (no network)', () => {
     const web = browser(service.port);
     await web.signIn('ann');
     // a first note, so that a category exists; then a second whose request must show it
+    expect((await web.call('GET', '/api/capture/mode')).json).toEqual({ mode: 'anthropic' });
     const first = (await web.call('POST', '/api/capture/propose', { text: 'my very private first note about boats' })).json.proposal;
     expect(first.mode).toBe('anthropic');
     expect(first.summary.newCategories).toEqual(['provider-made']);

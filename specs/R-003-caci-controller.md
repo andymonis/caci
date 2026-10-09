@@ -119,7 +119,7 @@ All need the session cookie (R-002) and the same cross-origin and JSON rules as 
 | `GET /api/capture/proposals/:id` | The pending proposal |
 | `POST /api/capture/proposals/:id/approve` | Writes it; 200 with what was written |
 | `POST /api/capture/proposals/:id/reject` | Discards it; 204 |
-| `GET /api/capture/mode` | The mode (`demo` or `anthropic`) and nothing else, so a front end can say which model files a note **before** one is sent (added for R-007, T-129; not built until then) |
+| `GET /api/capture/mode` | The mode (`demo` or `anthropic`) and nothing else, so a front end can say which model files a note **before** one is sent (added for R-007, T-129) |
 | `GET /api/graph` | Counts |
 | `GET /api/graph/categories` | `limit`, `cursor`; categories with item counts |
 | `GET /api/graph/category?id=` | `limit`, `cursor`; the items in one category |
