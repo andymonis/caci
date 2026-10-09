@@ -202,10 +202,14 @@ describe('the circles section of the README', () => {
 
 const webSection = section('Using the web app');
 
+// The page's own files are plain JavaScript without type declarations, so they are loaded by address and given the shape the test needs.
+const loadWeb = async <T>(name: string): Promise<T> => (await import(new URL(`../../web/${name}`, import.meta.url).href)) as T;
+type Route = { name: string };
+
 describe('the web app section of the README', () => {
   it('is there, with its parts', () => {
     expect(webSection.length).toBeGreaterThan(3000);
-    for (const heading of ['### Open it', '### What it is made of', '### What it sends and keeps', '### The policy on every page', '### Browsers and limits']) expect(webSection).toContain(heading);
+    for (const heading of ['### Open it', '### What it is made of', '### What it sends and keeps', '### Circles in the web app', '### The policy on every page', '### Browsers and limits']) expect(webSection).toContain(heading);
   });
 
   it('lists exactly the files the service serves, each by its own name', () => {
@@ -227,6 +231,31 @@ describe('the web app section of the README', () => {
     for (const route of named) expect(real, route).toContain(route);
   });
 
+  it('says it uses the fifteen circle and invitation routes, and there are fifteen', () => {
+    const real = [...createCircleRoutes({ circles: {} as never }), ...createInvitationRoutes({ circles: {} as never })];
+    expect(real).toHaveLength(15);
+    expect(webSection).toContain('the fifteen circle and invitation routes');
+  });
+
+  it('lists exactly the four addresses the router knows, and each one is a screen the router returns', async () => {
+    const { parseHash } = await loadWeb<{ parseHash: (hash: string) => Route }>('router.js');
+    const documented = [...webSection.matchAll(/^\| `(#\/[^`]*)` \|/gm)].map((m) => m[1] as string);
+    expect(documented).toEqual(['#/', '#/circles', '#/circles/<id>', '#/invitations']);
+    expect(parseHash('#/')).toEqual({ name: 'home' });
+    expect(parseHash('#/circles')).toEqual({ name: 'circles' });
+    expect(parseHash('#/circles/c0123456789abcdef')).toMatchObject({ name: 'circle' });
+    expect(parseHash('#/invitations')).toEqual({ name: 'invitations' });
+    expect(parseHash('#/circles/<id>')).toEqual({ name: 'home' });
+  });
+
+  it('describes each role in exactly the words the page uses, and names exactly the four roles', async () => {
+    const { ROLE_WORDS, ROLES: WEB_ROLES } = await loadWeb<{ ROLE_WORDS: Record<string, string>; ROLES: string[] }>('permissions.js');
+    const rows = [...webSection.matchAll(/^\| `(owner|manager|member|observer)` \| (.+) \|$/gm)].map((m) => [m[1], m[2]]);
+    expect(rows.map((r) => r[0])).toEqual([...WEB_ROLES]);
+    for (const [role, words] of rows) expect(words, role).toBe(ROLE_WORDS[role as string]);
+    expect(Object.keys(ROLE_WORDS).sort()).toEqual(['manager', 'member', 'observer', 'owner']);
+  });
+
   it('every command and setting it names exists, and there is no build step for the web files', () => {
     for (const c of [...webSection.matchAll(/npm run ([a-z:]+)/g)].map((m) => m[1] as string)) expect(pkg.scripts[c], c).toBeDefined();
     for (const v of webSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
@@ -235,7 +264,7 @@ describe('the web app section of the README', () => {
   });
 
   it('says the things a reader must not miss', () => {
-    for (const phrase of ['Nothing else is built yet', 'does not use circles', 'Register yourself first', 'becomes the administrator', 'not an installable app', 'no service worker', 'as text, never as markup', 'Nothing in the browser', 'to the same address, because the session cookie', 'no HTTPS of its own', 'pass the service\'s headers through unchanged']) {
+    for (const phrase of ['Nothing else is built yet', 'does not capture notes', 'does not browse a graph', 'use circles', 'Register yourself first', 'becomes the administrator', 'not an installable app', 'no service worker', 'as text, never as markup', 'Nothing in the browser', 'to the same address, because the session cookie', 'no HTTPS of its own', 'pass the service\'s headers through unchanged', 'the main heading takes the focus', 'The **service decides**', 'Leaving, deleting a circle and removing someone ask first', 'never a browser dialog', 'never says whether such an account exists', 'No such circle, or you are not in it.', 'circles share no data yet', 'everyone in a circle sees everyone\'s username and display name', 'nobody is notified of an invitation', 'nothing is live', 'two tabs do not know about each other']) {
       expect(webSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
     }
   });

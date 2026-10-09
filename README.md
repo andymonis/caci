@@ -335,7 +335,7 @@ It asks for the new password on the terminal (not shown, typed twice), or reads 
 
 ## Using the web app
 
-The service also serves a small web app from the same address as the API. This first version does **three things**: you can **register**, **sign in and out**, and visit a **temporary home page** that shows your name and username. **Nothing else is built yet**: the app does not capture notes, does not browse a graph and does not use circles (the API has those; the app does not use them). It is specified in `specs/R-005-web-app.md`.
+The service also serves a small web app from the same address as the API. It lets you **register**, **sign in and out**, visit a **temporary home page** (your name, your username and how many invitations are waiting for you), and **use circles**: create one, accept or decline an invitation, leave, look at who is in a circle and manage it. **Nothing else is built yet**: the app does not capture notes and does not browse a graph (the API has those; the app does not use them). It is specified in `specs/R-005-web-app.md` (the first slice) and `specs/R-006-web-circles.md` (circles).
 
 ### Open it
 
@@ -349,7 +349,7 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 
 | File | Does |
 |---|---|
-| `index.html` | the page: the sign-in and create-account forms and the home page |
+| `index.html` | the page: the sign-in and create-account forms, the home page and the circle screens |
 | `style.css` | the look, light and dark by the system setting |
 | `app.js` | starts the page |
 | `mount.js` | puts the session on the page |
@@ -370,9 +370,37 @@ A file you add to `web/` is not served until you list it, and the tests fail if 
 
 ### What it sends and keeps
 
-- It talks only to the account routes on the same address: `POST /api/register`, `POST /api/login`, `POST /api/logout` and `GET /api/me`. Nothing goes anywhere else, and nothing is loaded from anywhere else (no fonts, scripts or images from other sites).
-- It keeps **nothing in the browser**: no local or session storage, and it never reads the session cookie, which the browser holds and the page cannot see (`HttpOnly`). The password lives only in the form field and the one request, and the fields are emptied once it is used.
+- It talks only to the account routes on the same address (`POST /api/register`, `POST /api/login`, `POST /api/logout` and `GET /api/me`) and to the fifteen circle and invitation routes listed under **Circles**. Nothing goes anywhere else, and nothing is loaded from anywhere else (no fonts, scripts or images from other sites).
+- It keeps **nothing in the browser**: no local or session storage (circle data lives in memory while the page is open and is dropped when you leave a screen or sign out), and it never reads the session cookie, which the browser holds and the page cannot see (`HttpOnly`). The password lives only in the form field and the one request, and the fields are emptied once it is used.
 - Everything the service says (your name, an error message) is shown **as text, never as markup**.
+
+### Circles in the web app
+
+The screens have addresses, so the back and forward buttons, a reload and a copied address all work. Anything that is not exactly one of these is the home screen, and an id in an address must have the exact shape the service makes before it can be used in a request.
+
+| Address | Screen |
+|---|---|
+| `#/` | home: your name and username, the invitation count with a Refresh button, links, and Sign out |
+| `#/circles` | your circles with your role and how many people are in each, "Show more", and the form to make a circle |
+| `#/circles/<id>` | one circle: details, your role, the people, and what your role lets you do |
+| `#/invitations` | the invitations addressed to you, each with Accept and Decline |
+
+On every change of screen the main heading takes the focus and the tab title follows. If you are signed out, the address is kept and applies after you sign in.
+
+What each role is shown, in plain words beside the choices (the same words as the page):
+
+| Role | Words |
+|---|---|
+| `owner` | Everything: rename and delete the circle, invite and remove anyone, give anyone any role, including owner. |
+| `manager` | Invite and remove members and observers, and move people between those two. Never touches an owner or another manager. |
+| `member` | See the circle and who is in it, and leave. |
+| `observer` | The same as a member for now. |
+
+The buttons follow the role as a **hint**: the page shows only what your role allows (nothing beside your own row, a manager only on members and observers, members and observers only a way to leave), and a test checks the page's table against the service's own over every combination. The **service decides**: if a refusal arrives anyway, the page shows the service's own words and reloads the view.
+
+**Leaving, deleting a circle and removing someone ask first**, in the page, with a confirm and a cancel (never a browser dialog); cancelling changes nothing. After inviting, the page says only that the invitation was recorded for that username; it never says whether such an account exists. A circle that is not yours and one that does not exist read the same: "No such circle, or you are not in it."
+
+What the web app does **not** do with circles: circles share no data yet, and everyone in a circle sees everyone's username and display name (the pages say so); nobody is notified of an invitation, so you find out by looking; the invitation count is fetched when the home page opens and when you press Refresh, and **nothing is live** (a view is as old as its last load, and every action reloads what it changed); two tabs do not know about each other.
 
 ### The policy on every page
 
