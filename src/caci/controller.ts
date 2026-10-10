@@ -2,7 +2,7 @@ import type { ControllerError, Controller, PendingProposal, ProposalSummary } fr
 import { err, ok, type JsonValue, type Result, type StorageAdapter } from '../graph_store/index.js';
 import { createRegistrationThrottle as createWindowLimiter, type Authenticated, type UserController } from '../users/index.js';
 import { parseScope, PERSONAL, type Provenance, type ResolvedScope, type ScopeResolver, type ScopesError, type Scope } from '../scopes/index.js';
-import { createBrain, type BrainLimits, type BrainScope, type MineCategoryPage, type MineSummary } from './brain.js';
+import { createBrain, type BrainLimits, type BrainScope, type MineCategoryItemsPage, type MineCategoryPage, type MineItemDetail, type MineSummary } from './brain.js';
 import { createBrowser, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
 
@@ -84,6 +84,13 @@ export interface CaciController {
   mineSummary(token: unknown): Promise<Result<MineSummary, CaciError>>;
   /** My Brain: the categories of every readable scope, each tagged with where it came from, in a fixed order, a page at a time. */
   mineCategories(token: unknown, page?: PageInput): Promise<Result<MineCategoryPage, CaciError>>;
+  /**
+   * My Brain: the items of one category. A category in My Brain is identified by **where it is and its id**:
+   * `ref` is `{ scope, id }` and nothing else, and the scope is required. The caller must be able to read that scope.
+   */
+  mineCategoryItems(token: unknown, ref: unknown, page?: PageInput): Promise<Result<MineCategoryItemsPage, CaciError>>;
+  /** My Brain: one item, identified by `{ scope, id }`, and the categories of that scope it is filed under. */
+  mineItem(token: unknown, ref: unknown): Promise<Result<MineItemDetail, CaciError>>;
   /**
    * Counts of items, categories and links in the caller's graph, or (with a `scope`, R-009) in one circle's brain
    * the caller may read, in which case the answer names the circle. Every browse call below takes the same optional
@@ -235,6 +242,24 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     return ok([Object.freeze({ userId: me.value.user.id, scope: PERSONAL, graphId: me.value.graphId, provenance: Object.freeze({ kind: 'personal' as const }) })]);
   }
 
+  /** `{ scope, id }` as My Brain names a category or an item: both required, nothing else, and the scope readable now. */
+  async function located(token: unknown, ref: unknown): Promise<Result<{ where: ResolvedScope; id: unknown }, CaciError>> {
+    const me = await whoIs(token);
+    if (!me.ok) return me;
+    if (typeof ref !== 'object' || ref === null || Array.isArray(ref)) return err(caciError('INVALID_INPUT', 'name it as { scope, id }', { field: 'ref' }));
+    for (const key of Object.keys(ref)) if (key !== 'scope' && key !== 'id') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
+    const given = (ref as { scope?: unknown; id?: unknown }).scope;
+    if (given === undefined) return err(caciError('INVALID_INPUT', 'say which scope it is in', { field: 'scope' }));
+    const parsed = parseScope(given);
+    if (!parsed.ok) return err(scopeProblem(parsed.error));
+    if (parsed.value.kind === 'personal') {
+      return ok({ where: Object.freeze({ userId: me.value.user.id, scope: PERSONAL, graphId: me.value.graphId, provenance: Object.freeze({ kind: 'personal' as const }) }), id: (ref as { id?: unknown }).id });
+    }
+    if (scopes === undefined) return err(noCircle());
+    const resolved = await scopes.resolve(token, parsed.value, 'read');
+    return resolved.ok ? ok({ where: resolved.value, id: (ref as { id?: unknown }).id }) : err(scopeProblem(resolved.error));
+  }
+
   /** A browse result with the circle it came from (nothing is added for the personal brain). */
   const tag = <T extends object>(value: T, provenance: Provenance | undefined): T => (provenance === undefined ? value : Object.freeze({ ...value, scope: provenance }));
 
@@ -250,6 +275,16 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     async mode(token) {
       const me = await whoIs(token);
       return me.ok ? ok(Object.freeze({ mode })) : me;
+    },
+
+    async mineCategoryItems(token, ref, page) {
+      const at = await located(token, ref);
+      return at.ok ? brain.categoryItems(at.value.where.userId, at.value.where, at.value.id, page) : at;
+    },
+
+    async mineItem(token, ref) {
+      const at = await located(token, ref);
+      return at.ok ? brain.item(at.value.where, at.value.id) : at;
     },
 
     async brainScopes(token) {

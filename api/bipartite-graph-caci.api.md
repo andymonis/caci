@@ -49,6 +49,8 @@ export interface CaciController {
     get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
     item(token: unknown, itemId: unknown, scope?: unknown): Promise<Result<ItemDetail, CaciError>>;
     mineCategories(token: unknown, page?: PageInput): Promise<Result<MineCategoryPage, CaciError>>;
+    mineCategoryItems(token: unknown, ref: unknown, page?: PageInput): Promise<Result<MineCategoryItemsPage, CaciError>>;
+    mineItem(token: unknown, ref: unknown): Promise<Result<MineItemDetail, CaciError>>;
     mineSummary(token: unknown): Promise<Result<MineSummary, CaciError>>;
     mode(token: unknown): Promise<Result<{
         readonly mode: 'demo' | 'anthropic';
@@ -211,12 +213,36 @@ export interface MineCategory extends CategoryView {
     readonly scope: Provenance;
 }
 
+// @public
+export interface MineCategoryItemsPage extends Omit<CategoryItemsPage, 'scope' | 'items'> {
+    // (undocumented)
+    readonly items: ReadonlyArray<ItemView & {
+        readonly scope: Provenance;
+    }>;
+    // (undocumented)
+    readonly scope: Provenance;
+}
+
 // @public (undocumented)
 export interface MineCategoryPage {
     // (undocumented)
     readonly items: readonly MineCategory[];
     // (undocumented)
     readonly nextCursor: string | null;
+}
+
+// @public
+export interface MineItemDetail extends Omit<ItemDetail, 'scope' | 'item' | 'categories'> {
+    // (undocumented)
+    readonly categories: ReadonlyArray<ItemDetail['categories'][number] & {
+        readonly scope: Provenance;
+    }>;
+    // (undocumented)
+    readonly item: ItemView & {
+        readonly scope: Provenance;
+    };
+    // (undocumented)
+    readonly scope: Provenance;
 }
 
 // @public

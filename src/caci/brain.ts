@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { CircleRole } from '../circles/index.js';
 import { authoriseBrain, type Provenance, type ResolvedScope } from '../scopes/index.js';
 import { err, ok, type Result } from '../graph_store/index.js';
-import { pageOf, type CategoryView, type createBrowser, type GraphSummary, type PageInput } from './browse.js';
+import { pageOf, type CategoryItemsPage, type CategoryView, type createBrowser, type GraphSummary, type ItemDetail, type ItemView, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
 
 // My Brain (R-009): one view over the person's own brain and every circle brain they may read, built by reading
@@ -29,6 +29,18 @@ export interface MineCategoryPage {
   readonly nextCursor: string | null;
 }
 
+/** The items of one category of one scope: the category's identity is the scope and its id. */
+export interface MineCategoryItemsPage extends Omit<CategoryItemsPage, 'scope' | 'items'> {
+  readonly scope: Provenance;
+  readonly items: ReadonlyArray<ItemView & { readonly scope: Provenance }>;
+}
+/** One item of one scope, and the categories (of that same scope) it is filed under. */
+export interface MineItemDetail extends Omit<ItemDetail, 'scope' | 'item' | 'categories'> {
+  readonly scope: Provenance;
+  readonly item: ItemView & { readonly scope: Provenance };
+  readonly categories: ReadonlyArray<ItemDetail['categories'][number] & { readonly scope: Provenance }>;
+}
+
 export interface BrainLimits {
   /** Graphs read at the same time when counting. Default 4. */
   readonly maxConcurrentReads?: number;
@@ -39,7 +51,7 @@ type Browser = ReturnType<typeof createBrowser>;
 const keyOf = (r: ResolvedScope): string => (r.scope.kind === 'personal' ? 'personal' : `circle:${r.scope.circleId}`);
 
 /** What a cursor is bound to: the person, the view and exactly which scopes were readable, in order. */
-const fingerprint = (userId: string, view: string, scopes: readonly ResolvedScope[]): string => createHash('sha256').update(JSON.stringify([userId, view, scopes.map(keyOf)])).digest('hex').slice(0, 32);
+const fingerprint = (userId: string, view: string, parts: readonly string[]): string => createHash('sha256').update(JSON.stringify([userId, view, parts])).digest('hex').slice(0, 32);
 
 interface Position {
   /** Which scope, by place in the readable list. */
@@ -92,10 +104,35 @@ export function createBrain(browser: Browser, limits: BrainLimits = {}) {
       return ok(Object.freeze({ itemCount: total((s) => s.itemCount), categoryCount: total((s) => s.categoryCount), edgeCount: total((s) => s.edgeCount), scopes: Object.freeze(rows.map((s) => Object.freeze(s))) }));
     },
 
+    /** The items of one category in one resolved scope; the cursor is bound to the person, that scope and that category. */
+    async categoryItems(userId: string, where: ResolvedScope, categoryId: unknown, input: PageInput | undefined): Promise<Result<MineCategoryItemsPage, CaciError>> {
+      const page = pageOf(input);
+      if (!page.ok) return page;
+      const fp = fingerprint(userId, 'items', [keyOf(where), typeof categoryId === 'string' ? categoryId : '']);
+      let inner: string | null = null;
+      if (page.value.cursor !== null) {
+        const decoded = decode(page.value.cursor, 'items', fp, 1);
+        if (decoded === undefined) return err(badCursor());
+        inner = decoded.c;
+      }
+      const listed = await browser.categoryItems(where.graphId, categoryId, { limit: page.value.limit, ...(inner === null ? {} : { cursor: inner }) });
+      if (!listed.ok) return listed;
+      const { category, items, nextCursor } = listed.value;
+      return ok(Object.freeze({ scope: where.provenance, category, items: Object.freeze(items.map((i) => Object.freeze({ ...i, scope: where.provenance }))), nextCursor: nextCursor === null ? null : encode('items', fp, { i: 0, c: nextCursor }) }));
+    },
+
+    /** One item of one resolved scope, with its categories, all tagged. */
+    async item(where: ResolvedScope, itemId: unknown): Promise<Result<MineItemDetail, CaciError>> {
+      const found = await browser.item(where.graphId, itemId);
+      if (!found.ok) return found;
+      const { item, categories, moreCategories } = found.value;
+      return ok(Object.freeze({ scope: where.provenance, item: Object.freeze({ ...item, scope: where.provenance }), categories: Object.freeze(categories.map((c) => Object.freeze({ ...c, scope: where.provenance }))), ...(moreCategories === true ? { moreCategories: true as const } : {}) }));
+    },
+
     async categories(userId: string, readable: readonly ResolvedScope[], input: PageInput | undefined): Promise<Result<MineCategoryPage, CaciError>> {
       const page = pageOf(input);
       if (!page.ok) return page;
-      const fp = fingerprint(userId, 'categories', readable);
+      const fp = fingerprint(userId, 'categories', readable.map(keyOf));
       let at: Position = { i: 0, c: null };
       if (page.value.cursor !== null) {
         const decoded = decode(page.value.cursor, 'categories', fp, readable.length);

@@ -263,3 +263,147 @@ describe('My Brain, categories', () => {
     expect(JSON.stringify(r)).not.toContain('secret');
   });
 });
+
+describe('My Brain, a category\'s items and one item', () => {
+  const ref = (scope: unknown, id: unknown) => ({ scope, id });
+  const circleScope = (circleId: string) => ({ kind: 'circle', circleId });
+
+  it('a category is its scope and its id: the same id in four scopes gives four lists, each item tagged with its own scope (SC-AC-02)', async () => {
+    const { w, c1, c2, c3 } = await setup();
+    const expected: Array<[unknown, Record<string, unknown>, string]> = [
+      [PERSON, PERSON, 'PERSONAL shared'],
+      [circleScope(c1), circ(c1, 'Circle 1'), 'C1 shared'],
+      [circleScope(c2), circ(c2, 'Circle 2'), 'C2 shared'],
+      [circleScope(c3), circ(c3, 'Circle 3'), 'C3 shared'],
+    ];
+    for (const [scope, provenance, title] of expected) {
+      const page = must(await w.caci.mineCategoryItems(w.tokens.ann, ref(scope, 'shared')));
+      expect(page.scope).toEqual(provenance);
+      expect(page.category).toMatchObject({ id: 'shared' });
+      expect(page.items.map((i) => [i.id, (i.data as { title: string }).title, i.scope])).toEqual([['item-shared', title, provenance]]);
+      expect(Object.isFrozen(page) && Object.isFrozen(page.items) && Object.isFrozen(page.items[0])).toBe(true);
+    }
+  });
+
+  it('one item is its scope and its id: the same id in four scopes gives four items, with their categories tagged', async () => {
+    const { w, c1, c2, c3 } = await setup();
+    for (const [scope, provenance, title] of [[PERSON, PERSON, 'PERSONAL shared'], [circleScope(c1), circ(c1, 'Circle 1'), 'C1 shared'], [circleScope(c2), circ(c2, 'Circle 2'), 'C2 shared'], [circleScope(c3), circ(c3, 'Circle 3'), 'C3 shared']] as const) {
+      const d = must(await w.caci.mineItem(w.tokens.ann, ref(scope, 'item-shared')));
+      expect(d.scope).toEqual(provenance);
+      expect((d.item.data as { title: string }).title).toBe(title);
+      expect(d.item.scope).toEqual(provenance);
+      expect(d.categories.length).toBeGreaterThan(0);
+      expect(d.categories.every((c) => JSON.stringify(c.scope) === JSON.stringify(provenance))).toBe(true);
+      expect(d.categories.map((c) => c.name).join()).toContain(title.split(' ')[0] as string);
+    }
+  });
+
+  it('an id that exists only in another scope is not found; a scope the person cannot read is the one not-found', async () => {
+    const { w, c1 } = await setup();
+    expect(ownErrorOf(await w.caci.mineItem(w.tokens.ann, ref(PERSON, 'item-a-only')))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(must(await w.caci.mineItem(w.tokens.ann, ref(circleScope(c1), 'item-a-only'))).item.id).toBe('item-a-only');
+    const NO_CIRCLE = { ok: false, error: { source: 'caci', error: { code: 'NOT_FOUND', message: 'no such circle' } } };
+    for (const who of ['ann', 'cat', 'root']) {
+      expect(await w.caci.mineItem(w.tokens[who], ref(circleScope('c0000000000000004'), 'item-secret')), who).toEqual(NO_CIRCLE);
+      expect(await w.caci.mineCategoryItems(w.tokens[who], ref(circleScope('c0000000000000004'), 'secret')), who).toEqual(NO_CIRCLE);
+    }
+    expect(await w.caci.mineItem(w.tokens.cat, ref(circleScope(c1), 'item-shared'))).toEqual(NO_CIRCLE);
+  });
+
+  it('the scope is required, the reference has only scope and id, and the id must be text', async () => {
+    const { w } = await setup();
+    const err = async (r: unknown) => ownErrorOf((await w.caci.mineItem(w.tokens.ann, r)) as never);
+    expect(await err(undefined)).toMatchObject({ code: 'INVALID_INPUT', field: 'ref' });
+    for (const bad of [null, 'x', 5, [], ['personal']]) expect(await err(bad), String(bad)).toMatchObject({ code: 'INVALID_INPUT', field: 'ref' });
+    expect(await err({ id: 'item-shared' })).toMatchObject({ code: 'INVALID_INPUT', field: 'scope' });
+    expect(await err({ scope: 'circle', id: 'x' })).toMatchObject({ code: 'INVALID_INPUT', field: 'scope' });
+    expect(await err({ scope: { kind: 'circle', circleId: 'x' }, id: 'x' })).toMatchObject({ code: 'INVALID_INPUT', field: 'scope.circleId' });
+    expect(await err({ scope: PERSON, id: 'x', graphId: 'user-u1' })).toMatchObject({ code: 'INVALID_INPUT', field: 'graphId' });
+    for (const id of [undefined, 5, null, '']) expect(await err({ scope: PERSON, id }), String(id)).toMatchObject({ code: 'INVALID_INPUT', field: 'id' });
+    expect(ownErrorOf((await w.caci.mineCategoryItems(w.tokens.ann, { id: 'shared' })) as never)).toMatchObject({ code: 'INVALID_INPUT', field: 'scope' });
+    expect(ownErrorOf((await w.caci.mineItem('nope', ref(PERSON, 'x'))) as never)).toMatchObject({ code: 'UNAUTHENTICATED' });
+  });
+
+  it('without a resolver a circle is not found and the personal brain works', async () => {
+    const { w, c1 } = await setup();
+    const capture = createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }) });
+    const bare = createCaciController({ users: w.users, capture, graphAdapter: w.graphs });
+    expect(await bare.mineItem(w.tokens.ann, ref(circleScope(c1), 'item-shared'))).toMatchObject({ ok: false, error: { error: { code: 'NOT_FOUND' } } });
+    expect(must(await bare.mineItem(w.tokens.ann, ref(PERSON, 'item-shared'))).scope).toEqual(PERSON);
+  });
+
+  it('an item filed under more categories than are listed says so', async () => {
+    const { w, c1 } = await setup();
+    const ops: unknown[] = [{ op: 'upsertNode', partition: 'item', id: 'wide', data: { title: 'wide' } }];
+    for (let i = 0; i < 201; i++) ops.push({ op: 'upsertNode', partition: 'category', id: `k${String(i).padStart(3, '0')}`, data: { name: `K${i}` } }, { op: 'link', item: 'wide', category: `k${String(i).padStart(3, '0')}` });
+    must(await write(w.graphs, { version: 1, kind: 'mutation', graphId: `circle-${c1}`, ops } as never));
+    const d = must(await w.caci.mineItem(w.tokens.ann, { scope: circleScope(c1), id: 'wide' }));
+    expect(d.categories).toHaveLength(200);
+    expect(d.moreCategories).toBe(true);
+    expect(must(await w.caci.mineItem(w.tokens.ann, { scope: circleScope(c1), id: 'item-shared' })).moreCategories).toBeUndefined();
+  });
+
+  it('awkward ids work', async () => {
+    const { w, c1 } = await setup();
+    const odd = ['a b', 'A/B?c=d&e#f', '100%', '<b>x</b>', '😀', '..'];
+    await fill(w, `circle-${c1}`, odd, 'ODD');
+    for (const id of odd) {
+      expect(must(await w.caci.mineItem(w.tokens.ann, ref(circleScope(c1), `item-${id}`))).item.id).toBe(`item-${id}`);
+      expect(must(await w.caci.mineCategoryItems(w.tokens.ann, ref(circleScope(c1), id))).items).toHaveLength(1);
+    }
+  });
+
+  describe('paging', () => {
+    const many = async () => {
+      const s = await setup();
+      const ops: unknown[] = [];
+      for (let i = 0; i < 9; i++) ops.push({ op: 'upsertNode', partition: 'item', id: `m${i}`, data: { title: `M${i}` } }, { op: 'link', item: `m${i}`, category: 'shared' });
+      must(await write(s.w.graphs, { version: 1, kind: 'mutation', graphId: `circle-${s.c1}`, ops } as never));
+      return s;
+    };
+    const walk = async (w: World, token: string, r: unknown, limit: number) => {
+      const out: string[] = [];
+      let cursor: string | null = null;
+      for (let guard = 0; guard < 30; guard++) {
+        const page: { items: Array<{ id: string }>; nextCursor: string | null } = must(await w.caci.mineCategoryItems(token, r, { limit, ...(cursor === null ? {} : { cursor }) })) as never;
+        expect(page.items.length).toBeLessThanOrEqual(limit);
+        out.push(...page.items.map((i) => i.id));
+        if (page.nextCursor === null) return out;
+        cursor = page.nextCursor;
+      }
+      throw new Error('paging did not end');
+    };
+
+    it('any page size gives the same items in the same order, and the same request twice is deep-equal (SC-AC-10)', async () => {
+      const { w, c1 } = await many();
+      const r = ref(circleScope(c1), 'shared');
+      const whole = await walk(w, w.tokens.ann as string, r, 100);
+      expect(whole).toHaveLength(10);
+      for (const limit of [1, 3, 4, 10]) expect(await walk(w, w.tokens.ann as string, r, limit), `limit ${limit}`).toEqual(whole);
+      const a = must(await w.caci.mineCategoryItems(w.tokens.ann, r, { limit: 4 }));
+      expect(a.items).toHaveLength(4);
+      expect(must(await w.caci.mineCategoryItems(w.tokens.ann, r, { limit: 4 }))).toEqual(a);
+    });
+
+    it('a cursor is bound to the person, the scope, the category and the view', async () => {
+      const { w, c1, c3 } = await many();
+      const r = ref(circleScope(c1), 'shared');
+      const first = must(await w.caci.mineCategoryItems(w.tokens.ann, r, { limit: 4 }));
+      const cursor = first.nextCursor as string;
+      const refused = async (token: string, rr: unknown, c: unknown) => ownErrorOf((await w.caci.mineCategoryItems(token, rr, { limit: 4, cursor: c } as never)) as never);
+      expect(await refused(w.tokens.bob as string, r, cursor)).toMatchObject({ code: 'INVALID_INPUT', field: 'cursor' }); // bob reads the same circle
+      expect(await refused(w.tokens.ann as string, ref(circleScope(c3), 'shared'), cursor)).toMatchObject({ field: 'cursor' });
+      expect(await refused(w.tokens.ann as string, ref(circleScope(c1), 'a-only'), cursor)).toMatchObject({ field: 'cursor' });
+      expect(await refused(w.tokens.ann as string, ref(PERSON, 'shared'), cursor)).toMatchObject({ field: 'cursor' });
+      const categoriesCursor = must(await w.caci.mineCategories(w.tokens.ann, { limit: 1 })).nextCursor;
+      expect(await refused(w.tokens.ann as string, r, categoriesCursor)).toMatchObject({ field: 'cursor' });
+      for (const bad of ['', 'x', cursor + 'A', ` ${cursor}`, 5, {}]) expect(await refused(w.tokens.ann as string, r, bad), String(bad)).toMatchObject({ field: 'cursor' });
+      expect(must(await w.caci.mineCategoryItems(w.tokens.ann, r, { limit: 4, cursor })).items.length).toBeGreaterThan(0);
+    });
+
+    it('a bad limit is refused naming limit', async () => {
+      const { w } = await setup();
+      for (const limit of [0, 101, 1.5, 'x']) expect(ownErrorOf((await w.caci.mineCategoryItems(w.tokens.ann, ref(PERSON, 'shared'), { limit } as never)) as never), String(limit)).toMatchObject({ code: 'INVALID_INPUT', field: 'limit' });
+    });
+  });
+});
