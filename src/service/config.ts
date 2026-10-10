@@ -34,6 +34,8 @@ export interface ServiceConfig {
   readonly maxMembersPerCircle: number;
   /** `CACI_INVITATION_DAYS`: how long an invitation to a circle stays open, 1 to 365. Default 7. */
   readonly invitationDays: number;
+  /** `CACI_MAX_BRAIN_SCOPES`: the most scopes (the personal brain plus circles) one My Brain view may combine, 2 to 100. Default 25. */
+  readonly maxBrainScopes: number;
 }
 
 /** One thing wrong with the settings: which variable, and what to do. Never the value given. */
@@ -57,6 +59,7 @@ export const VARIABLES: readonly string[] = Object.freeze([
   'CACI_MAX_CIRCLES_PER_USER',
   'CACI_MAX_MEMBERS_PER_CIRCLE',
   'CACI_INVITATION_DAYS',
+  'CACI_MAX_BRAIN_SCOPES',
 ]);
 
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -123,6 +126,7 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
   const maxCirclesPerUser = whole('CACI_MAX_CIRCLES_PER_USER', 20, 1, 1000);
   const maxMembersPerCircle = whole('CACI_MAX_MEMBERS_PER_CIRCLE', 50, 1, 1000);
   const invitationDays = whole('CACI_INVITATION_DAYS', 7, 1, 365);
+  const maxBrainScopes = whole('CACI_MAX_BRAIN_SCOPES', 25, 2, 100);
 
   let llm: 'demo' | 'anthropic' = 'demo';
   const llmGiven = text('CACI_LLM');
@@ -148,5 +152,5 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
     bad('CACI_COOKIE_SECURE', 'must be true when CACI_BIND is not a loopback address (put HTTPS in front), or set CACI_ALLOW_INSECURE=true to accept sending session cookies in the clear');
   }
   if (errors.length > 0) return err(errors);
-  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser, maxCirclesPerUser, maxMembersPerCircle, invitationDays });
+  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser, maxCirclesPerUser, maxMembersPerCircle, invitationDays, maxBrainScopes });
 }

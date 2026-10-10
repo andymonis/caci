@@ -22,7 +22,7 @@ afterAll(() => {
   for (const leak of [PW, 'scrypt$', 'passwordHash', 'example.com', 'email', 'graphId', 'user-u', 'caci_session']) expect(all.includes(leak), `a response held "${leak}"`).toBe(false);
 });
 
-const config = (dataDir: string): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7 });
+const config = (dataDir: string): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25 });
 
 interface Reply {
   status: number;

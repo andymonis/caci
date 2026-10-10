@@ -130,7 +130,7 @@ export interface CircleController {
   removeMember(token: unknown, circleId: unknown, userId: unknown): Promise<Result<true, CirclesError>>;
 }
 
-export const DEFAULT_CIRCLE_LIMITS = Object.freeze({ maxCirclesPerUser: 20, maxMembersPerCircle: 50, maxOpenInvitationsPerCircle: 50, invitationsPerHour: 30, invitationDays: 7 });
+export const DEFAULT_CIRCLE_LIMITS = Object.freeze({ maxCirclesPerUser: 20, maxMembersPerCircle: 50, maxOpenInvitationsPerCircle: 50, invitationsPerHour: 30, invitationDays: 7, maxBrainScopes: 25 });
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 export const DEFAULT_PAGE_SIZE = 50;

@@ -73,6 +73,7 @@ export interface ServiceConfig {
     readonly dataDir: string;
     readonly invitationDays: number;
     readonly llm: 'demo' | 'anthropic';
+    readonly maxBrainScopes: number;
     readonly maxCirclesPerUser: number;
     readonly maxMembersPerCircle: number;
     readonly maxPendingPerUser: number;

@@ -243,6 +243,7 @@ export const DEFAULT_CIRCLE_LIMITS: Readonly<{
     maxOpenInvitationsPerCircle: 50;
     invitationsPerHour: 30;
     invitationDays: 7;
+    maxBrainScopes: 25;
 }>;
 
 // @public (undocumented)
