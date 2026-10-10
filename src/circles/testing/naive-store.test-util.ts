@@ -1,7 +1,7 @@
 import { circlesError, type CirclesError } from '../errors.js';
 import { pageOf } from '../cursor.js';
 import { err, ok, type Result } from '../result.js';
-import type { AcceptLimits, CirclePage, CircleStore, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from '../store.js';
+import type { AcceptLimits, CirclePage, CircleStore, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from '../store.js';
 import type { Circle, CircleRole } from '../types.js';
 
 /**
@@ -42,11 +42,35 @@ export const DEFECTS = [
   'bad-cursor-accepted',
   'purge-miscounts',
   'invitation-id-conflict-ignored',
+  'grant-non-member',
+  'grant-non-owner-checked-only',
+  'grant-self',
+  'grant-merges',
+  'grant-limit-off',
+  'grant-limit-counts-duplicates',
+  'grant-no-dedupe',
+  'grant-unsorted',
+  'grant-id-length-ignored',
+  'grant-empty-keeps',
+  'grant-symmetric',
+  'grant-no-copies',
+  'grant-survives-leave',
+  'grant-leave-drops-other-circles',
+  'grant-leave-owner-only',
+  'grant-hidden-not-deleted',
+  'grant-role-change-drops',
+  'grant-survives-circle-delete',
+  'grant-survives-remove-user',
+  'grant-remove-user-owner-only',
+  'grant-lists-other-circles',
+  'grant-racy-set',
+  'grant-racy-last-writer-merges',
 ] as const;
 export type Defect = (typeof DEFECTS)[number];
 
 const RANK: Readonly<Record<CircleRole, number>> = { owner: 0, manager: 1, member: 2, observer: 3 };
 const SHARED = { circles: new Map<string, Circle>(), members: new Map<string, Map<string, Membership>>(), invitations: new Map<string, Invitation>() };
+const cmp = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 const nf = (what: string): CirclesError => circlesError('NOT_FOUND', `no such ${what}`);
 
 export function createNaiveCircleStore(defect?: Defect): CircleStore {
@@ -54,12 +78,26 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
   const circles = d('shared-state') ? SHARED.circles : new Map<string, Circle>();
   const members = d('shared-state') ? SHARED.members : new Map<string, Map<string, Membership>>();
   const invitations = d('shared-state') ? SHARED.invitations : new Map<string, Invitation>();
+  const grants = new Map<string, Grant>();
+  const gk = (c: string, o: string, g: string): string => `${c}|${o}|${g}`;
+  const grantOut = (g: Grant): Grant => (d('grant-no-copies') ? g : { ...g, categories: [...g.categories] });
+  /** What a leaving person's grants do: by default they are deleted, in this circle, both ways. */
+  const dropGrants = (c: string, u: string): void => {
+    if (d('grant-survives-leave') || d('grant-hidden-not-deleted')) return;
+    for (const [k, g] of grants) {
+      const here = d('grant-leave-drops-other-circles') ? true : g.circleId === c;
+      const mine = d('grant-leave-owner-only') ? g.ownerId === u : g.ownerId === u || g.granteeId === u;
+      if (here && mine) grants.delete(k);
+    }
+  };
+  const stillMembers = (g: Grant): boolean => !d('grant-hidden-not-deleted') || (members.get(g.circleId)?.has(g.ownerId) === true && members.get(g.circleId)?.has(g.granteeId) === true);
   const out = <T extends object>(v: T): T => (d('no-copies') ? v : { ...v });
   const open = (i: Invitation, now: number): boolean => d('lists-expired') || now < i.expiresAt;
   const owners = (id: string): number => [...(members.get(id)?.values() ?? [])].filter((m) => m.role === 'owner').length;
   const circlesOf = (u: string): string[] => [...members.entries()].filter(([, m]) => m.has(u)).map(([id]) => id).sort();
   const drop = (id: string): void => {
     circles.delete(id);
+    if (!d('grant-survives-circle-delete')) for (const [k, g] of grants) if (g.circleId === id) grants.delete(k);
     if (!d('delete-keeps-members')) members.delete(id);
     if (!d('delete-keeps-invitations')) for (const [k, i] of invitations) if (i.circleId === id) invitations.delete(k);
   };
@@ -114,6 +152,7 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
       if (guard && (d('racy-role') ? only : owners(c) === 1)) return err(circlesError('LAST_OWNER', 'owner'));
       const next = { ...m, role };
       members.get(c)?.set(u, next);
+      if (d('grant-role-change-drops')) for (const [k, g] of grants) if (g.circleId === c && (g.ownerId === u || g.granteeId === u)) grants.delete(k);
       return ok(out(next));
     },
     removeMember: async (c, u): Promise<Result<boolean, CirclesError>> => {
@@ -123,6 +162,7 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
       if (d('racy-remove')) await Promise.resolve();
       if (!d('no-last-owner-on-remove') && m.role === 'owner' && (d('racy-remove') ? only : owners(c) === 1)) return err(circlesError('LAST_OWNER', 'owner'));
       members.get(c)?.delete(u);
+      dropGrants(c, u);
       return ok(true);
     },
 
@@ -208,6 +248,9 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
           handedOver.push(c);
         }
         here.delete(userId);
+        if (!d('grant-survives-remove-user')) {
+          for (const [k, g] of grants) if (g.circleId === c && (d('grant-remove-user-owner-only') ? g.ownerId === userId : g.ownerId === userId || g.granteeId === userId)) grants.delete(k);
+        }
       }
       let removed = 0;
       if (!d('remove-user-keeps-invitations')) {
@@ -220,6 +263,38 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
       }
       return { left: mine.length, handedOver, dissolved, invitationsRemoved: removed };
     },
+    setGrant: async (c: string, o: string, g: string, categories: readonly string[], now: number, limits: GrantLimits): Promise<Result<Grant | undefined, CirclesError>> => {
+      if (!circles.has(c)) return err(nf('circle'));
+      const here = members.get(c);
+      const ownerIn = here?.has(o) === true;
+      const granteeIn = here?.has(g) === true;
+      if (!d('grant-non-member') && !(d('grant-non-owner-checked-only') ? ownerIn : ownerIn && granteeIn)) return err(nf('member'));
+      if (!d('grant-self') && o === g) return err(circlesError('INVALID_INPUT', 'self', { field: 'granteeId' }));
+      if (!Array.isArray(categories) || categories.some((x) => typeof x !== 'string' || x === '' || (!d('grant-id-length-ignored') && [...x].length > 256))) return err(circlesError('INVALID_INPUT', 'bad id', { field: 'categories' }));
+      const distinct = d('grant-no-dedupe') ? [...categories] : [...new Set(categories)];
+      const counted = d('grant-limit-counts-duplicates') ? categories.length : distinct.length;
+      if (!d('grant-limit-off') && counted > limits.maxCategoriesPerGrant) return err(circlesError('LIMIT_REACHED', 'too many'));
+      const key = gk(c, o, g);
+      if (d('grant-racy-set')) await Promise.resolve();
+      let set = d('grant-unsorted') ? distinct : distinct.sort(cmp);
+      if (d('grant-merges') || d('grant-racy-last-writer-merges')) set = [...new Set([...(grants.get(key)?.categories ?? []), ...set])].sort(cmp);
+      if (set.length === 0 && !d('grant-empty-keeps')) {
+        grants.delete(key);
+        return ok(undefined);
+      }
+      if (set.length === 0) return ok(undefined);
+      const grant: Grant = { circleId: c, ownerId: o, granteeId: g, categories: set, updatedAt: now };
+      grants.set(key, grant);
+      if (d('grant-symmetric')) grants.set(gk(c, g, o), { ...grant, ownerId: g, granteeId: o });
+      return ok(grantOut(grant));
+    },
+    getGrant: async (c, o, g) => {
+      const found = grants.get(gk(c, o, g));
+      return found === undefined || !stillMembers(found) ? undefined : grantOut(found);
+    },
+    listGrantsBy: async (c, o, p) => page([...grants.values()].filter((x) => (d('grant-lists-other-circles') || x.circleId === c) && x.ownerId === o && stillMembers(x)).sort((a, b) => cmp(a.granteeId, b.granteeId)).map(grantOut), (r) => r.granteeId, p),
+    listGrantsTo: async (c, g, p) => page([...grants.values()].filter((x) => x.circleId === c && x.granteeId === g && stillMembers(x)).sort((a, b) => cmp(a.ownerId, b.ownerId)).map(grantOut), (r) => r.ownerId, p),
+    withdrawGrant: async (c, o, g) => grants.delete(gk(c, o, g)),
     purgeExpired: async (now) => {
       let n = 0;
       for (const [k, i] of invitations) {

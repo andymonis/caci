@@ -70,7 +70,26 @@ export interface InviteLimits {
   readonly maxOpenInvitationsPerCircle: number;
 }
 
+export interface GrantLimits {
+  /** The most categories one grant may name. */
+  readonly maxCategoriesPerGrant: number;
+}
+
+/**
+ * What one owner has shared with one other member of one circle (R-008): categories of the owner's own graph,
+ * by id, in plain code-unit order, never empty (an empty set is no grant at all).
+ */
+export interface Grant {
+  readonly circleId: string;
+  readonly ownerId: string;
+  readonly granteeId: string;
+  readonly categories: readonly string[];
+  /** When the set was last replaced. */
+  readonly updatedAt: number;
+}
+
 /** What `removeUser` did. */
+
 export interface RemoveUserOutcome {
   /** How many circles the person was in. */
   readonly left: number;
@@ -144,4 +163,22 @@ export interface CircleStore {
   removeUser(userId: string, username: string): Promise<RemoveUserOutcome>;
   /** Removes every invitation that has expired; returns how many. */
   purgeExpired(now: number): Promise<number>;
+
+  /**
+   * Replaces the whole set of categories `ownerId` shares with `granteeId` in a circle (R-008). Both must be current
+   * members (`NOT_FOUND` otherwise, whichever is missing, and for a missing circle), and they must be different people
+   * (`INVALID_INPUT`, field `granteeId`). Each category is an id of 1 to 256 characters (`INVALID_INPUT`, field
+   * `categories`); duplicates are collapsed; more than `maxCategoriesPerGrant` is `LIMIT_REACHED`. An empty set removes
+   * the grant and answers `ok(undefined)`. The store does not look at the owner's graph: that is the caller's job.
+   */
+  setGrant(circleId: string, ownerId: string, granteeId: string, categories: readonly string[], now: number, limits: GrantLimits): Promise<Result<Grant | undefined, CirclesError>>;
+  getGrant(circleId: string, ownerId: string, granteeId: string): Promise<Grant | undefined>;
+  /** What `ownerId` shares in a circle, one grant per grantee, by grantee id. */
+  listGrantsBy(circleId: string, ownerId: string, page: CirclePage): Promise<Listing<Grant>>;
+  /** What is shared with `granteeId` in a circle, one grant per owner, by owner id. */
+  listGrantsTo(circleId: string, granteeId: string, page: CirclePage): Promise<Listing<Grant>>;
+  /** Removes one grant. `false` if there was none. */
+  withdrawGrant(circleId: string, ownerId: string, granteeId: string): Promise<boolean>;
+  // A grant also ends, in the same step, when either person leaves or is removed (`removeMember`, `removeUser`) or when
+  // the circle is deleted: a grant never outlives a membership.
 }

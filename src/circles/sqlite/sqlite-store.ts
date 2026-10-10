@@ -303,6 +303,12 @@ export function createSqliteCircleStore(options: SqliteCircleStoreOptions = {}):
       }),
     purgeExpired: async (now) => db.run('DELETE FROM circle_invitations WHERE expires_at <= ?', now),
 
+    // Grants (R-008) are stored by T-141 (schema version 5); until then this store refuses them rather than pretend.
+    setGrant: async () => err(circlesError('STORAGE_ERROR', 'grants are not stored by this store yet')),
+    getGrant: async () => undefined,
+    listGrantsBy: async () => ({ items: [], nextCursor: null }),
+    listGrantsTo: async () => ({ items: [], nextCursor: null }),
+    withdrawGrant: async () => false,
     close: () => db.close(),
   };
 }

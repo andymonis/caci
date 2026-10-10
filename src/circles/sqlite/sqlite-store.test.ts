@@ -48,7 +48,8 @@ const codeOf = (fn: () => unknown): string | undefined => {
 };
 
 // The whole circle store contract: on a private in-memory database per test, and again on a real file per test.
-runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { dispose: (store) => (store as SqliteCircleStore).close() });
+// (the `grants` group joins in T-141, when this store keeps grants)
+runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { dispose: (store) => (store as SqliteCircleStore).close(), groups: ['core'] });
 {
   const homes = new Map<CircleStore, string>();
   describe('on a file', () => {
@@ -61,6 +62,7 @@ runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { d
       },
       { describe, it },
       {
+        groups: ['core'],
         dispose: (store) => {
           (store as SqliteCircleStore).close();
           const dir = homes.get(store);

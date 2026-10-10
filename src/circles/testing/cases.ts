@@ -686,5 +686,274 @@ export function circleStoreCases(): readonly CircleStoreCase[] {
         assert.equal((await rolesOf(store, 1)).length, 2);
       },
     },
+    ...grantCases(),
+  ];
+}
+
+// ---- grants (R-008)
+
+const GRANT_LIMITS = { maxCategoriesPerGrant: 200 };
+const SORTED = (ids: readonly string[]): string[] => [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+/** A circle owned by user 1 with users 2 and 3 as members. */
+const trio = (store: CircleStore, n: number | string = 1): Promise<void> => circleWith(store, n, ['member', 'member']);
+const grantOf = (store: CircleStore, circle: number | string, owner: number, grantee: number) => store.getGrant(cid(circle), uid(owner), uid(grantee));
+const give = async (store: CircleStore, circle: number | string, owner: number, grantee: number, categories: readonly string[], now = NOW) => must(await store.setGrant(cid(circle), uid(owner), uid(grantee), categories, now, GRANT_LIMITS));
+
+function grantCases(): readonly CircleStoreCase[] {
+  const G = (name: string, run: CircleStoreCase['run']): CircleStoreCase => ({ name: `grants: ${name}`, group: 'grants', run });
+  return [
+    G('a grant round-trips, with its categories in plain code-unit order and its time', async (store) => {
+      await trio(store);
+      const made = await give(store, 1, 2, 3, ['zebra', 'apple', 'Mango'], NOW + 5);
+      assert.deepEqual(made, { circleId: cid(1), ownerId: uid(2), granteeId: uid(3), categories: ['Mango', 'apple', 'zebra'], updatedAt: NOW + 5 });
+      assert.deepEqual(await grantOf(store, 1, 2, 3), made);
+    }),
+    G('setting a grant replaces the whole set, it does not merge', async (store) => {
+      await trio(store);
+      await give(store, 1, 2, 3, ['a', 'b', 'c'], NOW + 1);
+      const second = await give(store, 1, 2, 3, ['c', 'd'], NOW + 2);
+      assert.deepEqual(second?.categories, ['c', 'd']);
+      assert.equal(second?.updatedAt, NOW + 2);
+      assert.deepEqual((await grantOf(store, 1, 2, 3))?.categories, ['c', 'd']);
+    }),
+    G('an empty set is a withdrawal: no grant remains and the answer is ok with nothing', async (store) => {
+      await trio(store);
+      await give(store, 1, 2, 3, ['a']);
+      const r = await store.setGrant(cid(1), uid(2), uid(3), [], NOW, GRANT_LIMITS);
+      assert.deepEqual(r, { ok: true, value: undefined });
+      assert.equal(await grantOf(store, 1, 2, 3), undefined);
+      assert.deepEqual((await allPages((p) => store.listGrantsBy(cid(1), uid(2), p))).length, 0);
+    }),
+    G('duplicates are collapsed', async (store) => {
+      await trio(store);
+      assert.deepEqual((await give(store, 1, 2, 3, ['a', 'b', 'a', 'a']))?.categories, ['a', 'b']);
+    }),
+    G('a grant is one direction: sharing with someone does not share back, and each pair is its own grant', async (store) => {
+      await trio(store);
+      await give(store, 1, 2, 3, ['a']);
+      assert.equal(await grantOf(store, 1, 3, 2), undefined);
+      await give(store, 1, 3, 2, ['b']);
+      await give(store, 1, 2, 1, ['c']);
+      assert.deepEqual((await grantOf(store, 1, 2, 3))?.categories, ['a']);
+      assert.deepEqual((await grantOf(store, 1, 3, 2))?.categories, ['b']);
+      assert.deepEqual((await grantOf(store, 1, 2, 1))?.categories, ['c']);
+    }),
+    G('both people must be current members of the circle, and the circle must exist', async (store) => {
+      await trio(store);
+      assert.equal(code(await store.setGrant(cid(1), uid(9), uid(3), ['a'], NOW, GRANT_LIMITS)), 'NOT_FOUND');
+      assert.equal(code(await store.setGrant(cid(1), uid(2), uid(9), ['a'], NOW, GRANT_LIMITS)), 'NOT_FOUND');
+      assert.equal(code(await store.setGrant(cid(9), uid(2), uid(3), ['a'], NOW, GRANT_LIMITS)), 'NOT_FOUND');
+      assert.equal(code(await store.setGrant(cid(1), uid(9), uid(3), [], NOW, GRANT_LIMITS)), 'NOT_FOUND'); // even a withdrawal
+      assert.equal((await allPages((p) => store.listGrantsBy(cid(1), uid(2), p))).length, 0);
+    }),
+    G('a grant to oneself is refused, naming granteeId', async (store) => {
+      await trio(store);
+      const r = await store.setGrant(cid(1), uid(2), uid(2), ['a'], NOW, GRANT_LIMITS);
+      assert.equal(code(r), 'INVALID_INPUT');
+      assert.equal(r.ok ? undefined : r.error.field, 'granteeId');
+      assert.equal(await grantOf(store, 1, 2, 2), undefined);
+    }),
+    G('a category is an id of 1 to 256 characters: empty, longer, or not text is refused naming categories, and nothing changes', async (store) => {
+      await trio(store);
+      await give(store, 1, 2, 3, ['keep']);
+      for (const bad of [[''], ['x'.repeat(257)], ['ok', ''], [5 as unknown as string], [null as unknown as string]]) {
+        const r = await store.setGrant(cid(1), uid(2), uid(3), bad, NOW, GRANT_LIMITS);
+        assert.equal(code(r), 'INVALID_INPUT', JSON.stringify(bad).slice(0, 30));
+        assert.equal(r.ok ? undefined : r.error.field, 'categories');
+      }
+      assert.deepEqual((await grantOf(store, 1, 2, 3))?.categories, ['keep']);
+      assert.equal((await give(store, 1, 2, 3, ['x'.repeat(256)]))?.categories[0]?.length, 256);
+      assert.equal((await give(store, 1, 2, 3, ['😀'.repeat(256)]))?.categories[0]?.length, 512); // 256 characters, counted as characters
+      assert.equal(code(await store.setGrant(cid(1), uid(2), uid(3), ['😀'.repeat(257)], NOW, GRANT_LIMITS)), 'INVALID_INPUT');
+    }),
+    G('category ids are opaque: spaces, capitals, markup, slashes, emoji and CJK round-trip unchanged', async (store) => {
+      await trio(store);
+      const ids = ['a/b?c=d&e#f %é😀<b>..', ' spaces ', 'Capitals', '日本語', '..', 'x'.repeat(256)];
+      const made = await give(store, 1, 2, 3, ids);
+      assert.deepEqual(made?.categories, SORTED(ids));
+      assert.deepEqual((await grantOf(store, 1, 2, 3))?.categories, SORTED(ids));
+    }),
+    G('the store does not look at any graph: a category it has never heard of is accepted', async (store) => {
+      await trio(store);
+      assert.deepEqual((await give(store, 1, 2, 3, ['no-such-category-anywhere']))?.categories, ['no-such-category-anywhere']);
+    }),
+    G('at most the limit: exactly the limit is accepted, one more is LIMIT_REACHED and changes nothing, and collapsed duplicates do not count', async (store) => {
+      await trio(store);
+      const ids = Array.from({ length: 200 }, (_, i) => `cat-${String(i).padStart(3, '0')}`);
+      assert.equal((await give(store, 1, 2, 3, ids))?.categories.length, 200);
+      assert.equal((await give(store, 1, 2, 3, [...ids, ...ids]))?.categories.length, 200);
+      const r = await store.setGrant(cid(1), uid(2), uid(3), [...ids, 'one-more'], NOW, GRANT_LIMITS);
+      assert.equal(code(r), 'LIMIT_REACHED');
+      assert.equal((await grantOf(store, 1, 2, 3))?.categories.length, 200);
+      assert.equal(code(await store.setGrant(cid(1), uid(2), uid(3), ids, NOW, { maxCategoriesPerGrant: 199 })), 'LIMIT_REACHED');
+    }),
+    G('copies in and out: changing what was passed or returned changes nothing stored', async (store) => {
+      await trio(store);
+      const input = ['a', 'b'];
+      const made = await give(store, 1, 2, 3, input);
+      input.push('c');
+      (made?.categories as string[]).push('z');
+      const read = await grantOf(store, 1, 2, 3);
+      (read?.categories as string[]).push('y');
+      assert.deepEqual((await grantOf(store, 1, 2, 3))?.categories, ['a', 'b']);
+    }),
+    G('what I share lists one grant per grantee by grantee id, in pages, stable and without other circles, owners or grantees', async (store) => {
+      await circleWith(store, 1, ['member', 'member', 'member', 'member']);
+      await circleWith(store, 2, ['member']);
+      for (const g of [5, 3, 4, 2]) await give(store, 1, 1, g, [`for-${g}`]);
+      await give(store, 1, 2, 3, ['not-mine']);
+      await give(store, 2, 1, 2, ['other-circle']);
+      const mine = await allPages((p) => store.listGrantsBy(cid(1), uid(1), p), 2);
+      assert.deepEqual(mine.map((g) => g.granteeId), [uid(2), uid(3), uid(4), uid(5)]);
+      assert.deepEqual(mine.map((g) => g.categories[0]), ['for-2', 'for-3', 'for-4', 'for-5']);
+      const first = await store.listGrantsBy(cid(1), uid(1), { limit: 2, cursor: null });
+      assert.equal(first.items.length, 2);
+      assert.notEqual(first.nextCursor, null);
+      const exact = await store.listGrantsBy(cid(1), uid(1), { limit: 4, cursor: null });
+      assert.equal(exact.nextCursor, null);
+      assert.deepEqual((await store.listGrantsBy(cid(9), uid(1), { limit: 5, cursor: null })).items, []);
+    }),
+    G('what is shared with me lists one grant per owner by owner id', async (store) => {
+      await circleWith(store, 1, ['member', 'member', 'member']);
+      for (const o of [4, 2, 3]) await give(store, 1, o, 1, [`from-${o}`]);
+      await give(store, 1, 1, 2, ['mine-to-2']);
+      const toMe = await allPages((p) => store.listGrantsTo(cid(1), uid(1), p), 2);
+      assert.deepEqual(toMe.map((g) => g.ownerId), [uid(2), uid(3), uid(4)]);
+      assert.deepEqual(toMe.map((g) => g.categories[0]), ['from-2', 'from-3', 'from-4']);
+      assert.equal((await allPages((p) => store.listGrantsTo(cid(1), uid(2), p))).length, 1);
+    }),
+    G('a listing refuses a limit that is not a positive whole number and a cursor it did not give', async (store) => {
+      await trio(store);
+      for (const limit of [0, -1, 1.5, Number.NaN]) {
+        assert.ok((await thrown(() => store.listGrantsBy(cid(1), uid(2), { limit, cursor: null }))) instanceof RangeError, `by ${limit}`);
+        assert.ok((await thrown(() => store.listGrantsTo(cid(1), uid(2), { limit, cursor: null }))) instanceof RangeError, `to ${limit}`);
+      }
+      assert.ok((await thrown(() => store.listGrantsBy(cid(1), uid(2), { limit: 5, cursor: 'not-a-cursor' }))) instanceof RangeError);
+      assert.ok((await thrown(() => store.listGrantsTo(cid(1), uid(2), { limit: 5, cursor: 'not-a-cursor' }))) instanceof RangeError);
+    }),
+    G('withdrawing removes one grant and says whether there was one', async (store) => {
+      await trio(store);
+      await give(store, 1, 2, 3, ['a']);
+      await give(store, 1, 2, 1, ['b']);
+      assert.equal(await store.withdrawGrant(cid(1), uid(2), uid(3)), true);
+      assert.equal(await store.withdrawGrant(cid(1), uid(2), uid(3)), false);
+      assert.equal(await grantOf(store, 1, 2, 3), undefined);
+      assert.deepEqual((await grantOf(store, 1, 2, 1))?.categories, ['b']);
+      assert.equal(await store.withdrawGrant(cid(9), uid(2), uid(3)), false);
+    }),
+    G('leaving a circle ends every grant the person made or held there, and only there', async (store) => {
+      await trio(store, 1);
+      await trio(store, 2);
+      for (const c of [1, 2]) {
+        await give(store, c, 2, 3, ['x']);
+        await give(store, c, 3, 2, ['y']);
+        await give(store, c, 1, 2, ['z']);
+      }
+      assert.deepEqual(must(await store.removeMember(cid(1), uid(2))), true);
+      assert.equal(await grantOf(store, 1, 2, 3), undefined);
+      assert.equal(await grantOf(store, 1, 3, 2), undefined);
+      assert.equal(await grantOf(store, 1, 1, 2), undefined);
+      assert.equal((await allPages((p) => store.listGrantsBy(cid(1), uid(2), p))).length, 0);
+      assert.equal((await allPages((p) => store.listGrantsTo(cid(1), uid(2), p))).length, 0);
+      for (const [o, g] of [[2, 3], [3, 2], [1, 2]]) assert.ok(await grantOf(store, 2, o as number, g as number), `circle 2 grant ${o}->${g} stays`);
+    }),
+    G('other people\'s grants in the same circle stay when someone leaves', async (store) => {
+      await circleWith(store, 1, ['member', 'member', 'member']);
+      await give(store, 1, 2, 3, ['a']);
+      await give(store, 1, 3, 4, ['b']);
+      must(await store.removeMember(cid(1), uid(4)));
+      assert.deepEqual((await grantOf(store, 1, 2, 3))?.categories, ['a']);
+      assert.equal(await grantOf(store, 1, 3, 4), undefined);
+    }),
+    G('someone who leaves and is invited back has no grants: nothing is resurrected', async (store) => {
+      await trio(store);
+      await give(store, 1, 2, 3, ['a']);
+      await give(store, 1, 3, 2, ['b']);
+      must(await store.removeMember(cid(1), uid(2)));
+      must(await store.createInvitation(invitation('back', 1, 'user2'), LIMITS, NOW));
+      must(await store.acceptInvitation(iid('back'), uid(2), 'user2', NOW + 9, LIMITS));
+      assert.equal(await grantOf(store, 1, 2, 3), undefined);
+      assert.equal(await grantOf(store, 1, 3, 2), undefined);
+    }),
+    G('a refused removal (the only owner) leaves the grants alone', async (store) => {
+      await trio(store);
+      await give(store, 1, 1, 2, ['a']);
+      await give(store, 1, 2, 1, ['b']);
+      assert.equal(code(await store.removeMember(cid(1), uid(1))), 'LAST_OWNER');
+      assert.deepEqual((await grantOf(store, 1, 1, 2))?.categories, ['a']);
+      assert.deepEqual((await grantOf(store, 1, 2, 1))?.categories, ['b']);
+    }),
+    G('a role change keeps every grant: roles carry no access', async (store) => {
+      await trio(store);
+      await give(store, 1, 2, 3, ['a']);
+      must(await store.changeRole(cid(1), uid(2), 'observer'));
+      must(await store.changeRole(cid(1), uid(3), 'manager'));
+      assert.deepEqual((await grantOf(store, 1, 2, 3))?.categories, ['a']);
+      assert.equal(await grantOf(store, 1, 3, 2), undefined);
+    }),
+    G('deleting the circle ends every grant in it, and a new circle starts with none', async (store) => {
+      await trio(store, 1);
+      await trio(store, 2);
+      await give(store, 1, 2, 3, ['a']);
+      await give(store, 2, 2, 3, ['b']);
+      assert.equal(await store.deleteCircle(cid(1)), true);
+      assert.equal(await grantOf(store, 1, 2, 3), undefined);
+      assert.equal((await allPages((p) => store.listGrantsBy(cid(1), uid(2), p))).length, 0);
+      assert.deepEqual((await grantOf(store, 2, 2, 3))?.categories, ['b']);
+    }),
+    G('removing a person (an account gone) ends their grants in every circle, including one they solely owned and one that is dissolved', async (store) => {
+      await trio(store, 1); // user 1 owns; user 2 and 3 are members
+      await circleWith(store, 2); // user 1 alone: dissolved
+      await trio(store, 3);
+      await give(store, 1, 1, 2, ['a']);
+      await give(store, 1, 2, 1, ['b']);
+      await give(store, 1, 2, 3, ['stays']);
+      await give(store, 3, 1, 3, ['c']);
+      await give(store, 3, 3, 1, ['d']);
+      const out = await store.removeUser(uid(1), 'user1');
+      assert.ok(out.handedOver.includes(cid(1)) && out.dissolved.includes(cid(2)));
+      for (const c of [1, 3]) for (const [o, g] of [[1, 2], [2, 1], [1, 3], [3, 1]]) assert.equal(await grantOf(store, c, o as number, g as number), undefined, `circle ${c} ${o}->${g}`);
+      assert.deepEqual((await grantOf(store, 1, 2, 3))?.categories, ['stays']);
+    }),
+    G('a person removed twice changes nothing more', async (store) => {
+      await trio(store);
+      await give(store, 1, 2, 3, ['a']);
+      await store.removeUser(uid(9), 'user9');
+      await store.removeUser(uid(3), 'user3');
+      await store.removeUser(uid(3), 'user3');
+      assert.equal(await grantOf(store, 1, 2, 3), undefined);
+    }),
+    G('simultaneous replacements of one grant leave exactly one of them, never a mixture', async (store) => {
+      await trio(store);
+      const sets = Array.from({ length: 8 }, (_, i) => [`s${i}-a`, `s${i}-b`]);
+      await Promise.all(sets.map((set, i) => store.setGrant(cid(1), uid(2), uid(3), set, NOW + i, GRANT_LIMITS)));
+      const kept = (await grantOf(store, 1, 2, 3))?.categories ?? [];
+      assert.ok(sets.some((set) => JSON.stringify(set) === JSON.stringify(kept)), `kept ${JSON.stringify(kept)}`);
+    }),
+    G('a grant racing with the person leaving: afterwards there is no grant, whichever happened first', async (store) => {
+      for (let round = 0; round < 6; round++) {
+        const c = 10 + round;
+        await trio(store, c);
+        await Promise.all([store.setGrant(cid(c), uid(2), uid(3), ['a'], NOW, GRANT_LIMITS), store.removeMember(cid(c), uid(3))]);
+        assert.equal(await grantOf(store, c, 2, 3), undefined, `round ${round}`);
+        assert.equal((await allPages((p) => store.listGrantsTo(cid(c), uid(3), p))).length, 0);
+      }
+    }),
+    G('a grant racing with the circle being deleted leaves nothing behind', async (store) => {
+      for (let round = 0; round < 6; round++) {
+        const c = 30 + round;
+        await trio(store, c);
+        await Promise.all([store.setGrant(cid(c), uid(2), uid(3), ['a'], NOW, GRANT_LIMITS), store.deleteCircle(cid(c))]);
+        assert.equal(await grantOf(store, c, 2, 3), undefined, `round ${round}`);
+      }
+    }),
+    G('two stores share no grants', async (store, makeAnother) => {
+      const other = await makeAnother();
+      await trio(store);
+      await trio(other);
+      await give(store, 1, 2, 3, ['a']);
+      assert.equal(await grantOf(other, 1, 2, 3), undefined);
+    }),
   ];
 }

@@ -1,12 +1,14 @@
 import { circlesError, type CirclesError } from './errors.js';
 import { pageOf } from './cursor.js';
 import { err, ok, type Result } from './result.js';
-import type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from './store.js';
+import type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from './store.js';
 import type { Circle, CircleRole } from './types.js';
 
 const copyCircle = (c: Circle): Circle => ({ ...c });
 const copyMember = (m: Membership): Membership => ({ ...m });
 const copyInvitation = (i: Invitation): Invitation => ({ ...i });
+const copyGrant = (g: Grant): Grant => ({ ...g, categories: [...g.categories] });
+const MAX_CATEGORY_ID = 256;
 const RANK: Readonly<Record<CircleRole, number>> = { owner: 0, manager: 1, member: 2, observer: 3 };
 const notFound = (what: string): CirclesError => circlesError('NOT_FOUND', `no such ${what}`);
 
@@ -18,6 +20,8 @@ export function createMemoryCircleStore(): CircleStore {
   const circles = new Map<string, Circle>();
   const members = new Map<string, Map<string, Membership>>();
   const invitations = new Map<string, Invitation>();
+  const grants = new Map<string, Grant>();
+  const grantKey = (circleId: string, ownerId: string, granteeId: string): string => `${circleId}|${ownerId}|${granteeId}`;
 
   const circlesOfUser = (userId: string): string[] => [...members.entries()].filter(([, m]) => m.has(userId)).map(([id]) => id).sort();
   const owners = (circleId: string): number => [...(members.get(circleId)?.values() ?? [])].filter((m) => m.role === 'owner').length;
@@ -26,6 +30,11 @@ export function createMemoryCircleStore(): CircleStore {
     circles.delete(id);
     members.delete(id);
     for (const [invitationId, i] of invitations) if (i.circleId === id) invitations.delete(invitationId);
+    for (const [key, g] of grants) if (g.circleId === id) grants.delete(key);
+  };
+  /** A grant never outlives a membership: when a person goes from a circle, every grant they made or hold there goes too. */
+  const dropGrantsOf = (circleId: string, userId: string): void => {
+    for (const [key, g] of grants) if (g.circleId === circleId && (g.ownerId === userId || g.granteeId === userId)) grants.delete(key);
   };
   const page = <T>(rows: readonly T[], keyOf: (row: T) => string, p: CirclePage): Listing<T> => pageOf(rows, keyOf, p);
 
@@ -85,6 +94,7 @@ export function createMemoryCircleStore(): CircleStore {
       if (m === undefined) return ok(false);
       if (m.role === 'owner' && owners(circleId) === 1) return err(circlesError('LAST_OWNER', 'a circle must keep an owner'));
       members.get(circleId)?.delete(userId);
+      dropGrantsOf(circleId, userId);
       return ok(true);
     },
 
@@ -170,6 +180,7 @@ export function createMemoryCircleStore(): CircleStore {
           handedOver.push(circleId);
         }
         here.delete(userId);
+        dropGrantsOf(circleId, userId);
       }
       const name = username.toLowerCase();
       let removed = 0;
@@ -181,6 +192,36 @@ export function createMemoryCircleStore(): CircleStore {
       }
       return { left: mine.length, handedOver, dissolved, invitationsRemoved: removed };
     },
+    setGrant: async (circleId: string, ownerId: string, granteeId: string, categories: readonly string[], now: number, limits: GrantLimits): Promise<Result<Grant | undefined, CirclesError>> => {
+      if (!circles.has(circleId)) return err(notFound('circle'));
+      const here = members.get(circleId);
+      if (here?.has(ownerId) !== true || here.has(granteeId) !== true) return err(notFound('member'));
+      if (ownerId === granteeId) return err(circlesError('INVALID_INPUT', 'a person cannot share with themselves', { field: 'granteeId' }));
+      if (!Array.isArray(categories) || categories.some((c) => typeof c !== 'string' || c === '' || [...c].length > MAX_CATEGORY_ID)) return err(circlesError('INVALID_INPUT', `each category is an id of 1 to ${MAX_CATEGORY_ID} characters`, { field: 'categories' }));
+      const set = [...new Set(categories)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      if (set.length > limits.maxCategoriesPerGrant) return err(circlesError('LIMIT_REACHED', `a grant may name at most ${limits.maxCategoriesPerGrant} categories`));
+      const key = grantKey(circleId, ownerId, granteeId);
+      if (set.length === 0) {
+        grants.delete(key);
+        return ok(undefined);
+      }
+      const grant: Grant = { circleId, ownerId, granteeId, categories: set, updatedAt: now };
+      grants.set(key, grant);
+      return ok(copyGrant(grant));
+    },
+    getGrant: async (circleId, ownerId, granteeId) => {
+      const g = grants.get(grantKey(circleId, ownerId, granteeId));
+      return g === undefined ? undefined : copyGrant(g);
+    },
+    listGrantsBy: async (circleId, ownerId, p) => {
+      const rows = [...grants.values()].filter((g) => g.circleId === circleId && g.ownerId === ownerId).sort((a, b) => (a.granteeId < b.granteeId ? -1 : 1)).map(copyGrant);
+      return page(rows, (r) => r.granteeId, p);
+    },
+    listGrantsTo: async (circleId, granteeId, p) => {
+      const rows = [...grants.values()].filter((g) => g.circleId === circleId && g.granteeId === granteeId).sort((a, b) => (a.ownerId < b.ownerId ? -1 : 1)).map(copyGrant);
+      return page(rows, (r) => r.ownerId, p);
+    },
+    withdrawGrant: async (circleId, ownerId, granteeId) => grants.delete(grantKey(circleId, ownerId, granteeId)),
     purgeExpired: async (now) => {
       let removed = 0;
       for (const [id, i] of invitations) {

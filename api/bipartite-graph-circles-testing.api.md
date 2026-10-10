@@ -5,7 +5,11 @@
 ```ts
 
 // @public (undocumented)
+export type CaseGroup = 'core' | 'grants';
+
+// @public (undocumented)
 export interface CircleStoreCase {
+    readonly group?: CaseGroup;
     // (undocumented)
     readonly name: string;
     // Warning: (ae-forgotten-export) The symbol "CircleStore" needs to be exported by the entry point index.d.ts
@@ -15,6 +19,7 @@ export interface CircleStoreCase {
 // @public (undocumented)
 export interface ConformanceOptions {
     dispose?: (store: CircleStore) => Promise<void> | void;
+    groups?: readonly CaseGroup[];
 }
 
 // @public

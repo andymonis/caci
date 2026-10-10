@@ -166,8 +166,12 @@ export interface CircleStore {
     // (undocumented)
     getCircle(id: string): Promise<Circle | undefined>;
     // (undocumented)
+    getGrant(circleId: string, ownerId: string, granteeId: string): Promise<Grant | undefined>;
+    // (undocumented)
     getInvitation(id: string): Promise<Invitation | undefined>;
     listCirclesOf(userId: string, page: CirclePage): Promise<Listing<CircleSummary>>;
+    listGrantsBy(circleId: string, ownerId: string, page: CirclePage): Promise<Listing<Grant>>;
+    listGrantsTo(circleId: string, granteeId: string, page: CirclePage): Promise<Listing<Grant>>;
     listInvitationsFor(username: string, now: number, page: CirclePage): Promise<Listing<Invitation>>;
     listInvitationsOfCircle(circleId: string, now: number, page: CirclePage): Promise<Listing<Invitation>>;
     listMembers(circleId: string, page: CirclePage): Promise<Listing<Membership>>;
@@ -177,7 +181,9 @@ export interface CircleStore {
     removeMember(circleId: string, userId: string): Promise<Result<boolean, CirclesError>>;
     removeUser(userId: string, username: string): Promise<RemoveUserOutcome>;
     revokeInvitation(invitationId: string, circleId: string, now: number): Promise<boolean>;
+    setGrant(circleId: string, ownerId: string, granteeId: string, categories: readonly string[], now: number, limits: GrantLimits): Promise<Result<Grant | undefined, CirclesError>>;
     updateCircle(id: string, patch: CirclePatch): Promise<Result<Circle, CirclesError>>;
+    withdrawGrant(circleId: string, ownerId: string, granteeId: string): Promise<boolean>;
 }
 
 // @public
@@ -246,6 +252,24 @@ export type Err<E> = {
     readonly ok: false;
     readonly error: E;
 };
+
+// @public
+export interface Grant {
+    // (undocumented)
+    readonly categories: readonly string[];
+    // (undocumented)
+    readonly circleId: string;
+    // (undocumented)
+    readonly granteeId: string;
+    // (undocumented)
+    readonly ownerId: string;
+    readonly updatedAt: number;
+}
+
+// @public (undocumented)
+export interface GrantLimits {
+    readonly maxCategoriesPerGrant: number;
+}
 
 // @public (undocumented)
 export type Invitation = InvitationRecord;

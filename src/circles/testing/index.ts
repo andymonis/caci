@@ -2,7 +2,7 @@ import type { CircleStore } from '../store.js';
 import { circleStoreCases } from './cases.js';
 import type { ConformanceOptions, MakeCircleStore, TestApi } from './types.js';
 
-export type { CircleStoreCase, ConformanceOptions, MakeCircleStore, TestApi } from './types.js';
+export type { CaseGroup, CircleStoreCase, ConformanceOptions, MakeCircleStore, TestApi } from './types.js';
 
 /**
  * Registers the circle store conformance suite with your test runner. Every `CircleStore` must pass it.
@@ -17,7 +17,8 @@ export type { CircleStoreCase, ConformanceOptions, MakeCircleStore, TestApi } fr
  */
 export function runCircleStoreConformance(makeStore: MakeCircleStore, testApi: TestApi, options: ConformanceOptions = {}): void {
   testApi.describe('circle store conformance', () => {
-    for (const testCase of circleStoreCases()) {
+    const wanted = options.groups ?? (['core', 'grants'] as const);
+    for (const testCase of circleStoreCases().filter((c) => wanted.includes(c.group ?? 'core'))) {
       testApi.it(testCase.name, async () => {
         const made: CircleStore[] = [];
         const makeOne = async (): Promise<CircleStore> => {
