@@ -117,19 +117,19 @@ Statuses reuse the circle table: 401 `UNAUTHENTICATED`, 403 `FORBIDDEN` is **not
 
 ## Threats and controls
 
-Each row gets, in T-151, the test that covers it.
+Each row names the tests that cover it. `src/service/review.test.ts` fails the build if a named test file or test disappears.
 
-| Threat | Control |
-|--------|---------|
-| A member reading outside their grant (a private category, an item reachable only through one) | Every read is filtered by the current grant; an item must be filed under a shared category; a private id gives the same not-found as a made-up one (D10, D12, WS-FR-05, WS-FR-08) |
-| A private category's name or existence leaking through an item's categories or a count | Item detail names only shared categories; counts count only shared categories (D10, WS-NFR-01) |
-| A grant outliving membership (leaving, removal, account deletion, circle deletion) | Grants end in the same transaction as the membership change, in both stores, tested against each other (D6, WS-FR-07, WS-NFR-02) |
-| A request naming another graph (a user id, a graph id, a category of someone else) | The owner is a path parameter that must be a current member with a grant to the caller; the graph is derived from it; categories are checked against the owner's graph at grant time (D8, WS-NFR-05) |
-| Re-sharing what a grantee can see | A grant names only categories of the granter's own graph; a grantee has no way to name another person's category (D11, WS-FR-10) |
-| A stranger or the platform admin reading shared data | Membership and a grant are required; the admin has no exception; the answer is the one for a missing circle (D12, D13) |
-| A withdrawn or narrowed grant still used | No caching: membership and grant are re-checked on every request (D9, WS-FR-06) |
-| Enumerating who shares with whom, or which ids exist | One not-found answer for every case; only the caller's own shares are listed (D12, WS-FR-08) |
-| A write reaching a graph through this piece | The component has no write path; a recording adapter shows none is ever called (D1, WS-FR-09) |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| A member reading outside their grant (a private category, an item reachable only through one) | Every read is filtered by the current grant; an item must be filed under a shared category; a private id gives the same not-found as a made-up one (D10, D12, WS-FR-05, WS-FR-08) | `src/sharing/shared-reads.test.ts` — "gives one not-found answer for everything that is not shared"; `src/service/sharing-end-to-end.test.ts` — "a member reads exactly what was shared, and a private category"; `web/sharing-sessions-service.test.mjs` — "a private category and an item reachable only through it read as gone"; `web/sharing-service.test.mjs` — "shares, reads exactly what was shared" |
+| A private category's name or existence leaking through an item's categories or a count | Item detail names only shared categories; counts count only shared categories (D10, WS-NFR-01) | `src/sharing/shared-reads.test.ts` — "shows one item with only its shared categories named"; `src/sharing/shared-reads.test.ts` — "lists only shared categories with counts of the items under them"; `web/sharing-journey.test.mjs` — "ann shares two categories with bob; bob reads exactly those" |
+| A grant outliving membership (leaving, removal, account deletion, circle deletion) | Grants end in the same transaction as the membership change, in both stores, tested against each other (D6, WS-FR-07, WS-NFR-02) | `src/circles/testing/cases.ts` — "leaving a circle ends every grant the person made or held there, and only there"; `src/circles/testing/cases.ts` — "deleting the circle ends every grant in it, and a new circle starts with none"; `src/circles/testing/cases.ts` — "removing a person (an account gone) ends their grants in every circle"; `src/circles/sqlite/grants.test.ts` — "deleting an account (the user-row trigger) ends its grants everywhere"; `src/circles/sqlite/grants.test.ts` — "random circles, grants and removals, seed %i"; `src/service/sharing.test.ts` — "end when the person is removed, leaves or deletes the account, and with the circle" |
+| A request naming another graph (a user id, a graph id, a category of someone else) | The owner of a read is a path parameter that must be a current member with a grant to the caller; the graph is derived from it; the owner of a grant is the session; categories are checked against the owner's graph at grant time (D8, WS-NFR-05) | `src/sharing/grants.test.ts` — "the owner always comes from the session"; `src/sharing/grants.test.ts` — "every category must be one of the caller"; `src/api/sharing-routes.test.ts` — "the body takes categories and nothing else: owner, graph and user ids are refused by name"; `src/service/sharing-end-to-end.test.ts` — "is strict: unknown parameters are refused by name, ids are never taken from the path or a body" |
+| Re-sharing what a grantee can see | A grant names only categories of the granter's own graph; a grantee has no way to name another person's category (D11, WS-FR-10) | `src/sharing/grants.test.ts` — "the owner always comes from the session"; `src/sharing/grants.test.ts` — "a grant is one direction, and a role carries nothing"; `src/circles/testing/cases.ts` — "a grant is one direction: sharing with someone does not share back"; `src/sharing/shared-reads.test.ts` — "never reads the grantee" |
+| A stranger or the platform admin reading shared data | Membership and a grant are required; the admin has no exception; the answer is the one for a missing circle (D12, D13) | `src/service/sharing-end-to-end.test.ts` — "a stranger and the administrator read nothing, from all four routes"; `src/api/sharing-routes.test.ts` — "a stranger gets the answer for a made-up circle from all three routes"; `src/sharing/shared-reads.test.ts` — "a stranger, a non-text token and a made-up circle all read as no such circle" |
+| A withdrawn or narrowed grant still used | No caching: membership and grant are re-checked on every request (D9, WS-FR-06) | `src/sharing/shared-reads.test.ts` — "re-checks the grant on every call: narrowing and withdrawing take effect at once"; `src/service/sharing-end-to-end.test.ts` — "narrowing and withdrawing take effect on the next request"; `web/sharing-sessions-service.test.mjs` — "withdrawing makes what was open read as gone" |
+| Enumerating who shares with whom, or which ids exist | One not-found answer for every case; only the caller's own shares are listed (D12, WS-FR-08) | `src/sharing/shared-reads.test.ts` — "gives one not-found answer for everything that is not shared"; `src/service/sharing-end-to-end.test.ts` — "a member reads exactly what was shared, and a private category"; `web/sharing-client.test.mjs` — "404 is told apart by the service" |
+| A write reaching a graph through this piece | The component has no write path; a recording adapter shows none is ever called (D1, WS-FR-09) | `src/sharing/shared-reads.test.ts` — "is read only: no write primitive is ever called by any read"; `src/sharing/grants.test.ts` — "no write primitive is called by any grant operation, successful or refused" |
 
 ## What the person is told
 
@@ -162,6 +162,40 @@ Before anyone's data other than the owner's is held, or the service is offered t
 | WS-AC-08 | Awkward ids (spaces, markup, slashes, emoji, 256 characters) work for categories and items, only in the query string. |
 | WS-AC-09 | A database at version 4 upgrades to version 5 with everything else untouched, and the memory and SQLite stores agree over random worlds. |
 | WS-AC-10 | A scan of every response finds no private category name, no graph id and no other person's data. |
+
+### Where each criterion is checked (T-151)
+
+| ID | Where |
+|----|-------|
+| WS-AC-01 | `src/sharing/shared-reads.test.ts` — "lists only shared categories with counts of the items under them"; `src/service/sharing-end-to-end.test.ts` — "a member reads exactly what was shared, and a private category"; `web/sharing-journey.test.mjs` — "ann shares two categories with bob; bob reads exactly those" |
+| WS-AC-02 | `src/sharing/shared-reads.test.ts` — "shows one item with only its shared categories named"; `src/service/sharing-end-to-end.test.ts` — "a member reads exactly what was shared, and a private category"; `web/sharing-sessions-service.test.mjs` — "a private category and an item reachable only through it read as gone" |
+| WS-AC-03 | `src/sharing/shared-reads.test.ts` — "re-checks the grant on every call: narrowing and withdrawing take effect at once"; `src/service/sharing-end-to-end.test.ts` — "narrowing and withdrawing take effect on the next request"; `web/sharing-sessions-service.test.mjs` — "withdrawing makes what was open read as gone" |
+| WS-AC-04 | `src/circles/testing/cases.ts` — "leaving a circle ends every grant the person made or held there, and only there"; `src/circles/testing/cases.ts` — "deleting the circle ends every grant in it, and a new circle starts with none"; `src/circles/testing/cases.ts` — "removing a person (an account gone) ends their grants in every circle"; `src/service/sharing.test.ts` — "end when the person is removed, leaves or deletes the account, and with the circle"; `src/service/sharing-end-to-end.test.ts` — "leaving, being removed and rejoining end access and resurrect nothing" |
+| WS-AC-05 | `src/service/sharing-end-to-end.test.ts` — "a stranger and the administrator read nothing, from all four routes"; `src/service/sharing-end-to-end.test.ts` — "a member reads exactly what was shared, and a private category"; `src/api/sharing-routes.test.ts` — "a stranger gets the answer for a made-up circle from all three routes" |
+| WS-AC-06 | `src/sharing/grants.test.ts` — "every category must be one of the caller"; `src/sharing/grants.test.ts` — "a grant to oneself is refused, naming granteeId"; `src/sharing/grants.test.ts` — "at most 3 with that limit; exactly 3 is fine; the default is 200"; `src/api/sharing-routes.test.ts` — "refuses sharing with yourself (422) or with someone who is not in the circle (404)" |
+| WS-AC-07 | `src/sharing/shared-reads.test.ts` — "is read only: no write primitive is ever called by any read"; `src/sharing/grants.test.ts` — "no write primitive is called by any grant operation, successful or refused" |
+| WS-AC-08 | `src/sharing/shared-reads.test.ts` — "awkward ids work"; `src/service/sharing-end-to-end.test.ts` — "a member reads exactly what was shared, and a private category"; `web/sharing-client.test.mjs` — "reads categories, a category"; `web/sharing-service.test.mjs` — "shares, reads exactly what was shared" |
+| WS-AC-09 | `src/circles/sqlite/grants.test.ts` — "a version 4 database is upgraded without touching its users, circles, members or invitations"; `src/circles/sqlite/grants.test.ts` — "random circles, grants and removals, seed %i" |
+| WS-AC-10 | `src/service/sharing-end-to-end.test.ts` — "a member reads exactly what was shared, and a private category"; `src/api/sharing-routes.test.ts` — "never reveals a private category"; `web/sharing-journey.test.mjs` — "ann shares two categories with bob; bob reads exactly those" |
+
+The end-to-end test (`src/service/sharing-end-to-end.test.ts`) also ends with a scan of every response its readers received: none holds the private category's name, the hidden note's title, a password, a hash, an email or a graph id.
+
+**Looked at by hand in Chrome (T-150, recorded in STATE.md):** the sharing screens by mouse, the focus after each step, an injected script blocked, no browser storage, and the private category appearing nowhere on the reader's page.
+
+### Residual risks (not covered, with the reason)
+
+These are real and known; the ones that can be acted on are in the PLAN Backlog.
+
+1. **A member can copy what they see by hand.** Read-only means the service offers no write path and no export, not that a person cannot read a note aloud, take a screenshot or paste it elsewhere. No technical control prevents that; the legal groundwork (release gates) is where it is addressed.
+2. **Nobody is told.** The person who receives a share is not told when it starts, changes or ends, and the owner is not told who read what; the page says so in its own words.
+3. **Derived information is visible.** The names of shared categories, how many items are under each, the weights of an item's links and the number of categories shared reveal something about the owner's brain even though nothing else does.
+4. **Free text can mention what is private.** An item's data is shown as written (capped); if its title or summary names a private subject, the reader sees those words. Only the filing is filtered, not the prose.
+5. **A view is as old as its last load.** "Shared with you" is not live and two tabs do not know about each other; the service re-checks everything on every request, so a stale page can only show something that is then refused.
+6. **The release gates are not met.** Pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment and a statement of who may use the service are recorded in this specification and not built: do not use sharing with other people's data until they are.
+7. **The real model still receives notes, whoever may later read them.** Sharing changes who can read a brain, not what is sent to Anthropic when a note is captured with `CACI_LLM=anthropic` (R-003 residual risk 1).
+8. **Files are readable in plain text** by whoever can read the data folder (R-002 and R-004 residual risks); the grants table is no exception.
+9. **An item filed under more than 200 categories** may not show a shared category that falls outside the first page of its links; the read fails closed (it shows less, never more).
+10. **What was looked at by eye is one browser on one machine.** Narrow and dark layouts and a screen reader were not tried by hand; the structure is covered by checks on the pages.
 
 ## Build order
 
