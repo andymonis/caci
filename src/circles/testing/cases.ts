@@ -163,6 +163,23 @@ export function circleStoreCases(): readonly CircleStoreCase[] {
       },
     },
     {
+      name: 'every circle that exists is listed by id, in pages without gaps or repeats, and a deleted one is gone',
+      run: async (store) => {
+        assert.deepEqual(await store.listCircleIds({ limit: 5, cursor: null }), { items: [], nextCursor: null });
+        await circleWith(store, 3);
+        await circleWith(store, 1);
+        must(await store.createCircle({ id: cid(2), name: 'Other owner', createdAt: NOW }, uid(5), LIMITS));
+        await circleWith(store, 4);
+        assert.deepEqual(await allPages((p) => store.listCircleIds(p), 2), [1, 2, 3, 4].map(cid));
+        assert.equal((await store.listCircleIds({ limit: 4, cursor: null })).nextCursor, null);
+        assert.notEqual((await store.listCircleIds({ limit: 3, cursor: null })).nextCursor, null);
+        await store.deleteCircle(cid(3));
+        assert.deepEqual(await allPages((p) => store.listCircleIds(p), 2), [1, 2, 4].map(cid));
+        for (const limit of [0, -1, 1.5, Number.NaN]) assert.ok((await thrown(() => store.listCircleIds({ limit, cursor: null }))) instanceof RangeError, `limit ${limit}`);
+        assert.ok((await thrown(() => store.listCircleIds({ limit: 5, cursor: 'not-a-cursor' }))) instanceof RangeError);
+      },
+    },
+    {
       name: 'a page that exactly fills the limit has no next cursor, and a page with more has one',
       run: async (store) => {
         for (let n = 1; n <= 4; n++) await circleWith(store, n);

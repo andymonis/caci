@@ -26,6 +26,12 @@ export function parseScope(input: unknown): ScopesResult<Scope>;
 export const PERSONAL: Scope;
 
 // @public
+export function planReconcile(circleIds: Iterable<string>, graphIds: Iterable<string>): {
+    create: string[];
+    drop: string[];
+};
+
+// @public
 export type Provenance = {
     readonly kind: 'personal';
 } | {
@@ -33,6 +39,27 @@ export type Provenance = {
     readonly circleId: string;
     readonly circleName: string;
 };
+
+// @public
+export function reconcileCircleGraphs(init: ReconcileInit): Promise<ScopesResult<ReconcileReport>>;
+
+// @public (undocumented)
+export interface ReconcileInit {
+    // Warning: (ae-forgotten-export) The symbol "CircleStore" needs to be exported by the entry point index.d.ts
+    readonly circles: Pick<CircleStore, 'listCircleIds'>;
+    // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly graphAdapter: StorageAdapter;
+    readonly maxDrops?: number;
+}
+
+// @public (undocumented)
+export interface ReconcileReport {
+    readonly created: readonly string[];
+    readonly dropped: readonly string[];
+    readonly skipped: readonly string[];
+}
 
 // @public
 export interface ResolvedScope {
@@ -64,7 +91,6 @@ export interface ScopeResolver {
 
 // @public (undocumented)
 export interface ScopeResolverInit {
-    // Warning: (ae-forgotten-export) The symbol "CircleStore" needs to be exported by the entry point index.d.ts
     readonly store: Pick<CircleStore, 'membershipOf' | 'getCircle'>;
     // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
     readonly users: Pick<UserController, 'resolve'>;

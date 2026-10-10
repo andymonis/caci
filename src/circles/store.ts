@@ -122,6 +122,8 @@ export interface CircleStore {
   membershipOf(circleId: string, userId: string): Promise<Membership | undefined>;
   /** The circles a person is in, by circle id, with keyset paging. */
   listCirclesOf(userId: string, page: CirclePage): Promise<Listing<CircleSummary>>;
+  /** The id of every circle that exists, by id: for tools that keep something else in step with the circles (R-009's reconcile). Paged like every listing. */
+  listCircleIds(page: CirclePage): Promise<Listing<string>>;
   /** The members of a circle by user id; empty for a missing circle. */
   listMembers(circleId: string, page: CirclePage): Promise<Listing<Membership>>;
 

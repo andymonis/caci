@@ -141,6 +141,7 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
       return m === undefined ? undefined : out(m);
     },
     listCirclesOf: async (u, p) => page(circlesOf(u).map((id) => ({ circle: out(circles.get(id) as Circle), role: (members.get(id)?.get(u) as Membership).role, joinedAt: (members.get(id)?.get(u) as Membership).joinedAt, memberCount: members.get(id)?.size ?? 0 })), (r) => r.circle.id, p),
+    listCircleIds: async (p) => page([...circles.keys()].sort((a, b) => (a < b ? -1 : 1)), (id) => id, p),
     listMembers: async (c, p) => page([...(members.get(c)?.values() ?? [])].sort((a, b) => (a.userId < b.userId ? -1 : 1)).map(out), (r) => r.userId, p),
 
     changeRole: async (c, u, role): Promise<Result<Membership, CirclesError>> => {

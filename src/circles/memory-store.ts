@@ -76,6 +76,7 @@ export function createMemoryCircleStore(): CircleStore {
       });
       return page(rows, (r) => r.circle.id, p);
     },
+    listCircleIds: async (p) => page([...circles.keys()].sort((a, b) => (a < b ? -1 : 1)), (id) => id, p),
     listMembers: async (circleId, p) => {
       const rows = [...(members.get(circleId)?.values() ?? [])].sort((a, b) => (a.userId < b.userId ? -1 : 1)).map(copyMember);
       return page(rows, (r) => r.userId, p);

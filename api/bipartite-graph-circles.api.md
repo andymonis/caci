@@ -169,6 +169,7 @@ export interface CircleStore {
     getGrant(circleId: string, ownerId: string, granteeId: string): Promise<Grant | undefined>;
     // (undocumented)
     getInvitation(id: string): Promise<Invitation | undefined>;
+    listCircleIds(page: CirclePage): Promise<Listing<string>>;
     listCirclesOf(userId: string, page: CirclePage): Promise<Listing<CircleSummary>>;
     listGrantsBy(circleId: string, ownerId: string, page: CirclePage): Promise<Listing<Grant>>;
     listGrantsTo(circleId: string, granteeId: string, page: CirclePage): Promise<Listing<Grant>>;

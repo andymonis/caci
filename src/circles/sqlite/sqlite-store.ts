@@ -165,6 +165,13 @@ export function createSqliteCircleStore(options: SqliteCircleStoreOptions = {}):
         (row) => row.id,
         (row) => ({ circle: circleOf(row), role: row.role, joinedAt: Number(row.joined_at), memberCount: Number(row.member_count) }),
       ),
+    listCircleIds: async (page) =>
+      listing<{ id: string }, string>(
+        page,
+        (after, take) => (after === undefined ? db.all<{ id: string }>('SELECT id FROM circles ORDER BY id LIMIT ?', take) : db.all<{ id: string }>('SELECT id FROM circles WHERE id > ? ORDER BY id LIMIT ?', after, take)),
+        (row) => row.id,
+        (row) => row.id,
+      ),
     listMembers: async (circleId, page) =>
       listing<MemberRow, Membership>(
         page,
