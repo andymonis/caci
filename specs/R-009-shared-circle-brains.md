@@ -2,7 +2,9 @@
 
 Oct 9, 2026 · @Andy
 
-**Status: not implemented.** This is a different design from R-008 (`specs/R-008-shared-brains.md`, built as S1: read-only grants of chosen categories between members). The two disagree on who owns the shared data, who may write and whether per-member grants exist, so R-009 stays on file as an alternative or a later step and needs reconciling with R-008 before any work starts.
+**Status: being built as S2 (T-153 to T-170).** Revised 2026-10-10 with the owner's answers: observers may read a circle brain and cannot capture; tasks and actions are not stored in the brain (they are pushed to external tools such as a calendar at categorisation time, a Backlog item); editing and deleting shared items is nobody in v1.
+
+**Relation to R-008.** R-008 (`specs/R-008-shared-brains.md`, built as S1) lets a person share chosen categories of their **own personal brain**, read-only, with one named member. R-009 is a **circle-owned brain** that many members capture into and read. They are separate features that coexist: R-009 never reads a personal brain through a grant, R-008 never touches a circle graph, and a personal capture is unchanged. Whether to retire R-008 later is a Backlog decision.
 
 ## Overview
 
@@ -21,7 +23,7 @@ This specification **supersedes R-004's no-data-sharing non-goal** for the scope
 | D1 | Every account keeps its existing personal graph: `user-<userId>`. | Existing R-002 ownership and isolation remain valid. |
 | D2 | Every circle owns one persistent graph: `circle-<circleId>`. | A circle is the access boundary; separate graphs make accidental cross-circle reads impossible by construction. |
 | D3 | A circle graph persists when a member leaves or is removed. Their previous contributions remain. | Shared records may remain important to the people still in the circle. |
-| D4 | `owner`, `manager` and `member` may read and add shared circle information. `observer` has no shared-brain access in v1. | The owner chose the first three roles for sharing; an observer remains a membership-only role until a later policy changes it. |
+| D4 | `owner`, `manager` and `member` may read and add shared circle information. **`observer` may read but not add** (owner decision, 2026-10-10). | Observers follow a circle without changing what it knows. |
 | D5 | Every item captured into a circle is shared with every current role authorised by D4. No private circle item exists in v1. | The owner chose fully shared circle information for now. Private visibility is future scope. |
 | D6 | Capture explicitly names one target scope: personal or one circle. A capture never writes to several graphs. | Removes ambiguity and preserves atomicity within one graph. |
 | D7 | My Brain is a virtual aggregate, never a copied or materialised graph. Every result discloses whether it came from the personal graph or which circle. | Avoids stale duplicates and immediately removes access when membership changes. |
@@ -60,7 +62,7 @@ This specification **supersedes R-004's no-data-sharing non-goal** for the scope
 - **Circle Brain view**: a view of exactly one circle brain, after current membership and role checks.
 - **Provenance**: source information attached to a result: `{ kind: "personal" }` or `{ kind: "circle", circleId, circleName }`.
 - **Contribution**: a capture approved into a circle brain. `createdBy` and `createdAt` are application-owned metadata when stored; they are not trusted model output.
-- **Authorised sharing roles**: `owner`, `manager`, and `member`. `observer` is not an authorised sharing role in v1.
+- **Reading roles**: `owner`, `manager`, `member` and `observer`. **Capturing roles**: `owner`, `manager` and `member`. (There is no other role and no role with direct edit or delete rights.)
 
 ## Architecture and boundaries
 
@@ -90,11 +92,11 @@ The service wires the resolver, the CaCi controller and routes. The graph store 
 | SC-FR-02 | **Persistent records.** Leaving, removal, role change, invitation expiry, and account deletion of a former contributor do not remove or alter the circle graph's existing nodes or edges. Deleting the whole circle removes the whole circle graph. |
 | SC-FR-03 | **Scope validation.** Capture, browse and future context requests accept only the two closed scope shapes. Unknown keys, malformed circle ids and a caller-supplied graph id are refused before any graph or model operation. |
 | SC-FR-04 | **Personal scope.** A personal scope resolves only to the caller's personal graph. A client cannot name another user, another graph, or a circle through this scope. |
-| SC-FR-05 | **Circle scope authorisation.** A circle scope resolves only when the caller is a current `owner`, `manager` or `member` of that exact circle. `observer`, a non-member, a removed member, and a made-up circle receive the same not-found response. |
+| SC-FR-05 | **Circle scope authorisation.** A circle scope resolves for reading only when the caller is a current `owner`, `manager`, `member` or `observer` of that exact circle, and for capturing only when a current `owner`, `manager` or `member`. A non-member, a removed member and a made-up circle receive the same not-found response for both; an `observer` asking to capture receives that same not-found response. |
 | SC-FR-06 | **Scoped capture.** Propose, preview, approve and reject target exactly the scope selected at proposal creation. The proposal records immutable internal scope and graph bindings; approval cannot redirect it even if a request, session or circle changes later. |
-| SC-FR-07 | **Shared capture.** An approved circle-scope proposal writes only to that circle graph. Every current authorised sharing-role member can subsequently browse it. No circle-scope capture writes to a contributor's personal graph or another circle graph. |
+| SC-FR-07 | **Shared capture.** An approved circle-scope proposal writes only to that circle graph. Every current member in a reading role can subsequently browse it. No circle-scope capture writes to a contributor's personal graph or another circle graph. |
 | SC-FR-08 | **Model context isolation.** A circle-scope proposal reads categorisation context only from the selected circle graph. A personal proposal reads only the personal graph. Categories or items from any other scope are never included in the prompt. |
-| SC-FR-09 | **Circle browsing.** An authorised sharing-role member can browse graph summary, categories, category items and item details for one selected circle. Results include that circle's provenance and contain no data from personal or other circle graphs. |
+| SC-FR-09 | **Circle browsing.** A current member in a reading role can browse graph summary, categories, category items and item details for one selected circle. Results include that circle's provenance and contain no data from personal or other circle graphs. |
 | SC-FR-10 | **My Brain aggregate.** A signed-in person can browse an aggregate of the personal graph plus every circle graph they are currently authorised to read. Aggregation never creates, changes or persists graph data. |
 | SC-FR-11 | **Aggregate provenance.** Every aggregate category, item, edge-derived detail and count identifies its source scope. Results from different scopes with identical node ids remain distinct; provenance is part of aggregate identity and pagination. |
 | SC-FR-12 | **Deterministic aggregate paging.** My Brain lists are ordered deterministically by provenance kind, circle id, partition and node id in UTF-16 order. Cursors are opaque and bound to the requested view and the readable-scope set, so they cannot be replayed for another user or after scope membership changes. |
@@ -109,7 +111,7 @@ The service wires the resolver, the CaCi controller and routes. The graph store 
 | owner | Existing owner rights | Yes | Yes | No |
 | manager | Existing manager rights | Yes | Yes | No |
 | member | Existing member rights | Yes | Yes | No |
-| observer | Existing observer rights | No | No | No |
+| observer | Existing observer rights | Yes | No | No |
 | non-member | None | No | No | No |
 
 The final column preserves the existing capture model: graph mutations are created only by CaCi after model proposal and human approval. The edit/delete policy for previously stored shared items is intentionally not defined in v1.
@@ -146,7 +148,7 @@ An HTTP response must never include a raw graph id, another member's private gra
 
 ## Privacy and safety constraints
 
-1. A circle graph contains information deliberately shared with all current authorised sharing-role members. The interface must say this before capture and when browsing a circle.
+1. A circle graph contains information deliberately shared with every current member, observers included. The interface must say this before capture and when browsing a circle.
 2. Leaving, removal and account deletion prevent future service access but cannot retract data a person has already read, copied or remembered.
 3. Shared-circle data may concern people who do not have accounts. It is sensitive personal data. Do not enable an external LLM for real shared data until the pseudonymisation and legal/privacy work in the backlog is completed and accepted.
 4. In demo mode, nothing leaves the service. In Anthropic mode, any data admitted to the model context would leave the service. Scope isolation alone is not pseudonymisation or consent.
@@ -171,7 +173,7 @@ An HTTP response must never include a raw graph id, another member's private gra
 | Threat | Control |
 |---|---|
 | A member of Circle A reads Circle B | Scope resolver checks current membership for the exact circle; each graph read is independently scoped; aggregate includes only authorised circles. |
-| An observer reads or writes shared records | Authorisation matrix excludes observers; tests compare observer, stranger and made-up-circle responses. |
+| An observer captures into shared records, or a stranger reads them | The matrix lets observers read only; an observer's capture request gets the same not-found as a stranger's; tests compare the three. |
 | A removed member keeps using a saved URL or proposal | Membership is rechecked on every direct read and approval; direct requests become not found, and My Brain omits the circle. |
 | A proposal created for one circle is approved into another | Proposal stores immutable resolved scope and graph binding; approval ignores client scope input and rechecks membership. |
 | LLM receives context from another circle | Context fetch accepts a resolved graph only; provider-request tests seed distinctive data in other scopes and prove it is absent. |
@@ -188,7 +190,7 @@ An HTTP response must never include a raw graph id, another member's private gra
 | SC-AC-01 | Given a user in Parent Circle and In-law Circle, when they capture one note into each, then each circle view returns only its own note and no direct query crosses circles. |
 | SC-AC-02 | Given Circle A and Circle B contain nodes with the same ids, when My Brain is listed, then both results appear separately with their correct circle provenance. |
 | SC-AC-03 | Given a personal note and notes from two authorised circles, when My Brain is listed, then it returns all and only those scopes with explicit provenance and deterministic order. |
-| SC-AC-04 | Given a member has an approved circle-scope note, when another authorised member views the circle, then they see it; when an observer or stranger does, then they receive the same not-found response. |
+| SC-AC-04 | Given a member has an approved circle-scope note, when another member (owner, manager, member or observer) views the circle, then they see it; when a stranger does, or an observer tries to capture, then they receive the same not-found response. |
 | SC-AC-05 | Given a member leaves or is removed, when they request that circle or My Brain, then the direct request is not found and the circle is absent from My Brain; records remain visible to remaining authorised members. |
 | SC-AC-06 | Given a proposal is made for Circle A, when approval is attempted with a changed request scope or after losing Circle A membership, then it never writes to any graph; the response follows the fixed refusal policy. |
 | SC-AC-07 | Given distinctive categories and items in personal, Circle A and Circle B graphs, when a proposal is made in each scope, then the captured LLM request contains context from only that scope. |
@@ -204,17 +206,15 @@ An HTTP response must never include a raw graph id, another member's private gra
 
 1. **Specification and boundaries.** Register R-009, update R-004/R-003/README wording that says circles share no data, update the container diagram, and define the cross-store lifecycle/repair contract. Exit: decisions, API scope types, security review template and acceptance criteria are approved.
 2. **Scope resolver and graph lifecycle.** Add trusted `circleGraphId`, create/drop compensation, repair handling, and tests for create/delete failures. Exit: SC-FR-01/02 and SC-AC-08/09.
-3. **Circle authorisation policy.** Add the sharing-role decision independently of R-004 administration rights, with a pure table and membership-at-use-time tests. Exit: SC-FR-05/13 and SC-AC-04/05/12.
+3. **Circle authorisation policy.** Add the read and capture decisions independently of R-004 administration rights, with a pure table and membership-at-use-time tests. Exit: SC-FR-05/13 and SC-AC-04/05/12.
 4. **Scoped capture.** Extend CaCi proposal ownership, model context loading, preview and approval with immutable scope binding. Preserve personal compatibility. Exit: SC-FR-03 to 08, 14 and SC-AC-01/06/07/11.
 5. **Scoped browse.** Add circle-brain browse routes and provenance-bearing response types. Exit: SC-FR-09 and direct isolation cases.
 6. **My Brain aggregation.** Implement bounded deterministic fan-out, provenance identity, aggregate cursors and aggregate route/view. Exit: SC-FR-10 to 12 and SC-AC-02/03/10/13.
 7. **Web app.** Let a person choose a visible scope before capture and browse personal, one circle or My Brain. State the sharing/model notice before a circle capture. Exit: accessible, text-only UI journey over two circles.
 8. **End-to-end, review and documentation.** Test real SQLite service behaviour through role and membership changes; complete threat/criterion mapping, docs and residual risks. Exit: all SC-AC checks mapped to durable tests and `npm run gate` passes.
 
-## Open decisions before implementation
+## Decisions settled for the first release
 
-1. Who may edit or delete an approved shared item: its contributor, owners/managers, both, or nobody in the first release?
-2. What is the explicit repair record and operator workflow when compensation between `users.db` and `graphs.db` fails?
-3. Are circle graph records retained forever after a circle is deleted, or is deleting a circle a confirmed irreversible deletion as specified here?
-4. What model and data policy permits real shared-circle capture, given that scope isolation does not pseudonymise sensitive data?
-5. How should future care-subject/person records be represented so a question such as “which prescriptions need collecting for A and B?” can correctly identify people without coupling the core graph library to a care-domain model?
+1. **Editing and deleting an approved shared item:** nobody in v1 (the graph is append-only for members; whole-circle deletion is the only removal). A later release may let the contributor or owners and managers remove an item, with an audit trail.
+2. **Cross-store repair:** there is no repair table. An idempotent **reconcile** compares circle records with circle graphs, creates a missing graph and drops a graph whose circle no longer exists; it runs at start-up and after an account deletion (which can dissolve a circle through the database trigger). A failed compensation is a fixed storage failure that the next reconcile repairs.
+3. **Tasks and actions:** out of scope; if something needs doing it is pushed to an external tool (such as a calendar) at categorisation time, which needs its own specification.
