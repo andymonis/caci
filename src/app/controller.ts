@@ -1,4 +1,4 @@
-import { err, ok, write, type GraphError, type GraphOptions, type Mutation, type Result, type StorageAdapter, type WriteOutput } from '../graph_store/index.js';
+import { err, ok, write, type GraphError, type GraphOptions, type JsonValue, type Mutation, type Result, type StorageAdapter, type WriteOutput } from '../graph_store/index.js';
 import type { CategoriseOptions, Llm, LlmError } from '../llm/index.js';
 import { appError, type AppError } from './errors.js';
 import { createItemIdGenerator, type ItemIdGenerator } from './ids.js';
@@ -36,6 +36,12 @@ export interface ControllerInit {
 export interface ProposeOptions {
   /** Passed on to `categorise` (model, tier, time limit, cancellation, limits). */
   readonly categorise?: CategoriseOptions;
+  /**
+   * Who is adding this note, to be recorded on the item it creates (`contributedBy`, and `contributedAt` from the
+   * controller's clock). Set by trusted code after the model has answered; whatever the model put under those two
+   * names, on any node, is removed first, so the model cannot set, replace or forge them.
+   */
+  readonly stamp?: { readonly contributedBy: string };
 }
 
 /** What a successful approval returns. */
@@ -105,6 +111,18 @@ export function createController(init: ControllerInit): Controller {
   const store = createPendingStore({ now, ttlMs: settings.ttlMs, maxPending: settings.maxPending });
   const { adapter, llm, graphOptions } = init;
 
+  /** The mutation with the two contribution fields removed from every upsert and then set on the item this proposal creates (the guard allows exactly one item upsert). */
+  function stamped(mutation: Mutation, contributedBy: string, at: number): Mutation {
+    const ops = mutation.ops.map((op) => {
+      if (op.op !== 'upsertNode') return op;
+      const data = { ...((op.data ?? {}) as Record<string, JsonValue>) };
+      delete data.contributedBy;
+      delete data.contributedAt;
+      return { ...op, data: op.partition === 'item' ? { ...data, contributedBy, contributedAt: at } : data } as typeof op;
+    });
+    return { ...mutation, ops } as Mutation;
+  }
+
   async function propose(graphId: string, input: unknown, options?: ProposeOptions): Promise<Result<PendingProposal, ControllerError>> {
     try {
       // Refuse before any paid work if there is no room to hold the answer.
@@ -124,7 +142,8 @@ export function createController(init: ControllerInit): Controller {
       );
       if (!proposed.ok) return err({ source: 'llm', error: proposed.error });
 
-      const { mutation, rationale, usage, model, attempts } = proposed.value;
+      const { rationale, usage, model, attempts } = proposed.value;
+      const mutation = options?.stamp === undefined ? proposed.value.mutation : stamped(proposed.value.mutation, options.stamp.contributedBy, now());
       const existing = await readExisting(adapter, graphId, touched(mutation), graphOptions);
       if (!existing.ok) return graph(existing.error);
       const summary = summarise(mutation, existing.value);

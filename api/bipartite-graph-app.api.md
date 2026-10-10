@@ -216,6 +216,9 @@ export interface ProposalSummary {
 export interface ProposeOptions {
     // Warning: (ae-forgotten-export) The symbol "CategoriseOptions" needs to be exported by the entry point index.d.ts
     readonly categorise?: CategoriseOptions;
+    readonly stamp?: {
+        readonly contributedBy: string;
+    };
 }
 
 // @public

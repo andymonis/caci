@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createController } from '../app/index.js';
 import { createCaciController, viewOf } from './index.js';
-import { describeGraph, write } from '../graph_store/index.js';
+import { describeGraph, query, write } from '../graph_store/index.js';
 import { createDemoModelClient, createLlm } from '../llm/index.js';
 import { ownErrorOf, world, type World } from './controller.test-util.js';
+import type { ModelClient } from '../llm/index.js';
 
 const must = <T>(r: { ok: boolean; value?: T; error?: unknown }): T => {
   if (!r.ok) throw new Error(`expected success: ${JSON.stringify(r.error)}`);
@@ -262,6 +263,77 @@ describe('how scope problems are put', () => {
     expect('scope' in viewOf(proposal, 'demo', { kind: 'personal' })).toBe(false);
     expect('scope' in viewOf(proposal, 'demo')).toBe(false);
     expect(viewOf(proposal, 'demo', { kind: 'circle', circleId: 'c', circleName: 'N' }).scope).toEqual({ kind: 'circle', circleId: 'c', circleName: 'N' });
+  });
+});
+
+describe('contribution metadata', () => {
+  const dataOf = async (w: World, graphId: string): Promise<Array<{ id: string; partition: string; data?: Record<string, unknown> }>> => {
+    const r = await query(w.graphs, { version: 1, graphId, from: { all: true }, return: { shape: 'nodes', includeData: true } });
+    return r.ok ? ((r.value as { nodes: Array<{ id: string; partition: string; data?: Record<string, unknown> }> }).nodes) : [];
+  };
+  /** A model that tries to forge the contribution fields on every node it creates. */
+  const forging = (): ModelClient => {
+    const inner = createDemoModelClient();
+    return {
+      complete: async (request) => {
+        const r = await inner.complete(request);
+        if (!r.ok || r.value.output.kind !== 'json') return r;
+        const value = JSON.parse(JSON.stringify(r.value.output.value)) as { ops: Array<{ op: string; data?: Record<string, unknown> }> };
+        for (const op of value.ops) if (op.op === 'upsertNode') op.data = { ...(op.data ?? {}), contributedBy: 'u-forged', contributedAt: 1 };
+        return { ok: true, value: { ...r.value, output: { kind: 'json', value } } } as never;
+      },
+    };
+  };
+
+  it('an item captured into a circle records who added it and when; a personal capture records nothing of the kind', async () => {
+    const w = await setup();
+    const c = await w.circle(1, 'ann', [['bob', 'member']]);
+    w.now.value += 5000;
+    const made = must(await w.caci.propose(w.tokens.bob, { text: NOTE, scope: circleScope(c) }));
+    const upsertItem = (made.operations as Array<{ op: string; partition?: string; data?: Record<string, unknown> }>).find((o) => o.op === 'upsertNode' && o.partition === 'item');
+    expect(upsertItem?.data).toMatchObject({ contributedBy: (w.graphIds.bob as string).slice(5) });
+    const links = (made.operations as Array<{ op: string; data?: unknown }>).filter((o) => o.op === 'link');
+    expect(links.length).toBeGreaterThan(0);
+    for (const l of links) expect('data' in l).toBe(false);
+    must(await w.caci.approve(w.tokens.bob, made.id));
+    const stored = (await dataOf(w, `circle-${c}`)).filter((n) => n.partition === 'item');
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.data).toMatchObject({ contributedBy: (w.graphIds.bob as string).slice(5), contributedAt: expect.any(Number) });
+    expect(stored[0]?.data?.contributedAt).toBeGreaterThan(1_700_000_000_000);
+    const mine = must(await w.caci.propose(w.tokens.bob, { text: NOTE }));
+    must(await w.caci.approve(w.tokens.bob, mine.id));
+    const personal = (await dataOf(w, w.graphIds.bob as string)).filter((n) => n.partition === 'item');
+    expect(personal[0]?.data).not.toHaveProperty('contributedBy');
+    expect(personal[0]?.data).not.toHaveProperty('contributedAt');
+  });
+
+  it('whatever the model puts under those names, on any node, is replaced or removed: it cannot forge them', async () => {
+    const w = await setup({ client: forging() });
+    const c = await w.circle(1, 'ann', [['bob', 'member']]);
+    const made = must(await w.caci.propose(w.tokens.bob, { text: NOTE, scope: circleScope(c) }));
+    must(await w.caci.approve(w.tokens.bob, made.id));
+    const nodes = await dataOf(w, `circle-${c}`);
+    const item = nodes.find((n) => n.partition === 'item');
+    expect(item?.data?.contributedBy).toBe((w.graphIds.bob as string).slice(5));
+    expect(item?.data?.contributedAt).not.toBe(1);
+    for (const n of nodes.filter((x) => x.partition === 'category')) {
+      expect(n.data ?? {}).not.toHaveProperty('contributedBy');
+      expect(n.data ?? {}).not.toHaveProperty('contributedAt');
+    }
+    // a personal capture does not stamp, and does not clean what the model wrote either: it is the person's own graph and the model's data
+    const mine = must(await w.caci.propose(w.tokens.bob, { text: NOTE }));
+    expect(JSON.stringify(mine.operations)).toContain('u-forged');
+  });
+
+  it('records stay when the contributor\'s access ends: leaving does not touch the circle graph', async () => {
+    const w = await setup();
+    const c = await w.circle(1, 'ann', [['bob', 'member']]);
+    const made = must(await w.caci.propose(w.tokens.bob, { text: NOTE, scope: circleScope(c) }));
+    must(await w.caci.approve(w.tokens.bob, made.id));
+    must(await w.circleStore.removeMember(c, (w.graphIds.bob as string).slice(5)));
+    const left = (await dataOf(w, `circle-${c}`)).filter((n) => n.partition === 'item');
+    expect(left).toHaveLength(1);
+    expect(left[0]?.data?.contributedBy).toBe((w.graphIds.bob as string).slice(5));
   });
 });
 

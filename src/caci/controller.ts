@@ -314,7 +314,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       const reservation = ++reservations;
       reserved.set(reservation, userId);
       try {
-        const made = await capture.propose(graphId, { kind: 'text', text });
+        const made = await capture.propose(graphId, { kind: 'text', text }, circle === undefined ? undefined : { stamp: { contributedBy: userId } });
         reserved.delete(reservation);
         if (!made.ok) return made;
         held.set(made.value.id, { userId, expiresAt: made.value.expiresAt, ...(circle === undefined ? {} : { circle }) });
