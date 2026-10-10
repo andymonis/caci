@@ -146,8 +146,8 @@ export function createCaptureRoutes(options: CaptureRoutesOptions): readonly Rou
     {
       method: 'POST',
       path: '/api/capture/propose',
-      handler: signedIn(['text'], async (ctx, token) => {
-        const made = await caci.propose(token, { text: ctx.body?.text });
+      handler: signedIn(['text', 'scope'], async (ctx, token) => {
+        const made = await caci.propose(token, { text: ctx.body?.text, ...(ctx.body?.scope === undefined ? {} : { scope: ctx.body.scope }) });
         return made.ok ? ok({ status: 201, body: { proposal: asJson(made.value) } }) : made;
       }),
     },

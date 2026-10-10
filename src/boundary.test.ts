@@ -149,8 +149,8 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('scopes/') && /^(?:users|circles|graph_store|app)\//.test(target) && !/^(?:users|circles|graph_store|app)\/index$/.test(target) && !(scopesTest && /^(?:graph_store\/adapters\/memory|circles\/sqlite|users\/sqlite)\/index$/.test(target))) {
         problems.push(`${file} imports ${specifier}: the scopes component may use the users, circles, graph store and application components only through their indexes (its tests may also use the memory adapter and the SQLite stores)`);
       }
-      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|api)\//.test(file) && /^scopes(?:\/|$)/.test(target)) {
-        problems.push(`${file} imports ${specifier}: only the CaCi controller and the service may depend on the scopes component`);
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|api)\//.test(file) && /^scopes(?:\/|$)/.test(target) && !(file.startsWith('api/') && apiTest && target === 'scopes/index')) {
+        problems.push(`${file} imports ${specifier}: only the CaCi controller and the service may depend on the scopes component (API tests may use its index to build a stand-in service)`);
       }
       if ((file.startsWith('caci/') || file.startsWith('service/')) && target.startsWith('scopes/') && target !== 'scopes/index') {
         problems.push(`${file} imports ${specifier}: the CaCi controller and the service may use the scopes component only through scopes/index`);
@@ -221,6 +221,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'scopes/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createSqliteCircleStore } from '../circles/sqlite/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js';`,
         'caci/scopes.ts': `import { parseScope } from '../scopes/index.js';`,
         'service/scopes.ts': `import { createScopes } from '../scopes/index.js';`,
+        'api/scopes.test.ts': `import { createScopeResolver } from '../scopes/index.js';`,
         'api/share.ts': `import { createSharing } from '../sharing/index.js';`,
         'service/share.ts': `import { createSharing } from '../sharing/index.js';`,
         'api/circ.test.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';`,
@@ -315,6 +316,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the application using the scopes component', { 'app/x.ts': `import { parseScope } from '../scopes/index.js';` }],
     ['the sharing component using the scopes component', { 'sharing/x.ts': `import { parseScope } from '../scopes/index.js';` }],
     ['the API using the scopes component', { 'api/x.ts': `import { parseScope } from '../scopes/index.js';` }],
+    ['an API test reaching into the scopes internals', { 'api/x.test.ts': `import { x } from '../scopes/scope.js';` }],
     ['the CaCi controller reaching into the scopes internals', { 'caci/x.ts': `import { x } from '../scopes/scope.js';` }],
     ['the service reaching into the scopes internals', { 'service/x.ts': `import { x } from '../scopes/scope.js';` }],
     ['the sharing component using the LLM component', { 'sharing/x.ts': `import { createLlm } from '../llm/index.js';` }],
@@ -385,7 +387,7 @@ describe('the scopes component, in the real tree', () => {
     expect(Object.keys(own).length).toBeGreaterThan(1);
     expect(violations(own)).toEqual([]);
     const others = { ...sourcesUnder(join(srcRoot, 'circles')), ...sourcesUnder(join(srcRoot, 'users')), ...sourcesUnder(join(srcRoot, 'sharing')), ...sourcesUnder(join(srcRoot, 'api')), ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'app')), ...sourcesUnder(join(srcRoot, 'llm')) };
-    const dependents = Object.entries(others).filter(([, source]) => importsOf(source).some((s) => /(?:^|\/)scopes\//.test(s))).map(([file]) => file);
+    const dependents = Object.entries(others).filter(([file, source]) => !/^api\/[^/]+\.test\.ts$/.test(file) && importsOf(source).some((s) => /(?:^|\/)scopes\//.test(s))).map(([file]) => file);
     expect(Object.keys(others).length).toBeGreaterThan(50);
     expect(dependents).toEqual([]);
   });

@@ -58,9 +58,17 @@ export interface ApiServerOptions {
 }
 
 // @public (undocumented)
-export interface CaptureRoutesOptions {
+export interface BrainRoutesOptions {
     // Warning: (ae-forgotten-export) The symbol "CaciController" needs to be exported by the entry point index.d.ts
     //
+    // (undocumented)
+    readonly caci: CaciController;
+    readonly cookieName?: string;
+    readonly secureCookies?: boolean;
+}
+
+// @public (undocumented)
+export interface CaptureRoutesOptions {
     // (undocumented)
     readonly caci: CaciController;
     readonly cookieName?: string;
@@ -101,6 +109,9 @@ export function createAccountRoutes(options: AccountRoutesOptions): readonly Rou
 
 // @public
 export function createApiServer(options: ApiServerOptions): ApiServer;
+
+// @public
+export function createBrainRoutes(options: BrainRoutesOptions): readonly Route[];
 
 // @public
 export function createCaptureRoutes(options: CaptureRoutesOptions): readonly Route[];
