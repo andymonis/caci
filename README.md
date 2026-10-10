@@ -560,6 +560,47 @@ Deleting an account (your own, or by an admin) takes the person out of every cir
 - Nobody is told about an invitation: nothing is sent anywhere, so people have to look at `GET /api/invitations`.
 - Circles, memberships and invitations are stored in `users.db` as plain text, readable only by the file's owner; see the warning about encryption above. Leaving a circle ends access from then on, but cannot unsee what was already read.
 
+## Shared circle brains
+
+A person can **share chosen categories of their own brain, read-only, with one other member of a circle**. It is specified in `specs/R-008-shared-brains.md`, which also holds its threat table and the release gates below.
+
+### What is shared
+
+- **Read-only.** The person who receives a share can read and cannot change anything: this piece has no write path at all.
+- **Chosen categories.** A share names categories of the sharer's own brain; the items filed under them come along; everything else stays private. A share holds at most **200 categories**.
+- **One direction, one person.** Sharing with someone does not share back, and each person is its own share. Roles in the circle carry no access: an observer may share and receive like anyone.
+- **Live, and withdrawable at any time.** Nothing is copied. Every request re-checks that both people are still members and what is shared right now, so narrowing or withdrawing takes effect on the next request.
+- **It ends by itself** when either person leaves the circle or is removed, when an account is deleted, and when the circle is deleted, in the same step as that change. Coming back by invitation brings nothing back.
+- **The reader sees only what was shared.** An item is visible if it is filed under at least one shared category, its detail names only the shared categories, and counts include only them. A private category, an item reachable only through one, a member with no share and a made-up id all get exactly the same not-found answer. The platform admin has no access: an admin who is not in the circle is a stranger to it.
+
+### The routes
+
+All need the session cookie and are on the same status table as the circle routes. Ids of categories and items travel in the query string, never in the path, and an unknown parameter is refused by name.
+
+| Route | What it does |
+|-------|--------------|
+| `GET /api/circles/:id/grants` | What I share, one entry per other member (`limit`, `cursor`) |
+| `PUT /api/circles/:id/grants/:userId` | Body `{ "categories": [ids] }` only; replaces the set; 200 with it, or 204 when the empty list withdraws it |
+| `DELETE /api/circles/:id/grants/:userId` | Withdraws; 204 |
+| `GET /api/circles/:id/shared` | Who has shared with me, with how many categories |
+| `GET /api/circles/:id/shared/:userId/categories` | That person's shared categories with item counts (`limit`, `cursor`) |
+| `GET /api/circles/:id/shared/:userId/category?id=` | The items of one shared category (`limit`, `cursor`) |
+| `GET /api/circles/:id/shared/:userId/item?id=` | One visible item and the shared categories it is filed under |
+
+Every category you share must be one of your own, and nobody can share with themselves or with someone who is not in the circle.
+
+### In the web app
+
+The circle screen has **What you share** (press *Show what I share*: each other member, what is shared with them, a picker of your own categories with Save, and *Stop sharing*, which asks first) and **Shared with you** (press *Show what is shared with me*: who has shared, then their categories, a category's items and one item, read-only). Neither asks the service for anything until you press its button, and both forget everything when you leave the screen.
+
+### What is not protected, and what must happen before other people's data is used
+
+- **A member can copy what they see by hand.** Read-only means no write path and no export, not that a person cannot read a note aloud or take a screenshot.
+- **Nobody is told** when a share starts, changes or ends, and the owner is not told who read what.
+- **Some things are visible by nature:** the names of shared categories, how many items are in each, an item's weights, and any private subject an item's own text happens to mention (only the filing is filtered, not the prose).
+- **The files are plain text** to whoever can read the data folder, and **the real model still receives every note** when `CACI_LLM=anthropic`, whoever may later read it.
+- **The release gates are not met.** Before anyone else's data is held, the plan needs pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, and a statement of who may use the service. Do not use sharing with other people's data until they are done.
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.

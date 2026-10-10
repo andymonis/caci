@@ -1,10 +1,11 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CIRCLE_STATUS_OF, createAccountRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
+import { CIRCLE_STATUS_OF, createAccountRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
 import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
 import { CACI_ERROR_CODES, caciError, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
+import { DEFAULT_GRANT_LIMITS } from '../sharing/index.js';
 import { parseServiceConfig, VARIABLES } from './config.js';
 import { WEB_FILE_SPECS } from './web-app.js';
 
@@ -289,5 +290,33 @@ describe('the web app section of the README', () => {
     for (const phrase of ['Nothing else is built yet', 'cannot edit, delete or search what you filed', 'file notes and look through them', 'use circles', 'Register yourself first', 'becomes the administrator', 'not an installable app', 'no service worker', 'as text, never as markup', 'Nothing in the browser', 'to the same address, because the session cookie', 'no HTTPS of its own', 'pass the service\'s headers through unchanged', 'the main heading takes the focus', 'The **service decides**', 'Leaving, deleting a circle and removing someone ask first', 'never a browser dialog', 'never says whether such an account exists', 'No such circle, or you are not in it.', 'What you share', 'Shared with you', 'everyone in a circle sees everyone\'s username and display name', 'nobody is notified of an invitation', 'nothing is live', 'two tabs do not know about each other', 'The page says which model files the note, before it is sent', 'keeps the Propose button disabled until it knows', 'nothing is written until you press Approve', 'the note stays in the box', 'Browsing is read-only', 'page state, not part of the address', 'it does not update by itself', 'hold more than one proposal at a time', 'specs/R-007-web-notes.md', 'the capture and browse routes listed under **Notes in the web app**']) {
       expect(webSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
     }
+  });
+});
+
+const sharedSection = section('Shared circle brains');
+
+describe('the shared circle brains section of the README', () => {
+  it('lists exactly the sharing routes the server has', () => {
+    const real = createSharingRoutes({ sharing: {} as never }).map((r) => `${r.method} ${r.path}`);
+    const documented = [...sharedSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => (m[1] as string).replace(/\?id=$/, ''));
+    expect(documented.sort()).toEqual([...real].sort());
+    expect(real).toHaveLength(7);
+  });
+
+  it('states the number that is in the code, and names its specification, which exists', () => {
+    expect(sharedSection).toContain(`at most **${DEFAULT_GRANT_LIMITS.maxCategoriesPerGrant} categories**`);
+    expect(sharedSection).toContain('specs/R-008-shared-brains.md');
+    expect(existsSync(new URL('../../specs/R-008-shared-brains.md', import.meta.url))).toBe(true);
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['**Read-only.** The person who receives a share can read and cannot change anything', 'One direction, one person', 'Roles in the circle carry no access', 'Nothing is copied', 'narrowing or withdrawing takes effect on the next request', 'It ends by itself', 'Coming back by invitation brings nothing back', 'exactly the same not-found answer', 'The platform admin has no access', 'in the query string, never in the path', 'Nobody is told', 'A member can copy what they see by hand', 'The release gates are not met', 'pseudonymisation', 'a data processing agreement', 'a lawful basis', 'a risk assessment', 'Do not use sharing with other people', 'the real model still receives every note', 'Show what I share', 'Show what is shared with me']) {
+      expect(sharedSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+
+  it('is linked from the web app part, and every command and setting it names exists', () => {
+    expect(webSection).toContain('Shared with you');
+    for (const v of sharedSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
   });
 });
