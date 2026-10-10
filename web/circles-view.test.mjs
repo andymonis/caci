@@ -141,3 +141,20 @@ describe('the words for what you share', () => {
     expect(choiceLabel({ id: 'x', name: '' })).toBe('x');
   });
 });
+
+describe('the words for what is shared with you', () => {
+  it('names a person and counts what they share, in the singular and the plural', async () => {
+    const { sharedPersonRow, SHARED_NOBODY } = await import('./circles-view.js');
+    expect(SHARED_NOBODY).toBe('Nobody has shared anything with you in this circle.');
+    expect(sharedPersonRow({ displayName: 'Ann A', username: 'ann', categoryCount: 1 })).toEqual({ name: 'Ann A', meta: '1 category shared', label: 'Read what Ann A shares with you, 1 category shared' });
+    expect(sharedPersonRow({ username: 'ann', categoryCount: 3 })).toMatchObject({ name: 'ann', meta: '3 categories shared' });
+    expect(sharedPersonRow({ categoryCount: 0 })).toMatchObject({ name: 'Someone', meta: '0 categories shared' });
+  });
+  it('says whose it is and that it is read-only', async () => {
+    const { sharedOwnerWords, SHARED_NO_CATEGORIES } = await import('./circles-view.js');
+    expect(sharedOwnerWords({ displayName: 'Ann A' })).toEqual({ heading: 'Shared by Ann A', readonly: 'Read-only. You can see only the categories Ann A chose to share with you, and the items filed under them.' });
+    expect(sharedOwnerWords(null).heading).toBe('Shared by Someone');
+    expect(SHARED_NO_CATEGORIES).toBe('None of the categories shared with you still exist.');
+  });
+});
+

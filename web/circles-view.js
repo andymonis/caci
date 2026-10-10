@@ -130,3 +130,24 @@ export function shareRow(person) {
 
 /** One of my categories in the picker. */
 export const choiceLabel = (category) => categoryName(category);
+
+// "Shared with you" (R-008): the words for reading what other members share.
+
+export const SHARED_NOBODY = 'Nobody has shared anything with you in this circle.';
+export const SHARED_NO_CATEGORIES = 'None of the categories shared with you still exist.';
+
+/** What a row of the people who have shared with you says. */
+export function sharedPersonRow(person) {
+  const who = nameOf(person);
+  const count = person.categoryCount === 1 ? '1 category shared' : `${person.categoryCount} categories shared`;
+  return Object.freeze({ name: who, meta: count, label: `Read what ${who} shares with you, ${count}` });
+}
+
+/** The heading and the read-only reminder above one person's shared brain. */
+export function sharedOwnerWords(person) {
+  const who = person === null ? 'Someone' : nameOf(person);
+  return Object.freeze({
+    heading: `Shared by ${who}`,
+    readonly: `Read-only. You can see only the categories ${who} chose to share with you, and the items filed under them.`,
+  });
+}

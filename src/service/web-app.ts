@@ -20,6 +20,7 @@ export const WEB_FILE_SPECS: readonly WebFileSpec[] = Object.freeze([
   { path: '/sharing-client.js', file: 'sharing-client.js', kind: 'js' },
   { path: '/grants-session.js', file: 'grants-session.js', kind: 'js' },
   { path: '/share-page.js', file: 'share-page.js', kind: 'js' },
+  { path: '/shared-page.js', file: 'shared-page.js', kind: 'js' },
   { path: '/shared-session.js', file: 'shared-session.js', kind: 'js' },
   { path: '/permissions.js', file: 'permissions.js', kind: 'js' },
   { path: '/brain-page.js', file: 'brain-page.js', kind: 'js' },

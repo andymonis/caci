@@ -9,6 +9,7 @@ import { mountCapturePage } from './capture-page.js';
 import { createNotesClient } from './notes-client.js';
 import { mountCirclePage } from './circle-page.js';
 import { mountSharePage } from './share-page.js';
+import { mountSharedPage } from './shared-page.js';
 import { createSharingClient } from './sharing-client.js';
 import { mountCirclesPages } from './circles-pages.js';
 import { createCirclesClient } from './circles-client.js';
@@ -42,7 +43,9 @@ export function mount(document, fetchFn, env = NO_ENV) {
   const notesClient = createNotesClient({ fetchFn });
   const brainPage = mountBrainPage(document, { client: notesClient, onSignedOut: recheck });
   const capturePage = mountCapturePage(document, { client: notesClient, onWritten: () => brainPage.markStale(), onSignedOut: recheck });
-  const sharePage = mountSharePage(document, { sharing: createSharingClient({ fetchFn }), circles: circlesClient, notes: notesClient, onSignedOut: recheck });
+  const sharingClient = createSharingClient({ fetchFn });
+  const sharePage = mountSharePage(document, { sharing: sharingClient, circles: circlesClient, notes: notesClient, onSignedOut: recheck });
+  const sharedPage = mountSharedPage(document, { client: sharingClient, onSignedOut: recheck });
   let shown = null; // the address of the signed-in screen being shown
   let rechecked = false;
   /** A circle request says the session ended: ask the service once who is signed in. Once only per sign-in, so a service that contradicts itself cannot make a loop. */
@@ -114,6 +117,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
         pages.reset();
         circlePage.reset();
         sharePage.reset();
+        sharedPage.reset();
         capturePage.reset();
         brainPage.reset();
       }
@@ -137,6 +141,8 @@ export function mount(document, fetchFn, env = NO_ENV) {
     else circlePage.reset();
     if (route.name === 'circle') sharePage.show(route.id, session.getState().user.id);
     else sharePage.reset();
+    if (route.name === 'circle') sharedPage.show(route.id);
+    else sharedPage.reset();
     if (route.name === 'capture') capturePage.show();
     else capturePage.reset();
     if (route.name === 'brain') brainPage.show();

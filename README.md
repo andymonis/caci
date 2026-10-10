@@ -345,7 +345,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these twenty-seven, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these twenty-eight, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -372,6 +372,7 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `circles-session.js` | what the circles list, creating a circle and my invitations show (one request at a time, a count that is only ever a number the service gave) |
 | `notes-client.js` | the code that talks to the note capture and browsing routes |
 | `share-page.js` | puts "What you share" on a circle's screen: the other members, what is shared with each, a picker of your own categories and stopping (rows cloned from templates, text only) |
+| `shared-page.js` | puts "Shared with you" on a circle's screen: who has shared, their categories, a category's items and one item, read-only (rows cloned from templates, text only) |
 | `grants-session.js` | what the "What you share" part of a circle's screen shows and does: the other members, your categories to choose from, saving and stopping (stopping asks first) |
 | `shared-session.js` | what the "Shared with you" part shows: who has shared, their categories, a category's items and one item (read-only, the selection is page state) |
 | `sharing-client.js` | the code that talks to the sharing routes: what you share and what is shared with you |
@@ -411,7 +412,7 @@ The buttons follow the role as a **hint**: the page shows only what your role al
 
 **Leaving, deleting a circle and removing someone ask first**, in the page, with a confirm and a cancel (never a browser dialog); cancelling changes nothing. After inviting, the page says only that the invitation was recorded for that username; it never says whether such an account exists. A circle that is not yours and one that does not exist read the same: "No such circle, or you are not in it."
 
-What the web app does **not** do with circles yet: it cannot show you what other members have shared with you (the service can; the page for it comes next), and everyone in a circle sees everyone's username and display name (the pages say so); nobody is notified of an invitation, so you find out by looking; the invitation count is fetched when the home page opens and when you press Refresh, and **nothing is live** (a view is as old as its last load, and every action reloads what it changed); two tabs do not know about each other.
+What the web app does **not** do with circles: everyone in a circle sees everyone's username and display name (the pages say so); nobody is notified of an invitation, so you find out by looking; the invitation count is fetched when the home page opens and when you press Refresh, and **nothing is live** (a view is as old as its last load, and every action reloads what it changed); two tabs do not know about each other.
 
 ### Notes in the web app
 
@@ -501,7 +502,7 @@ Failures are `{ error: { code, message } }` with these statuses: 401 not signed 
 
 A **circle** is a group of people, each with a role in it. A person can be in several circles in different roles (a helper in one, helped in another), and everyone keeps their own graph. It is specified in `specs/R-004-circles.md`.
 
-**A circle shares nothing by itself.** Being in a circle lets people see who else is in it (usernames and display names) and nothing more. A member can choose to share chosen categories of their own brain, read-only, with one other member, and withdraw it at any time; it ends if either person leaves the circle. The web app's circle screen has a **What you share** part for this, and the service has routes for reading what was shared with you. Sharing sends nothing new to a model, but it is not safe to use with other people's data until pseudonymisation and the legal groundwork are done (see `specs/R-008-shared-brains.md`, which lists them as release gates). The platform admin has no power over circles either: an admin who is not in a circle is a stranger to it.
+**A circle shares nothing by itself.** Being in a circle lets people see who else is in it (usernames and display names) and nothing more. A member can choose to share chosen categories of their own brain, read-only, with one other member, and withdraw it at any time; it ends if either person leaves the circle. The web app's circle screen has a **What you share** part for choosing what to share and a **Shared with you** part for reading, read-only, what others have shared with you; the service has routes for both. Sharing sends nothing new to a model, but it is not safe to use with other people's data until pseudonymisation and the legal groundwork are done (see `specs/R-008-shared-brains.md`, which lists them as release gates). The platform admin has no power over circles either: an admin who is not in a circle is a stranger to it.
 
 ### Roles
 
