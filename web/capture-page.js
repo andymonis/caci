@@ -4,7 +4,8 @@
 // person's note are only ever text.
 
 import { createCaptureSession } from './capture-session.js';
-import { countText, expiresText, modeNotice, noteLines, opText, outcomeText, previewNotice, problemLines, withWait } from './capture-view.js';
+import { countText, expiresText, modeNotice, noteLines, opText, outcomeText, previewNotice, problemLines, readOnlyLine, scopeLine, scopeNotice, withWait } from './capture-view.js';
+import { createScopeSession, PERSONAL_LABEL } from './scope-session.js';
 
 export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
   const $ = (id) => {
@@ -13,12 +14,20 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
     return element;
   };
   const session = createCaptureSession({ client, onSignedOut, onWritten });
+  const scopes = createScopeSession({ client, onSignedOut });
 
   const notice = $('capture-mode-notice');
   const retry = $('capture-mode-retry');
   const formSection = $('capture-form-section');
   const form = $('capture-form');
   const general = $('capture-error');
+  const scopeSelect = $('capture-scope');
+  const scopeNoticeEl = $('capture-scope-notice');
+  const scopeReadOnly = $('capture-scope-readonly');
+  const scopeError = $('capture-scope-error');
+  const scopeOptionTemplate = $('capture-scope-option-template');
+  const previewScope = $('capture-preview-scope');
+  const previewScopeNotice = $('capture-preview-scope-notice');
   const note = $('capture-note');
   const count = $('capture-count');
   const noteError = $('capture-note-error');
@@ -53,7 +62,36 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
     target.hidden = message === '';
   };
 
+  let optionKeys = '';
+  /** The scope choice: only the places the person may capture into; rebuilt only when that list changes. */
+  function renderScopes(state) {
+    const s = scopes.getState();
+    const offered = s.scopes.filter((x) => x.canCapture);
+    const list = offered.length > 0 ? offered : [{ key: 'personal', label: PERSONAL_LABEL }];
+    const signature = list.map((x) => `${x.key}\n${x.label}`).join('\n\n');
+    if (signature !== optionKeys) {
+      optionKeys = signature;
+      scopeSelect.replaceChildren(
+        ...list.map((x) => {
+          const option = scopeOptionTemplate.content.firstElementChild.cloneNode(true);
+          option.value = x.key;
+          option.textContent = x.label;
+          return option;
+        }),
+      );
+    }
+    scopeSelect.value = s.captureKey;
+    scopeSelect.disabled = state.busy || state.proposal !== null || s.busy;
+    scopeNoticeEl.textContent = scopeNotice(s.captureScope, state.mode.value);
+    const readOnly = readOnlyLine(s.scopes);
+    scopeReadOnly.textContent = readOnly;
+    scopeReadOnly.hidden = readOnly === '';
+    scopeError.textContent = s.status === 'error' ? `Could not list your circles (${s.error}). Notes go to your own notes.` : '';
+    scopeError.hidden = s.status !== 'error';
+  }
+
   function render(state) {
+    renderScopes(state);
     const proposal = state.proposal;
     notice.textContent = modeNotice(state.mode);
     notice.hidden = false;
@@ -66,6 +104,8 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
 
     preview.hidden = proposal === null;
     if (proposal !== null) {
+      previewScope.textContent = scopeLine(proposal.scope);
+      previewScopeNotice.textContent = scopeNotice(proposal.scope, proposal.mode);
       previewNoticeEl.textContent = previewNotice(proposal);
       text.textContent = proposal.text;
       ops.replaceChildren(...proposal.operations.map((op) => rowOf(opTemplate, opText(op))));
@@ -91,7 +131,7 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
     setError(general, '');
     setError(noteError, '');
     note.removeAttribute('aria-invalid');
-    const r = await session.propose(note.value);
+    const r = await session.propose(note.value, scopes.getState().captureScope);
     if (r.ok) {
       previewHeading.focus();
       return;
@@ -103,7 +143,8 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
       note.focus();
       return;
     }
-    // the note stays in the box so it can be sent again
+    // the note stays in the box so it can be sent again; a circle that is no longer there is dropped from the choice
+    if (r.kind === 'not-found') void scopes.load();
     setError(general, withWait(r.message, r.retryAfterSeconds));
     general.focus();
   });
@@ -143,6 +184,10 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
     if (session.startAgain()) note.focus();
   });
 
+  scopeSelect.addEventListener('change', () => {
+    if (!scopes.chooseCapture(scopeSelect.value)) scopeSelect.value = scopes.getState().captureKey;
+  });
+  scopes.subscribe(() => render(session.getState()));
   session.subscribe(render);
   render(session.getState());
 
@@ -151,6 +196,7 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
     /** The capture screen has been shown: find out which model files notes. */
     show() {
       void session.loadMode();
+      void scopes.load();
     },
     /** Signed out, or off this screen: forget the proposal and the typed note. */
     reset() {
@@ -160,6 +206,7 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
       setError(actionError, '');
       note.removeAttribute('aria-invalid');
       session.reset();
+      scopes.reset();
     },
   });
 }

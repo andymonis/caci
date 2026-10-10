@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { countText, expiresText, formatTime, MODE_LOADING, MODE_UNKNOWN, MODE_WORDS, modeNotice, noteLines, opText, outcomeText, previewNotice, problemLines, REJECTED_WORDS, withWait, writtenText } from './capture-view.js';
+import { circleNotice, countText, expiresText, formatTime, MODE_LOADING, MODE_UNKNOWN, MODE_WORDS, modeNotice, noteLines, opText, outcomeText, PERSONAL_NOTICE, previewNotice, problemLines, readOnlyLine, REJECTED_WORDS, scopeLine, scopeNotice, withWait, writtenText } from './capture-view.js';
 
 const SUMMARY = (extra = {}) => ({ newItems: [], updatedItems: [], newCategories: [], updatedCategories: [], reusedCategories: [], newLinks: [], problems: [], notes: [], ...extra });
 
@@ -85,5 +85,42 @@ describe('what a person is told before a note goes into a circle', () => {
     expect(circleNotice('', 'demo')).toContain('this circle');
     expect(circleNotice(undefined, 'demo')).toContain('this circle');
     expect(PERSONAL_NOTICE).toBe('This note will be added to your own notes. Only you can read it.');
+  });
+});
+
+describe('where a note goes (R-009)', () => {
+  const circle = { kind: 'circle', circleId: 'c0123456789abcdef', circleName: 'Club' };
+  it('says where a proposal goes, falling back to words when the name is missing', () => {
+    expect(scopeLine({ kind: 'personal' })).toBe('Goes to your own notes.');
+    expect(scopeLine(undefined)).toBe('Goes to your own notes.');
+    expect(scopeLine(circle)).toBe('Goes to the circle "Club".');
+    expect(scopeLine({ kind: 'circle', circleId: circle.circleId })).toBe('Goes to the circle "this circle".');
+    expect(scopeLine({ ...circle, circleName: '' })).toBe('Goes to the circle "this circle".');
+  });
+  it('gives each scope its own notice', () => {
+    expect(scopeNotice({ kind: 'personal' }, 'anthropic')).toBe(PERSONAL_NOTICE);
+    expect(scopeNotice(undefined, 'demo')).toBe(PERSONAL_NOTICE);
+    expect(scopeNotice(circle, 'demo')).toBe(circleNotice('Club', 'demo'));
+    expect(scopeNotice(circle, 'anthropic')).toBe(circleNotice('Club', 'anthropic'));
+  });
+  it('names the circles that can only be read, and says nothing when there are none', () => {
+    const rows = [
+      { scope: { kind: 'personal' }, label: 'My own notes', canCapture: true },
+      { scope: circle, label: 'Club', canCapture: true },
+      { scope: { kind: 'circle', circleId: 'cabcdefghij012345' }, label: 'Read', canCapture: false },
+      { scope: { kind: 'circle', circleId: 'cabcdefghij012346' }, label: 'Other', canCapture: false },
+    ];
+    expect(readOnlyLine(rows)).toBe('You can read, but not add notes to: "Read", "Other".');
+    expect(readOnlyLine(rows.slice(0, 2))).toBe('');
+    expect(readOnlyLine([])).toBe('');
+    expect(readOnlyLine([{ scope: { kind: 'personal' }, label: 'My own notes', canCapture: false }])).toBe('');
+    expect(readOnlyLine([{ scope: circle, label: 'Club', canCapture: undefined }])).toBe('');
+  });
+  it('adds the circle to a written outcome and nothing for the own notes', () => {
+    const summary = { newItems: ['a'], updatedItems: [], newCategories: [], updatedCategories: [], reusedCategories: [], newLinks: [] };
+    expect(outcomeText({ kind: 'written', applied: 1, summary, scope: circle })).toBe('Written: 1 operation (1 new item). Added to the circle "Club".');
+    expect(outcomeText({ kind: 'written', applied: 1, summary, scope: { kind: 'personal' } })).toBe('Written: 1 operation (1 new item).');
+    expect(outcomeText({ kind: 'written', applied: 1, summary })).toBe('Written: 1 operation (1 new item).');
+    expect(outcomeText({ kind: 'written', applied: 1, summary, scope: { kind: 'circle', circleId: circle.circleId } })).toContain('"this circle"');
   });
 });

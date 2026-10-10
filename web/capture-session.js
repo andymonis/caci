@@ -131,7 +131,7 @@ export function createCaptureSession({ client, onSignedOut, onWritten }) {
           return failed(r.error);
         }
         proposal = null;
-        outcome = { kind: 'written', applied: r.value.applied, summary: r.value.summary };
+        outcome = { kind: 'written', applied: r.value.applied, summary: r.value.summary, ...(held.scope === undefined ? {} : { scope: held.scope }) };
         if (typeof onWritten === 'function') {
           try {
             onWritten(held.scope);

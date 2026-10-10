@@ -21,7 +21,7 @@ function service(table = {}) {
   const fetchFn = async (path, init) => {
     const key = `${init.method} ${path}`;
     calls.push({ key, body: init.body === undefined ? undefined : JSON.parse(init.body) });
-    const entry = table[key] ?? (/^GET \/api\/(invitations|circles)/.test(key) ? { status: 200, body: { items: [], nextCursor: null } } : refuse(401, 'UNAUTHENTICATED', 'not signed in'));
+    const entry = table[key] ?? (key === 'GET /api/brain/scopes' ? { status: 200, body: { items: [{ scope: { kind: 'personal' }, canCapture: true }] } } : /^GET \/api\/(invitations|circles)/.test(key) ? { status: 200, body: { items: [], nextCursor: null } } : refuse(401, 'UNAUTHENTICATED', 'not signed in'));
     const a = await (typeof entry === 'function' ? entry(calls.length) : entry);
     if (a instanceof Error) throw a;
     return { status: a.status, headers: { get: (n) => (a.headers && a.headers[n]) ?? null }, text: async () => (a.body === undefined ? '' : JSON.stringify(a.body)) };
@@ -409,5 +409,125 @@ describe('leaving and signing out', () => {
     const page = fakePage();
     const broken = { title: '', getElementById: (id) => (id === 'capture-approve' ? null : page.document.getElementById(id)) };
     expect(() => mount(broken, service().fetchFn)).toThrow(/no element "capture-approve"/);
+  });
+});
+
+describe('choosing where a note goes', () => {
+  const C1 = 'c0123456789abcdef';
+  const C2 = 'cabcdefghij012345';
+  const HOSTILE = '<b>Club</b>';
+  const LIST = { 'GET /api/brain/scopes': { status: 200, body: { items: [{ scope: { kind: 'personal' }, canCapture: true }, { scope: { kind: 'circle', circleId: C1, circleName: HOSTILE }, role: 'member', canCapture: true }, { scope: { kind: 'circle', circleId: C2, circleName: 'Read only' }, role: 'observer', canCapture: false }] } } };
+  const inCircle = (extra = {}) => proposed({ scope: { kind: 'circle', circleId: C1, circleName: HOSTILE }, ...extra });
+  const options = (page) => page.el('capture-scope').children.map((o) => [o.value, o.textContent]);
+  const choose = (page, key) => {
+    page.el('capture-scope').value = key;
+    page.el('capture-scope').fire('change');
+  };
+  const posts = (svc) => svc.calls.filter((c) => c.key === 'POST /api/capture/propose');
+
+  it('offers the own notes and each circle the person may add to, and names the ones they may only read', async () => {
+    const { page, svc } = await start(LIST);
+    expect(svc.keys()).toContain('GET /api/brain/scopes');
+    expect(options(page)).toEqual([['personal', 'My own notes'], [`circle:${C1}`, HOSTILE]]);
+    expect(page.el('capture-scope').children.every((o) => o.children.length === 0)).toBe(true);
+    expect(page.el('capture-scope').value).toBe('personal');
+    expect(page.el('capture-scope-notice').textContent).toBe('This note will be added to your own notes. Only you can read it.');
+    expect(page.el('capture-scope-readonly').hidden).toBe(false);
+    expect(page.el('capture-scope-readonly').textContent).toBe('You can read, but not add notes to: "Read only".');
+    expect(page.el('capture-scope-error').hidden).toBe(true);
+  });
+
+  it('keeps the same options when only the choice changes, and hides the read-only line when there is nothing to say', async () => {
+    const { page } = await start(LIST);
+    const before = page.el('capture-scope').children[1];
+    choose(page, `circle:${C1}`);
+    expect(page.el('capture-scope').children[1]).toBe(before);
+    const solo = await start();
+    expect(solo.page.el('capture-scope-readonly').hidden).toBe(true);
+    expect(solo.page.el('capture-scope-readonly').textContent).toBe('');
+  });
+
+  it('a note for the own notes sends nothing but the text', async () => {
+    const { page, svc } = await start({ ...LIST, 'POST /api/capture/propose': proposed({ scope: { kind: 'personal' } }) });
+    await propose(page);
+    expect(posts(svc)[0].body).toEqual({ text: 'Dr Patel booked my blood test' });
+    expect(page.el('capture-preview-scope').textContent).toBe('Goes to your own notes.');
+    expect(page.el('capture-preview-scope-notice').textContent).toBe('This note will be added to your own notes. Only you can read it.');
+  });
+
+  it('choosing a circle says who can read it and that it cannot be taken back, before and on the preview, and sends the circle id only', async () => {
+    const { page, svc } = await start({ ...LIST, 'POST /api/capture/propose': inCircle(), 'POST /api/capture/proposals/prop-0abc12345-00-abcdef/approve': written });
+    choose(page, `circle:${C1}`);
+    const said = `This note will be added to the circle "${HOSTILE}". Everyone in the circle can read it, and it cannot be taken back once approved.`;
+    expect(page.el('capture-scope-notice').textContent).toBe(said);
+    expect(page.el('capture-scope').value).toBe(`circle:${C1}`);
+    await propose(page);
+    expect(posts(svc)[0].body).toEqual({ text: 'Dr Patel booked my blood test', scope: { kind: 'circle', circleId: C1 } });
+    expect(page.el('capture-preview-scope').textContent).toBe(`Goes to the circle "${HOSTILE}".`);
+    expect(page.el('capture-preview-scope-notice').textContent).toBe(said);
+    expect(page.el('capture-scope').disabled).toBe(true);
+    page.el('capture-approve').fire('click');
+    await settle();
+    expect(page.el('capture-outcome-text').textContent).toBe(`Written: 3 operations (1 new item, 1 new category, 1 link). Added to the circle "${HOSTILE}".`);
+    expect(page.el('capture-scope').disabled).toBe(false);
+  });
+
+  it('with the real model the circle notice also says the note goes to Anthropic, unanonymised', async () => {
+    const { page } = await start({ ...LIST, 'GET /api/capture/mode': { status: 200, body: { mode: 'anthropic' } } });
+    choose(page, `circle:${C1}`);
+    expect(page.el('capture-scope-notice').textContent).toContain('sent to Anthropic and are not anonymised');
+  });
+
+  it('a circle the person may only read cannot be chosen, even if the page is told to', async () => {
+    const { page } = await start(LIST);
+    choose(page, `circle:${C2}`);
+    expect(page.el('capture-scope').value).toBe('personal');
+    expect(page.el('capture-scope-notice').textContent).toContain('your own notes');
+  });
+
+  it('the choice cannot change while a proposal is pending, and rejecting frees it', async () => {
+    const { page } = await start({ ...LIST, 'POST /api/capture/propose': inCircle(), 'POST /api/capture/proposals/prop-0abc12345-00-abcdef/reject': { status: 204 } });
+    choose(page, `circle:${C1}`);
+    await propose(page);
+    expect(page.el('capture-scope').disabled).toBe(true);
+    page.el('capture-reject').fire('click');
+    await settle();
+    expect(page.el('capture-scope').disabled).toBe(false);
+    expect(page.el('capture-scope').value).toBe(`circle:${C1}`);
+  });
+
+  it('a circle that is gone: the words are shown, the note stays, the list is asked again and the choice falls back to the own notes', async () => {
+    let n = 0;
+    const { page, svc } = await start({
+      'GET /api/brain/scopes': () => (++n === 1 ? LIST['GET /api/brain/scopes'] : { status: 200, body: { items: [{ scope: { kind: 'personal' }, canCapture: true }] } }),
+      'POST /api/capture/propose': refuse(404, 'NOT_FOUND', 'no such circle'),
+    });
+    choose(page, `circle:${C1}`);
+    await propose(page);
+    expect(page.el('capture-error').textContent).toBe('No such circle, or you are not in it.');
+    expect(page.el('capture-note').value).toBe('Dr Patel booked my blood test');
+    expect(svc.keys().filter((k) => k === 'GET /api/brain/scopes')).toHaveLength(2);
+    expect(options(page)).toEqual([['personal', 'My own notes']]);
+    expect(page.el('capture-scope').value).toBe('personal');
+  });
+
+  it('if the list cannot be read, only the own notes are offered and the person is told', async () => {
+    const { page, svc } = await start({ 'GET /api/brain/scopes': refuse(500, 'STORAGE_ERROR', 'x'), 'POST /api/capture/propose': proposed() });
+    expect(options(page)).toEqual([['personal', 'My own notes']]);
+    expect(page.el('capture-scope-error').hidden).toBe(false);
+    expect(page.el('capture-scope-error').textContent).toContain('Notes go to your own notes.');
+    await propose(page);
+    expect(posts(svc)[0].body).toEqual({ text: 'Dr Patel booked my blood test' });
+  });
+
+  it('leaving the screen forgets the choice', async () => {
+    const { page, addr } = await start(LIST);
+    choose(page, `circle:${C1}`);
+    addr.change('#/');
+    await settle();
+    addr.change('#/capture');
+    await settle();
+    expect(page.el('capture-scope').value).toBe('personal');
+    expect(page.el('capture-scope-notice').textContent).toContain('your own notes');
   });
 });

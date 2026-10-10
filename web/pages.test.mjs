@@ -258,8 +258,8 @@ describe('the page', () => {
 describe('the templates and the address bar', () => {
   const templates = [...html.matchAll(/<template\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/template>/g)].map((m) => ({ id: m[1], body: m[2] }));
 
-  it('there are thirteen row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
-    expect(templates.map((t) => t.id).sort()).toEqual(['capture-line-template', 'capture-op-template', 'category-row-template', 'circle-invitation-row-template', 'circle-row-template', 'data-row-template', 'invitation-row-template', 'item-category-row-template', 'item-row-template', 'member-row-template', 'share-choice-template', 'share-row-template', 'shared-person-row-template']);
+  it('there are fourteen row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
+    expect(templates.map((t) => t.id).sort()).toEqual(['capture-line-template', 'capture-op-template', 'capture-scope-option-template', 'category-row-template', 'circle-invitation-row-template', 'circle-row-template', 'data-row-template', 'invitation-row-template', 'item-category-row-template', 'item-row-template', 'member-row-template', 'share-choice-template', 'share-row-template', 'shared-person-row-template']);
     for (const t of templates) {
       expect(t.body, t.id).not.toMatch(/\sid\s*=/i);
       expect(t.body, t.id).not.toMatch(/<script|\son[a-z]+\s*=|\sstyle\s*=|\shref\s*=|\ssrc\s*=/i);

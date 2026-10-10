@@ -17,6 +17,15 @@ export function circleNotice(name, mode) {
   const seen = `This note will be added to the circle ${circle}. Everyone in the circle can read it, and it cannot be taken back once approved.`;
   return mode === 'anthropic' ? `${seen} The note and the names of the circle's categories are sent to Anthropic and are not anonymised.` : seen;
 }
+/** Where a proposal will be written, in words (the preview and the outcome). */
+export const scopeLine = (scope) => (scope && scope.kind === 'circle' ? `Goes to the circle "${typeof scope.circleName === 'string' && scope.circleName !== '' ? scope.circleName : 'this circle'}".` : 'Goes to your own notes.');
+/** The notice that belongs to a scope: a circle's (who can read, cannot be taken back) or the personal one. */
+export const scopeNotice = (scope, mode) => (scope && scope.kind === 'circle' ? circleNotice(scope.circleName, mode) : PERSONAL_NOTICE);
+/** The circles the person can read but may not add notes to, in one sentence (nothing when there are none). */
+export function readOnlyLine(scopes) {
+  const names = scopes.filter((s) => s.scope.kind === 'circle' && s.canCapture === false).map((s) => `"${s.label}"`);
+  return names.length === 0 ? '' : `You can read, but not add notes to: ${names.join(', ')}.`;
+}
 export const PERSONAL_NOTICE = 'This note will be added to your own notes. Only you can read it.';
 export const MODE_UNKNOWN = 'Could not tell which model files your notes.';
 export const MODE_LOADING = 'Checking which model files your notes…';
@@ -74,7 +83,8 @@ export function writtenText(outcome) {
   if (s.updatedCategories.length > 0) parts.push(plural(s.updatedCategories.length, 'updated category', 'updated categories'));
   if (s.reusedCategories.length > 0) parts.push(plural(s.reusedCategories.length, 'category reused', 'categories reused'));
   if (s.newLinks.length > 0) parts.push(plural(s.newLinks.length, 'link', 'links'));
-  return `Written: ${plural(outcome.applied, 'operation', 'operations')}${parts.length === 0 ? '' : ` (${parts.join(', ')})`}.`;
+  const where = outcome.scope && outcome.scope.kind === 'circle' ? ` Added to the circle "${typeof outcome.scope.circleName === 'string' && outcome.scope.circleName !== '' ? outcome.scope.circleName : 'this circle'}".` : '';
+  return `Written: ${plural(outcome.applied, 'operation', 'operations')}${parts.length === 0 ? '' : ` (${parts.join(', ')})`}.${where}`;
 }
 
 /** The sentence for the outcome of a proposal. */
