@@ -5,10 +5,19 @@
 ```ts
 
 // @public
+export function authoriseBrain(role: unknown, action: unknown): boolean;
+
+// @public (undocumented)
+export type BrainAction = 'read' | 'capture';
+
+// @public
 export function circleGraphId(circleId: string): string;
 
 // @public
 export function circleIdOfGraph(graphId: string): string | undefined;
+
+// @public (undocumented)
+export function createScopeResolver(init: ScopeResolverInit): ScopeResolver;
 
 // @public
 export function parseScope(input: unknown): ScopesResult<Scope>;
@@ -25,6 +34,20 @@ export type Provenance = {
     readonly circleName: string;
 };
 
+// @public
+export interface ResolvedScope {
+    // (undocumented)
+    readonly graphId: string;
+    // (undocumented)
+    readonly provenance: Provenance;
+    // Warning: (ae-forgotten-export) The symbol "CircleRole" needs to be exported by the entry point index.d.ts
+    readonly role?: CircleRole;
+    // (undocumented)
+    readonly scope: Scope;
+    // (undocumented)
+    readonly userId: string;
+}
+
 // @public (undocumented)
 export type Scope = {
     readonly kind: 'personal';
@@ -33,8 +56,22 @@ export type Scope = {
     readonly circleId: string;
 };
 
+// @public (undocumented)
+export interface ScopeResolver {
+    resolve(token: unknown, scope: Scope, action: BrainAction): Promise<ScopesResult<ResolvedScope>>;
+    who(token: unknown): Promise<ScopesResult<string>>;
+}
+
+// @public (undocumented)
+export interface ScopeResolverInit {
+    // Warning: (ae-forgotten-export) The symbol "CircleStore" needs to be exported by the entry point index.d.ts
+    readonly store: Pick<CircleStore, 'membershipOf' | 'getCircle'>;
+    // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
+    readonly users: Pick<UserController, 'resolve'>;
+}
+
 // @public
-export const SCOPES_ERROR_CODES: readonly ["INVALID_INPUT", "NOT_FOUND", "STORAGE_ERROR"];
+export const SCOPES_ERROR_CODES: readonly ["INVALID_INPUT", "UNAUTHENTICATED", "NOT_FOUND", "STORAGE_ERROR"];
 
 // @public (undocumented)
 export interface ScopesError {

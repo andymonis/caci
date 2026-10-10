@@ -7,3 +7,7 @@ export { circleGraphId, circleIdOfGraph, parseScope, PERSONAL } from './scope.js
 export type { Provenance, Scope } from './scope.js';
 export { SCOPES_ERROR_CODES, scopesError } from './errors.js';
 export type { ScopesError, ScopesErrorCode, ScopesResult } from './errors.js';
+export { authoriseBrain } from './policy.js';
+export type { BrainAction } from './policy.js';
+export { createScopeResolver } from './resolver.js';
+export type { ResolvedScope, ScopeResolver, ScopeResolverInit } from './resolver.js';
