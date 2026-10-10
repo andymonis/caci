@@ -50,6 +50,8 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-005 | [Web App (first slice) — Specification](specs/R-005-web-app.md) |
 | R-006 | [Web App: Circles — Specification](specs/R-006-web-circles.md) |
 | R-007 | [Web App: Notes — Specification](specs/R-007-web-notes.md) |
+| R-008 | [Shared Circle Brains — Specification](specs/R-008-shared-brains.md) |
+| R-008 | [Shared Circle Brains — Specification](specs/R-008-shared-circle-brains.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -98,7 +100,7 @@ Local-only development tools live under `dev/` and are never published: `dev/gra
 - **Done (2026-10):** W1 the web app, first slice (R-005): register, sign in and out and a temporary home page, in plain HTML, CSS and JavaScript served by the service from the same address under a strict Content-Security-Policy. Nothing else is in the app yet.
 - **Done (2026-10):** W2 the web app with circles (R-006): screens with addresses for creating, joining, leaving, viewing and managing circles, role hints tested against the service, two-step confirmations, an end-to-end test and a security review.
 - **Done (2026-10):** W3 the web app with notes (R-007): capture with a preview and approval, a notice of which model files the note shown before it is sent, read-only browsing of your own categories and items, an end-to-end test and a security review.
-- **Next, to be planned:** restricted access between circle members (needs pseudonymisation and the legal groundwork first).
+- **Next (planned as S1):** read-only sharing of chosen categories between circle members (R-008): the owner grants to a named member, withdrawable at any time, ended by leaving; pseudonymisation and the legal groundwork are release gates before anyone but the owner uses it. After that: writing into another brain via approval (with "request update"), relationship labels, invitation notifications.
 - **After that, to be planned:** making the web app installable, deployment to a Raspberry Pi, M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Each roadmap item in the Backlog needs its own spec first.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
 

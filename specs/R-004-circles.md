@@ -45,7 +45,7 @@ D1 to D4 are the owner's answers; D5 to D13 are proposals that stand unless chan
 4. Nobody can learn of a circle they are not in, or whether an account exists, from the answers.
 5. Nothing here exposes anyone's graph, email or credentials.
 
-**Non-goals (v1)**: any sharing of graphs or notes between members; what members may see of each other's brains (later, after pseudonymisation); labels such as "carer" or "family"; notifications of invitations (nothing is sent anywhere); circles inside circles; per-circle settings beyond a name and description; invitations by email address; transfer between circles; an audit log; a platform-admin view.
+**Non-goals (v1)**: any sharing of graphs or notes between members; what members may see of each other's brains (**now specified separately, read-only and per category, in `specs/R-008-shared-brains.md`; this specification still shares nothing**); labels such as "carer" or "family"; notifications of invitations (nothing is sent anywhere); circles inside circles; per-circle settings beyond a name and description; invitations by email address; transfer between circles; an audit log; a platform-admin view.
 
 ## Definitions
 
@@ -205,7 +205,7 @@ These are real and known; each is also in the PLAN Backlog where it can be acted
 5. **Races over HTTP are best effort in a test.** Requests to one Node process are handled one after another, so the strict last-owner and accept races are proved at the store and controller level (named above); the end-to-end test sends the requests at the same moment and shows the outcomes are the allowed ones.
 6. **No one is told about an invitation.** Nothing is sent anywhere (no email, no push); an invitee must look at `/api/invitations`. Notifications are a later piece.
 7. **Anyone who can read the database files sees every circle, membership and invitation in plain text.** The same position as the accounts and graphs (no encryption at rest, files readable only by their owner); backups copy it all.
-8. **Circles share nothing yet, and this review does not cover sharing.** When members can see parts of each other's brains, that work needs its own threat table, and pseudonymisation and the legal groundwork first.
+8. **Circles share nothing in this specification, and this review does not cover sharing** (see R-008, which has its own threat table). When members can see parts of each other's brains, that work needs its own threat table, and pseudonymisation and the legal groundwork first.
 9. **A removed or departed person may remember what they saw.** Leaving a circle ends access from then on; it cannot unsee the roster they already read.
 
 ## Build order
