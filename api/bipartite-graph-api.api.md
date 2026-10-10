@@ -115,6 +115,9 @@ export function createInvitationRoutes(options: CircleRoutesOptions): readonly R
 export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
 
 // @public
+export function createSharingRoutes(options: SharingRoutesOptions): readonly Route[];
+
+// @public
 export function createWebRoutes(options: WebRoutesOptions): readonly Route[];
 
 // @public
@@ -216,6 +219,14 @@ export interface RouteContext {
 
 // @public
 export function serialiseCookie(name: string, value: string, options: CookieOptions): string;
+
+// @public (undocumented)
+export interface SharingRoutesOptions extends Pick<CircleRoutesOptions, 'cookieName' | 'secureCookies'> {
+    // Warning: (ae-forgotten-export) The symbol "Sharing" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly sharing: Sharing;
+}
 
 // @public
 export const STATUS_OF: Readonly<Record<UsersError['code'], number>>;

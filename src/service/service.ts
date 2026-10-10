@@ -1,9 +1,10 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createAccountRoutes, createApiServer, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createWebRoutes } from '../api/index.js';
+import { createAccountRoutes, createApiServer, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
 import { createCaciController } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
+import { createSharing } from '../sharing/index.js';
 import { createSqliteCircleStore } from '../circles/sqlite/index.js';
 import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';
 import { createDemoModelClient, createLlm, type ModelClient } from '../llm/index.js';
@@ -90,12 +91,14 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       store: circleStore,
       limits: { maxCirclesPerUser: config.maxCirclesPerUser, maxMembersPerCircle: config.maxMembersPerCircle, invitationDays: config.invitationDays },
     });
+    const sharing = createSharing({ users: controller, directory: users, store: circleStore, graphAdapter: graphs });
     const routes = [
       ...createAccountRoutes({ controller, secureCookies: config.cookieSecure }),
       ...createCaptureRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createReadRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createCircleRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createInvitationRoutes({ circles, secureCookies: config.cookieSecure }),
+      ...createSharingRoutes({ sharing, secureCookies: config.cookieSecure }),
       ...createWebRoutes({ files: webFiles }),
     ];
     const api = createApiServer({

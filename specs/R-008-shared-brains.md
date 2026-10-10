@@ -106,7 +106,7 @@ All need the session cookie and the same cross-origin, JSON and size rules as th
 | Route | What it does |
 |---|---|
 | `GET /api/circles/:id/grants` | What I share, per other member (`userId`, username, display name, categories with name) |
-| `PUT /api/circles/:id/grants/:userId` | Body `{ "categories": [ids] }`; replaces the set; empty withdraws; 200 with the grant |
+| `PUT /api/circles/:id/grants/:userId` | Body `{ "categories": [ids] }`; replaces the set; 200 with the grant, or 204 when the empty set withdraws it |
 | `DELETE /api/circles/:id/grants/:userId` | Withdraws; 204 |
 | `GET /api/circles/:id/shared` | Who has shared with me (owners with counts) |
 | `GET /api/circles/:id/shared/:userId/categories` | `limit`, `cursor`; the shared categories with counts |

@@ -19,3 +19,5 @@ export type { CircleRoutesOptions } from './circle-routes.js';
 export { createInvitationRoutes } from './invitation-routes.js';
 export { createWebRoutes, WEB_POLICY } from './web-routes.js';
 export type { WebFile, WebRoutesOptions } from './web-routes.js';
+export { createSharingRoutes } from './sharing-routes.js';
+export type { SharingRoutesOptions } from './sharing-routes.js';
