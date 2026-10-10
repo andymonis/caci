@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'sharing-client.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -96,11 +96,17 @@ describe('nothing is kept in the browser and nothing is sent anywhere else', () 
       '/api/capture/propose',
       '/api/circles',
       '/api/circles/${c}',
+      '/api/circles/${c}/grants',
+      '/api/circles/${c}/grants/${u}',
       '/api/circles/${c}/invitations',
       '/api/circles/${c}/invitations/${i}',
       '/api/circles/${c}/leave',
       '/api/circles/${c}/members',
       '/api/circles/${c}/members/${u}',
+      '/api/circles/${c}/shared',
+      '/api/circles/${c}/shared/${u}/categories',
+      '/api/circles/${c}/shared/${u}/category',
+      '/api/circles/${c}/shared/${u}/item',
       '/api/graph/categories',
       '/api/graph/category',
       '/api/graph/item',

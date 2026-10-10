@@ -95,7 +95,7 @@ const itemOf = (raw) => {
   return Object.freeze({ id: raw.id, data: Object.freeze({ ...raw.data }), ...(raw.dataTruncated === true ? { dataTruncated: true } : {}) });
 };
 
-const pageOf = (itemParser, extra) => (json) => {
+export const pageOf = (itemParser, extra) => (json) => {
   if (!isObject(json) || !Array.isArray(json.items) || !(json.nextCursor === null || (typeof json.nextCursor === 'string' && CURSOR.test(json.nextCursor)))) return undefined;
   const items = [];
   for (const raw of json.items) {
@@ -108,18 +108,18 @@ const pageOf = (itemParser, extra) => (json) => {
   return Object.freeze({ ...more, items: Object.freeze(items), nextCursor: json.nextCursor });
 };
 
-const categoryOf = (raw) => {
+export const categoryOf = (raw) => {
   if (!isObject(raw) || typeof raw.id !== 'string' || raw.id === '' || !optionalName(raw.name) || !whole(raw.itemCount) || !(raw.itemCountCapped === undefined || raw.itemCountCapped === true)) return undefined;
   return Object.freeze({ id: raw.id, ...(typeof raw.name === 'string' && raw.name !== '' ? { name: raw.name } : {}), itemCount: raw.itemCount, ...(raw.itemCountCapped === true ? { itemCountCapped: true } : {}) });
 };
 
-const categoryItemsOf = pageOf(itemOf, (json) => {
+export const categoryItemsOf = pageOf(itemOf, (json) => {
   const c = json.category;
   if (!isObject(c) || typeof c.id !== 'string' || c.id === '' || !optionalName(c.name)) return undefined;
   return { category: Object.freeze({ id: c.id, ...(typeof c.name === 'string' && c.name !== '' ? { name: c.name } : {}) }) };
 });
 
-function itemDetailOf(json) {
+export function itemDetailOf(json) {
   if (!isObject(json) || !Array.isArray(json.categories) || !(json.moreCategories === undefined || json.moreCategories === true)) return undefined;
   const item = itemOf(json.item);
   if (item === undefined) return undefined;
@@ -153,7 +153,7 @@ function errorFor(what, fields, status, json, retryAfter) {
 }
 
 /** `?limit=&cursor=` from page options, or the problem with them. */
-function query(page, extra = []) {
+export function query(page, extra = []) {
   const parts = [...extra];
   if (page !== undefined) {
     if (!isObject(page)) return { problem: { kind: 'invalid', message: 'Please check what you asked for.' } };

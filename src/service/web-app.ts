@@ -17,6 +17,7 @@ export const WEB_FILE_SPECS: readonly WebFileSpec[] = Object.freeze([
   { path: '/circles-client.js', file: 'circles-client.js', kind: 'js' },
   { path: '/router.js', file: 'router.js', kind: 'js' },
   { path: '/notes-client.js', file: 'notes-client.js', kind: 'js' },
+  { path: '/sharing-client.js', file: 'sharing-client.js', kind: 'js' },
   { path: '/permissions.js', file: 'permissions.js', kind: 'js' },
   { path: '/brain-page.js', file: 'brain-page.js', kind: 'js' },
   { path: '/brain-session.js', file: 'brain-session.js', kind: 'js' },
