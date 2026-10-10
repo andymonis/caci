@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryRow, dataEntries, EMPTY_BRAIN, itemCategoryRow, itemRow, MORE_CATEGORIES, NO_CIRCLE_WAYS, scopeHint, SHORTENED, whereText } from './brain-view.js';
+import { categoryRow, dataEntries, EMPTY_BRAIN, emptyText, itemCategoryRow, itemRow, MORE_CATEGORIES, NO_CIRCLE_WAYS, scopeHint, SHORTENED, whereText } from './brain-view.js';
 
 describe('a category row', () => {
   it('shows its name and how many items, singular and plural', () => {
@@ -82,6 +82,16 @@ describe('where a result is (R-009)', () => {
     expect(itemCategoryRow({ id: 'c', name: 'N', weight: 1 }, 'Circle "Club"')).toMatchObject({ where: 'Circle "Club"', label: 'Open the category N, from Circle "Club"' });
     expect(categoryRow({ id: 'c', name: 'N', itemCount: 1 }, '').label).toBe('Open the category N, 1 item');
     expect(itemRow({ id: 'i', data: { title: 'T' } }, '').label).toBe('Open the item T');
+  });
+  it('does not tell a reader to capture into a circle she cannot add to', () => {
+    const scopes = [
+      { key: 'circle:c1', label: 'Club', scope: { kind: 'circle', circleId: 'c1' }, canCapture: true },
+      { key: 'circle:c2', label: 'Read', scope: { kind: 'circle', circleId: 'c2' }, canCapture: false },
+    ];
+    expect(emptyText('circle:c2', scopes)).toBe('Nothing has been filed in this circle yet.');
+    expect(emptyText('circle:c1', scopes)).toBe(EMPTY_BRAIN);
+    expect(emptyText('personal', scopes)).toBe(EMPTY_BRAIN);
+    expect(emptyText('mine', scopes)).toBe(EMPTY_BRAIN);
   });
   it('says what is being shown, and that a circle cannot be added to when it cannot', () => {
     const scopes = [

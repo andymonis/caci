@@ -3,7 +3,8 @@
 // `<template>` elements; everything the person or the model wrote is only ever text.
 
 import { createBrainSession } from './brain-session.js';
-import { categoryRow, dataEntries, EMPTY_BRAIN, EMPTY_CATEGORY, itemCategoryRow, itemRow, MORE_CATEGORIES, NO_CIRCLE_WAYS, scopeHint, SHORTENED, whereText } from './brain-view.js';
+import { categoryRow, dataEntries, EMPTY_CATEGORY, emptyText, itemCategoryRow, itemRow, LOST_CIRCLE_NOTE, MORE_CATEGORIES, NO_CIRCLE_WAYS, scopeHint, SHORTENED, whereText } from './brain-view.js';
+import { NO_CIRCLE } from './notes-client.js';
 import { createScopeSession, MINE_LABEL } from './scope-session.js';
 
 export function mountBrainPage(document, { client, onSignedOut }) {
@@ -61,6 +62,7 @@ export function mountBrainPage(document, { client, onSignedOut }) {
   };
 
   let optionKeys = '';
+  let lost = false; // the circle that was being read is no longer on the person's list
   /** The scope choice: My Brain (everything), then the person's own notes, then each circle they are in. */
   function renderScopes(state) {
     const s = scopes.getState();
@@ -83,8 +85,9 @@ export function mountBrainPage(document, { client, onSignedOut }) {
     const chosen = s.scopes.find((x) => x.key === s.browseKey);
     captureLink.hidden = chosen !== undefined && chosen.canCapture === false;
     const circleGone = state.categories.status === 'gone';
-    gone.hidden = !circleGone;
-    goneHint.textContent = circleGone ? `${state.categories.error ?? ''} ${NO_CIRCLE_WAYS}`.trim() : '';
+    gone.hidden = !(circleGone || lost);
+    goneHint.textContent = circleGone ? `${state.categories.error ?? ''} ${NO_CIRCLE_WAYS}`.trim() : lost ? `${NO_CIRCLE} ${LOST_CIRCLE_NOTE}` : '';
+    goneBack.hidden = !circleGone;
   }
 
   function render(state) {
@@ -100,7 +103,7 @@ export function mountBrainPage(document, { client, onSignedOut }) {
 
     // the categories
     const c = state.categories;
-    empty.textContent = EMPTY_BRAIN;
+    empty.textContent = emptyText(scopes.getState().browseKey, scopes.getState().scopes);
     empty.hidden = !(c.status === 'loaded' && c.items.length === 0);
     const rows = c.items.map((category) => {
       const view = categoryRow(category, whereText(category.scope ?? state.categories.where));
@@ -197,17 +200,28 @@ export function mountBrainPage(document, { client, onSignedOut }) {
     const changed = session.setScope(scopes.getState().browseScope);
     if (changed || session.getState().needsLoad) void session.load();
   }
+  /** Ask for the person's circles again. If the circle being read has gone from the list, say so (the choice falls back to the own notes). */
+  async function relist() {
+    const before = scopes.getState().browseKey;
+    const r = await scopes.load();
+    if (r.kind === 'dropped') return r;
+    lost = r.ok === true && before.startsWith('circle:') && scopes.getState().browseKey !== before;
+    render(session.getState());
+    return r;
+  }
   scopeSelect.addEventListener('change', () => {
+    lost = false;
     if (!scopes.chooseBrowse(scopeSelect.value)) scopeSelect.value = scopes.getState().browseKey;
     apply();
   });
   goneBack.addEventListener('click', () => {
+    lost = false;
     scopes.chooseBrowse('personal');
     apply();
     heading.focus();
   });
   refresh.addEventListener('click', async () => {
-    await scopes.load();
+    await relist();
     session.setScope(scopes.getState().browseScope);
     void session.load();
   });
@@ -220,7 +234,7 @@ export function mountBrainPage(document, { client, onSignedOut }) {
     session,
     /** The Brain screen has been shown: load the categories if they were never loaded or a note was written since. */
     show() {
-      void scopes.load().then((r) => {
+      void relist().then((r) => {
         if (r.kind !== 'dropped') apply();
       });
     },
@@ -228,6 +242,7 @@ export function mountBrainPage(document, { client, onSignedOut }) {
     markStale: () => session.markStale(),
     /** Signed out: forget everything. */
     reset() {
+      lost = false;
       session.reset();
       scopes.reset();
     },

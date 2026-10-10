@@ -2,6 +2,7 @@
 // `brain-page.js` only puts them on the page.
 
 export const EMPTY_BRAIN = 'Nothing is filed yet. Capture a note and approve it, and it will appear here.';
+export const EMPTY_READ_ONLY = 'Nothing has been filed in this circle yet.';
 export const EMPTY_CATEGORY = 'There are no items in this category.';
 export const SHORTENED = 'Some of this was shortened because it was long.';
 export const MORE_CATEGORIES = 'This item is filed under more categories than are shown here.';
@@ -10,6 +11,7 @@ const plural = (n, one, many) => `${n.toLocaleString('en-GB')} ${n === 1 ? one :
 const text = (value) => (typeof value === 'string' ? value : '');
 
 export const NO_CIRCLE_WAYS = 'You can go back to your own notes.';
+export const LOST_CIRCLE_NOTE = 'Showing your own notes instead.';
 
 /** Where a result came from, in words: the person's own notes or one circle (a circle without a name is just "a circle"). */
 export function whereText(scope) {
@@ -17,6 +19,12 @@ export function whereText(scope) {
   return 'My own notes';
 }
 const from = (where) => (where === undefined || where === '' ? '' : `, from ${where}`);
+
+/** The words for an empty brain: no advice to capture where the person cannot. */
+export function emptyText(browseKey, scopes) {
+  const chosen = scopes.find((s) => s.key === browseKey);
+  return chosen && chosen.scope.kind === 'circle' && chosen.canCapture === false ? EMPTY_READ_ONLY : EMPTY_BRAIN;
+}
 
 /** One sentence under the scope choice about what is being shown. */
 export function scopeHint(browseKey, scopes) {

@@ -560,6 +560,13 @@ describe('choosing whose notes to look at', () => {
     await settle();
   });
 
+  it('an empty circle the person can only read does not suggest capturing', async () => {
+    const { page } = await start({ ...SCOPES, ...inCircle(IN2, 'c', []) });
+    await choose(page, `circle:${C2}`);
+    expect(page.el('brain-empty').hidden).toBe(false);
+    expect(page.el('brain-empty').textContent).toBe('Nothing has been filed in this circle yet.');
+  });
+
   it('a circle that can no longer be read says so in one set of words, with a way back to the own notes', async () => {
     const { page, svc } = await start({
       ...SCOPES,
@@ -582,7 +589,7 @@ describe('choosing whose notes to look at', () => {
     expect(svc.keys()).not.toContain('GET /api/brain/categories?scope=mine&limit=50');
   });
 
-  it('a circle chosen earlier that the person has since lost falls back to the own notes the next time the screen is shown', async () => {
+  it('a circle chosen earlier that the person has since lost: the next time the screen is shown it says so and shows the own notes', async () => {
     let n = 0;
     const { page, addr } = await start({
       'GET /api/brain/scopes': () => (++n === 1 ? SCOPES['GET /api/brain/scopes'] : { status: 200, body: { items: [{ scope: ME_SCOPE, canCapture: true }] } }),
@@ -590,6 +597,7 @@ describe('choosing whose notes to look at', () => {
     });
     await choose(page, `circle:${C1}`);
     expect(page.el('brain-scope').value).toBe(`circle:${C1}`);
+    expect(page.el('brain-gone').hidden).toBe(true);
     addr.change('#/');
     await settle();
     addr.change('#/brain');
@@ -597,6 +605,26 @@ describe('choosing whose notes to look at', () => {
     expect(page.el('brain-scope').value).toBe('personal');
     expect(options(page)).toEqual([['mine', MINE_LABEL], ['personal', 'My own notes']]);
     expect(rows(page, 'brain-categories-list')).toHaveLength(2);
+    expect(page.el('brain-gone').hidden).toBe(false);
+    expect(page.el('brain-gone-hint').textContent).toBe('No such circle, or you are not in it. Showing your own notes instead.');
+    expect(page.el('brain-gone-back').hidden).toBe(true);
+    // choosing anything clears the message
+    await choose(page, 'mine');
+    expect(page.el('brain-gone').hidden).toBe(true);
+  });
+
+  it('a list that cannot be read does not claim the circle is gone', async () => {
+    let n = 0;
+    const { page, addr } = await start({
+      'GET /api/brain/scopes': () => (++n === 1 ? SCOPES['GET /api/brain/scopes'] : refuse(500, 'STORAGE_ERROR', 'x')),
+      ...inCircle(IN1, 'c', [cat('x')]),
+    });
+    await choose(page, `circle:${C1}`);
+    addr.change('#/');
+    await settle();
+    addr.change('#/brain');
+    await settle();
+    expect(page.el('brain-gone').hidden).toBe(true);
   });
 
   it('when the list of circles cannot be read the own notes still work', async () => {
