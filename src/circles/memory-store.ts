@@ -1,4 +1,5 @@
 import { circlesError, type CirclesError } from './errors.js';
+import { normaliseCategories, SELF_GRANT } from './grants.js';
 import { pageOf } from './cursor.js';
 import { err, ok, type Result } from './result.js';
 import type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from './store.js';
@@ -8,7 +9,6 @@ const copyCircle = (c: Circle): Circle => ({ ...c });
 const copyMember = (m: Membership): Membership => ({ ...m });
 const copyInvitation = (i: Invitation): Invitation => ({ ...i });
 const copyGrant = (g: Grant): Grant => ({ ...g, categories: [...g.categories] });
-const MAX_CATEGORY_ID = 256;
 const RANK: Readonly<Record<CircleRole, number>> = { owner: 0, manager: 1, member: 2, observer: 3 };
 const notFound = (what: string): CirclesError => circlesError('NOT_FOUND', `no such ${what}`);
 
@@ -196,10 +196,10 @@ export function createMemoryCircleStore(): CircleStore {
       if (!circles.has(circleId)) return err(notFound('circle'));
       const here = members.get(circleId);
       if (here?.has(ownerId) !== true || here.has(granteeId) !== true) return err(notFound('member'));
-      if (ownerId === granteeId) return err(circlesError('INVALID_INPUT', 'a person cannot share with themselves', { field: 'granteeId' }));
-      if (!Array.isArray(categories) || categories.some((c) => typeof c !== 'string' || c === '' || [...c].length > MAX_CATEGORY_ID)) return err(circlesError('INVALID_INPUT', `each category is an id of 1 to ${MAX_CATEGORY_ID} characters`, { field: 'categories' }));
-      const set = [...new Set(categories)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-      if (set.length > limits.maxCategoriesPerGrant) return err(circlesError('LIMIT_REACHED', `a grant may name at most ${limits.maxCategoriesPerGrant} categories`));
+      if (ownerId === granteeId) return err(SELF_GRANT());
+      const normal = normaliseCategories(categories, limits.maxCategoriesPerGrant);
+      if (!normal.ok) return normal;
+      const set = normal.value;
       const key = grantKey(circleId, ownerId, granteeId);
       if (set.length === 0) {
         grants.delete(key);

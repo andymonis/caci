@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 4;
+export const USERS_SCHEMA_VERSION = 5;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -130,7 +130,36 @@ const V4: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4]);
+/**
+ * Version 5 (R-008): what one person shares with one other member of a circle. One row per pair, holding the
+ * categories as a JSON array (JSON text keeps any category id exactly, even one with a lone surrogate, which a
+ * plain text column would not), so replacing a grant is one statement. The row goes with its circle (the cascade)
+ * and, in a trigger, with either person's membership row, so **a grant never outlives a membership**, whoever
+ * deletes the membership: leaving, removal, or the account-deletion trigger of version 4. Like memberships,
+ * grants have no foreign key to `users`.
+ */
+const V5: Migration = Object.freeze({
+  to: 5,
+  creates: Object.freeze(['circle_grants']),
+  sql: Object.freeze([
+    `CREATE TABLE circle_grants (
+       circle_id TEXT NOT NULL REFERENCES circles (id) ON DELETE CASCADE,
+       owner_id TEXT NOT NULL,
+       grantee_id TEXT NOT NULL,
+       categories TEXT NOT NULL CHECK (json_valid(categories) AND json_array_length(categories) > 0),
+       updated_at INTEGER NOT NULL,
+       PRIMARY KEY (circle_id, owner_id, grantee_id),
+       CHECK (owner_id <> grantee_id)
+     ) WITHOUT ROWID`,
+    'CREATE INDEX circle_grants_by_grantee ON circle_grants (circle_id, grantee_id, owner_id)',
+    `CREATE TRIGGER circle_grants_end_with_member AFTER DELETE ON circle_members
+     BEGIN
+       DELETE FROM circle_grants WHERE circle_id = old.circle_id AND (owner_id = old.user_id OR grantee_id = old.user_id);
+     END`,
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });

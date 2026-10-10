@@ -1,9 +1,10 @@
 import { DbError, openDb, type Db } from '../../sqlite/db.js';
 import { prepareUsersDatabase } from '../../users/sqlite/index.js';
 import { checkLimit, decodeCursor, encodeCursor } from '../cursor.js';
+import { normaliseCategories, SELF_GRANT } from '../grants.js';
 import { circlesError, type CirclesError } from '../errors.js';
 import { err, ok, type Result } from '../result.js';
-import type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from '../store.js';
+import type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from '../store.js';
 import type { Circle, CircleRole } from '../types.js';
 
 export interface SqliteCircleStoreOptions {
@@ -40,6 +41,13 @@ interface InvitationRow {
   created_at: number;
   expires_at: number;
 }
+interface GrantRow {
+  circle_id: string;
+  owner_id: string;
+  grantee_id: string;
+  categories: string;
+  updated_at: number;
+}
 interface SummaryRow extends CircleRow {
   role: CircleRole;
   joined_at: number;
@@ -52,6 +60,8 @@ const INVITATION_COLUMNS = 'id, circle_id, username, role, invited_by, created_a
 /** Owner first, then managers, members, observers: who inherits a circle. */
 const HEIR_ORDER = "CASE role WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 WHEN 'member' THEN 2 ELSE 3 END, joined_at, user_id";
 
+const GRANT_COLUMNS = 'circle_id, owner_id, grantee_id, categories, updated_at';
+const grantOf = (row: GrantRow): Grant => ({ circleId: row.circle_id, ownerId: row.owner_id, granteeId: row.grantee_id, categories: JSON.parse(row.categories) as string[], updatedAt: Number(row.updated_at) });
 const circleOf = (row: CircleRow): Circle => ({ id: row.id, name: row.name, ...(row.description === null ? {} : { description: row.description }), createdAt: Number(row.created_at), updatedAt: Number(row.updated_at) });
 const memberOf = (row: MemberRow): Membership => ({ circleId: row.circle_id, userId: row.user_id, role: row.role, joinedAt: Number(row.joined_at) });
 const invitationOf = (row: InvitationRow): Invitation => ({ id: row.id, circleId: row.circle_id, username: row.username, role: row.role, invitedBy: row.invited_by, createdAt: Number(row.created_at), expiresAt: Number(row.expires_at) });
@@ -303,12 +313,50 @@ export function createSqliteCircleStore(options: SqliteCircleStoreOptions = {}):
       }),
     purgeExpired: async (now) => db.run('DELETE FROM circle_invitations WHERE expires_at <= ?', now),
 
-    // Grants (R-008) are stored by T-141 (schema version 5); until then this store refuses them rather than pretend.
-    setGrant: async () => err(circlesError('STORAGE_ERROR', 'grants are not stored by this store yet')),
-    getGrant: async () => undefined,
-    listGrantsBy: async () => ({ items: [], nextCursor: null }),
-    listGrantsTo: async () => ({ items: [], nextCursor: null }),
-    withdrawGrant: async () => false,
+    setGrant: async (circleId: string, ownerId: string, granteeId: string, categories: readonly string[], now: number, limits: GrantLimits): Promise<Result<Grant | undefined, CirclesError>> => {
+      try {
+        return inTransaction(() => {
+          if (circleRow(circleId) === undefined) return err(notFound('circle'));
+          if (memberRow(circleId, ownerId) === undefined || memberRow(circleId, granteeId) === undefined) return err(notFound('member'));
+          if (ownerId === granteeId) return err(SELF_GRANT());
+          const normal = normaliseCategories(categories, limits.maxCategoriesPerGrant);
+          if (!normal.ok) return normal;
+          if (normal.value.length === 0) {
+            db.run('DELETE FROM circle_grants WHERE circle_id = ? AND owner_id = ? AND grantee_id = ?', circleId, ownerId, granteeId);
+            return ok(undefined);
+          }
+          db.run(`INSERT OR REPLACE INTO circle_grants (${GRANT_COLUMNS}) VALUES (?, ?, ?, ?, ?)`, circleId, ownerId, granteeId, JSON.stringify(normal.value), now);
+          return ok(grantOf(db.get<GrantRow>(`SELECT ${GRANT_COLUMNS} FROM circle_grants WHERE circle_id = ? AND owner_id = ? AND grantee_id = ?`, circleId, ownerId, granteeId) as GrantRow));
+        });
+      } catch (cause) {
+        return err(failure(cause));
+      }
+    },
+    getGrant: async (circleId, ownerId, granteeId) => {
+      const row = db.get<GrantRow>(`SELECT ${GRANT_COLUMNS} FROM circle_grants WHERE circle_id = ? AND owner_id = ? AND grantee_id = ?`, circleId, ownerId, granteeId);
+      return row === undefined ? undefined : grantOf(row);
+    },
+    listGrantsBy: async (circleId, ownerId, page) =>
+      listing<GrantRow, Grant>(
+        page,
+        (after, take) =>
+          after === undefined
+            ? db.all<GrantRow>(`SELECT ${GRANT_COLUMNS} FROM circle_grants WHERE circle_id = ? AND owner_id = ? ORDER BY grantee_id LIMIT ?`, circleId, ownerId, take)
+            : db.all<GrantRow>(`SELECT ${GRANT_COLUMNS} FROM circle_grants WHERE circle_id = ? AND owner_id = ? AND grantee_id > ? ORDER BY grantee_id LIMIT ?`, circleId, ownerId, after, take),
+        (row) => row.grantee_id,
+        grantOf,
+      ),
+    listGrantsTo: async (circleId, granteeId, page) =>
+      listing<GrantRow, Grant>(
+        page,
+        (after, take) =>
+          after === undefined
+            ? db.all<GrantRow>(`SELECT ${GRANT_COLUMNS} FROM circle_grants WHERE circle_id = ? AND grantee_id = ? ORDER BY owner_id LIMIT ?`, circleId, granteeId, take)
+            : db.all<GrantRow>(`SELECT ${GRANT_COLUMNS} FROM circle_grants WHERE circle_id = ? AND grantee_id = ? AND owner_id > ? ORDER BY owner_id LIMIT ?`, circleId, granteeId, after, take),
+        (row) => row.owner_id,
+        grantOf,
+      ),
+    withdrawGrant: async (circleId, ownerId, granteeId) => db.run('DELETE FROM circle_grants WHERE circle_id = ? AND owner_id = ? AND grantee_id = ?', circleId, ownerId, granteeId) > 0,
     close: () => db.close(),
   };
 }
