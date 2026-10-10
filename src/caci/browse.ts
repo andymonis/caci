@@ -65,7 +65,7 @@ export interface ItemDetail {
 }
 
 /** `{ limit, cursor }` as the store wants it, or the error naming the field. */
-function pageOf(input: PageInput | undefined): Result<{ limit: number; cursor: string | null }, CaciError> {
+export function pageOf(input: PageInput | undefined): Result<{ limit: number; cursor: string | null }, CaciError> {
   const limit = input?.limit === undefined ? DEFAULT_PAGE : input.limit;
   if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE) return err(caciError('INVALID_INPUT', `limit must be a whole number from 1 to ${MAX_PAGE}`, { field: 'limit' }));
   const cursor = input?.cursor === undefined ? null : input.cursor;

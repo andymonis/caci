@@ -110,6 +110,6 @@ describe('the errors', () => {
     expect(Object.isFrozen(e)).toBe(true);
     expect('field' in e).toBe(false);
     expect(scopesError('INVALID_INPUT', 'x', 'scope').field).toBe('scope');
-    expect([...SCOPES_ERROR_CODES]).toEqual(['INVALID_INPUT', 'UNAUTHENTICATED', 'NOT_FOUND', 'STORAGE_ERROR']);
+    expect([...SCOPES_ERROR_CODES]).toEqual(['INVALID_INPUT', 'UNAUTHENTICATED', 'NOT_FOUND', 'LIMIT_REACHED', 'STORAGE_ERROR']);
   });
 });

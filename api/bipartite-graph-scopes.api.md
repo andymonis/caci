@@ -90,18 +90,20 @@ export type Scope = {
 
 // @public (undocumented)
 export interface ScopeResolver {
+    readable(token: unknown): Promise<ScopesResult<readonly ResolvedScope[]>>;
     resolve(token: unknown, scope: Scope, action: BrainAction): Promise<ScopesResult<ResolvedScope>>;
     who(token: unknown): Promise<ScopesResult<string>>;
 }
 
 // @public (undocumented)
 export interface ScopeResolverInit {
-    readonly store: Pick<CircleStore, 'membershipOf' | 'getCircle'>;
+    readonly maxScopes?: number;
+    readonly store: Pick<CircleStore, 'membershipOf' | 'getCircle' | 'listCirclesOf'>;
     readonly users: Pick<UserController, 'resolve'>;
 }
 
 // @public
-export const SCOPES_ERROR_CODES: readonly ["INVALID_INPUT", "UNAUTHENTICATED", "NOT_FOUND", "STORAGE_ERROR"];
+export const SCOPES_ERROR_CODES: readonly ["INVALID_INPUT", "UNAUTHENTICATED", "NOT_FOUND", "LIMIT_REACHED", "STORAGE_ERROR"];
 
 // @public (undocumented)
 export interface ScopesError {

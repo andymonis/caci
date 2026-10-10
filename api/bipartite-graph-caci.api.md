@@ -16,16 +16,40 @@ export interface ApprovedView {
     readonly summary: ProposalSummary;
 }
 
+// @public (undocumented)
+export interface BrainLimits {
+    readonly maxConcurrentReads?: number;
+}
+
+// @public
+export interface BrainScope {
+    // (undocumented)
+    readonly canCapture: boolean;
+    // Warning: (ae-forgotten-export) The symbol "CircleRole" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly role?: CircleRole;
+    // Warning: (ae-forgotten-export) The symbol "Provenance" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly scope: Provenance;
+}
+
 // @public
 export const CACI_ERROR_CODES: readonly ["UNAUTHENTICATED", "NOT_FOUND", "EXPIRED", "THROTTLED", "TOO_MANY_PENDING", "INVALID_INPUT"];
 
 // @public (undocumented)
 export interface CaciController {
     approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
+    brainScopes(token: unknown): Promise<Result<{
+        readonly items: readonly BrainScope[];
+    }, CaciError>>;
     categories(token: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryPage, CaciError>>;
     categoryItems(token: unknown, categoryId: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryItemsPage, CaciError>>;
     get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
     item(token: unknown, itemId: unknown, scope?: unknown): Promise<Result<ItemDetail, CaciError>>;
+    mineCategories(token: unknown, page?: PageInput): Promise<Result<MineCategoryPage, CaciError>>;
+    mineSummary(token: unknown): Promise<Result<MineSummary, CaciError>>;
     mode(token: unknown): Promise<Result<{
         readonly mode: 'demo' | 'anthropic';
     }, CaciError>>;
@@ -48,7 +72,7 @@ export interface CaciControllerInit {
     // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
     readonly graphAdapter: StorageAdapter;
     // (undocumented)
-    readonly limits?: CaciLimits;
+    readonly limits?: CaciLimits & BrainLimits;
     readonly mode?: 'demo' | 'anthropic';
     // Warning: (ae-forgotten-export) The symbol "ScopeResolver" needs to be exported by the entry point index.d.ts
     readonly scopes?: ScopeResolver;
@@ -108,8 +132,6 @@ export interface CategoryItemsPage {
     readonly items: readonly ItemView[];
     // (undocumented)
     readonly nextCursor: string | null;
-    // Warning: (ae-forgotten-export) The symbol "Provenance" needs to be exported by the entry point index.d.ts
-    //
     // (undocumented)
     readonly scope?: Provenance;
 }
@@ -182,6 +204,28 @@ export const MAX_NOTE_CHARS = 8000;
 
 // @public (undocumented)
 export const MAX_PAGE = 100;
+
+// @public (undocumented)
+export interface MineCategory extends CategoryView {
+    // (undocumented)
+    readonly scope: Provenance;
+}
+
+// @public (undocumented)
+export interface MineCategoryPage {
+    // (undocumented)
+    readonly items: readonly MineCategory[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+}
+
+// @public
+export interface MineSummary extends GraphSummary {
+    // (undocumented)
+    readonly scopes: ReadonlyArray<GraphSummary & {
+        readonly scope: Provenance;
+    }>;
+}
 
 // @public (undocumented)
 export interface PageInput {

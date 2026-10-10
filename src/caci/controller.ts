@@ -1,7 +1,8 @@
 import type { ControllerError, Controller, PendingProposal, ProposalSummary } from '../app/index.js';
 import { err, ok, type JsonValue, type Result, type StorageAdapter } from '../graph_store/index.js';
 import { createRegistrationThrottle as createWindowLimiter, type Authenticated, type UserController } from '../users/index.js';
-import { parseScope, type Provenance, type ScopeResolver, type ScopesError, type Scope } from '../scopes/index.js';
+import { parseScope, PERSONAL, type Provenance, type ResolvedScope, type ScopeResolver, type ScopesError, type Scope } from '../scopes/index.js';
+import { createBrain, type BrainLimits, type BrainScope, type MineCategoryPage, type MineSummary } from './brain.js';
 import { createBrowser, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
 
@@ -29,7 +30,7 @@ export interface CaciControllerInit {
   readonly mode?: 'demo' | 'anthropic';
   /** The clock in milliseconds. Use the capture controller's clock too, so expiry agrees. */
   readonly clock?: () => number;
-  readonly limits?: CaciLimits;
+  readonly limits?: CaciLimits & BrainLimits;
   /** Resolves a circle scope to its graph for the current member (R-009). Without it only the personal scope works. */
   readonly scopes?: ScopeResolver;
 }
@@ -77,6 +78,12 @@ export interface CaciController {
   approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
   /** Which model files this person's notes: `demo` (nothing leaves the machine) or `anthropic` (the note and category names go to Anthropic). Nothing else is said. */
   mode(token: unknown): Promise<Result<{ readonly mode: 'demo' | 'anthropic' }, CaciError>>;
+  /** The scopes the person may use, their own brain first: where each is, their role there and whether they may capture. */
+  brainScopes(token: unknown): Promise<Result<{ readonly items: readonly BrainScope[] }, CaciError>>;
+  /** My Brain: counts over the person's brain and every circle brain they may read, and for each on its own. */
+  mineSummary(token: unknown): Promise<Result<MineSummary, CaciError>>;
+  /** My Brain: the categories of every readable scope, each tagged with where it came from, in a fixed order, a page at a time. */
+  mineCategories(token: unknown, page?: PageInput): Promise<Result<MineCategoryPage, CaciError>>;
   /**
    * Counts of items, categories and links in the caller's graph, or (with a `scope`, R-009) in one circle's brain
    * the caller may read, in which case the answer names the circle. Every browse call below takes the same optional
@@ -125,6 +132,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   const { users, capture, graphAdapter } = init;
   if (users === undefined || capture === undefined || graphAdapter === undefined) throw new TypeError('createCaciController needs users, capture and graphAdapter');
   const browser = createBrowser(graphAdapter);
+  const brain = createBrain(browser, init.limits);
   const mode = init.mode ?? 'demo';
   if (mode !== 'demo' && mode !== 'anthropic') throw new TypeError('createCaciController: mode must be demo or anthropic');
   const scopes = init.scopes;
@@ -182,6 +190,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     if (e.code === 'INVALID_INPUT') return caciError('INVALID_INPUT', e.message, { field: e.field === undefined || e.field === 'scope' ? 'scope' : `scope.${e.field}` });
     if (e.code === 'UNAUTHENTICATED') return caciError('UNAUTHENTICATED', 'not signed in');
     if (e.code === 'NOT_FOUND') return noCircle();
+    if (e.code === 'LIMIT_REACHED') return caciError('INVALID_INPUT', e.message, { field: 'scope' });
     return storage();
   };
 
@@ -215,6 +224,17 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     return ok({ graphId: resolved.value.graphId, provenance: resolved.value.provenance });
   }
 
+  /** Everything the person may read, their own brain first. Without a resolver that is just their own. */
+  async function readableScopes(token: unknown): Promise<Result<readonly ResolvedScope[], CaciError>> {
+    if (scopes !== undefined) {
+      const r = await scopes.readable(token);
+      return r.ok ? ok(r.value) : err(scopeProblem(r.error));
+    }
+    const me = await whoIs(token);
+    if (!me.ok) return me;
+    return ok([Object.freeze({ userId: me.value.user.id, scope: PERSONAL, graphId: me.value.graphId, provenance: Object.freeze({ kind: 'personal' as const }) })]);
+  }
+
   /** A browse result with the circle it came from (nothing is added for the personal brain). */
   const tag = <T extends object>(value: T, provenance: Provenance | undefined): T => (provenance === undefined ? value : Object.freeze({ ...value, scope: provenance }));
 
@@ -230,6 +250,21 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     async mode(token) {
       const me = await whoIs(token);
       return me.ok ? ok(Object.freeze({ mode })) : me;
+    },
+
+    async brainScopes(token) {
+      const all = await readableScopes(token);
+      return all.ok ? ok(Object.freeze({ items: brain.scopes(all.value) })) : all;
+    },
+
+    async mineSummary(token) {
+      const all = await readableScopes(token);
+      return all.ok ? brain.summary(all.value) : all;
+    },
+
+    async mineCategories(token, page) {
+      const all = await readableScopes(token);
+      return all.ok ? brain.categories((all.value[0] as ResolvedScope).userId, all.value, page) : all;
     },
 
     async summary(token, scope) {

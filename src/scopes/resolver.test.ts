@@ -138,6 +138,7 @@ describe('failures are one fixed message', () => {
         if (what === 'circle') throw new Error(secret);
         return undefined;
       },
+      listCirclesOf: async () => ({ items: [], nextCursor: null }),
     };
     return { w, r: createScopeResolver({ users: w.users as never, store: store as never }), secret };
   };
@@ -157,7 +158,7 @@ describe('failures are one fixed message', () => {
   });
 
   it('a user service that throws, or answers with something other than "not signed in", is a storage failure and not a sign-out', async () => {
-    const store = { membershipOf: async () => undefined, getCircle: async () => undefined };
+    const store = { membershipOf: async () => undefined, getCircle: async () => undefined, listCirclesOf: async () => ({ items: [], nextCursor: null }) };
     const throwing = createScopeResolver({ users: { resolve: async () => { throw new Error('x'); } } as never, store });
     expect(await throwing.resolve('t', PERSONAL, 'read')).toMatchObject({ ok: false, error: { code: 'STORAGE_ERROR' } });
     const odd = createScopeResolver({ users: { resolve: async () => ({ ok: false, error: { code: 'STORAGE_ERROR', message: 'y' } }) } as never, store });
@@ -167,7 +168,110 @@ describe('failures are one fixed message', () => {
   });
 
   it('construction needs both a user controller and a circle store', () => {
+    const w0 = world('memory');
+    kept.push(w0);
     expect(() => createScopeResolver({} as never)).toThrow(TypeError);
     expect(() => createScopeResolver({ users: { resolve: async () => ({}) } } as never)).toThrow(TypeError);
+    expect(() => createScopeResolver({ users: { resolve: async () => ({}) }, store: { membershipOf: async () => undefined, getCircle: async () => undefined } } as never)).toThrow(TypeError);
+    for (const maxScopes of [0, -1, 1.5, Number.NaN]) expect(() => createScopeResolver({ users: w0.users as never, store: w0.store, maxScopes })).toThrow(TypeError);
   });
 });
+
+describe.each(['memory', 'sqlite'] as const)('the scopes a person may read, over the %s circle store', (kind) => {
+  it('their own brain first, then every circle they are in whatever the role, by circle id, with names and roles', async () => {
+    const { w, r } = make(kind);
+    await w.circle(3, 'ann', [['bob', 'observer']]);
+    await w.circle(1, 'ann', [['bob', 'owner']]);
+    await w.circle(2, 'cat', []);
+    const got = await r.readable(w.token('bob'));
+    expect(got).toEqual({
+      ok: true,
+      value: [
+        { userId: w.id('bob'), scope: { kind: 'personal' }, graphId: `user-${w.id('bob')}`, provenance: { kind: 'personal' } },
+        { userId: w.id('bob'), scope: { kind: 'circle', circleId: cid(1) }, graphId: `circle-${cid(1)}`, provenance: { kind: 'circle', circleId: cid(1), circleName: 'Circle 1' }, role: 'owner' },
+        { userId: w.id('bob'), scope: { kind: 'circle', circleId: cid(3) }, graphId: `circle-${cid(3)}`, provenance: { kind: 'circle', circleId: cid(3), circleName: 'Circle 3' }, role: 'observer' },
+      ],
+    });
+    const v = (got as { value: readonly object[] }).value;
+    expect(Object.isFrozen(v) && v.every((x) => Object.isFrozen(x))).toBe(true);
+  });
+
+  it('a person in no circle has only their own brain, and the circle store is asked once for their circles', async () => {
+    const { w, r } = make(kind);
+    await w.circle(1, 'ann', []);
+    w.calls.length = 0;
+    const got = await r.readable(w.token('dan'));
+    expect(got).toMatchObject({ ok: true, value: [{ scope: { kind: 'personal' } }] });
+    expect((got as unknown as { value: unknown[] }).value).toHaveLength(1);
+    expect(w.calls).toEqual(['listCirclesOf']);
+  });
+
+  it('is read from the store every time: a removal and a new circle show on the next call', async () => {
+    const { w, r } = make(kind);
+    const c = await w.circle(1, 'ann', [['bob', 'member']]);
+    expect((await r.readable(w.token('bob'))) as unknown as { value: unknown[] }).toMatchObject({ value: { length: 2 } });
+    await w.store.removeMember(c, w.id('bob'));
+    expect((await r.readable(w.token('bob'))) as unknown as { value: unknown[] }).toMatchObject({ value: { length: 1 } });
+    await w.circle(2, 'bob', []);
+    expect((await r.readable(w.token('bob'))) as unknown as { value: unknown[] }).toMatchObject({ value: { length: 2 } });
+  });
+
+  it('more than the limit is refused with the number, never cut short; exactly the limit is fine', async () => {
+    const w = world(kind);
+    kept.push(w);
+    for (let n = 1; n <= 3; n++) await w.circle(n, 'ann', []);
+    const exact = createScopeResolver({ users: w.users as never, store: w.store, maxScopes: 4 });
+    expect(((await exact.readable(w.token('ann'))) as unknown as { value: unknown[] }).value).toHaveLength(4);
+    const tight = createScopeResolver({ users: w.users as never, store: w.store, maxScopes: 3 });
+    const refused = await tight.readable(w.token('ann'));
+    expect(refused).toEqual({ ok: false, error: { code: 'LIMIT_REACHED', message: 'you are in more circles than can be combined in one view (at most 2): choose one circle' } });
+  });
+
+  it('pages through more circles than one page of the store', async () => {
+    const w = world(kind);
+    kept.push(w);
+    for (let n = 1; n <= 130; n++) await w.store.createCircle({ id: cid(n), name: `Circle ${n}`, createdAt: 1 }, w.id('ann'), { maxCirclesPerUser: 1000 });
+    const big = createScopeResolver({ users: w.users as never, store: w.store, maxScopes: 200 });
+    const got = (await big.readable(w.token('ann'))) as unknown as { value: Array<{ scope: { circleId?: string } }> };
+    expect(got.value).toHaveLength(131);
+    expect(w.calls.filter((c) => c === 'listCirclesOf')).toHaveLength(2); // 100 and 30
+    expect(got.value.slice(1).map((s) => s.scope.circleId)).toEqual(Array.from({ length: 130 }, (_, i) => cid(i + 1)));
+  }, 30_000);
+
+  it('by default the personal brain and 24 circles are combined, and 25 circles are refused', async () => {
+    const w = world(kind);
+    kept.push(w);
+    for (let n = 1; n <= 24; n++) await w.store.createCircle({ id: cid(n), name: `Circle ${n}`, createdAt: 1 }, w.id('ann'), { maxCirclesPerUser: 1000 });
+    const r = createScopeResolver({ users: w.users as never, store: w.store });
+    expect(((await r.readable(w.token('ann'))) as unknown as { value: unknown[] }).value).toHaveLength(25);
+    await w.store.createCircle({ id: cid(25), name: 'Circle 25', createdAt: 1 }, w.id('ann'), { maxCirclesPerUser: 1000 });
+    expect(await r.readable(w.token('ann'))).toMatchObject({ ok: false, error: { code: 'LIMIT_REACHED' } });
+  });
+
+  it('a session that does not work is unauthenticated and the circle store is not asked', async () => {
+    const { w, r } = make(kind);
+    w.calls.length = 0;
+    expect(await r.readable('nope')).toMatchObject({ ok: false, error: { code: 'UNAUTHENTICATED' } });
+    expect(w.calls).toEqual([]);
+  });
+});
+
+describe('the list of readable scopes fails closed', () => {
+  const resolverWith = (listCirclesOf: (p: { limit: number; cursor: string | null }) => unknown) => {
+    const w = world('memory');
+    kept.push(w);
+    return { w, r: createScopeResolver({ users: w.users as never, store: { membershipOf: async () => undefined, getCircle: async () => undefined, listCirclesOf } as never }) };
+  };
+  it('a store that throws is the fixed message and never the thrown text', async () => {
+    const { w, r } = resolverWith(async () => { throw new Error('disk /secret'); });
+    const got = await r.readable(w.token('ann'));
+    expect(got).toEqual({ ok: false, error: { code: 'STORAGE_ERROR', message: 'the scopes service could not complete the request' } });
+  });
+  it('a cursor that repeats is a failure, not a loop', async () => {
+    let calls = 0;
+    const { w, r } = resolverWith(async () => (calls++, { items: [], nextCursor: 'same' }));
+    expect(await r.readable(w.token('ann'))).toMatchObject({ ok: false, error: { code: 'STORAGE_ERROR' } });
+    expect(calls).toBe(2);
+  });
+});
+

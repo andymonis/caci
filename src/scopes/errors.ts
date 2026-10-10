@@ -1,7 +1,7 @@
 import type { Result } from '../circles/index.js';
 
 /** The failures of the scopes component. Messages are fixed per kind: nothing a store or a request said is repeated. */
-export const SCOPES_ERROR_CODES = ['INVALID_INPUT', 'UNAUTHENTICATED', 'NOT_FOUND', 'STORAGE_ERROR'] as const;
+export const SCOPES_ERROR_CODES = ['INVALID_INPUT', 'UNAUTHENTICATED', 'NOT_FOUND', 'LIMIT_REACHED', 'STORAGE_ERROR'] as const;
 export type ScopesErrorCode = (typeof SCOPES_ERROR_CODES)[number];
 
 export interface ScopesError {

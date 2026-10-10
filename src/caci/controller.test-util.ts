@@ -5,7 +5,7 @@ import { createDemoModelClient, createLlm, type ModelClient, type ModelRequest }
 import { createLoginThrottle, createMemorySessionStore, createMemoryUserStore, createPasswordHasher, createRegistrationThrottle, createUserController, type UserController } from '../users/index.js';
 import { createMemoryCircleStore, type CircleRole, type CircleStore } from '../circles/index.js';
 import { circleGraphId, createScopeResolver } from '../scopes/index.js';
-import { createCaciController, type CaciController, type CaciLimits } from './index.js';
+import { createCaciController, type BrainLimits, type CaciController, type CaciLimits } from './index.js';
 
 export const PW = 'correct horse 7 staple';
 export const T0 = 1_700_000_000_000;
@@ -25,7 +25,7 @@ export interface World {
   circle(n: number, owner: string, others?: ReadonlyArray<readonly [string, CircleRole]>): Promise<string>;
 }
 
-export async function world(extra: { limits?: CaciLimits; client?: ModelClient; capturePending?: number; mode?: 'demo' | 'anthropic'; people?: string[]; captureAdapter?: (adapter: StorageAdapter) => StorageAdapter; ttlMs?: number } = {}): Promise<World> {
+export async function world(extra: { limits?: CaciLimits & BrainLimits; maxScopes?: number; browseAdapter?: (adapter: StorageAdapter) => StorageAdapter; client?: ModelClient; capturePending?: number; mode?: 'demo' | 'anthropic'; people?: string[]; captureAdapter?: (adapter: StorageAdapter) => StorageAdapter; ttlMs?: number } = {}): Promise<World> {
   const now = { value: T0 };
   const graphs = createMemoryAdapter();
   const users = createUserController({
@@ -44,8 +44,8 @@ export async function world(extra: { limits?: CaciLimits; client?: ModelClient; 
   const client: ModelClient = { complete: (request) => (modelCalls.push(request), inner.complete(request)) };
   const capture = createController({ adapter: extra.captureAdapter?.(graphs) ?? graphs, llm: createLlm({ client }), now: () => now.value + skew.value, ...(extra.capturePending === undefined ? {} : { maxPending: extra.capturePending }), ...(extra.ttlMs === undefined ? {} : { ttlMs: extra.ttlMs }) });
   const circleStore = createMemoryCircleStore();
-  const scopes = createScopeResolver({ users, store: circleStore });
-  const caci = createCaciController({ users, capture, graphAdapter: graphs, scopes, clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }), ...(extra.mode === undefined ? {} : { mode: extra.mode }) });
+  const scopes = createScopeResolver({ users, store: circleStore, ...(extra.maxScopes === undefined ? {} : { maxScopes: extra.maxScopes }) });
+  const caci = createCaciController({ users, capture, graphAdapter: extra.browseAdapter?.(graphs) ?? graphs, scopes, clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }), ...(extra.mode === undefined ? {} : { mode: extra.mode }) });
   const tokens: Record<string, string> = {};
   const graphIds: Record<string, string> = {};
   for (const name of extra.people ?? ['ann', 'bob']) {
