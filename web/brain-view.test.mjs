@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { categoryRow, dataEntries, EMPTY_BRAIN, itemCategoryRow, itemRow, MORE_CATEGORIES, SHORTENED } from './brain-view.js';
+import { categoryRow, dataEntries, EMPTY_BRAIN, itemCategoryRow, itemRow, MORE_CATEGORIES, NO_CIRCLE_WAYS, scopeHint, SHORTENED, whereText } from './brain-view.js';
 
 describe('a category row', () => {
   it('shows its name and how many items, singular and plural', () => {
-    expect(categoryRow({ id: 'c1', name: 'Health', itemCount: 3 })).toEqual({ name: 'Health', count: '3 items', label: 'Open the category Health, 3 items' });
+    expect(categoryRow({ id: 'c1', name: 'Health', itemCount: 3 })).toEqual({ name: 'Health', count: '3 items', where: '', label: 'Open the category Health, 3 items' });
     expect(categoryRow({ id: 'c1', name: 'Health', itemCount: 1 }).count).toBe('1 item');
     expect(categoryRow({ id: 'c1', name: 'Health', itemCount: 0 }).count).toBe('0 items');
     expect(categoryRow({ id: 'c1', name: 'Health', itemCount: 12345 }).count).toBe('12,345 items');
@@ -22,7 +22,7 @@ describe('a category row', () => {
 
 describe('an item row', () => {
   it('shows the title and summary, falling back to the name and then the id', () => {
-    expect(itemRow({ id: 'i', data: { title: 'T', summary: 'S' } })).toEqual({ title: 'T', summary: 'S', shortened: '', label: 'Open the item T' });
+    expect(itemRow({ id: 'i', data: { title: 'T', summary: 'S' } })).toEqual({ title: 'T', summary: 'S', shortened: '', where: '', label: 'Open the item T' });
     expect(itemRow({ id: 'i', data: { name: 'N' } }).title).toBe('N');
     expect(itemRow({ id: 'i', data: { title: '', name: 'N' } }).title).toBe('N');
     expect(itemRow({ id: 'i', data: {} }).title).toBe('i');
@@ -55,7 +55,7 @@ describe('the data of one item', () => {
 
 describe('a category an item is filed under', () => {
   it('shows the name (or id) and the weight', () => {
-    expect(itemCategoryRow({ id: 'c', name: 'Health', weight: 0.9 })).toEqual({ name: 'Health', weight: 'weight 0.9', label: 'Open the category Health' });
+    expect(itemCategoryRow({ id: 'c', name: 'Health', weight: 0.9 })).toEqual({ name: 'Health', weight: 'weight 0.9', where: '', label: 'Open the category Health' });
     expect(itemCategoryRow({ id: 'c', weight: 1 }).name).toBe('c');
     expect(itemCategoryRow({ id: 'c', name: '', weight: 1 }).name).toBe('c');
   });
@@ -65,5 +65,35 @@ describe('fixed words', () => {
   it('say what they should', () => {
     expect(EMPTY_BRAIN).toContain('Capture a note and approve it');
     expect(MORE_CATEGORIES).toBe('This item is filed under more categories than are shown here.');
+  });
+});
+
+describe('where a result is (R-009)', () => {
+  it('names the own notes or the circle, and an unnamed circle as unnamed', () => {
+    expect(whereText({ kind: 'personal' })).toBe('My own notes');
+    expect(whereText(undefined)).toBe('My own notes');
+    expect(whereText({ kind: 'circle', circleId: 'c0123456789abcdef', circleName: 'Club' })).toBe('Circle "Club"');
+    expect(whereText({ kind: 'circle', circleId: 'c0123456789abcdef' })).toBe('Circle "unnamed"');
+    expect(whereText({ kind: 'circle', circleId: 'c0123456789abcdef', circleName: '' })).toBe('Circle "unnamed"');
+  });
+  it('puts where a result is into the label of each row, and nothing when it is not known', () => {
+    expect(categoryRow({ id: 'c', name: 'N', itemCount: 1 }, 'Circle "Club"')).toMatchObject({ where: 'Circle "Club"', label: 'Open the category N, 1 item, from Circle "Club"' });
+    expect(itemRow({ id: 'i', data: { title: 'T' } }, 'Circle "Club"')).toMatchObject({ where: 'Circle "Club"', label: 'Open the item T, from Circle "Club"' });
+    expect(itemCategoryRow({ id: 'c', name: 'N', weight: 1 }, 'Circle "Club"')).toMatchObject({ where: 'Circle "Club"', label: 'Open the category N, from Circle "Club"' });
+    expect(categoryRow({ id: 'c', name: 'N', itemCount: 1 }, '').label).toBe('Open the category N, 1 item');
+    expect(itemRow({ id: 'i', data: { title: 'T' } }, '').label).toBe('Open the item T');
+  });
+  it('says what is being shown, and that a circle cannot be added to when it cannot', () => {
+    const scopes = [
+      { key: 'personal', label: 'My own notes', scope: { kind: 'personal' }, canCapture: true },
+      { key: 'circle:c1', label: 'Club', scope: { kind: 'circle', circleId: 'c1' }, canCapture: true },
+      { key: 'circle:c2', label: 'Read', scope: { kind: 'circle', circleId: 'c2' }, canCapture: false },
+    ];
+    expect(scopeHint('personal', scopes)).toBe('Showing only your own notes.');
+    expect(scopeHint('mine', scopes)).toBe('My Brain shows your own notes and the notes of every circle you are in. Each one says where it is.');
+    expect(scopeHint('circle:c1', scopes)).toBe('Showing the circle "Club": the notes added by its members.');
+    expect(scopeHint('circle:c2', scopes)).toBe('Showing the circle "Read": the notes added by its members. You can read it, but not add notes to it.');
+    expect(scopeHint('circle:gone', scopes)).toBe('Showing only your own notes.');
+    expect(NO_CIRCLE_WAYS).toBe('You can go back to your own notes.');
   });
 });

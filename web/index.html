@@ -339,10 +339,16 @@
 
       <section id="view-brain" hidden>
         <h2 id="brain-heading" tabindex="-1">Your notes</h2>
-        <p class="hint">This is what you have filed, read-only. It is as old as the last time it was loaded.</p>
+        <p class="hint">This is what has been filed, read-only. It is as old as the last time it was loaded.</p>
+        <div class="field">
+          <label for="brain-scope">Which notes?</label>
+          <select id="brain-scope" name="scope" aria-describedby="brain-scope-hint"></select>
+          <p id="brain-scope-hint" class="hint"></p>
+        </div>
         <p id="brain-status" role="status" hidden></p>
         <p id="brain-error" class="error" role="alert" tabindex="-1" hidden></p>
-        <p><button type="button" id="brain-refresh" class="link">Refresh</button> · <a href="#/capture">Capture a note</a></p>
+        <p id="brain-gone" hidden><span id="brain-gone-hint"></span> <button type="button" id="brain-gone-back" class="link">Go to your own notes</button></p>
+        <p><button type="button" id="brain-refresh" class="link">Refresh</button><span id="brain-capture-link"> · <a href="#/capture">Capture a note</a></span></p>
 
         <section id="brain-categories" hidden>
           <p id="brain-empty" hidden></p>
@@ -353,6 +359,7 @@
         <section id="brain-category" hidden>
           <p><button type="button" id="brain-category-back" class="link">Back to the categories</button></p>
           <h3 id="brain-category-heading" tabindex="-1">Category</h3>
+          <p id="brain-category-where" class="meta"></p>
           <p id="brain-category-error" class="error" role="alert" tabindex="-1" hidden></p>
           <p id="brain-items-empty" hidden></p>
           <ul id="brain-items-list" class="rows" hidden></ul>
@@ -362,6 +369,7 @@
         <section id="brain-item" hidden>
           <p><button type="button" id="brain-item-back" class="link">Back</button></p>
           <h3 id="brain-item-heading" tabindex="-1">Item</h3>
+          <p id="brain-item-where" class="meta"></p>
           <p id="brain-item-error" class="error" role="alert" tabindex="-1" hidden></p>
           <ul id="brain-item-data" class="plain"></ul>
           <p id="brain-item-shortened" class="hint" hidden></p>
@@ -403,7 +411,7 @@
 
     <template id="category-row-template">
       <li class="row">
-        <button type="button" data-slot="open" class="rowbutton"><span data-slot="name" class="row-title"></span> <span data-slot="count" class="meta"></span></button>
+        <button type="button" data-slot="open" class="rowbutton"><span data-slot="name" class="row-title"></span> <span data-slot="count" class="meta"></span> <span data-slot="where" class="meta"></span></button>
       </li>
     </template>
 
@@ -411,13 +419,14 @@
       <li class="row">
         <button type="button" data-slot="open" class="rowbutton"><span data-slot="title" class="row-title"></span></button>
         <span data-slot="summary" class="meta"></span>
+        <span data-slot="where" class="meta"></span>
         <span data-slot="shortened" class="hint"></span>
       </li>
     </template>
 
     <template id="item-category-row-template">
       <li class="row">
-        <button type="button" data-slot="open" class="rowbutton"><span data-slot="name" class="row-title"></span> <span data-slot="weight" class="meta"></span></button>
+        <button type="button" data-slot="open" class="rowbutton"><span data-slot="name" class="row-title"></span> <span data-slot="weight" class="meta"></span> <span data-slot="where" class="meta"></span></button>
       </li>
     </template>
 

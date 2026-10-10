@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fakePage, fill, settle } from './fake-page.test-util.mjs';
 import { mount } from './mount.js';
+import { MINE_LABEL } from './scope-session.js';
 
 const USER = { id: 'u0000000000000001', username: 'ann', displayName: 'Ann A' };
 const cat = (id, extra = {}) => ({ id, name: `Name ${id}`, itemCount: 2, ...extra });
@@ -19,7 +20,7 @@ function service(table = {}) {
   const fetchFn = async (path, init) => {
     const key = `${init.method} ${path}`;
     calls.push({ key, body: init.body === undefined ? undefined : JSON.parse(init.body) });
-    const entry = table[key] ?? (/^GET \/api\/(invitations|circles)/.test(key) ? pageOf([]) : refuse(401, 'UNAUTHENTICATED', 'not signed in'));
+    const entry = table[key] ?? (key === 'GET /api/brain/scopes' ? { status: 200, body: { items: [{ scope: { kind: 'personal' }, canCapture: true }] } } : /^GET \/api\/(invitations|circles)/.test(key) ? pageOf([]) : refuse(401, 'UNAUTHENTICATED', 'not signed in'));
     const a = await (typeof entry === 'function' ? entry(calls.length) : entry);
     if (a instanceof Error) throw a;
     return { status: a.status, headers: { get: (n) => (a.headers && a.headers[n]) ?? null }, text: async () => (a.body === undefined ? '' : JSON.stringify(a.body)) };
@@ -59,7 +60,7 @@ describe('the categories', () => {
     expect(slot(list[0], 'name').textContent).toBe('Name c1');
     expect(slot(list[0], 'count').textContent).toBe('2 items');
     expect(slot(list[1], 'count').textContent).toBe('1 item');
-    expect(slot(list[0], 'open').getAttribute('aria-label')).toBe('Open the category Name c1, 2 items');
+    expect(slot(list[0], 'open').getAttribute('aria-label')).toBe('Open the category Name c1, 2 items, from My own notes');
     expect(page.el('brain-empty').hidden).toBe(true);
     expect(svc.keys()).toContain('GET /api/graph/categories?limit=50');
   });
@@ -387,5 +388,249 @@ describe('between screens', () => {
     const page = fakePage();
     const broken = { title: '', getElementById: (id) => (id === 'brain-item-back' ? null : page.document.getElementById(id)) };
     expect(() => mount(broken, service().fetchFn)).toThrow(/no element "brain-item-back"/);
+  });
+});
+
+describe('choosing whose notes to look at', () => {
+  const C1 = 'c0123456789abcdef';
+  const C2 = 'cabcdefghij012345';
+  const NAME1 = '<b>Parent</b>';
+  const IN1 = { kind: 'circle', circleId: C1, circleName: NAME1 };
+  const IN2 = { kind: 'circle', circleId: C2, circleName: 'In-law' };
+  const ME_SCOPE = { kind: 'personal' };
+  const SCOPES = { 'GET /api/brain/scopes': { status: 200, body: { items: [{ scope: ME_SCOPE, canCapture: true }, { scope: IN1, role: 'member', canCapture: true }, { scope: IN2, role: 'observer', canCapture: false }] } } };
+  const withScope = (scope, body) => ({ status: 200, body: { ...body, scope } });
+  const inCircle = (scope, id, list) => ({ [`GET /api/brain/categories?scope=circle:${scope.circleId}&limit=50`]: withScope(scope, { items: list, nextCursor: null }) });
+  const MINE = {
+    'GET /api/brain/categories?scope=mine&limit=50': withScope({ kind: 'personal' }, {
+      items: [
+        { ...cat('c1'), scope: ME_SCOPE },
+        { ...cat('shared', { name: 'Shared' }), scope: IN1 },
+        { ...cat('shared', { name: 'Shared', itemCount: 5 }), scope: IN2 },
+      ],
+      nextCursor: null,
+    }),
+  };
+  const options = (page) => page.el('brain-scope').children.map((o) => [o.value, o.textContent]);
+  const choose = async (page, key) => {
+    page.el('brain-scope').value = key;
+    page.el('brain-scope').fire('change');
+    await settle();
+  };
+
+  it('offers My Brain, the own notes and every circle (readers included), starting on the own notes', async () => {
+    const { page } = await start(SCOPES);
+    expect(options(page)).toEqual([['mine', MINE_LABEL], ['personal', 'My own notes'], [`circle:${C1}`, NAME1], [`circle:${C2}`, 'In-law']]);
+    expect(page.el('brain-scope').children.every((o) => o.children.length === 0)).toBe(true);
+    expect(page.el('brain-scope').value).toBe('personal');
+    expect(page.el('brain-scope-hint').textContent).toBe('Showing only your own notes.');
+    expect(page.el('brain-capture-link').hidden).toBe(false);
+    expect(page.el('brain-gone').hidden).toBe(true);
+    expect(slot(rows(page, 'brain-categories-list')[0], 'where').textContent).toBe('My own notes');
+  });
+
+  it('My Brain lists everything with where it is: identical ids in two circles stay two rows, and each opens its own', async () => {
+    const SRC1 = `GET /api/brain/category?scope=mine&source=circle:${C1}&id=shared&limit=50`;
+    const SRC2 = `GET /api/brain/category?scope=mine&source=circle:${C2}&id=shared&limit=50`;
+    const { page, svc } = await start({
+      ...SCOPES,
+      ...MINE,
+      [SRC1]: withScope(IN1, { category: { id: 'shared', name: 'Shared' }, items: [{ ...itm('i1'), scope: IN1 }], nextCursor: null }),
+      [SRC2]: withScope(IN2, { category: { id: 'shared', name: 'Shared' }, items: [{ ...itm('i1'), scope: IN2 }, { ...itm('i2'), scope: IN2 }], nextCursor: null }),
+      [`GET /api/brain/item?scope=mine&source=circle:${C2}&id=i2`]: withScope(IN2, { item: { ...itm('i2'), scope: IN2 }, categories: [{ id: 'shared', name: 'Shared', weight: 0.7, scope: IN2 }] }),
+    });
+    await choose(page, 'mine');
+    expect(page.el('brain-scope').value).toBe('mine');
+    expect(page.el('brain-scope-hint').textContent).toContain('My Brain shows your own notes and the notes of every circle you are in');
+    const list = rows(page, 'brain-categories-list');
+    expect(list.map((r) => [slot(r, 'name').textContent, slot(r, 'count').textContent, slot(r, 'where').textContent])).toEqual([
+      ['Name c1', '2 items', 'My own notes'],
+      ['Shared', '2 items', `Circle "${NAME1}"`],
+      ['Shared', '5 items', 'Circle "In-law"'],
+    ]);
+    expect(slot(list[1], 'where').children).toEqual([]);
+    expect(slot(list[2], 'open').getAttribute('aria-label')).toBe('Open the category Shared, 5 items, from Circle "In-law"');
+
+    slot(list[2], 'open').fire('click');
+    await settle();
+    expect(svc.keys()).toContain(SRC2);
+    expect(svc.keys()).not.toContain(SRC1);
+    expect(page.el('brain-category-where').textContent).toBe('Circle "In-law"');
+    const its = rows(page, 'brain-items-list');
+    expect(its.map((r) => [slot(r, 'title').textContent, slot(r, 'where').textContent])).toEqual([['Title i1', 'Circle "In-law"'], ['Title i2', 'Circle "In-law"']]);
+
+    slot(its[1], 'open').fire('click');
+    await settle();
+    expect(page.el('brain-item-where').textContent).toBe('Circle "In-law"');
+    expect(page.focused().id).toBe('brain-item-heading');
+    const filed = rows(page, 'brain-item-categories');
+    expect(filed.map((r) => [slot(r, 'name').textContent, slot(r, 'weight').textContent, slot(r, 'where').textContent])).toEqual([['Shared', 'weight 0.7', 'Circle "In-law"']]);
+
+    // the way back leads to the right category, then to the list that still has all three rows
+    page.el('brain-item-back').fire('click');
+    page.el('brain-category-back').fire('click');
+    expect(rows(page, 'brain-categories-list')).toHaveLength(3);
+  });
+
+  it('one circle shows only its notes, each marked with the circle; an observer sees no capture link and is told why', async () => {
+    const { page, svc } = await start({ ...SCOPES, ...inCircle(IN2, 'c', [cat('shared')]), ...inCircle(IN1, 'c', [cat('y')]) });
+    await choose(page, `circle:${C2}`);
+    expect(svc.keys()).toContain(`GET /api/brain/categories?scope=circle:${C2}&limit=50`);
+    expect(page.el('brain-scope-hint').textContent).toBe('Showing the circle "In-law": the notes added by its members. You can read it, but not add notes to it.');
+    expect(page.el('brain-capture-link').hidden).toBe(true);
+    const list = rows(page, 'brain-categories-list');
+    expect(list).toHaveLength(1);
+    expect(slot(list[0], 'where').textContent).toBe('Circle "In-law"');
+    // a circle the person can add to keeps the link
+    await choose(page, `circle:${C1}`);
+    expect(page.el('brain-capture-link').hidden).toBe(false);
+    expect(page.el('brain-scope-hint').textContent).toBe(`Showing the circle "${NAME1}": the notes added by its members.`);
+  });
+
+  it('inside one circle every category, item and filing says the circle', async () => {
+    const { page } = await start({
+      ...SCOPES,
+      ...inCircle(IN1, 'c', [cat('x')]),
+      [`GET /api/brain/category?scope=circle:${C1}&id=x&limit=50`]: withScope(IN1, { category: { id: 'x', name: 'Name x' }, items: [itm('i1')], nextCursor: null }),
+      [`GET /api/brain/item?scope=circle:${C1}&id=i1`]: withScope(IN1, { item: itm('i1'), categories: [{ id: 'x', name: 'Name x', weight: 0.5 }] }),
+    });
+    await choose(page, `circle:${C1}`);
+    slot(rows(page, 'brain-categories-list')[0], 'open').fire('click');
+    await settle();
+    expect(page.el('brain-category-where').textContent).toBe(`Circle "${NAME1}"`);
+    expect(slot(rows(page, 'brain-items-list')[0], 'where').textContent).toBe(`Circle "${NAME1}"`);
+    slot(rows(page, 'brain-items-list')[0], 'open').fire('click');
+    await settle();
+    expect(page.el('brain-item-where').textContent).toBe(`Circle "${NAME1}"`);
+    expect(slot(rows(page, 'brain-item-categories')[0], 'where').textContent).toBe(`Circle "${NAME1}"`);
+    // opening the category from the item stays in the circle
+    slot(rows(page, 'brain-item-categories')[0], 'open').fire('click');
+    await settle();
+    expect(page.el('brain-category-where').textContent).toBe(`Circle "${NAME1}"`);
+  });
+
+  it('keeps the same options when only the choice changes', async () => {
+    const { page } = await start({ ...SCOPES, ...inCircle(IN1, 'c', [cat('x')]) });
+    const before = page.el('brain-scope').children[2];
+    await choose(page, `circle:${C1}`);
+    expect(page.el('brain-scope').children[2]).toBe(before);
+  });
+
+  it('Refresh asks for the circles again, and is disabled while they are being asked for', async () => {
+    const g = gate();
+    let n = 0;
+    const { page, svc } = await start({ 'GET /api/brain/scopes': () => (++n === 2 ? g.promise.then(() => SCOPES['GET /api/brain/scopes'].body && SCOPES['GET /api/brain/scopes']) : SCOPES['GET /api/brain/scopes']) });
+    expect(svc.keys().filter((k) => k === 'GET /api/brain/scopes')).toHaveLength(1);
+    page.el('brain-refresh').fire('click');
+    await settle();
+    expect(page.el('brain-refresh').disabled).toBe(true);
+    g.release();
+    await settle();
+    expect(page.el('brain-refresh').disabled).toBe(false);
+    expect(svc.keys().filter((k) => k === 'GET /api/brain/scopes')).toHaveLength(2);
+    expect(svc.keys().filter((k) => k === 'GET /api/graph/categories?limit=50')).toHaveLength(2);
+  });
+
+  it('signing out before the circles arrive loads nothing', async () => {
+    const g = gate();
+    const page = fakePage();
+    const svc = service({ ...ME, 'POST /api/logout': { status: 204 }, 'GET /api/brain/scopes': () => g.promise.then(() => SCOPES['GET /api/brain/scopes']) });
+    const addr = address('#/brain');
+    mount(page.document, svc.fetchFn, addr.env);
+    await settle();
+    page.el('signout').fire('click');
+    await settle();
+    g.release();
+    await settle();
+    expect(svc.keys().filter((k) => k.startsWith('GET /api/graph/categories'))).toEqual([]);
+  });
+
+  it('while a category in My Brain is loading, the screen already says where it is', async () => {
+    const g = gate();
+    const { page } = await start({
+      ...SCOPES,
+      ...MINE,
+      [`GET /api/brain/category?scope=mine&source=circle:${C2}&id=shared&limit=50`]: () => g.promise.then(() => withScope(IN2, { category: { id: 'shared', name: 'Shared' }, items: [], nextCursor: null })),
+    });
+    await choose(page, 'mine');
+    slot(rows(page, 'brain-categories-list')[2], 'open').fire('click');
+    await settle();
+    expect(page.el('brain-category-where').textContent).toBe('Circle "In-law"');
+    g.release();
+    await settle();
+  });
+
+  it('a circle that can no longer be read says so in one set of words, with a way back to the own notes', async () => {
+    const { page, svc } = await start({
+      ...SCOPES,
+      ...MINE,
+      [`GET /api/brain/categories?scope=circle:${C1}&limit=50`]: refuse(404, 'NOT_FOUND', 'no such circle'),
+    });
+    await choose(page, `circle:${C1}`);
+    page.el('brain-gone-back').focus();
+    expect(page.el('brain-gone').hidden).toBe(false);
+    expect(page.el('brain-gone-hint').textContent).toBe('No such circle, or you are not in it. You can go back to your own notes.');
+    expect(page.el('brain-error').hidden).toBe(true);
+    expect(rows(page, 'brain-categories-list')).toHaveLength(0);
+    page.el('brain-gone-back').fire('click');
+    await settle();
+    expect(page.el('brain-gone').hidden).toBe(true);
+    expect(page.el('brain-scope').value).toBe('personal');
+    expect(rows(page, 'brain-categories-list')).toHaveLength(2);
+    expect(page.focused().id).toBe('brain-heading');
+    expect(svc.keys().filter((k) => k === 'GET /api/graph/categories?limit=50').length).toBeGreaterThan(0);
+    expect(svc.keys()).not.toContain('GET /api/brain/categories?scope=mine&limit=50');
+  });
+
+  it('a circle chosen earlier that the person has since lost falls back to the own notes the next time the screen is shown', async () => {
+    let n = 0;
+    const { page, addr } = await start({
+      'GET /api/brain/scopes': () => (++n === 1 ? SCOPES['GET /api/brain/scopes'] : { status: 200, body: { items: [{ scope: ME_SCOPE, canCapture: true }] } }),
+      ...inCircle(IN1, 'c', [cat('x')]),
+    });
+    await choose(page, `circle:${C1}`);
+    expect(page.el('brain-scope').value).toBe(`circle:${C1}`);
+    addr.change('#/');
+    await settle();
+    addr.change('#/brain');
+    await settle();
+    expect(page.el('brain-scope').value).toBe('personal');
+    expect(options(page)).toEqual([['mine', MINE_LABEL], ['personal', 'My own notes']]);
+    expect(rows(page, 'brain-categories-list')).toHaveLength(2);
+  });
+
+  it('when the list of circles cannot be read the own notes still work', async () => {
+    const { page } = await start({ 'GET /api/brain/scopes': refuse(500, 'STORAGE_ERROR', 'x') });
+    expect(options(page)).toEqual([['mine', MINE_LABEL], ['personal', 'My own notes']]);
+    expect(rows(page, 'brain-categories-list')).toHaveLength(2);
+  });
+
+  it('the choice is disabled while a request is out, and cannot be pointed at something that is not on the list', async () => {
+    const g = gate();
+    const { page } = await start({ ...SCOPES, [`GET /api/brain/categories?scope=circle:${C1}&limit=50`]: () => g.promise.then(() => withScope(IN1, { items: [cat('x')], nextCursor: null })) });
+    page.el('brain-scope').value = `circle:${C1}`;
+    page.el('brain-scope').fire('change');
+    await settle();
+    expect(page.el('brain-scope').disabled).toBe(true);
+    g.release();
+    await settle();
+    expect(page.el('brain-scope').disabled).toBe(false);
+    await choose(page, 'circle:cnotonthelist00000');
+    expect(page.el('brain-scope').value).toBe(`circle:${C1}`);
+  });
+
+  it('moving to another screen keeps the choice, like what was loaded, and signing out forgets it', async () => {
+    const { page, addr } = await start({ ...SCOPES, ...inCircle(IN1, 'c', [cat('x')]), 'POST /api/logout': { status: 204 } });
+    await choose(page, `circle:${C1}`);
+    addr.change('#/capture');
+    await settle();
+    addr.change('#/brain');
+    await settle();
+    expect(page.el('brain-scope').value).toBe(`circle:${C1}`);
+    page.el('nav-home').fire('click');
+    page.el('signout').fire('click');
+    await settle();
+    expect(page.el('brain-scope').value).toBe('personal');
+    expect(rows(page, 'brain-categories-list')).toHaveLength(0);
   });
 });

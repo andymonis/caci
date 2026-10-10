@@ -98,7 +98,7 @@ export function createBrainSession({ client, onSignedOut }) {
       categories = { ...categories, status: circleGone ? 'gone' : cursor === undefined ? 'error' : categories.status, error: r.error.message, ...(cursor === undefined ? { items: [], nextCursor: null } : {}) };
       return failed(r.error);
     }
-    categories = { status: 'loaded', items: cursor === undefined ? [...r.value.items] : [...categories.items, ...r.value.items], nextCursor: r.value.nextCursor, error: null, stale: false };
+    categories = { status: 'loaded', items: cursor === undefined ? [...r.value.items] : [...categories.items, ...r.value.items], nextCursor: r.value.nextCursor, error: null, stale: false, ...(r.value.scope === undefined ? {} : { where: r.value.scope }) };
     return { ok: true };
   }
 
@@ -112,7 +112,7 @@ export function createBrainSession({ client, onSignedOut }) {
       return failed(r.error);
     }
     const name = r.value.category.name ?? category?.name;
-    category = { id, ...where, ...(name === undefined ? {} : { name }), status: 'loaded', items: cursor === undefined ? [...r.value.items] : [...(category?.items ?? []), ...r.value.items], nextCursor: r.value.nextCursor, error: null };
+    category = { id, ...where, ...(r.value.scope === undefined ? {} : { where: r.value.scope }), ...(name === undefined ? {} : { name }), status: 'loaded', items: cursor === undefined ? [...r.value.items] : [...(category?.items ?? []), ...r.value.items], nextCursor: r.value.nextCursor, error: null };
     return { ok: true };
   }
 
