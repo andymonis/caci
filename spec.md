@@ -51,7 +51,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-006 | [Web App: Circles — Specification](specs/R-006-web-circles.md) |
 | R-007 | [Web App: Notes — Specification](specs/R-007-web-notes.md) |
 | R-008 | [Shared Circle Brains — Specification](specs/R-008-shared-brains.md) |
-| R-008 | [Shared Circle Brains — Specification](specs/R-008-shared-circle-brains.md) |
+| R-009 | [Shared Circle Brains (circle-owned graph) — Specification](specs/R-009-shared-circle-brains.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.

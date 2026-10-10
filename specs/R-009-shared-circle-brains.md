@@ -2,6 +2,8 @@
 
 Oct 9, 2026 · @Andy
 
+**Status: not implemented.** This is a different design from R-008 (`specs/R-008-shared-brains.md`, built as S1: read-only grants of chosen categories between members). The two disagree on who owns the shared data, who may write and whether per-member grants exist, so R-009 stays on file as an alternative or a later step and needs reconciling with R-008 before any work starts.
+
 ## Overview
 
 A person has a personal brain and may belong to zero or more care circles. Each circle has a persistent shared brain. Information captured in one circle is visible only to current members of that circle; it is not relevant to another circle. A person's **My Brain** view is a virtual aggregation of their personal brain and every circle brain they may currently read, with the source of every result disclosed.
@@ -200,7 +202,7 @@ An HTTP response must never include a raw graph id, another member's private gra
 
 ## GSD build order
 
-1. **Specification and boundaries.** Register R-008, update R-004/R-003/README wording that says circles share no data, update the container diagram, and define the cross-store lifecycle/repair contract. Exit: decisions, API scope types, security review template and acceptance criteria are approved.
+1. **Specification and boundaries.** Register R-009, update R-004/R-003/README wording that says circles share no data, update the container diagram, and define the cross-store lifecycle/repair contract. Exit: decisions, API scope types, security review template and acceptance criteria are approved.
 2. **Scope resolver and graph lifecycle.** Add trusted `circleGraphId`, create/drop compensation, repair handling, and tests for create/delete failures. Exit: SC-FR-01/02 and SC-AC-08/09.
 3. **Circle authorisation policy.** Add the sharing-role decision independently of R-004 administration rights, with a pure table and membership-at-use-time tests. Exit: SC-FR-05/13 and SC-AC-04/05/12.
 4. **Scoped capture.** Extend CaCi proposal ownership, model context loading, preview and approval with immutable scope binding. Preserve personal compatibility. Exit: SC-FR-03 to 08, 14 and SC-AC-01/06/07/11.
