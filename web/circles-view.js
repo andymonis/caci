@@ -100,3 +100,33 @@ export function circleInvitationRow(invitation) {
     withdrawLabel: `Withdraw the invitation for ${invitation.username}`,
   });
 }
+
+// "What you share" (R-008): the words for the sharing part of a circle's screen.
+
+export const SHARE_NONE = 'Nothing shared';
+export const SHARE_NOBODY = 'There is nobody else in this circle yet.';
+export const SHARE_LOADING_MINE = 'Loading your categories…';
+export const SHARE_NO_CATEGORIES = 'You have no categories yet: file a note first.';
+export const SHARE_CAPPED = ' Only the first 1,000 of your categories are listed.';
+
+const categoriesText = (n) => (n === 1 ? '1 category' : `${n} categories`);
+const categoryName = (c) => (typeof c.name === 'string' && c.name !== '' ? c.name : c.id);
+
+/** What a row of the other members says: who, and what is shared with them. */
+export function shareRow(person) {
+  const shared = Array.isArray(person.shared) ? person.shared : [];
+  const who = nameOf(person);
+  return Object.freeze({
+    name: who,
+    meta: shared.length === 0 ? SHARE_NONE : `Sharing ${categoriesText(shared.length)}: ${shared.map(categoryName).join(', ')}`,
+    changeLabel: `Choose what to share with ${who}`,
+    stopLabel: `Stop sharing with ${who}`,
+    stopText: `Stop sharing with ${who}? They will no longer be able to read any of your categories.`,
+    help: `Tick the categories ${who} may read. The items filed under them come with them.`,
+    saveLabel: `Save what is shared with ${who}`,
+    cancelLabel: `Cancel changing what is shared with ${who}`,
+  });
+}
+
+/** One of my categories in the picker. */
+export const choiceLabel = (category) => categoryName(category);

@@ -107,7 +107,7 @@
 
       <section id="view-circles" hidden>
         <h2 id="circles-heading" tabindex="-1">Your circles</h2>
-        <p class="note">A circle is a group of people. Circles share no data yet: being in one only lets people see who else is in it.</p>
+        <p class="note">A circle is a group of people. Being in one shares nothing by itself: each person chooses what to share, and with whom.</p>
         <p id="circles-status" role="status" hidden></p>
         <p id="circles-error" class="error" role="alert" tabindex="-1" hidden></p>
         <p id="circles-empty" hidden></p>
@@ -144,7 +144,7 @@
           <p id="circle-description"></p>
           <p id="circle-role"></p>
           <p id="circle-role-words" class="hint"></p>
-          <p class="note">Circles share no data yet: being in one only lets people see who else is in it. Everyone in a circle can see everyone's username and display name.</p>
+          <p class="note">Being in a circle shares nothing by itself: you choose what to share, below. Everyone in a circle can see everyone's username and display name.</p>
 
           <section id="rename-section" hidden>
             <h3>Rename or describe</h3>
@@ -169,6 +169,17 @@
           <p id="members-error" class="error" role="alert" tabindex="-1" hidden></p>
           <ul id="members-list" class="rows"></ul>
           <button type="button" id="members-more" hidden>Show more</button>
+
+          <section id="share-section">
+            <h3 id="share-heading" tabindex="-1">What you share</h3>
+            <p class="note">Sharing is read-only and goes one way. Someone you share with can read the categories you choose, and the items filed under them, and nothing else. You can change or stop it at any time, and it ends if either of you leaves the circle. They are not told when you share or stop.</p>
+            <p><button type="button" id="share-load" class="secondary">Show what I share</button></p>
+            <p id="share-status" role="status" hidden></p>
+            <p id="share-error" class="error" role="alert" tabindex="-1" hidden></p>
+            <p id="share-notice" role="status" tabindex="-1" hidden></p>
+            <p id="share-empty" hidden>There is nobody else in this circle yet.</p>
+            <ul id="share-list" class="rows" hidden></ul>
+          </section>
 
           <section id="invite-section" hidden>
             <h3>Invite someone</h3>
@@ -379,6 +390,37 @@
           <button type="button" data-slot="removeNo" class="secondary">Cancel</button>
         </div>
       </li>
+    </template>
+
+    <template id="share-row-template">
+      <li class="row">
+        <span data-slot="name" class="row-title"></span>
+        <span data-slot="meta" class="meta"></span>
+        <div class="actions">
+          <button type="button" data-slot="change" class="secondary">Choose what to share</button>
+          <button type="button" data-slot="stop" class="secondary">Stop sharing</button>
+        </div>
+        <div data-slot="stopAsk" class="notice" hidden>
+          <p data-slot="stopText"></p>
+          <div class="actions">
+            <button type="button" data-slot="stopYes">Yes, stop sharing</button>
+            <button type="button" data-slot="stopNo" class="secondary">Cancel</button>
+          </div>
+        </div>
+        <div data-slot="picker" hidden>
+          <p data-slot="pickerHelp" class="hint"></p>
+          <p data-slot="pickerError" class="error" role="alert" tabindex="-1" hidden></p>
+          <ul data-slot="choices" class="plain"></ul>
+          <div class="actions">
+            <button type="button" data-slot="save">Save</button>
+            <button type="button" data-slot="cancel" class="secondary">Cancel</button>
+          </div>
+        </div>
+      </li>
+    </template>
+
+    <template id="share-choice-template">
+      <li><label><input type="checkbox" data-slot="box"> <span data-slot="label"></span></label></li>
     </template>
 
     <template id="circle-invitation-row-template">

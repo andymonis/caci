@@ -188,7 +188,7 @@ describe('the circles section of the README', () => {
   });
 
   it('says the things a reader must not miss', () => {
-    for (const phrase of ['Circles share no data yet', 'no power over circles', 'nothing happens until that person accepts', 'the same whether or not that account exists', 'exactly the answer for a circle that does not exist', 'A circle always has an owner', 'Nobody changes their own role', 'plain text', 'Nobody is told about an invitation']) {
+    for (const phrase of ['A circle shares nothing by itself', 'no power over circles', 'nothing happens until that person accepts', 'the same whether or not that account exists', 'exactly the answer for a circle that does not exist', 'A circle always has an owner', 'Nobody changes their own role', 'plain text', 'Nobody is told about an invitation']) {
       expect(circlesSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
     }
   });
@@ -216,7 +216,7 @@ describe('the web app section of the README', () => {
     const documented = [...webSection.matchAll(/^\| `([a-z-]+\.(?:html|js|css))` \|/gm)].map((m) => m[1] as string);
     expect(documented.sort()).toEqual(WEB_FILE_SPECS.map((s) => s.file).sort());
     expect(documented).toHaveLength(WEB_FILE_SPECS.length);
-    expect(webSection).toContain(`only these ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five', 'twenty-six'][WEB_FILE_SPECS.length]}`);
+    expect(webSection).toContain(`only these ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five', 'twenty-six', 'twenty-seven'][WEB_FILE_SPECS.length]}`);
   });
 
   it('prints exactly the policy the service sends, and its other headers', () => {
@@ -286,7 +286,7 @@ describe('the web app section of the README', () => {
   });
 
   it('says the things a reader must not miss', () => {
-    for (const phrase of ['Nothing else is built yet', 'cannot edit, delete or search what you filed', 'file notes and look through them', 'use circles', 'Register yourself first', 'becomes the administrator', 'not an installable app', 'no service worker', 'as text, never as markup', 'Nothing in the browser', 'to the same address, because the session cookie', 'no HTTPS of its own', 'pass the service\'s headers through unchanged', 'the main heading takes the focus', 'The **service decides**', 'Leaving, deleting a circle and removing someone ask first', 'never a browser dialog', 'never says whether such an account exists', 'No such circle, or you are not in it.', 'circles share no data yet', 'everyone in a circle sees everyone\'s username and display name', 'nobody is notified of an invitation', 'nothing is live', 'two tabs do not know about each other', 'The page says which model files the note, before it is sent', 'keeps the Propose button disabled until it knows', 'nothing is written until you press Approve', 'the note stays in the box', 'Browsing is read-only', 'page state, not part of the address', 'it does not update by itself', 'hold more than one proposal at a time', 'specs/R-007-web-notes.md', 'the capture and browse routes listed under **Notes in the web app**']) {
+    for (const phrase of ['Nothing else is built yet', 'cannot edit, delete or search what you filed', 'file notes and look through them', 'use circles', 'Register yourself first', 'becomes the administrator', 'not an installable app', 'no service worker', 'as text, never as markup', 'Nothing in the browser', 'to the same address, because the session cookie', 'no HTTPS of its own', 'pass the service\'s headers through unchanged', 'the main heading takes the focus', 'The **service decides**', 'Leaving, deleting a circle and removing someone ask first', 'never a browser dialog', 'never says whether such an account exists', 'No such circle, or you are not in it.', 'it cannot show you what other members have shared with you', 'everyone in a circle sees everyone\'s username and display name', 'nobody is notified of an invitation', 'nothing is live', 'two tabs do not know about each other', 'The page says which model files the note, before it is sent', 'keeps the Propose button disabled until it knows', 'nothing is written until you press Approve', 'the note stays in the box', 'Browsing is read-only', 'page state, not part of the address', 'it does not update by itself', 'hold more than one proposal at a time', 'specs/R-007-web-notes.md', 'the capture and browse routes listed under **Notes in the web app**']) {
       expect(webSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
     }
   });

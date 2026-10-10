@@ -8,6 +8,8 @@ import { mountBrainPage } from './brain-page.js';
 import { mountCapturePage } from './capture-page.js';
 import { createNotesClient } from './notes-client.js';
 import { mountCirclePage } from './circle-page.js';
+import { mountSharePage } from './share-page.js';
+import { createSharingClient } from './sharing-client.js';
 import { mountCirclesPages } from './circles-pages.js';
 import { createCirclesClient } from './circles-client.js';
 import { headingIdFor, navFor, titleFor } from './circles-view.js';
@@ -40,6 +42,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
   const notesClient = createNotesClient({ fetchFn });
   const brainPage = mountBrainPage(document, { client: notesClient, onSignedOut: recheck });
   const capturePage = mountCapturePage(document, { client: notesClient, onWritten: () => brainPage.markStale(), onSignedOut: recheck });
+  const sharePage = mountSharePage(document, { sharing: createSharingClient({ fetchFn }), circles: circlesClient, notes: notesClient, onSignedOut: recheck });
   let shown = null; // the address of the signed-in screen being shown
   let rechecked = false;
   /** A circle request says the session ended: ask the service once who is signed in. Once only per sign-in, so a service that contradicts itself cannot make a loop. */
@@ -110,6 +113,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
       if (shown !== null) {
         pages.reset();
         circlePage.reset();
+        sharePage.reset();
         capturePage.reset();
         brainPage.reset();
       }
@@ -131,6 +135,8 @@ export function mount(document, fetchFn, env = NO_ENV) {
     pages.show(route);
     if (route.name === 'circle') circlePage.show(route.id, session.getState().user.id);
     else circlePage.reset();
+    if (route.name === 'circle') sharePage.show(route.id, session.getState().user.id);
+    else sharePage.reset();
     if (route.name === 'capture') capturePage.show();
     else capturePage.reset();
     if (route.name === 'brain') brainPage.show();

@@ -100,7 +100,7 @@ describe('what an owner sees', () => {
     expect(slot(open[1], 'withdraw').hidden).toBe(false);
   });
 
-  it('the page says circles share no data and members see each other\'s names', async () => {
+  it('the page says a circle shares nothing by itself and members see each other\'s names', async () => {
     const { page } = await start(base('owner', [member(1, 'owner')], []));
     expect(page.el('circle-invitations-empty').hidden).toBe(false);
     expect(page.el('circle-invitations-empty').textContent).toBe('There are no open invitations.');

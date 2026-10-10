@@ -113,3 +113,31 @@ describe('the circle screen\'s words', () => {
     expect(DELETE_TEXT).toBe('Delete this circle? This removes the circle, its members and its invitations. It cannot be undone.');
   });
 });
+
+describe('the words for what you share', () => {
+  const person = (extra = {}) => ({ userId: 'u0000000000000002', username: 'bob', displayName: 'Bob B', shared: [], ...extra });
+  it('says what is shared with a person, by name, singular and plural', async () => {
+    const { shareRow, SHARE_NONE } = await import('./circles-view.js');
+    expect(shareRow(person()).meta).toBe(SHARE_NONE);
+    expect(SHARE_NONE).toBe('Nothing shared');
+    expect(shareRow(person({ shared: [{ id: 'a', name: 'Alpha' }] })).meta).toBe('Sharing 1 category: Alpha');
+    expect(shareRow(person({ shared: [{ id: 'a', name: 'Alpha' }, { id: 'b' }] })).meta).toBe('Sharing 2 categories: Alpha, b');
+  });
+  it('names the person by display name, then username, then words, in every label', async () => {
+    const { shareRow } = await import('./circles-view.js');
+    const v = shareRow(person());
+    expect(v.name).toBe('Bob B');
+    expect([v.changeLabel, v.stopLabel, v.saveLabel, v.cancelLabel]).toEqual(['Choose what to share with Bob B', 'Stop sharing with Bob B', 'Save what is shared with Bob B', 'Cancel changing what is shared with Bob B']);
+    expect(v.stopText).toBe('Stop sharing with Bob B? They will no longer be able to read any of your categories.');
+    expect(v.help).toBe('Tick the categories Bob B may read. The items filed under them come with them.');
+    expect(shareRow(person({ displayName: undefined })).name).toBe('bob');
+    expect(shareRow(person({ displayName: undefined, username: undefined })).name).toBe('Someone');
+    expect(shareRow({}).meta).toBe('Nothing shared');
+  });
+  it('shows a category by its name, else its id', async () => {
+    const { choiceLabel } = await import('./circles-view.js');
+    expect(choiceLabel({ id: 'x', name: 'Name' })).toBe('Name');
+    expect(choiceLabel({ id: 'x' })).toBe('x');
+    expect(choiceLabel({ id: 'x', name: '' })).toBe('x');
+  });
+});

@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'shared-session.js', 'sharing-client.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'share-page.js', 'shared-session.js', 'sharing-client.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -203,7 +203,7 @@ describe('the page', () => {
 
   it('gives every field a visible label, a name and the right autocomplete value', () => {
     const labels = new Set(tags.filter((t) => t.name === 'label').map((t) => attr(t, 'for')));
-    const inputs = tags.filter((t) => t.name === 'input');
+    const inputs = tags.filter((t) => t.name === 'input' && Boolean(attr(t, 'id')));
     expect(inputs).toHaveLength(11);
     const expected = {
       'signin-username': ['text', 'username'],
@@ -253,8 +253,8 @@ describe('the page', () => {
 describe('the templates and the address bar', () => {
   const templates = [...html.matchAll(/<template\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/template>/g)].map((m) => ({ id: m[1], body: m[2] }));
 
-  it('there are ten row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
-    expect(templates.map((t) => t.id).sort()).toEqual(['capture-line-template', 'capture-op-template', 'category-row-template', 'circle-invitation-row-template', 'circle-row-template', 'data-row-template', 'invitation-row-template', 'item-category-row-template', 'item-row-template', 'member-row-template']);
+  it('there are twelve row templates, with no ids (a clone would repeat them), no scripts, no handlers and no links of their own', () => {
+    expect(templates.map((t) => t.id).sort()).toEqual(['capture-line-template', 'capture-op-template', 'category-row-template', 'circle-invitation-row-template', 'circle-row-template', 'data-row-template', 'invitation-row-template', 'item-category-row-template', 'item-row-template', 'member-row-template', 'share-choice-template', 'share-row-template']);
     for (const t of templates) {
       expect(t.body, t.id).not.toMatch(/\sid\s*=/i);
       expect(t.body, t.id).not.toMatch(/<script|\son[a-z]+\s*=|\sstyle\s*=|\shref\s*=|\ssrc\s*=/i);
@@ -262,14 +262,20 @@ describe('the templates and the address bar', () => {
   });
 
   it('every slot the script fills exists in its template, and the other way round', () => {
-    const sources = ['circles-pages.js', 'circle-page.js', 'capture-page.js', 'brain-page.js'].map((f) => code(read(f))).join('\n');
-    const used = new Set([...sources.matchAll(/slot\(row, '([\w-]+)'\)/g)].map((m) => m[1]));
+    const sources = ['circles-pages.js', 'circle-page.js', 'capture-page.js', 'brain-page.js', 'share-page.js'].map((f) => code(read(f))).join('\n');
+    const used = new Set([...sources.matchAll(/slot\((?:row|item), '([\w-]+)'\)/g)].map((m) => m[1]));
     expect(sources).toContain('slot(row, `opt-${r}`)'); // the four role options are filled in a loop
     expect(sources).toContain('[data-slot="text"]'); // the capture rows have one text slot, looked up by that name
     used.add('text');
     for (const r of ['owner', 'manager', 'member', 'observer']) used.add(`opt-${r}`);
     const inTemplates = new Set(templates.flatMap((t) => [...t.body.matchAll(/data-slot="([\w-]+)"/g)].map((m) => m[1])));
     expect([...used].sort()).toEqual([...inTemplates].sort());
+  });
+
+  it('the one tick box in a template is inside its label, so the whole line is its label', () => {
+    const boxes = templates.flatMap((t) => [...t.body.matchAll(/<label>[\s\S]*?<input type="checkbox"[^>]*>[\s\S]*?<\/label>/g)]);
+    expect(boxes).toHaveLength(1);
+    expect(templates.flatMap((t) => [...t.body.matchAll(/<input\b/g)])).toHaveLength(1);
   });
 
   it('only the entry point touches the address bar', () => {
@@ -289,8 +295,11 @@ describe('the templates and the address bar', () => {
     expect(tags.find((t) => t.name === 'nav' && attr(t, 'aria-label') === 'Main')).toBeDefined();
   });
 
-  it('says that circles share no data and that members see each other\'s names', () => {
-    expect(html).toContain('Circles share no data yet');
+  it('says that a circle shares nothing by itself, that sharing is a choice, and that members see each other\'s names', () => {
+    expect(html).toContain('Being in one shares nothing by itself: each person chooses what to share, and with whom.');
+    expect(html).toContain('Being in a circle shares nothing by itself: you choose what to share, below.');
+    expect(html).toContain('Sharing is read-only and goes one way.');
+    expect(html).toContain('They are not told when you share or stop.');
     expect(html).toContain("Everyone in a circle can see everyone's username and display name.");
     expect(html).toContain('It does not update by itself.');
   });
