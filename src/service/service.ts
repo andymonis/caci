@@ -4,6 +4,7 @@ import { createAccountRoutes, createApiServer, createCaptureRoutes, createCircle
 import { createController } from '../app/index.js';
 import { createCaciController } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
+import { afterAccountDeletion, reconcileCircleGraphs, withCircleGraphs, type ReconcileReport, type ScopesResult } from '../scopes/index.js';
 import { createSharing } from '../sharing/index.js';
 import { createSqliteCircleStore } from '../circles/sqlite/index.js';
 import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';
@@ -35,6 +36,8 @@ export interface ServiceOptions {
   readonly llmClient?: ModelClient;
   /** For tests: the folder to read the web app's files from, instead of `web/` beside the code. */
   readonly webDir?: string;
+  /** Told the outcome of every reconcile of circle records and circle graphs: at start-up and after each account deletion. */
+  readonly onReconcile?: (result: ScopesResult<ReconcileReport>) => void;
 }
 
 /** The model that files notes: the one given, the free demo one, or (only when asked for, so the provider's SDK is not needed otherwise) the real one. */
@@ -76,7 +79,16 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     const circleStore = createSqliteCircleStore({ path: join(dataDir, 'users.db') }); // circles live beside the accounts, so deleting an account can remove its places in the same transaction
     closers.push(() => circleStore.close());
 
-    const controller = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration } });
+    const reconcile = async (): Promise<void> => {
+      const result = await reconcileCircleGraphs({ circles: circleStore, graphAdapter: graphs });
+      try {
+        options.onReconcile?.(result);
+      } catch {
+        // an observer must not stop the service
+      }
+    };
+    const baseUsers = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration } });
+    const controller = afterAccountDeletion(baseUsers, reconcile); // deleting an account can dissolve a circle, which leaves its graph behind
     const capture = createController({ adapter: graphs, llm: createLlm({ client }) });
     const caci = createCaciController({
       users: controller,
@@ -85,12 +97,13 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       mode: config.llm,
       limits: { maxPendingPerUser: config.maxPendingPerUser, proposalsPerHour: config.proposalsPerHour },
     });
-    const circles = createCircleController({
+    const circles = withCircleGraphs(createCircleController({
       users: controller,
       directory: users,
       store: circleStore,
       limits: { maxCirclesPerUser: config.maxCirclesPerUser, maxMembersPerCircle: config.maxMembersPerCircle, invitationDays: config.invitationDays },
-    });
+    }), graphs);
+    await reconcile(); // circles made before circle graphs existed get theirs, and graphs of circles that are gone are dropped
     const sharing = createSharing({ users: controller, directory: users, store: circleStore, graphAdapter: graphs });
     const routes = [
       ...createAccountRoutes({ controller, secureCookies: config.cookieSecure }),

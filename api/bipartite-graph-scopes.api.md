@@ -4,6 +4,11 @@
 
 ```ts
 
+// Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function afterAccountDeletion(users: UserController, after: () => Promise<unknown>): UserController;
+
 // @public
 export function authoriseBrain(role: unknown, action: unknown): boolean;
 
@@ -92,7 +97,6 @@ export interface ScopeResolver {
 // @public (undocumented)
 export interface ScopeResolverInit {
     readonly store: Pick<CircleStore, 'membershipOf' | 'getCircle'>;
-    // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
     readonly users: Pick<UserController, 'resolve'>;
 }
 
@@ -118,6 +122,11 @@ export type ScopesErrorCode = (typeof SCOPES_ERROR_CODES)[number];
 //
 // @public (undocumented)
 export type ScopesResult<T> = Result<T, ScopesError>;
+
+// Warning: (ae-forgotten-export) The symbol "CircleController" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function withCircleGraphs(circles: CircleController, graphAdapter: StorageAdapter): CircleController;
 
 // (No @packageDocumentation comment for this package)
 

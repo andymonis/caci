@@ -11,5 +11,6 @@ export { authoriseBrain } from './policy.js';
 export type { BrainAction } from './policy.js';
 export { createScopeResolver } from './resolver.js';
 export type { ResolvedScope, ScopeResolver, ScopeResolverInit } from './resolver.js';
+export { afterAccountDeletion, withCircleGraphs } from './lifecycle.js';
 export { planReconcile, reconcileCircleGraphs } from './reconcile.js';
 export type { ReconcileInit, ReconcileReport } from './reconcile.js';

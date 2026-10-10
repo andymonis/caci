@@ -1,4 +1,5 @@
 import { readAnthropicKey } from '../llm/index.js';
+import type { ReconcileReport, ScopesResult } from '../scopes/index.js';
 import { parseServiceConfig, type ConfigError } from './config.js';
 import { startService, type RunningService } from './service.js';
 
@@ -10,6 +11,16 @@ export interface ServeIo {
 export type ServeResult = { readonly code: 0; readonly service: RunningService } | { readonly code: 1 | 2 };
 
 const describe = (errors: readonly ConfigError[]): string => errors.map((e) => `  ${e.variable}: ${e.message}`).join('\n');
+
+/** What to tell the operator about a reconcile of circle graphs: nothing when nothing was done. */
+export function describeReconcile(result: ScopesResult<ReconcileReport>): { out?: string; err: string[] } {
+  if (!result.ok) return { err: ['Warning: could not check that every circle has its notes graph and no graph is left over; it will be tried again.\n'] };
+  const { created, dropped, skipped } = result.value;
+  return {
+    ...(created.length > 0 || dropped.length > 0 ? { out: `Circle graphs brought in step: ${created.length} made, ${dropped.length} removed.\n` } : {}),
+    err: skipped.length > 0 ? [`Warning: ${skipped.length} circle graphs belong to no circle but were not removed (more than the safety limit); look at the data before removing them.\n`] : [],
+  };
+}
 
 /**
  * What `npm run serve` does, with the environment and the output passed in so it can be tested:
@@ -26,7 +37,14 @@ export async function serve(env: Readonly<Record<string, string | undefined>>, i
     // the key is read here, when the model starts, and goes to the client only: it is not in the settings and is never printed
     const key = config.value.llm === 'anthropic' ? readAnthropicKey(env) : undefined;
     if (key !== undefined && !key.ok) throw new Error(key.error.message);
-    const service = await startService(config.value, key?.ok === true ? { apiKey: key.value } : {});
+    const service = await startService(config.value, {
+      ...(key?.ok === true ? { apiKey: key.value } : {}),
+      onReconcile: (result) => {
+        const said = describeReconcile(result);
+        if (said.out !== undefined) io.stdout(said.out);
+        for (const line of said.err) io.stderr(line);
+      },
+    });
     const shown = service.host.includes(':') ? `[${service.host}]` : service.host;
     io.stdout(`Listening on http://${shown}:${service.port}\n`);
     io.stdout(`Open http://${shown}:${service.port}/ in a browser to register and sign in.\n`);

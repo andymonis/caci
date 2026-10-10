@@ -95,6 +95,9 @@ export interface ServiceOptions {
         readonly status: number;
         readonly ms: number;
     }) => void;
+    // Warning: (ae-forgotten-export) The symbol "ScopesResult" needs to be exported by the entry point index.d.ts
+    // Warning: (ae-forgotten-export) The symbol "ReconcileReport" needs to be exported by the entry point index.d.ts
+    readonly onReconcile?: (result: ScopesResult<ReconcileReport>) => void;
     readonly webDir?: string;
 }
 
