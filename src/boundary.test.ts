@@ -80,7 +80,7 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('service/') && target.startsWith('api/') && target !== 'api/index') {
         problems.push(`${file} imports ${specifier}: the service may use the API only through api/index`);
       }
-      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|api)\//.test(file) && /^service(?:\/|$)/.test(target)) {
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes|api)\//.test(file) && /^service(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: nothing may depend on the service`);
       }
       const circlesTest = /\.test(?:-util)?\.ts$/.test(file);
@@ -142,7 +142,20 @@ export function violations(files: Record<string, string>): string[] {
       if ((file.startsWith('api/') || file.startsWith('service/')) && target.startsWith('sharing/') && target !== 'sharing/index') {
         problems.push(`${file} imports ${specifier}: the API and the service may use the sharing component only through sharing/index`);
       }
-      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing)\//.test(file) && /^api(?:\/|$)/.test(target)) {
+      const scopesTest = /\.test(?:-util)?\.ts$/.test(file);
+      if (file.startsWith('scopes/') && /^(?:llm|caci|api|service|sqlite|sharing)(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the scopes component must not depend on the LLM component, the CaCi controller, the API, the service, the SQLite wrapper or the sharing component`);
+      }
+      if (file.startsWith('scopes/') && /^(?:users|circles|graph_store|app)\//.test(target) && !/^(?:users|circles|graph_store|app)\/index$/.test(target) && !(scopesTest && /^(?:graph_store\/adapters\/memory|circles\/sqlite|users\/sqlite)\/index$/.test(target))) {
+        problems.push(`${file} imports ${specifier}: the scopes component may use the users, circles, graph store and application components only through their indexes (its tests may also use the memory adapter and the SQLite stores)`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|api)\//.test(file) && /^scopes(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: only the CaCi controller and the service may depend on the scopes component`);
+      }
+      if ((file.startsWith('caci/') || file.startsWith('service/')) && target.startsWith('scopes/') && target !== 'scopes/index') {
+        problems.push(`${file} imports ${specifier}: the CaCi controller and the service may use the scopes component only through scopes/index`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes)\//.test(file) && /^api(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: nothing may depend on the API`);
       }
       if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/') || file.startsWith('circles/'))) {
@@ -204,6 +217,10 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'api/circ.ts': `import { createCircleController } from '../circles/index.js';`,
         'sharing/x.ts': `import { createCircleController } from '../circles/index.js'; import { query } from '../graph_store/index.js'; import { isUserId } from '../users/index.js'; import { y } from './y.js';`,
         'sharing/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createSqliteCircleStore } from '../circles/sqlite/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js';`,
+        'scopes/x.ts': `import { isUserId } from '../users/index.js'; import { isCircleId } from '../circles/index.js'; import { query } from '../graph_store/index.js'; import { createController } from '../app/index.js'; import { y } from './y.js';`,
+        'scopes/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createSqliteCircleStore } from '../circles/sqlite/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js';`,
+        'caci/scopes.ts': `import { parseScope } from '../scopes/index.js';`,
+        'service/scopes.ts': `import { createScopes } from '../scopes/index.js';`,
         'api/share.ts': `import { createSharing } from '../sharing/index.js';`,
         'service/share.ts': `import { createSharing } from '../sharing/index.js';`,
         'api/circ.test.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';`,
@@ -280,6 +297,26 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the circles component using the API', { 'circles/x.ts': `import { createApiServer } from '../api/index.js';` }],
     ['the circles component using the service', { 'circles/x.ts': `import { serve } from '../service/index.js';` }],
     ['the users component using the circles component', { 'users/x.ts': `import { createCircleController } from '../circles/index.js';` }],
+    ['the scopes component using the LLM component', { 'scopes/x.ts': `import { createLlm } from '../llm/index.js';` }],
+    ['the scopes component using the CaCi controller', { 'scopes/x.ts': `import { createCaciController } from '../caci/index.js';` }],
+    ['the scopes component using the API', { 'scopes/x.ts': `import { createApiServer } from '../api/index.js';` }],
+    ['the scopes component using the service', { 'scopes/x.ts': `import { serve } from '../service/index.js';` }],
+    ['the scopes component using the SQLite wrapper', { 'scopes/x.ts': `import { openDb } from '../sqlite/db.js';` }],
+    ['the scopes component using the sharing component', { 'scopes/x.ts': `import { createSharing } from '../sharing/index.js';` }],
+    ['the scopes component reaching into the circles internals', { 'scopes/x.ts': `import { x } from '../circles/store.js';` }],
+    ['the scopes component reaching into the graph store internals', { 'scopes/x.ts': `import { x } from '../graph_store/query-plan.js';` }],
+    ['the scopes component reaching into the users internals', { 'scopes/x.ts': `import { x } from '../users/controller.js';` }],
+    ['the scopes component reaching into the application internals', { 'scopes/x.ts': `import { x } from '../app/controller.js';` }],
+    ['production scopes code using the memory adapter', { 'scopes/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
+    ['production scopes code using the SQLite circle store', { 'scopes/x.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';` }],
+    ['the circles component using the scopes component', { 'circles/x.ts': `import { parseScope } from '../scopes/index.js';` }],
+    ['the users component using the scopes component', { 'users/x.ts': `import { parseScope } from '../scopes/index.js';` }],
+    ['the graph store using the scopes component', { 'graph_store/x.ts': `import { parseScope } from '../scopes/index.js';` }],
+    ['the application using the scopes component', { 'app/x.ts': `import { parseScope } from '../scopes/index.js';` }],
+    ['the sharing component using the scopes component', { 'sharing/x.ts': `import { parseScope } from '../scopes/index.js';` }],
+    ['the API using the scopes component', { 'api/x.ts': `import { parseScope } from '../scopes/index.js';` }],
+    ['the CaCi controller reaching into the scopes internals', { 'caci/x.ts': `import { x } from '../scopes/scope.js';` }],
+    ['the service reaching into the scopes internals', { 'service/x.ts': `import { x } from '../scopes/scope.js';` }],
     ['the sharing component using the LLM component', { 'sharing/x.ts': `import { createLlm } from '../llm/index.js';` }],
     ['the sharing component using the application', { 'sharing/x.ts': `import { createController } from '../app/index.js';` }],
     ['the sharing component using the CaCi controller', { 'sharing/x.ts': `import { createCaciController } from '../caci/index.js';` }],
@@ -342,6 +379,18 @@ describe('the sharing component, in the real tree', () => {
   });
 });
 
+describe('the scopes component, in the real tree', () => {
+  it('uses only the indexes of users, circles, the graph store and the application, and nothing depends on it but the CaCi controller and the service', () => {
+    const own = sourcesUnder(join(srcRoot, 'scopes'));
+    expect(Object.keys(own).length).toBeGreaterThan(1);
+    expect(violations(own)).toEqual([]);
+    const others = { ...sourcesUnder(join(srcRoot, 'circles')), ...sourcesUnder(join(srcRoot, 'users')), ...sourcesUnder(join(srcRoot, 'sharing')), ...sourcesUnder(join(srcRoot, 'api')), ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'app')), ...sourcesUnder(join(srcRoot, 'llm')) };
+    const dependents = Object.entries(others).filter(([, source]) => importsOf(source).some((s) => /(?:^|\/)scopes\//.test(s))).map(([file]) => file);
+    expect(Object.keys(others).length).toBeGreaterThan(50);
+    expect(dependents).toEqual([]);
+  });
+});
+
 describe('the provider SDK', () => {
   // `@anthropic-ai/sdk` is an optional dependency used by one entry point. Nothing else may import it,
   // so the graph store, the rest of the LLM component and the application work without it.
@@ -393,7 +442,7 @@ describe('no ambient input', () => {
     }
   });
 
-  it.each(['llm', 'app', 'sharing'])('keeps the %s component free of environment and file access', (component) => {
+  it.each(['llm', 'app', 'sharing', 'scopes'])('keeps the %s component free of environment and file access', (component) => {
     const files = sourcesUnder(join(srcRoot, component));
     const offenders = Object.entries(files)
       .filter(([file]) => !file.endsWith('.test.ts'))
