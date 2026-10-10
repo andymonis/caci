@@ -47,12 +47,12 @@ export async function world() {
   const service = await startService({ port: 0, bind: '127.0.0.1', dataDir: dir, allowRegistration: true, cookieSecure: false, trustedProxies: 1, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7 });
   running.push(service);
   const people = {};
-  for (const name of ['ann', 'bob', 'cat']) {
+  for (const name of ['ann', 'bob', 'cat', 'dan']) {
     const f = browserFetch(service.port);
     const api = createApiClient({ fetchFn: f });
     const registered = await api.register({ username: name, displayName: `Display ${name}`, password: PW });
     await api.login({ username: name, password: PW });
-    people[name] = { id: registered.value.id, circles: createCirclesClient({ fetchFn: f }), sharing: createSharingClient({ fetchFn: f }), notes: createNotesClient({ fetchFn: f }) };
+    people[name] = { fetch: f, id: registered.value.id, circles: createCirclesClient({ fetchFn: f }), sharing: createSharingClient({ fetchFn: f }), notes: createNotesClient({ fetchFn: f }) };
   }
   const circle = (await people.ann.circles.createCircle({ name: 'Club' })).value.id;
   for (const name of ['bob', 'cat']) {
