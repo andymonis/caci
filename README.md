@@ -291,6 +291,7 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_MAX_CIRCLES_PER_USER` | Circles one person may be in (1 to 1,000) | `20` |
 | `CACI_MAX_MEMBERS_PER_CIRCLE` | People one circle may hold (1 to 1,000) | `50` |
 | `CACI_INVITATION_DAYS` | How long an invitation to a circle stays open (1 to 365) | `7` |
+| `CACI_MAX_BRAIN_SCOPES` | Most brains My Brain may combine: your own plus circles (2 to 100) | `25` |
 
 Listening on anything but this machine (`CACI_BIND=0.0.0.0`, say) is refused unless `CACI_COOKIE_SECURE=true`, or you also set `CACI_ALLOW_INSECURE=true` to say you accept that session cookies cross the network in the clear.
 
@@ -436,6 +437,8 @@ The routes it uses are `GET /api/capture/mode`, `POST /api/capture/propose`, `GE
 
 **The flow is propose, preview, approve.** A note is checked first (1 to 8,000 characters); nothing is written until you press Approve; Reject discards it and writes nothing. The preview shows the service's own text, the operations it would write, the model's reason and when the proposal expires (15 minutes), all as plain text. Failures and limits (the model timing out, refusing or being busy, too many proposals in an hour or waiting) are shown in the service's own words with the wait when it gives one, and **the note stays in the box** so it can be sent again. A refused write keeps the proposal; a proposal that has expired, or that the service no longer has after a restart, says so and writes nothing.
 
+**Where a note goes.** The capture screen has a choice, "Where should this note go?", with your own notes and each circle you may add to, and the Brain screen has "Which notes?" with My Brain, your own notes and each circle; see **The shared circle brain**.
+
 **Browsing is read-only.** The categories show how many items each holds ("at least" when the service capped the count), a category shows its items, an item shows its data as text and the categories it is filed under with their weights; a value the service shortened is marked as shortened. Which category or item you opened is **page state, not part of the address** (node ids are opaque text), so a reload returns to the list. What was loaded stays while you move between screens and is reloaded after you approve a note, or when you press Refresh; it does not update by itself.
 
 What it does **not** do: edit, delete, move or search what you filed; hold more than one proposal at a time; take pictures or voice; work offline. A proposal and the typed note are forgotten when you leave the capture screen or sign out, and nothing is kept in the browser.
@@ -503,7 +506,7 @@ Failures are `{ error: { code, message } }` with these statuses: 401 not signed 
 
 A **circle** is a group of people, each with a role in it. A person can be in several circles in different roles (a helper in one, helped in another), and everyone keeps their own graph. It is specified in `specs/R-004-circles.md`.
 
-**A circle shares nothing by itself.** Being in a circle lets people see who else is in it (usernames and display names) and nothing more. A member can choose to share chosen categories of their own brain, read-only, with one other member, and withdraw it at any time; it ends if either person leaves the circle. The web app's circle screen has a **What you share** part for choosing what to share and a **Shared with you** part for reading, read-only, what others have shared with you; the service has routes for both. Sharing sends nothing new to a model, but it is not safe to use with other people's data until pseudonymisation and the legal groundwork are done (see `specs/R-008-shared-brains.md`, which lists them as release gates). The platform admin has no power over circles either: an admin who is not in a circle is a stranger to it.
+**A circle shares nothing by itself, and owns one brain only if you use it** (see **The shared circle brain**). Being in a circle lets people see who else is in it (usernames and display names) and nothing more. A member can choose to share chosen categories of their own brain, read-only, with one other member, and withdraw it at any time; it ends if either person leaves the circle. The web app's circle screen has a **What you share** part for choosing what to share and a **Shared with you** part for reading, read-only, what others have shared with you; the service has routes for both. Sharing sends nothing new to a model, but it is not safe to use with other people's data until pseudonymisation and the legal groundwork are done (see `specs/R-008-shared-brains.md`, which lists them as release gates). The platform admin has no power over circles either: an admin who is not in a circle is a stranger to it.
 
 ### Roles
 
@@ -601,6 +604,55 @@ The circle screen has **What you share** (press *Show what I share*: each other 
 - **Some things are visible by nature:** the names of shared categories, how many items are in each, an item's weights, and any private subject an item's own text happens to mention (only the filing is filtered, not the prose).
 - **The files are plain text** to whoever can read the data folder, and **the real model still receives every note** when `CACI_LLM=anthropic`, whoever may later read it.
 - **The release gates are not met.** Before anyone else's data is held, the plan needs pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, and a statement of who may use the service. Do not use sharing with other people's data until they are done.
+
+## The shared circle brain
+
+A circle can also **own one brain that its members capture into and read together**. It is specified in `specs/R-009-shared-circle-brains.md`, which holds its threat table, residual risks and the release gates below. It is separate from the per-member read-only shares in **Shared circle brains** above: both work, and neither depends on the other.
+
+### Scopes
+
+Every capture and every read is about one **scope**: your own brain (`{ "kind": "personal" }`, the default when no scope is given, exactly as before) or one circle's brain (`{ "kind": "circle", "circleId": "..." }`). A circle's brain is made when the circle is made and dropped, with its notes, when the circle is deleted; leaving or being removed never touches it, so earlier notes stay for the others. The scope always names a brain you may use: the service never takes a graph id from a request.
+
+| Role in the circle | May capture into the circle's brain | May read it |
+|---|---|---|
+| owner | yes | yes |
+| manager | yes | yes |
+| member | yes | yes |
+| observer | no | yes |
+
+Anything not allowed (a stranger, someone who has left, a circle that does not exist, an observer capturing, the platform admin who is not a member) gets exactly the same answer as a circle that does not exist: **no such circle**. Your role is read from the store on every request, so a demotion, a removal or a deleted circle takes effect on the next request, and a proposal you made for a circle you can no longer capture into is discarded and writes nothing.
+
+### My Brain
+
+My Brain is your own notes **and every circle you are in, together**. Every category, item and count in it says where it comes from (`My own notes` or the circle's name), the same category id in two scopes stays two separate rows, and the order is fixed (your own brain, then circles by id, then by category id). A person in more circles than `CACI_MAX_BRAIN_SCOPES` allows (default 25 brains including their own) is refused a combined view with a clear message, never given a partial one; any one circle can still be read on its own.
+
+Each item captured into a circle records **who added it and when** (`contributedBy`, `contributedAt`), set by the service after the model has answered; nothing the model writes can set or forge them.
+
+### The routes
+
+All need the session cookie, take the scope from the query string (`scope=personal`, `scope=circle:<id>` or `scope=mine`; none means personal) and are read-only. Ids of categories and items travel in the query string, never in the path, and an unknown parameter is refused by name. In My Brain a category or item is named by where it is as well: `source=personal` or `source=circle:<id>`, required there and refused anywhere else.
+
+| Route | What it does |
+|-------|--------------|
+| `GET /api/brain/scopes` | The brains you may use: your own first, then each circle with your role and whether you may capture into it |
+| `GET /api/brain` | The counts of one scope, or of every scope in My Brain |
+| `GET /api/brain/categories` | The categories of one scope, or of every scope in My Brain, each tagged (`limit`, `cursor`) |
+| `GET /api/brain/category` | The items of one category (`id`, and `source` in My Brain) |
+| `GET /api/brain/item` | One item and its categories (`id`, and `source` in My Brain) |
+
+`POST /api/capture/propose` also takes an optional `scope` beside `text`; the proposal is bound to that scope when it is made and approval writes only there, whatever a later request says. The older `/api/graph/...` routes still read your own brain only.
+
+### In the web app
+
+The capture screen asks **Where should this note go?** and offers your own notes and each circle you may capture into; circles you can only read are named under it. Before anything is sent it says where the note will go. For a circle the words are: "This note will be added to the circle "Name". Everyone in the circle can read it, and it cannot be taken back once approved." (with the real model it adds that the note and the names of the circle's categories are sent to Anthropic and are not anonymised). The preview repeats the scope and the notice, and the outcome says which circle the note was added to. The Brain screen asks **Which notes?**: My Brain, your own notes or one circle, marks every row with where it is, hides the capture link for a circle you can only read, and says so in one set of words if a circle you were reading is no longer yours.
+
+### What is not protected, and what must happen before other people's data is used
+
+- **What a member has read cannot be taken back.** A note in a circle's brain is seen by every current member who may read; there is **no edit and no delete** of a shared note in this release (Reject works only before approval).
+- **A circle's brain may describe people who have no account** and have not agreed to it.
+- **Separating circles is not pseudonymisation.** It limits who reads a brain, not what the operator or the model provider can see, and **with `CACI_LLM=anthropic` the note and the names of the circle's categories go to Anthropic, unanonymised**.
+- **Nobody is told** when a note is added, and the files are plain text to whoever can read the data folder.
+- **The release gates are not met.** Before anyone else's data is held, the plan needs pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, and a statement of who may use the service. Do not use circle brains with other people's data until they are done.
 
 ## Writing a storage adapter
 

@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CIRCLE_STATUS_OF, createAccountRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
+import { CIRCLE_STATUS_OF, createAccountRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
 import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
 import { CACI_ERROR_CODES, caciError, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
 import { DEFAULT_GRANT_LIMITS } from '../sharing/index.js';
+import { authoriseBrain } from '../scopes/index.js';
 import { parseServiceConfig, VARIABLES } from './config.js';
 import { WEB_FILE_SPECS } from './web-app.js';
 
@@ -23,9 +24,7 @@ function section(title: string): string {
 }
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
-/** Settings the service reads that the README does not describe yet (emptied by the README task, T-170). */
-const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_MAX_BRAIN_SCOPES'];
-const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
+const DOCUMENTED = [...VARIABLES];
 
 describe('the user accounts section of the README', () => {
   it('is there, and long enough to be the real thing', () => {
@@ -320,5 +319,58 @@ describe('the shared circle brains section of the README', () => {
   it('is linked from the web app part, and every command and setting it names exists', () => {
     expect(webSection).toContain('Shared with you');
     for (const v of sharedSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+  });
+});
+
+const brainSection = section('The shared circle brain');
+
+describe('the shared circle brain section of the README', () => {
+  it('lists exactly the brain routes the server has', () => {
+    const real = createBrainRoutes({ caci: {} as never }).map((r) => `${r.method} ${r.path}`);
+    const documented = [...brainSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented.sort()).toEqual([...real].sort());
+    expect(real).toHaveLength(5);
+  });
+
+  it('prints the authorisation matrix exactly as the code decides it', () => {
+    for (const role of CIRCLE_ROLES) {
+      const row = brainSection.split('\n').find((l) => l.startsWith(`| ${role} |`));
+      expect(row, role).toBeDefined();
+      const [, , capture, read] = (row as string).split('|').map((c) => c.trim());
+      expect(capture, `${role} capture`).toBe(authoriseBrain(role, 'capture') ? 'yes' : 'no');
+      expect(read, `${role} read`).toBe(authoriseBrain(role, 'read') ? 'yes' : 'no');
+    }
+    expect(CIRCLE_ROLES).toHaveLength(4);
+  });
+
+  it('states the scope limit that is in the code, and names its specification, which exists', () => {
+    expect(brainSection).toContain(`default 25 brains including their own`);
+    expect(defaults.ok ? defaults.value.maxBrainScopes : 0).toBe(25);
+    expect(brainSection).toContain(`default ${defaults.ok ? defaults.value.maxBrainScopes : 0} brains`);
+    expect(brainSection).toContain('specs/R-009-shared-circle-brains.md');
+    expect(existsSync(new URL('../../specs/R-009-shared-circle-brains.md', import.meta.url))).toBe(true);
+    expect(readme).toMatch(/\| `CACI_MAX_BRAIN_SCOPES` \|[^|]*\| `25` \|/);
+  });
+
+  it('prints the circle notice in exactly the words the page uses', async () => {
+    const view = (await import(new URL('../../web/capture-view.js', import.meta.url).href)) as { circleNotice: (name: string, mode: string) => string };
+    const demo = view.circleNotice('Name', 'demo');
+    expect(brainSection).toContain(demo.replace('"Name"', '"Name"'));
+    const real = view.circleNotice('Name', 'anthropic');
+    expect(real.startsWith(demo)).toBe(true);
+    expect(brainSection).toContain("the note and the names of the circle's categories are sent to Anthropic and are not anonymised");
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['separate from the per-member read-only shares', 'never takes a graph id from a request', 'exactly the same answer as a circle that does not exist', 'read from the store on every request', 'discarded and writes nothing', 'every circle you are in, together', 'stays two separate rows', 'never given a partial one', 'who added it and when', 'can set or forge them', 'bound to that scope when it is made', 'Where should this note go?', 'Which notes?', 'cannot be taken back once approved', 'What a member has read cannot be taken back', 'no edit and no delete', 'have no account', 'not pseudonymisation', 'unanonymised', 'Nobody is told', 'The release gates are not met', 'pseudonymisation', 'a data processing agreement', 'a lawful basis', 'a risk assessment', 'Do not use circle brains with other people']) {
+      expect(brainSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+
+  it('is linked from the circles and web parts, and every setting and command it names exists', () => {
+    expect(section('Circles')).toContain('The shared circle brain');
+    expect(webSection).toContain('The shared circle brain');
+    for (const v of brainSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+    for (const m of brainSection.matchAll(/npm run ([\w:-]+)/g)) expect(pkg.scripts, m[1]).toHaveProperty(m[1] as string);
   });
 });

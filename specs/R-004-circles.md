@@ -205,7 +205,7 @@ These are real and known; each is also in the PLAN Backlog where it can be acted
 5. **Races over HTTP are best effort in a test.** Requests to one Node process are handled one after another, so the strict last-owner and accept races are proved at the store and controller level (named above); the end-to-end test sends the requests at the same moment and shows the outcomes are the allowed ones.
 6. **No one is told about an invitation.** Nothing is sent anywhere (no email, no push); an invitee must look at `/api/invitations`. Notifications are a later piece.
 7. **Anyone who can read the database files sees every circle, membership and invitation in plain text.** The same position as the accounts and graphs (no encryption at rest, files readable only by their owner); backups copy it all.
-8. **Circles share nothing in this specification, and this review does not cover sharing** (see R-008, which has its own threat table, and R-009, the circle-owned brain, which will have its own). When members can see parts of each other's brains, that work needs its own threat table, and pseudonymisation and the legal groundwork first.
+8. **Circles share nothing in this specification, and this review does not cover sharing** (see R-008, which has its own threat table, and R-009, the circle-owned brain, which has its own). When members can see parts of each other's brains, that work needs its own threat table, and pseudonymisation and the legal groundwork first.
 9. **A removed or departed person may remember what they saw.** Leaving a circle ends access from then on; it cannot unsee the roster they already read.
 
 ## Build order
