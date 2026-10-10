@@ -1,4 +1,5 @@
 import { describeGraph, err, ok, query, type CountOutput, type GraphError, type JsonObject, type NodesOutput, type Result, type StorageAdapter, type SubgraphOutput } from '../graph_store/index.js';
+import type { Provenance } from '../scopes/index.js';
 import { caciError, type CaciError } from './errors.js';
 
 /** Largest `data` of one node that is returned whole, in characters of JSON. */
@@ -18,6 +19,8 @@ export interface PageInput {
 }
 
 export interface GraphSummary {
+  /** Whose brain this is, for a circle (absent for the personal brain, as before R-009). */
+  readonly scope?: Provenance;
   readonly itemCount: number;
   readonly categoryCount: number;
   readonly edgeCount: number;
@@ -34,6 +37,7 @@ export interface CategoryView {
 }
 
 export interface CategoryPage {
+  readonly scope?: Provenance;
   readonly items: readonly CategoryView[];
   readonly nextCursor: string | null;
 }
@@ -46,12 +50,14 @@ export interface ItemView {
 }
 
 export interface CategoryItemsPage {
+  readonly scope?: Provenance;
   readonly category: { readonly id: string; readonly name?: string };
   readonly items: readonly ItemView[];
   readonly nextCursor: string | null;
 }
 
 export interface ItemDetail {
+  readonly scope?: Provenance;
   readonly item: ItemView;
   readonly categories: ReadonlyArray<{ readonly id: string; readonly name?: string; readonly weight: number }>;
   /** True when the item is filed under more categories than are listed here. */

@@ -77,14 +77,18 @@ export interface CaciController {
   approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
   /** Which model files this person's notes: `demo` (nothing leaves the machine) or `anthropic` (the note and category names go to Anthropic). Nothing else is said. */
   mode(token: unknown): Promise<Result<{ readonly mode: 'demo' | 'anthropic' }, CaciError>>;
-  /** Counts of items, categories and links in the caller's graph. */
-  summary(token: unknown): Promise<Result<GraphSummary, CaciError>>;
+  /**
+   * Counts of items, categories and links in the caller's graph, or (with a `scope`, R-009) in one circle's brain
+   * the caller may read, in which case the answer names the circle. Every browse call below takes the same optional
+   * trailing `scope`: omitted or personal is the caller's own brain exactly as before.
+   */
+  summary(token: unknown, scope?: unknown): Promise<Result<GraphSummary, CaciError>>;
   /** The caller's categories by id, a page at a time (`limit` 1 to 100, default 50), each with how many items are filed under it. */
-  categories(token: unknown, page?: PageInput): Promise<Result<CategoryPage, CaciError>>;
+  categories(token: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryPage, CaciError>>;
   /** The items filed under one of the caller's categories. An id that is not one of theirs is `NOT_FOUND`, whatever other graphs hold. */
-  categoryItems(token: unknown, categoryId: unknown, page?: PageInput): Promise<Result<CategoryItemsPage, CaciError>>;
+  categoryItems(token: unknown, categoryId: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryItemsPage, CaciError>>;
   /** One of the caller's items, and the categories it is filed under. */
-  item(token: unknown, itemId: unknown): Promise<Result<ItemDetail, CaciError>>;
+  item(token: unknown, itemId: unknown, scope?: unknown): Promise<Result<ItemDetail, CaciError>>;
   /** Discards the owner's pending proposal. Nothing is written. */
   reject(token: unknown, proposalId: unknown): Promise<Result<{ readonly id: string }, CaciError>>;
 }
@@ -195,6 +199,25 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     return notFound();
   }
 
+  /**
+   * The graph a browse call reads: the caller's own (the session says which), or one circle's brain when the
+   * caller is a current member in any reading role, checked now. Everything else is the one NOT_FOUND.
+   */
+  async function readable(token: unknown, scope: unknown): Promise<Result<{ graphId: string; provenance: Provenance | undefined }, CaciError>> {
+    const me = await whoIs(token);
+    if (!me.ok) return me;
+    const parsed = parseScope(scope);
+    if (!parsed.ok) return err(scopeProblem(parsed.error));
+    if (parsed.value.kind === 'personal') return ok({ graphId: me.value.graphId, provenance: undefined });
+    if (scopes === undefined) return err(noCircle());
+    const resolved = await scopes.resolve(token, parsed.value, 'read');
+    if (!resolved.ok) return err(scopeProblem(resolved.error));
+    return ok({ graphId: resolved.value.graphId, provenance: resolved.value.provenance });
+  }
+
+  /** A browse result with the circle it came from (nothing is added for the personal brain). */
+  const tag = <T extends object>(value: T, provenance: Provenance | undefined): T => (provenance === undefined ? value : Object.freeze({ ...value, scope: provenance }));
+
   /** The capture controller's own refusals for a proposal that is gone, in this controller's words. */
   const gone = (error: ControllerError): CaciError | undefined => {
     if (error.source !== 'app') return undefined;
@@ -209,24 +232,32 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       return me.ok ? ok(Object.freeze({ mode })) : me;
     },
 
-    async summary(token) {
-      const me = await whoIs(token);
-      return me.ok ? browser.summary(me.value.graphId) : me;
+    async summary(token, scope) {
+      const where = await readable(token, scope);
+      if (!where.ok) return where;
+      const r = await browser.summary(where.value.graphId);
+      return r.ok ? ok(tag(r.value, where.value.provenance)) : r;
     },
 
-    async categories(token, page) {
-      const me = await whoIs(token);
-      return me.ok ? browser.categories(me.value.graphId, page) : me;
+    async categories(token, page, scope) {
+      const where = await readable(token, scope);
+      if (!where.ok) return where;
+      const r = await browser.categories(where.value.graphId, page);
+      return r.ok ? ok(tag(r.value, where.value.provenance)) : r;
     },
 
-    async categoryItems(token, categoryId, page) {
-      const me = await whoIs(token);
-      return me.ok ? browser.categoryItems(me.value.graphId, categoryId, page) : me;
+    async categoryItems(token, categoryId, page, scope) {
+      const where = await readable(token, scope);
+      if (!where.ok) return where;
+      const r = await browser.categoryItems(where.value.graphId, categoryId, page);
+      return r.ok ? ok(tag(r.value, where.value.provenance)) : r;
     },
 
-    async item(token, itemId) {
-      const me = await whoIs(token);
-      return me.ok ? browser.item(me.value.graphId, itemId) : me;
+    async item(token, itemId, scope) {
+      const where = await readable(token, scope);
+      if (!where.ok) return where;
+      const r = await browser.item(where.value.graphId, itemId);
+      return r.ok ? ok(tag(r.value, where.value.provenance)) : r;
     },
 
     async get(token, proposalId) {

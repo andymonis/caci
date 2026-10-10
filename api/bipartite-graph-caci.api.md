@@ -22,10 +22,10 @@ export const CACI_ERROR_CODES: readonly ["UNAUTHENTICATED", "NOT_FOUND", "EXPIRE
 // @public (undocumented)
 export interface CaciController {
     approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
-    categories(token: unknown, page?: PageInput): Promise<Result<CategoryPage, CaciError>>;
-    categoryItems(token: unknown, categoryId: unknown, page?: PageInput): Promise<Result<CategoryItemsPage, CaciError>>;
+    categories(token: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryPage, CaciError>>;
+    categoryItems(token: unknown, categoryId: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryItemsPage, CaciError>>;
     get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
-    item(token: unknown, itemId: unknown): Promise<Result<ItemDetail, CaciError>>;
+    item(token: unknown, itemId: unknown, scope?: unknown): Promise<Result<ItemDetail, CaciError>>;
     mode(token: unknown): Promise<Result<{
         readonly mode: 'demo' | 'anthropic';
     }, CaciError>>;
@@ -37,7 +37,7 @@ export interface CaciController {
     reject(token: unknown, proposalId: unknown): Promise<Result<{
         readonly id: string;
     }, CaciError>>;
-    summary(token: unknown): Promise<Result<GraphSummary, CaciError>>;
+    summary(token: unknown, scope?: unknown): Promise<Result<GraphSummary, CaciError>>;
 }
 
 // @public (undocumented)
@@ -108,6 +108,10 @@ export interface CategoryItemsPage {
     readonly items: readonly ItemView[];
     // (undocumented)
     readonly nextCursor: string | null;
+    // Warning: (ae-forgotten-export) The symbol "Provenance" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly scope?: Provenance;
 }
 
 // @public (undocumented)
@@ -116,6 +120,8 @@ export interface CategoryPage {
     readonly items: readonly CategoryView[];
     // (undocumented)
     readonly nextCursor: string | null;
+    // (undocumented)
+    readonly scope?: Provenance;
 }
 
 // @public (undocumented)
@@ -141,6 +147,7 @@ export interface GraphSummary {
     readonly edgeCount: number;
     // (undocumented)
     readonly itemCount: number;
+    readonly scope?: Provenance;
 }
 
 // @public (undocumented)
@@ -154,6 +161,8 @@ export interface ItemDetail {
     // (undocumented)
     readonly item: ItemView;
     readonly moreCategories?: true;
+    // (undocumented)
+    readonly scope?: Provenance;
 }
 
 // @public (undocumented)
@@ -195,7 +204,6 @@ export interface ProposalView {
     // Warning: (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
     readonly operations: readonly JsonValue[];
     readonly rationale?: string;
-    // Warning: (ae-forgotten-export) The symbol "Provenance" needs to be exported by the entry point index.d.ts
     readonly scope?: Provenance;
     // (undocumented)
     readonly summary: ProposalSummary;
