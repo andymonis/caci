@@ -80,7 +80,7 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('service/') && target.startsWith('api/') && target !== 'api/index') {
         problems.push(`${file} imports ${specifier}: the service may use the API only through api/index`);
       }
-      if (/^(?:graph_store|llm|app|sqlite|users|circles|api)\//.test(file) && /^service(?:\/|$)/.test(target)) {
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|api)\//.test(file) && /^service(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: nothing may depend on the service`);
       }
       const circlesTest = /\.test(?:-util)?\.ts$/.test(file);
@@ -129,7 +129,20 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('api/') && target.startsWith('circles/') && !/^circles\/index$/.test(target) && !(apiTest && /^circles\/(?:sqlite\/index|testing\/index)$/.test(target))) {
         problems.push(`${file} imports ${specifier}: the API may use the circles component only through circles/index (its tests may also use the SQLite store)`);
       }
-      if (/^(?:graph_store|llm|app|sqlite|users|circles)\//.test(file) && /^api(?:\/|$)/.test(target)) {
+      const sharingTest = /\.test(?:-util)?\.ts$/.test(file);
+      if (file.startsWith('sharing/') && /^(?:llm|app|caci|api|service|sqlite)(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the sharing component must not depend on the LLM component, the application, the CaCi controller, the API, the service or the SQLite wrapper`);
+      }
+      if (file.startsWith('sharing/') && /^(?:users|circles|graph_store)\//.test(target) && !/^(?:users|circles|graph_store)\/index$/.test(target) && !(sharingTest && /^(?:graph_store\/adapters\/memory|circles\/sqlite|users\/sqlite)\/index$/.test(target))) {
+        problems.push(`${file} imports ${specifier}: the sharing component may use the users, circles and graph store components only through their indexes (its tests may also use the memory adapter and the SQLite stores)`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|caci)\//.test(file) && /^sharing(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: only the API and the service may depend on the sharing component`);
+      }
+      if ((file.startsWith('api/') || file.startsWith('service/')) && target.startsWith('sharing/') && target !== 'sharing/index') {
+        problems.push(`${file} imports ${specifier}: the API and the service may use the sharing component only through sharing/index`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing)\//.test(file) && /^api(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: nothing may depend on the API`);
       }
       if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/') || file.startsWith('circles/'))) {
@@ -189,6 +202,10 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'circles/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createUserController } from '../users/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js';`,
         'circles/sqlite/store.ts': `import { prepareUsersDatabase } from '../../users/sqlite/index.js'; import { openDb } from '../../sqlite/db.js'; import { c } from '../cursor.js';`,
         'api/circ.ts': `import { createCircleController } from '../circles/index.js';`,
+        'sharing/x.ts': `import { createCircleController } from '../circles/index.js'; import { query } from '../graph_store/index.js'; import { isUserId } from '../users/index.js'; import { y } from './y.js';`,
+        'sharing/x.test.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js'; import { createSqliteCircleStore } from '../circles/sqlite/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js';`,
+        'api/share.ts': `import { createSharing } from '../sharing/index.js';`,
+        'service/share.ts': `import { createSharing } from '../sharing/index.js';`,
         'api/circ.test.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';`,
         'service/circ.ts': `import { createCircleController } from '../circles/index.js'; import { createSqliteCircleStore } from '../circles/sqlite/index.js';`,
         'service/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js'; import { createUserController } from '../users/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { createApiServer } from '../api/index.js'; import { ok } from '../graph_store/index.js'; import { y } from './y.js';`,
@@ -263,6 +280,24 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the circles component using the API', { 'circles/x.ts': `import { createApiServer } from '../api/index.js';` }],
     ['the circles component using the service', { 'circles/x.ts': `import { serve } from '../service/index.js';` }],
     ['the users component using the circles component', { 'users/x.ts': `import { createCircleController } from '../circles/index.js';` }],
+    ['the sharing component using the LLM component', { 'sharing/x.ts': `import { createLlm } from '../llm/index.js';` }],
+    ['the sharing component using the application', { 'sharing/x.ts': `import { createController } from '../app/index.js';` }],
+    ['the sharing component using the CaCi controller', { 'sharing/x.ts': `import { createCaciController } from '../caci/index.js';` }],
+    ['the sharing component using the API', { 'sharing/x.ts': `import { createApiServer } from '../api/index.js';` }],
+    ['the sharing component using the service', { 'sharing/x.ts': `import { serve } from '../service/index.js';` }],
+    ['the sharing component using the SQLite wrapper', { 'sharing/x.ts': `import { openDb } from '../sqlite/db.js';` }],
+    ['the sharing component reaching into the circles internals', { 'sharing/x.ts': `import { x } from '../circles/store.js';` }],
+    ['the sharing component reaching into the graph store internals', { 'sharing/x.ts': `import { x } from '../graph_store/query-plan.js';` }],
+    ['the sharing component reaching into the users internals', { 'sharing/x.ts': `import { x } from '../users/controller.js';` }],
+    ['production sharing code using the memory adapter', { 'sharing/x.ts': `import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';` }],
+    ['production sharing code using the SQLite circle store', { 'sharing/x.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';` }],
+    ['production sharing code using the SQLite user store', { 'sharing/x.ts': `import { createSqliteUserStore } from '../users/sqlite/index.js';` }],
+    ['the circles component using the sharing component', { 'circles/x.ts': `import { createSharing } from '../sharing/index.js';` }],
+    ['the users component using the sharing component', { 'users/x.ts': `import { createSharing } from '../sharing/index.js';` }],
+    ['the graph store using the sharing component', { 'graph_store/x.ts': `import { createSharing } from '../sharing/index.js';` }],
+    ['the CaCi controller using the sharing component', { 'caci/x.ts': `import { createSharing } from '../sharing/index.js';` }],
+    ['the API reaching into the sharing internals', { 'api/x.ts': `import { x } from '../sharing/sharing.js';` }],
+    ['the service reaching into the sharing internals', { 'service/x.ts': `import { x } from '../sharing/sharing.js';` }],
     ['the CaCi controller using the circles component', { 'caci/x.ts': `import { createCircleController } from '../circles/index.js';` }],
     ['the graph store using the circles component', { 'graph_store/x.ts': `import { x } from '../circles/index.js';` }],
     ['the API reaching into the circles component\'s internals', { 'api/x.ts': `import { x } from '../circles/controller.js';` }],
@@ -292,6 +327,18 @@ describe('the real source tree', () => {
     expect(Object.keys(files).some((f) => f.startsWith('llm/'))).toBe(true);
     expect(Object.keys(files).some((f) => f.startsWith('app/'))).toBe(true);
     expect(violations(files)).toEqual([]);
+  });
+});
+
+describe('the sharing component, in the real tree', () => {
+  it('uses only the indexes of users, circles and the graph store, and nothing depends on it but the API and the service', () => {
+    const own = sourcesUnder(join(srcRoot, 'sharing'));
+    expect(Object.keys(own).length).toBeGreaterThan(1);
+    expect(violations(own)).toEqual([]);
+    const others = { ...sourcesUnder(join(srcRoot, 'circles')), ...sourcesUnder(join(srcRoot, 'users')), ...sourcesUnder(join(srcRoot, 'caci')), ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'llm')), ...sourcesUnder(join(srcRoot, 'app')) };
+    const dependents = Object.entries(others).filter(([, source]) => importsOf(source).some((s) => /(?:^|\/)sharing\//.test(s))).map(([file]) => file);
+    expect(Object.keys(others).length).toBeGreaterThan(50);
+    expect(dependents).toEqual([]);
   });
 });
 
@@ -346,7 +393,7 @@ describe('no ambient input', () => {
     }
   });
 
-  it.each(['llm', 'app'])('keeps the %s component free of environment and file access', (component) => {
+  it.each(['llm', 'app', 'sharing'])('keeps the %s component free of environment and file access', (component) => {
     const files = sourcesUnder(join(srcRoot, component));
     const offenders = Object.entries(files)
       .filter(([file]) => !file.endsWith('.test.ts'))

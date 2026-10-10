@@ -12,6 +12,7 @@ export type { CreateCircleInput, InviteInput, UpdateCircleInput } from './valida
 export { authorise, CIRCLE_ACTIONS } from './authorise.js';
 export type { AuthoriseContext, CircleAction } from './authorise.js';
 export type { Err, Ok, Result } from './result.js';
+export { MAX_CATEGORY_ID, normaliseCategories } from './grants.js';
 export { createMemoryCircleStore } from './memory-store.js';
 export type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from './store.js';
 export { createCircleController, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './controller.js';

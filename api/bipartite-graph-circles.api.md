@@ -341,6 +341,9 @@ export interface Listing<T> {
     readonly nextCursor: string | null;
 }
 
+// @public
+export const MAX_CATEGORY_ID = 256;
+
 // @public (undocumented)
 export const MAX_PAGE_SIZE = 100;
 
@@ -398,6 +401,9 @@ export const newCircleId: (random?: Random) => string;
 
 // @public (undocumented)
 export const newInvitationId: (random?: Random) => string;
+
+// @public
+export function normaliseCategories(categories: unknown, max: number): Result<string[], CirclesError>;
 
 // @public (undocumented)
 export type Ok<T> = {
