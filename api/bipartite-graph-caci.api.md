@@ -32,6 +32,7 @@ export interface CaciController {
     // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
     propose(token: unknown, input: {
         readonly text: unknown;
+        readonly scope?: unknown;
     }): Promise<Result<ProposalView, CaciError>>;
     reject(token: unknown, proposalId: unknown): Promise<Result<{
         readonly id: string;
@@ -49,6 +50,8 @@ export interface CaciControllerInit {
     // (undocumented)
     readonly limits?: CaciLimits;
     readonly mode?: 'demo' | 'anthropic';
+    // Warning: (ae-forgotten-export) The symbol "ScopeResolver" needs to be exported by the entry point index.d.ts
+    readonly scopes?: ScopeResolver;
     // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
     readonly users: Pick<UserController, 'resolve'>;
 }
@@ -192,6 +195,8 @@ export interface ProposalView {
     // Warning: (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
     readonly operations: readonly JsonValue[];
     readonly rationale?: string;
+    // Warning: (ae-forgotten-export) The symbol "Provenance" needs to be exported by the entry point index.d.ts
+    readonly scope?: Provenance;
     // (undocumented)
     readonly summary: ProposalSummary;
     readonly text: string;
@@ -200,7 +205,7 @@ export interface ProposalView {
 // Warning: (ae-forgotten-export) The symbol "PendingProposal" needs to be exported by the entry point index.d.ts
 //
 // @public
-export function viewOf(proposal: PendingProposal, mode: 'demo' | 'anthropic'): ProposalView;
+export function viewOf(proposal: PendingProposal, mode: 'demo' | 'anthropic', scope?: Provenance): ProposalView;
 
 // (No @packageDocumentation comment for this package)
 

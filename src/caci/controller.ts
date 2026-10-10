@@ -1,6 +1,7 @@
 import type { ControllerError, Controller, PendingProposal, ProposalSummary } from '../app/index.js';
 import { err, ok, type JsonValue, type Result, type StorageAdapter } from '../graph_store/index.js';
 import { createRegistrationThrottle as createWindowLimiter, type Authenticated, type UserController } from '../users/index.js';
+import { parseScope, type Provenance, type ScopeResolver, type ScopesError, type Scope } from '../scopes/index.js';
 import { createBrowser, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
 
@@ -29,6 +30,8 @@ export interface CaciControllerInit {
   /** The clock in milliseconds. Use the capture controller's clock too, so expiry agrees. */
   readonly clock?: () => number;
   readonly limits?: CaciLimits;
+  /** Resolves a circle scope to its graph for the current member (R-009). Without it only the personal scope works. */
+  readonly scopes?: ScopeResolver;
 }
 
 /** A proposal as a person is allowed to see it: the preview and what they would be approving, and nothing about the plumbing. */
@@ -44,6 +47,8 @@ export interface ProposalView {
   readonly operations: readonly JsonValue[];
   /** The model's short reason, when it gave one. */
   readonly rationale?: string;
+  /** Where it will be written, for a circle proposal (the circle's name and id). Absent for a personal one, as before R-009. */
+  readonly scope?: Provenance;
 }
 
 /** What approving a proposal reports: which proposal, how many operations were written, and what they were. */
@@ -59,7 +64,7 @@ export interface CaciController {
    * from the session: there is no way to name another). Holds the answer as a pending proposal owned by
    * them. Writes nothing.
    */
-  propose(token: unknown, input: { readonly text: unknown }): Promise<Result<ProposalView, CaciError>>;
+  propose(token: unknown, input: { readonly text: unknown; readonly scope?: unknown }): Promise<Result<ProposalView, CaciError>>;
   /**
    * A pending proposal, for its owner only. Anyone else (another account, an admin, a made-up id) gets exactly
    * the answer a missing proposal gets. Its owner is told when it has expired.
@@ -87,6 +92,8 @@ export interface CaciController {
 interface Held {
   readonly userId: string;
   readonly expiresAt: number;
+  /** Fixed when the proposal is made and never changed: where approving would write (a circle scope only). */
+  readonly circle?: { readonly scope: Scope; readonly graphId: string; readonly provenance: Provenance };
 }
 
 const whole = (value: number | undefined, fallback: number, name: string): number => {
@@ -96,7 +103,7 @@ const whole = (value: number | undefined, fallback: number, name: string): numbe
 };
 
 /** How a pending proposal is shown: no prompt, no raw model output, no usage, no model name, no graph id. */
-export function viewOf(proposal: PendingProposal, mode: 'demo' | 'anthropic'): ProposalView {
+export function viewOf(proposal: PendingProposal, mode: 'demo' | 'anthropic', scope?: Provenance): ProposalView {
   return Object.freeze({
     id: proposal.id,
     createdAt: proposal.createdAt,
@@ -106,6 +113,7 @@ export function viewOf(proposal: PendingProposal, mode: 'demo' | 'anthropic'): P
     summary: proposal.summary,
     operations: proposal.mutation.ops as unknown as readonly JsonValue[],
     ...(proposal.rationale === undefined ? {} : { rationale: proposal.rationale }),
+    ...(scope === undefined || scope.kind === 'personal' ? {} : { scope }),
   });
 }
 
@@ -115,6 +123,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   const browser = createBrowser(graphAdapter);
   const mode = init.mode ?? 'demo';
   if (mode !== 'demo' && mode !== 'anthropic') throw new TypeError('createCaciController: mode must be demo or anthropic');
+  const scopes = init.scopes;
   const clock = init.clock ?? Date.now;
   const maxPending = whole(init.limits?.maxPendingPerUser, 10, 'maxPendingPerUser');
   const perHour = whole(init.limits?.proposalsPerHour, 30, 'proposalsPerHour');
@@ -149,15 +158,41 @@ export function createCaciController(init: CaciControllerInit): CaciController {
    * The owner's view of a proposal id. Everyone else, and every id that is not a proposal, gets the very
    * same `NOT_FOUND`, so nobody can tell a stranger's proposal from one that does not exist.
    */
-  async function owned(token: unknown, proposalId: unknown): Promise<Result<{ userId: string; id: string }, CaciError>> {
+  async function owned(token: unknown, proposalId: unknown): Promise<Result<{ userId: string; id: string; held: Held }, CaciError>> {
     const me = await whoIs(token);
     if (!me.ok) return me;
     const userId = me.value.user.id;
     sweep(clock());
     if (typeof proposalId !== 'string') return err(notFound());
-    if (held.get(proposalId)?.userId === userId) return ok({ userId, id: proposalId });
+    const h = held.get(proposalId);
+    if (h !== undefined && h.userId === userId) return ok({ userId, id: proposalId, held: h });
     if (expiredOwners.get(proposalId) === userId) return err(expired());
     return err(notFound());
+  }
+
+  const noCircle = (): CaciError => caciError('NOT_FOUND', 'no such circle');
+  const storage = (): CaciError => ({ source: 'graph', error: { code: 'STORAGE_ERROR', message: 'the service could not complete the request' } as never });
+
+  /** A scope problem in this controller's words: a malformed scope names its field. */
+  const scopeProblem = (e: ScopesError): CaciError => {
+    if (e.code === 'INVALID_INPUT') return caciError('INVALID_INPUT', e.message, { field: e.field === undefined || e.field === 'scope' ? 'scope' : `scope.${e.field}` });
+    if (e.code === 'UNAUTHENTICATED') return caciError('UNAUTHENTICATED', 'not signed in');
+    if (e.code === 'NOT_FOUND') return noCircle();
+    return storage();
+  };
+
+  /**
+   * A circle proposal may only be shown or written while its owner is still allowed to capture into that circle,
+   * checked now, from the store. If not, the proposal is discarded (it can never be approved) and reads as missing.
+   */
+  async function stillAllowed(token: unknown, id: string, h: Held): Promise<CaciError | undefined> {
+    if (h.circle === undefined) return undefined;
+    const r = scopes === undefined ? undefined : await scopes.resolve(token, h.circle.scope, 'capture');
+    if (r?.ok === true) return undefined;
+    if (r !== undefined && !r.ok && r.error.code === 'STORAGE_ERROR') return storage(); // cannot tell: keep it, refuse for now
+    capture.reject(id);
+    held.delete(id);
+    return notFound();
   }
 
   /** The capture controller's own refusals for a proposal that is gone, in this controller's words. */
@@ -197,17 +232,21 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     async get(token, proposalId) {
       const mine = await owned(token, proposalId);
       if (!mine.ok) return mine;
+      const refused = await stillAllowed(token, mine.value.id, mine.value.held);
+      if (refused !== undefined) return err(refused);
       const proposal = capture.get(mine.value.id);
       if (proposal === undefined) {
         held.delete(mine.value.id);
         return err(expired());
       }
-      return ok(viewOf(proposal, mode));
+      return ok(viewOf(proposal, mode, mine.value.held.circle?.provenance));
     },
 
     async approve(token, proposalId) {
       const mine = await owned(token, proposalId);
       if (!mine.ok) return mine;
+      const refused = await stillAllowed(token, mine.value.id, mine.value.held);
+      if (refused !== undefined) return err(refused);
       const done = await capture.approve(mine.value.id);
       if (done.ok) {
         held.delete(mine.value.id);
@@ -240,12 +279,25 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       const userId = me.value.user.id;
 
       for (const key of Object.keys(input ?? {})) {
-        if (key !== 'text') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
+        if (key !== 'text' && key !== 'scope') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
       }
       const text = input?.text;
       if (typeof text !== 'string') return err(caciError('INVALID_INPUT', 'text must be text', { field: 'text' }));
       if (text.trim() === '') return err(caciError('INVALID_INPUT', 'text must not be empty', { field: 'text' }));
       if (text.length > MAX_NOTE_CHARS) return err(caciError('INVALID_INPUT', `text is over the limit of ${MAX_NOTE_CHARS} characters`, { field: 'text' }));
+
+      const parsed = parseScope(input?.scope);
+      if (!parsed.ok) return err(scopeProblem(parsed.error));
+      // where the note will be written is decided here, once, and bound to the proposal: a circle needs a current member who may capture
+      let graphId = me.value.graphId;
+      let circle: Held['circle'];
+      if (parsed.value.kind === 'circle') {
+        if (scopes === undefined) return err(noCircle());
+        const resolved = await scopes.resolve(token, parsed.value, 'capture');
+        if (!resolved.ok) return err(scopeProblem(resolved.error));
+        graphId = resolved.value.graphId;
+        circle = Object.freeze({ scope: resolved.value.scope, graphId, provenance: resolved.value.provenance });
+      }
 
       const now = clock();
       sweep(now);
@@ -262,11 +314,11 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       const reservation = ++reservations;
       reserved.set(reservation, userId);
       try {
-        const made = await capture.propose(me.value.graphId, { kind: 'text', text });
+        const made = await capture.propose(graphId, { kind: 'text', text });
         reserved.delete(reservation);
         if (!made.ok) return made;
-        held.set(made.value.id, { userId, expiresAt: made.value.expiresAt });
-        return ok(viewOf(made.value, mode));
+        held.set(made.value.id, { userId, expiresAt: made.value.expiresAt, ...(circle === undefined ? {} : { circle }) });
+        return ok(viewOf(made.value, mode, circle?.provenance));
       } catch (cause) {
         reserved.delete(reservation);
         throw cause;
