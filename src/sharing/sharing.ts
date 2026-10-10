@@ -1,5 +1,5 @@
 import { circlesError, isCircleId, normaliseCategories, type CirclePage, type CirclesError, type CircleStore, type Grant, type Result } from '../circles/index.js';
-import { query, type JsonValue, type NodesOutput, type StorageAdapter } from '../graph_store/index.js';
+import { query, type CountOutput, type JsonObject, type JsonValue, type NodesOutput, type StorageAdapter, type SubgraphOutput } from '../graph_store/index.js';
 import { isUserId, userGraphId, type Authenticated, type UserController, type UserStore } from '../users/index.js';
 
 // Sharing (R-008): what a person shares of their own brain with another member of a circle. This file is the
@@ -12,6 +12,10 @@ export const DEFAULT_PAGE = 50;
 export const MAX_PAGE = 100;
 const CATEGORY_NAME_MAX = 100;
 const BATCH = 50;
+const MAX_DATA_CHARS = 4096;
+const CUT_STRING = 300;
+const MAX_ID_CHARS = 256;
+const ITEM_CATEGORIES = 200;
 const STORAGE = 'the sharing service could not complete the request';
 
 export interface SharingLimits {
@@ -57,7 +61,45 @@ export interface PageRequest {
   readonly cursor?: string | null;
 }
 
+/** A person who has shared part of their brain with the caller, and how many of the shared categories still exist. */
+export interface SharedBrainView {
+  readonly userId: string;
+  readonly username?: string;
+  readonly displayName?: string;
+  readonly categoryCount: number;
+}
+/** A shared category with the number of items filed under it (all of them: the grant names the category, items come with it). */
+export interface SharedCategoryEntry {
+  readonly id: string;
+  readonly name?: string;
+  readonly itemCount: number;
+  readonly itemCountCapped?: true;
+}
+export interface SharedItemView {
+  readonly id: string;
+  readonly data: JsonObject;
+  readonly dataTruncated?: true;
+}
+export interface SharedCategoryItems {
+  readonly category: SharedCategoryView;
+  readonly items: readonly SharedItemView[];
+  readonly nextCursor: string | null;
+}
+/** One shared item: only the categories that are shared with the caller are named. */
+export interface SharedItemDetail {
+  readonly item: SharedItemView;
+  readonly categories: ReadonlyArray<SharedCategoryView & { readonly weight: number }>;
+}
+
 export interface Sharing {
+  /** Who in the circle has shared something with the caller, by user id. Read only. */
+  sharedWithMe(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<SharedBrainView>, CirclesError>>;
+  /** The categories `ownerId` shares with the caller, with item counts. */
+  sharedCategories(token: unknown, circleId: unknown, ownerId: unknown, page?: PageRequest): Promise<Result<Page<SharedCategoryEntry>, CirclesError>>;
+  /** The items under one shared category. */
+  sharedCategoryItems(token: unknown, circleId: unknown, ownerId: unknown, categoryId: unknown, page?: PageRequest): Promise<Result<SharedCategoryItems, CirclesError>>;
+  /** One item filed under at least one shared category. */
+  sharedItem(token: unknown, circleId: unknown, ownerId: unknown, itemId: unknown): Promise<Result<SharedItemDetail, CirclesError>>;
   /**
    * Replaces what the caller shares with `granteeId` in a circle. `input` is `{ categories: [ids] }` and nothing else.
    * Every category must exist in the caller's own graph; an empty list withdraws (and answers `ok(undefined)`).
@@ -160,7 +202,154 @@ export function createSharing(init: SharingInit): Sharing {
     return ok({ limit, cursor });
   }
 
+  const noBrain = (): CirclesError => circlesError('NOT_FOUND', 'no such shared brain');
+  const noCategory = (): CirclesError => circlesError('NOT_FOUND', 'no such category');
+  const noItem = (): CirclesError => circlesError('NOT_FOUND', 'no such item');
+  const clip = (text: string, max: number): string => [...text].slice(0, max).join('');
+
+  function capData(data: JsonValue | undefined): { data: JsonObject; truncated: boolean } {
+    const whole = isObject(data) ? (data as JsonObject) : {};
+    if (JSON.stringify(whole).length <= MAX_DATA_CHARS) return { data: whole, truncated: false };
+    const cut: JsonObject = {};
+    for (const [key, value] of Object.entries(whole)) cut[key] = typeof value === 'string' ? clip(value, CUT_STRING) : value;
+    return { data: JSON.stringify(cut).length <= MAX_DATA_CHARS ? cut : {}, truncated: true };
+  }
+  const itemView = (id: string, data: JsonValue | undefined): SharedItemView => {
+    const capped = capData(data);
+    return Object.freeze({ id, data: capped.data, ...(capped.truncated ? { dataTruncated: true as const } : {}) });
+  };
+
+  /** The grant `ownerId` gave the caller in this circle, as it is right now; one answer for every way of not having one. */
+  async function grantFrom(me: { userId: string; circleId: string }, ownerId: unknown): Promise<Result<Grant, CirclesError>> {
+    if (!isUserId(ownerId) || ownerId === me.userId) return err(noBrain());
+    if ((await store.membershipOf(me.circleId, ownerId)) === undefined) return err(noBrain());
+    const grant = await store.getGrant(me.circleId, ownerId, me.userId);
+    return grant === undefined || grant.categories.length === 0 ? err(noBrain()) : ok(grant);
+  }
+
+  /** A graph read of the owner's graph: a missing graph reads as nothing there. */
+  async function read(ownerId: string, input: Record<string, unknown>): Promise<Result<unknown, CirclesError>> {
+    const r = await query(graphAdapter, { version: 1, graphId: userGraphId(ownerId), ...input } as never);
+    if (r.ok) return ok(r.value);
+    if (r.error.code === 'GRAPH_NOT_FOUND') return err(circlesError('NOT_FOUND', 'gone'));
+    if (r.error.code === 'VALIDATION_ERROR' && r.error.path?.join('.') === 'page.cursor') return err(circlesError('INVALID_INPUT', 'cursor is not one this service gave for this request', { field: 'cursor' }));
+    return err(storageFailure());
+  }
+
+  const encodeCursor = (id: string): string => `s${Buffer.from(id, 'utf8').toString('base64url')}`;
+  function decodeCursor(cursor: string | null): Result<string | null, CirclesError> {
+    if (cursor === null) return ok(null);
+    const bad = err(circlesError('INVALID_INPUT', 'that cursor is not one this service gave', { field: 'cursor' }));
+    if (cursor.length > 2048 || !/^s[A-Za-z0-9_-]*$/.test(cursor)) return bad;
+    const id = Buffer.from(cursor.slice(1), 'base64url').toString('utf8');
+    return encodeCursor(id) === cursor ? ok(id) : bad;
+  }
+
+  async function listPage<T>(fetch: () => Promise<T>): Promise<Result<T, CirclesError>> {
+    try {
+      return ok(await fetch());
+    } catch (cause) {
+      if (cause instanceof RangeError) return err(circlesError('INVALID_INPUT', 'that cursor is not one this service gave', { field: 'cursor' }));
+      throw cause;
+    }
+  }
+
   return {
+    sharedWithMe: (token, circleId, request) =>
+      guarded(async () => {
+        const me = await memberOf(token, circleId);
+        if (!me.ok) return me;
+        const page = pageOf(request);
+        if (!page.ok) return page;
+        const listed = await listPage(() => store.listGrantsTo(me.value.circleId, me.value.userId, page.value));
+        if (!listed.ok) return listed;
+        const items: SharedBrainView[] = [];
+        for (const grant of listed.value.items) {
+          const names = await existing(grant.ownerId, grant.categories);
+          if (!names.ok) return names;
+          const person = await directory.get(grant.ownerId);
+          items.push(Object.freeze({ userId: grant.ownerId, ...(person === undefined ? {} : { username: person.username, displayName: person.displayName }), categoryCount: grant.categories.filter((id) => names.value.has(id)).length }));
+        }
+        return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.value.nextCursor }));
+      }),
+
+    sharedCategories: (token, circleId, ownerId, request) =>
+      guarded(async () => {
+        const me = await memberOf(token, circleId);
+        if (!me.ok) return me;
+        const grant = await grantFrom(me.value, ownerId);
+        if (!grant.ok) return grant;
+        const page = pageOf(request);
+        if (!page.ok) return page;
+        const after = decodeCursor(page.value.cursor);
+        if (!after.ok) return after;
+        const ids = grant.value.categories; // sorted, as the store keeps them
+        let pos = after.value === null ? 0 : ids.findIndex((id) => id > (after.value as string));
+        if (pos === -1) pos = ids.length;
+        const items: SharedCategoryEntry[] = [];
+        while (items.length < page.value.limit && pos < ids.length) {
+          const chunk = ids.slice(pos, pos + BATCH);
+          const names = await existing(grant.value.ownerId, chunk);
+          if (!names.ok) return names;
+          for (const id of chunk) {
+            pos++;
+            if (!names.value.has(id)) continue;
+            const counted = await read(grant.value.ownerId, { from: { partition: 'category', ids: [id] }, traverse: { depth: 1 }, filter: { partition: 'item' }, return: { shape: 'count' } });
+            if (!counted.ok) return counted;
+            const { count, truncated } = counted.value as CountOutput;
+            const name = names.value.get(id);
+            items.push(Object.freeze({ id, ...(name === undefined ? {} : { name }), itemCount: count, ...(truncated ? { itemCountCapped: true as const } : {}) }));
+            if (items.length === page.value.limit) break;
+          }
+        }
+        return ok(Object.freeze({ items: Object.freeze(items), nextCursor: pos < ids.length ? encodeCursor(ids[pos - 1] as string) : null }));
+      }),
+
+    sharedCategoryItems: (token, circleId, ownerId, categoryId, request) =>
+      guarded(async () => {
+        const me = await memberOf(token, circleId);
+        if (!me.ok) return me;
+        const grant = await grantFrom(me.value, ownerId);
+        if (!grant.ok) return grant;
+        if (typeof categoryId !== 'string' || categoryId === '') return err(circlesError('INVALID_INPUT', 'id must be text', { field: 'id' }));
+        const page = pageOf(request);
+        if (!page.ok) return page;
+        if (categoryId.length > MAX_ID_CHARS || !grant.value.categories.includes(categoryId)) return err(noCategory());
+        const there = await existing(grant.value.ownerId, [categoryId]);
+        if (!there.ok) return there;
+        if (!there.value.has(categoryId)) return err(noCategory());
+        const listed = await read(grant.value.ownerId, { from: { partition: 'category', ids: [categoryId] }, traverse: { depth: 1 }, filter: { partition: 'item' }, return: { shape: 'nodes', includeData: true }, page: page.value });
+        if (!listed.ok) return listed.error.code === 'NOT_FOUND' ? err(noCategory()) : listed;
+        const { nodes, nextCursor } = listed.value as NodesOutput;
+        const name = there.value.get(categoryId);
+        return ok(Object.freeze({ category: Object.freeze({ id: categoryId, ...(name === undefined ? {} : { name }) }), items: Object.freeze(nodes.filter((n) => n.partition === 'item').map((n) => itemView(n.id, n.data))), nextCursor }));
+      }),
+
+    sharedItem: (token, circleId, ownerId, itemId) =>
+      guarded(async () => {
+        const me = await memberOf(token, circleId);
+        if (!me.ok) return me;
+        const grant = await grantFrom(me.value, ownerId);
+        if (!grant.ok) return grant;
+        if (typeof itemId !== 'string' || itemId === '') return err(circlesError('INVALID_INPUT', 'id must be text', { field: 'id' }));
+        if (itemId.length > MAX_ID_CHARS) return err(noItem());
+        const r = await read(grant.value.ownerId, { from: { partition: 'item', ids: [itemId] }, traverse: { depth: 1 }, return: { shape: 'subgraph', includeData: true }, page: { limit: ITEM_CATEGORIES + 1, cursor: null } });
+        if (!r.ok) return r.error.code === 'NOT_FOUND' ? err(noItem()) : r;
+        const out = r.value as SubgraphOutput;
+        const item = out.nodes.find((n) => n.partition === 'item' && n.id === itemId);
+        if (item === undefined) return err(noItem());
+        const shared = new Set(grant.value.categories);
+        const names = new Map(out.nodes.filter((n) => n.partition === 'category').map((n) => [n.id, nameOf(n.data)] as const));
+        const categories = out.edges
+          .filter((e) => e.item === itemId && shared.has(e.category))
+          .map((e) => {
+            const name = names.get(e.category);
+            return Object.freeze({ id: e.category, ...(name === undefined ? {} : { name }), weight: e.weight });
+          });
+        if (categories.length === 0) return err(noItem());
+        return ok(Object.freeze({ item: itemView(item.id, item.data), categories: Object.freeze(categories) }));
+      }),
+
     setGrant: (token, circleId, granteeId, input) =>
       guarded(async () => {
         const me = await memberOf(token, circleId);

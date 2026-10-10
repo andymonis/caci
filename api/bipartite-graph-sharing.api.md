@@ -48,6 +48,40 @@ export interface PageRequest {
 }
 
 // @public
+export interface SharedBrainView {
+    // (undocumented)
+    readonly categoryCount: number;
+    // (undocumented)
+    readonly displayName?: string;
+    // (undocumented)
+    readonly userId: string;
+    // (undocumented)
+    readonly username?: string;
+}
+
+// @public
+export interface SharedCategoryEntry {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly itemCount: number;
+    // (undocumented)
+    readonly itemCountCapped?: true;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public (undocumented)
+export interface SharedCategoryItems {
+    // (undocumented)
+    readonly category: SharedCategoryView;
+    // (undocumented)
+    readonly items: readonly SharedItemView[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+}
+
+// @public
 export interface SharedCategoryView {
     // (undocumented)
     readonly id: string;
@@ -55,12 +89,38 @@ export interface SharedCategoryView {
     readonly name?: string;
 }
 
+// @public
+export interface SharedItemDetail {
+    // (undocumented)
+    readonly categories: ReadonlyArray<SharedCategoryView & {
+        readonly weight: number;
+    }>;
+    // (undocumented)
+    readonly item: SharedItemView;
+}
+
+// @public (undocumented)
+export interface SharedItemView {
+    // Warning: (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly data: JsonObject;
+    // (undocumented)
+    readonly dataTruncated?: true;
+    // (undocumented)
+    readonly id: string;
+}
+
 // @public (undocumented)
 export interface Sharing {
     grants(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result_2<Page<GrantView>, CirclesError>>;
+    setGrant(token: unknown, circleId: unknown, granteeId: unknown, input: unknown): Promise<Result_2<GrantView | undefined, CirclesError>>;
+    sharedCategories(token: unknown, circleId: unknown, ownerId: unknown, page?: PageRequest): Promise<Result_2<Page<SharedCategoryEntry>, CirclesError>>;
+    sharedCategoryItems(token: unknown, circleId: unknown, ownerId: unknown, categoryId: unknown, page?: PageRequest): Promise<Result_2<SharedCategoryItems, CirclesError>>;
+    sharedItem(token: unknown, circleId: unknown, ownerId: unknown, itemId: unknown): Promise<Result_2<SharedItemDetail, CirclesError>>;
     // Warning: (ae-forgotten-export) The symbol "Result_2" needs to be exported by the entry point index.d.ts
     // Warning: (ae-forgotten-export) The symbol "CirclesError" needs to be exported by the entry point index.d.ts
-    setGrant(token: unknown, circleId: unknown, granteeId: unknown, input: unknown): Promise<Result_2<GrantView | undefined, CirclesError>>;
+    sharedWithMe(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result_2<Page<SharedBrainView>, CirclesError>>;
     withdraw(token: unknown, circleId: unknown, granteeId: unknown): Promise<Result_2<boolean, CirclesError>>;
 }
 
