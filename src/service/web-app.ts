@@ -25,6 +25,7 @@ export const WEB_FILE_SPECS: readonly WebFileSpec[] = Object.freeze([
   { path: '/permissions.js', file: 'permissions.js', kind: 'js' },
   { path: '/brain-page.js', file: 'brain-page.js', kind: 'js' },
   { path: '/brain-session.js', file: 'brain-session.js', kind: 'js' },
+  { path: '/scope-session.js', file: 'scope-session.js', kind: 'js' },
   { path: '/brain-view.js', file: 'brain-view.js', kind: 'js' },
   { path: '/capture-page.js', file: 'capture-page.js', kind: 'js' },
   { path: '/capture-session.js', file: 'capture-session.js', kind: 'js' },

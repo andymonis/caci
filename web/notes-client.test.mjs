@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNotesClient, isNodeId, isProposalId, NOTE_MAX } from './notes-client.js';
+import { createNotesClient, isCircleId, isNodeId, isProposalId, NOTE_MAX, provenanceOf, scopeText } from './notes-client.js';
 
 it('the note limit is 8,000 characters', () => expect(NOTE_MAX).toBe(8000));
 
@@ -279,3 +279,200 @@ describe('refusals', () => {
     expect(() => createNotesClient({})).toThrow(TypeError);
   });
 });
+
+// R-009: scopes and My Brain
+const CIRCLE = 'c0123456789abcdef';
+const CIRCLE2 = 'cabcdefghij012345';
+const ME = { kind: 'personal' };
+const IN1 = { kind: 'circle', circleId: CIRCLE, circleName: 'Parent' };
+const IN2 = { kind: 'circle', circleId: CIRCLE2, circleName: 'In-law' };
+const CAT = { id: 'shared', name: 'Shared', itemCount: 2 };
+const ITEM = { id: 'i1', data: { title: 'T' } };
+
+describe('which scope, and how it is written', () => {
+  it('a circle id has the shape the service makes', () => {
+    expect(isCircleId(CIRCLE)).toBe(true);
+    for (const bad of ['', 'c', 'C0123456789abcdef', 'c0123456789abcde', 'c0123456789abcdef0', 'u0123456789abcdef', 'c0123456789abcd/f', '../x', 5, null, undefined]) expect(isCircleId(bad), String(bad)).toBe(false);
+  });
+  it('provenance is personal, or a circle with an id and a name, and nothing else', () => {
+    expect(provenanceOf(ME)).toEqual(ME);
+    expect(provenanceOf(IN1)).toEqual(IN1);
+    expect(Object.isFrozen(provenanceOf(IN1))).toBe(true);
+    expect(provenanceOf({ ...IN1, extra: 1 })).toEqual(IN1); // only its own fields are kept
+    for (const bad of [undefined, null, 'personal', {}, { kind: 'circle' }, { kind: 'circle', circleId: 'x', circleName: 'N' }, { kind: 'circle', circleId: CIRCLE }, { kind: 'circle', circleId: CIRCLE, circleName: 5 }, { kind: 'other' }]) expect(provenanceOf(bad), JSON.stringify(bad)).toBeUndefined();
+  });
+  it('a scope is written personal, circle:<id> or mine, and only where mine is allowed', () => {
+    expect(scopeText(undefined)).toBe('personal');
+    expect(scopeText(ME)).toBe('personal');
+    expect(scopeText(IN1)).toBe(`circle:${CIRCLE}`); // the name a scope was shown with is allowed and is never sent
+    expect(scopeText({ kind: 'circle', circleId: CIRCLE })).toBe(`circle:${CIRCLE}`);
+    expect(scopeText('mine')).toBeUndefined();
+    expect(scopeText('mine', true)).toBe('mine');
+    for (const bad of [null, 'personal', 'circle', {}, { kind: 'circle' }, { kind: 'circle', circleId: 'x' }, { kind: 'personal', extra: 1 }, { kind: 'circle', circleId: CIRCLE, graphId: 'x' }, 5, []]) expect(scopeText(bad, true), JSON.stringify(bad)).toBeUndefined();
+  });
+});
+
+describe('capturing into a scope', () => {
+  it('a circle scope is sent with the note; the personal scope and no scope send the note alone', async () => {
+    const { calls, client } = fake({ status: 201, body: { proposal: { ...PROPOSAL, scope: IN1 } } });
+    const r = await client.propose('a note', { kind: 'circle', circleId: CIRCLE });
+    expect(calls[0].body).toEqual({ text: 'a note', scope: { kind: 'circle', circleId: CIRCLE } });
+    expect(r.ok && r.value.scope).toEqual(IN1);
+    await client.propose('a note', ME);
+    await client.propose('a note');
+    expect(calls[1].body).toEqual({ text: 'a note' });
+    expect(calls[2].body).toEqual({ text: 'a note' });
+    expect('scope' in fake({ status: 201, body: { proposal: PROPOSAL } }).client).toBe(false);
+  });
+
+  it('only the circle id is sent, whatever else the scope carried; a bad scope is refused before sending', async () => {
+    const { calls, client } = fake({ status: 201, body: { proposal: PROPOSAL } });
+    for (const bad of ['mine', 'circle', { kind: 'circle', circleId: 'x' }, { kind: 'circle', circleId: CIRCLE, graphId: 'user-u1' }, { kind: 'other' }, null, 5]) {
+      expect(await client.propose('a note', bad), JSON.stringify(bad)).toMatchObject({ ok: false, error: { kind: 'invalid', field: 'scope' } });
+    }
+    expect(calls).toHaveLength(0);
+    await client.propose('x', { kind: 'circle', circleId: CIRCLE });
+    expect(Object.keys(calls[0].body.scope).sort()).toEqual(['circleId', 'kind']);
+    await client.propose('x', IN1); // a scope as it was shown, with its name
+    expect(calls[1].body.scope).toEqual({ kind: 'circle', circleId: CIRCLE });
+  });
+
+  it('a proposal without a scope has none; one with a malformed scope is a server problem', async () => {
+    const plain = await fake({ status: 201, body: { proposal: PROPOSAL } }).client.propose('x');
+    expect(plain.ok && 'scope' in plain.value).toBe(false);
+    for (const scope of [{ kind: 'circle' }, 'circle', { kind: 'circle', circleId: 'x', circleName: 'N' }]) {
+      expect(await fake({ status: 201, body: { proposal: { ...PROPOSAL, scope } } }).client.propose('x')).toMatchObject({ ok: false, error: { kind: 'server' } });
+    }
+  });
+
+  it('the service\'s refusals: no such circle in our words, a malformed scope naming scope', async () => {
+    const gone = await fake(err(404, { code: 'NOT_FOUND', message: 'no such circle' })).client.propose('x', { kind: 'circle', circleId: CIRCLE });
+    expect(gone.error).toEqual({ kind: 'not-found', what: 'circle', message: 'No such circle, or you are not in it.' });
+    const field = await fake(err(422, { code: 'INVALID_INPUT', message: 'x', field: 'scope.circleId' })).client.propose('x', { kind: 'circle', circleId: CIRCLE });
+    expect(field.error).toMatchObject({ kind: 'invalid', field: 'scope' });
+    const text = await fake(err(422, { code: 'INVALID_INPUT', message: 'x', field: 'text' })).client.propose('x');
+    expect(text.error.field).toBe('text');
+  });
+});
+
+describe('browsing one scope', () => {
+  it('goes to the brain routes with the scope in the query, and the plain answers still have no scope', async () => {
+    const { calls, client } = fake({ status: 200, body: { items: [CAT], nextCursor: null, category: { id: 'shared' }, item: ITEM, categories: [], summary: { itemCount: 1, categoryCount: 2, edgeCount: 3 } } });
+    await client.summaryIn(ME);
+    await client.categoriesIn(IN1, { limit: 5, cursor: 'sAbC' });
+    await client.categoryItemsIn({ kind: 'circle', circleId: CIRCLE }, 'a b/c', { limit: 2 });
+    await client.itemIn(undefined, 'i1');
+    expect(calls.map((c) => c.path)).toEqual(['/api/brain?scope=personal', `/api/brain/categories?scope=circle:${CIRCLE}&limit=5&cursor=sAbC`, `/api/brain/category?scope=circle:${CIRCLE}&id=a%20b%2Fc&limit=2`, '/api/brain/item?scope=personal&id=i1']);
+    expect(calls.every((c) => c.init.method === 'GET')).toBe(true);
+  });
+
+  it('a circle answer carries where it came from, and the plain one does not', async () => {
+    const withScope = fake({ status: 200, body: { items: [CAT], nextCursor: null, scope: IN1 } });
+    const a = await withScope.client.categoriesIn(IN1);
+    expect(a.value).toEqual({ items: [CAT], nextCursor: null, scope: IN1 });
+    const without = await fake({ status: 200, body: { items: [CAT], nextCursor: null } }).client.categoriesIn(ME);
+    expect('scope' in without.value).toBe(false);
+    const sum = await fake({ status: 200, body: { summary: { itemCount: 1, categoryCount: 2, edgeCount: 3, scope: IN1 } } }).client.summaryIn(IN1);
+    expect(sum.value).toEqual({ itemCount: 1, categoryCount: 2, edgeCount: 3, scope: IN1 });
+    const items = await fake({ status: 200, body: { category: { id: 'shared' }, items: [ITEM], nextCursor: null, scope: IN1 } }).client.categoryItemsIn(IN1, 'shared');
+    expect(items.value.scope).toEqual(IN1);
+    const detail = await fake({ status: 200, body: { item: ITEM, categories: [{ id: 'shared', weight: 1 }], scope: IN1 } }).client.itemIn(IN1, 'i1');
+    expect(detail.value.scope).toEqual(IN1);
+    expect(await fake({ status: 200, body: { items: [CAT], nextCursor: null, scope: { kind: 'circle' } } }).client.categoriesIn(IN1)).toMatchObject({ ok: false, error: { kind: 'server' } });
+  });
+
+  it('refuses mine here, bad scopes, and bad ids, before sending', async () => {
+    const { calls, client } = fake({ status: 200, body: {} });
+    for (const bad of ['mine', { kind: 'circle', circleId: 'x' }, null]) {
+      for (const run of [() => client.summaryIn(bad), () => client.categoriesIn(bad), () => client.categoryItemsIn(bad, 'x'), () => client.itemIn(bad, 'x')]) expect(await run(), JSON.stringify(bad)).toMatchObject({ ok: false, error: { kind: 'invalid', field: 'scope' } });
+    }
+    expect(await client.categoryItemsIn(IN1, '')).toMatchObject({ ok: false, error: { kind: 'not-found', what: 'category' } });
+    expect(await client.itemIn(IN1, 'x'.repeat(257))).toMatchObject({ ok: false, error: { kind: 'not-found', what: 'item' } });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('the service\'s 404s: a missing circle in our words, a missing category or item as before', async () => {
+    const c = fake(err(404, { code: 'NOT_FOUND', message: 'no such circle' })).client;
+    expect((await c.categoriesIn(IN1)).error).toEqual({ kind: 'not-found', what: 'circle', message: 'No such circle, or you are not in it.' });
+    const k = fake(err(404, { code: 'NOT_FOUND', message: 'no such category' })).client;
+    expect((await k.categoryItemsIn(IN1, 'x')).error).toMatchObject({ kind: 'not-found', what: 'category', message: 'Not found: it may have been removed.' });
+    expect((await fake(err(404, { code: 'NOT_FOUND', message: 'no such item' })).client.itemIn(IN1, 'x')).error).toMatchObject({ what: 'item' });
+  });
+});
+
+describe('the scopes a person may use', () => {
+  it('lists them with roles and whether they may capture', async () => {
+    const { calls, client } = fake({ status: 200, body: { items: [{ scope: ME, canCapture: true }, { scope: IN1, role: 'observer', canCapture: false }] } });
+    const r = await client.scopes();
+    expect(calls[0].path).toBe('/api/brain/scopes');
+    expect(r.value).toEqual({ items: [{ scope: ME, canCapture: true }, { scope: IN1, role: 'observer', canCapture: false }] });
+    expect(Object.isFrozen(r.value.items[1])).toBe(true);
+  });
+  it('a list that is not shaped right is a server problem', async () => {
+    for (const items of [[{ scope: ME }], [{ scope: ME, canCapture: 'yes' }], [{ scope: { kind: 'circle' }, canCapture: true }], [{ scope: ME, canCapture: true, role: 'boss' }], 'x']) {
+      expect(await fake({ status: 200, body: { items } }).client.scopes(), JSON.stringify(items)).toMatchObject({ ok: false, error: { kind: 'server' } });
+    }
+  });
+  it('too many circles is the service\'s own words, on scope', async () => {
+    const r = await fake(err(422, { code: 'INVALID_INPUT', message: 'you are in more circles than can be combined in one view (at most 24): choose one circle', field: 'scope' })).client.scopes();
+    expect(r.error).toMatchObject({ kind: 'invalid', field: 'scope', message: expect.stringContaining('choose one circle') });
+  });
+});
+
+describe('My Brain', () => {
+  it('the summary: totals and each scope on its own', async () => {
+    const { calls, client } = fake({ status: 200, body: { summary: { itemCount: 3, categoryCount: 4, edgeCount: 5, scopes: [{ itemCount: 1, categoryCount: 2, edgeCount: 3, scope: ME }, { itemCount: 2, categoryCount: 2, edgeCount: 2, scope: IN1 }] } } });
+    const r = await client.mineSummary();
+    expect(calls[0].path).toBe('/api/brain?scope=mine');
+    expect(r.value).toEqual({ itemCount: 3, categoryCount: 4, edgeCount: 5, scopes: [{ itemCount: 1, categoryCount: 2, edgeCount: 3, scope: ME }, { itemCount: 2, categoryCount: 2, edgeCount: 2, scope: IN1 }] });
+    for (const summary of [{ itemCount: 1 }, { itemCount: 1, categoryCount: 1, edgeCount: 1, scopes: [{ itemCount: 1, categoryCount: 1, edgeCount: 1 }] }, { itemCount: 1, categoryCount: 1, edgeCount: 1, scopes: 'x' }]) {
+      expect(await fake({ status: 200, body: { summary } }).client.mineSummary()).toMatchObject({ ok: false, error: { kind: 'server' } });
+    }
+  });
+
+  it('categories come with the scope of each, in the order given, and page', async () => {
+    const { calls, client } = fake({ status: 200, body: { items: [{ ...CAT, scope: ME }, { ...CAT, scope: IN1 }, { ...CAT, scope: IN2 }], nextCursor: 'sNext' } });
+    const r = await client.mineCategories({ limit: 3, cursor: 'sPrev' });
+    expect(calls[0].path).toBe('/api/brain/categories?scope=mine&limit=3&cursor=sPrev');
+    expect(r.value.items.map((c) => [c.id, c.scope.kind, c.scope.circleName])).toEqual([['shared', 'personal', undefined], ['shared', 'circle', 'Parent'], ['shared', 'circle', 'In-law']]);
+    expect(r.value.nextCursor).toBe('sNext');
+    expect(await fake({ status: 200, body: { items: [CAT], nextCursor: null } }).client.mineCategories()).toMatchObject({ ok: false, error: { kind: 'server' } });
+  });
+
+  it('a category or an item is named by its source and its id, both in the query', async () => {
+    const items = fake({ status: 200, body: { scope: IN1, category: { id: 'shared', name: 'Shared' }, items: [{ ...ITEM, scope: IN1 }], nextCursor: null } });
+    const a = await items.client.mineCategoryItems({ kind: 'circle', circleId: CIRCLE }, 'a b', { limit: 4 });
+    expect(items.calls[0].path).toBe(`/api/brain/category?scope=mine&source=circle:${CIRCLE}&id=a%20b&limit=4`);
+    expect(a.value.items[0].scope).toEqual(IN1);
+    expect(a.value.scope).toEqual(IN1);
+    const detail = fake({ status: 200, body: { scope: ME, item: { ...ITEM, scope: ME }, categories: [{ id: 'shared', weight: 1, scope: ME }] } });
+    const d = await detail.client.mineItem(ME, 'i1');
+    expect(detail.calls[0].path).toBe('/api/brain/item?scope=mine&source=personal&id=i1');
+    expect(d.value.categories[0].scope).toEqual(ME);
+    expect(d.value.item.scope).toEqual(ME);
+  });
+
+  it('rows without a scope are a server problem, and a bad source or id is refused before sending', async () => {
+    expect(await fake({ status: 200, body: { scope: IN1, category: { id: 'x' }, items: [ITEM], nextCursor: null } }).client.mineCategoryItems(IN1, 'x')).toMatchObject({ ok: false, error: { kind: 'server' } });
+    expect(await fake({ status: 200, body: { item: { ...ITEM, scope: ME }, categories: [], scope: ME } }).client.mineItem(ME, 'x')).toMatchObject({ ok: true });
+    expect(await fake({ status: 200, body: { scope: ME, item: ITEM, categories: [] } }).client.mineItem(ME, 'x')).toMatchObject({ ok: false, error: { kind: 'server' } });
+    expect(await fake({ status: 200, body: { scope: ME, item: { ...ITEM, scope: ME }, categories: [{ id: 'c', weight: 1 }] } }).client.mineItem(ME, 'x')).toMatchObject({ ok: false, error: { kind: 'server' } });
+    const { calls, client } = fake({ status: 200, body: {} });
+    for (const bad of [undefined, 'mine', { kind: 'circle', circleId: 'x' }, { kind: 'circle' }]) {
+      if (bad === undefined) continue; // an omitted source means personal for the single-scope calls, but here it is the personal source
+      expect(await client.mineItem(bad, 'x'), JSON.stringify(bad)).toMatchObject({ ok: false, error: { kind: 'invalid', field: 'scope' } });
+      expect(await client.mineCategoryItems(bad, 'x'), JSON.stringify(bad)).toMatchObject({ ok: false, error: { kind: 'invalid', field: 'scope' } });
+    }
+    expect(await client.mineItem(ME, '')).toMatchObject({ ok: false, error: { kind: 'not-found', what: 'item' } });
+    expect(await client.mineCategoryItems(ME, 'x'.repeat(257))).toMatchObject({ ok: false, error: { kind: 'not-found', what: 'category' } });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('a source naming nothing readable is the circle 404; a source problem is named', async () => {
+    const gone = await fake(err(404, { code: 'NOT_FOUND', message: 'no such circle' })).client.mineItem(IN1, 'x');
+    expect(gone.error).toEqual({ kind: 'not-found', what: 'circle', message: 'No such circle, or you are not in it.' });
+    const src = await fake(err(422, { code: 'INVALID_INPUT', message: 'say where it is', field: 'source' })).client.mineItem(ME, 'x');
+    expect(src.error).toMatchObject({ kind: 'invalid', field: 'source' });
+  });
+});
+

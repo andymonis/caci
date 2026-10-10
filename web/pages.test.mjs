@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'share-page.js', 'shared-page.js', 'shared-session.js', 'sharing-client.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'scope-session.js', 'session.js', 'share-page.js', 'shared-page.js', 'shared-session.js', 'sharing-client.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -89,6 +89,11 @@ describe('nothing is kept in the browser and nothing is sent anywhere else', () 
     const paths = new Set();
     for (const name of scripts) for (const m of code(read(name)).matchAll(/['"`](\/[^'"`\s]*)['"`]/g)) paths.add(m[1]);
     expect([...paths].sort()).toEqual([
+      '/api/brain',
+      '/api/brain/categories',
+      '/api/brain/category',
+      '/api/brain/item',
+      '/api/brain/scopes',
       '/api/capture/mode',
       '/api/capture/proposals/${p}',
       '/api/capture/proposals/${p}/approve',

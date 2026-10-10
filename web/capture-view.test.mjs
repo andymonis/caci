@@ -75,3 +75,15 @@ describe('operations and what was written', () => {
     for (const bad of [undefined, 0, -1, 1.5, '5', NaN]) expect(withWait('Too many.', bad), String(bad)).toBe('Too many.');
   });
 });
+
+describe('what a person is told before a note goes into a circle', () => {
+  it('names the circle, says who will see it and that it cannot be taken back, and (only for the real model) where it goes', async () => {
+    const { circleNotice, PERSONAL_NOTICE } = await import('./capture-view.js');
+    expect(circleNotice('Parent', 'demo')).toBe('This note will be added to the circle "Parent". Everyone in the circle can read it, and it cannot be taken back once approved.');
+    expect(circleNotice('Parent', 'anthropic')).toBe('This note will be added to the circle "Parent". Everyone in the circle can read it, and it cannot be taken back once approved. The note and the names of the circle\'s categories are sent to Anthropic and are not anonymised.');
+    expect(circleNotice('Parent', undefined)).toBe(circleNotice('Parent', 'demo'));
+    expect(circleNotice('', 'demo')).toContain('this circle');
+    expect(circleNotice(undefined, 'demo')).toContain('this circle');
+    expect(PERSONAL_NOTICE).toBe('This note will be added to your own notes. Only you can read it.');
+  });
+});

@@ -8,6 +8,16 @@ export const MODE_WORDS = Object.freeze({
   demo: 'Filed by the free demo model: nothing leaves this machine.',
   anthropic: "Filed by Anthropic's model: your note and the names of your categories are sent to Anthropic and are not anonymised.",
 });
+/**
+ * What a person is told before and while a note goes into a circle's brain (R-009): who will see it, that it cannot be
+ * taken back, and, when a real model files it, where the note goes. `name` is the circle's name as the service gave it.
+ */
+export function circleNotice(name, mode) {
+  const circle = typeof name === 'string' && name !== '' ? `"${name}"` : 'this circle';
+  const seen = `This note will be added to the circle ${circle}. Everyone in the circle can read it, and it cannot be taken back once approved.`;
+  return mode === 'anthropic' ? `${seen} The note and the names of the circle's categories are sent to Anthropic and are not anonymised.` : seen;
+}
+export const PERSONAL_NOTICE = 'This note will be added to your own notes. Only you can read it.';
 export const MODE_UNKNOWN = 'Could not tell which model files your notes.';
 export const MODE_LOADING = 'Checking which model files your notes…';
 export const REJECTED_WORDS = 'Rejected. Nothing was written.';

@@ -4,10 +4,10 @@ import type { Route } from './router.js';
 /**
  * The invitation routes of R-004. Same rules as the circle routes: the session cookie is the only
  * credential, one status table, unknown query parameters and body fields refused by name, and a
- * stranger gets the answer for a circle that does not exist. Inviting answers `202 { invited: true }`
+ * stranger gets the answer for a circle that does not exist. Inviting answers a 202 with `{ invited: true }`
  * for every target, whether or not the account exists, so the response cannot be used to find out who
- * has an account. Accepting or declining anything but your own open invitation is `404 no such
- * invitation`, whatever the reason.
+ * has an account. Accepting or declining anything but your own open invitation is a 404 `no such invitation`,
+ * whatever the reason.
  */
 export function createInvitationRoutes(options: CircleRoutesOptions): readonly Route[] {
   const { circles } = options;

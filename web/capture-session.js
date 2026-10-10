@@ -99,12 +99,15 @@ export function createCaptureSession({ client, onSignedOut, onWritten }) {
         return { ok: true };
       }),
 
-    /** Ask the model how to file a note. Needs the mode to be known; the note is checked first by the client. Nothing is written. */
-    propose(text) {
+    /**
+     * Ask the model how to file a note, in the person's own brain (no `scope`) or one circle's (`{ kind: 'circle', circleId }`).
+     * Needs the mode to be known; the note and the scope are checked first by the client. Nothing is written.
+     */
+    propose(text, scope) {
       if (mode.status !== 'known') return Promise.resolve({ ok: false, kind: 'mode-unknown', message: 'Could not tell which model files your notes.' });
       if (proposal !== null) return Promise.resolve({ ok: false, kind: 'pending', message: 'Approve or reject the current proposal first.' });
       return exclusive(async (mine) => {
-        const r = await client.propose(text);
+        const r = scope === undefined ? await client.propose(text) : await client.propose(text, scope);
         if (mine !== epoch) return DROPPED;
         if (!r.ok) return r.error.field === undefined ? failed(r.error) : { ...failed(r.error), errors: { [r.error.field]: r.error.message } };
         proposal = r.value;
@@ -131,7 +134,7 @@ export function createCaptureSession({ client, onSignedOut, onWritten }) {
         outcome = { kind: 'written', applied: r.value.applied, summary: r.value.summary };
         if (typeof onWritten === 'function') {
           try {
-            onWritten();
+            onWritten(held.scope);
           } catch {
             // ignored
           }

@@ -44,7 +44,7 @@ export const ODD_ITEM = '<b>item</b> 100%';
 export async function world() {
   const dir = mkdtempSync(join(tmpdir(), 'caci-sharing-web-'));
   dirs.push(dir);
-  const service = await startService({ port: 0, bind: '127.0.0.1', dataDir: dir, allowRegistration: true, cookieSecure: false, trustedProxies: 1, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7 });
+  const service = await startService({ port: 0, bind: '127.0.0.1', dataDir: dir, allowRegistration: true, cookieSecure: false, trustedProxies: 1, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25 });
   running.push(service);
   const people = {};
   for (const name of ['ann', 'bob', 'cat', 'dan']) {

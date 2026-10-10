@@ -307,3 +307,47 @@ describe('listeners and construction', () => {
     expect(() => createCaptureSession({ client: {} })).toThrow(TypeError);
   });
 });
+
+// R-009: capturing into a circle
+describe('capturing into a scope', () => {
+  const CIRCLE = { kind: 'circle', circleId: 'c0123456789abcdef' };
+  const known = async (script = {}, options = {}) => {
+    const f = fakeClient({ mode: okv({ mode: 'demo' }), ...script });
+    const s = createCaptureSession({ client: f.client, ...options });
+    await s.loadMode();
+    return { s, ...f };
+  };
+
+  it('the scope goes to the client with the note, and the proposal keeps the circle it will be written to', async () => {
+    const circle = { kind: 'circle', circleId: 'c0123456789abcdef', circleName: 'Parent' };
+    const { s, calls } = await known({ propose: okv(proposal({ scope: circle })) });
+    expect(await s.propose('a note', CIRCLE)).toMatchObject({ ok: true });
+    expect(calls.find((c) => c.name === 'propose')?.args).toEqual(['a note', CIRCLE]);
+    expect(s.getState().proposal.scope).toEqual(circle);
+  });
+
+  it('with no scope the client is called as before', async () => {
+    const { s, calls } = await known({ propose: okv(proposal()) });
+    await s.propose('a note');
+    expect(calls.find((c) => c.name === 'propose')?.args).toEqual(['a note']);
+  });
+
+  it('approving tells the listener where the note was written, so that place is reloaded', async () => {
+    const circle = { kind: 'circle', circleId: 'c0123456789abcdef', circleName: 'Parent' };
+    const told = [];
+    const { s } = await known({ propose: okv(proposal({ scope: circle })), approve: okv({ id: P, applied: 3, summary: SUMMARY }) }, { onWritten: (where) => told.push(where) });
+    await s.propose('a note', CIRCLE);
+    await s.approve();
+    expect(told).toEqual([circle]);
+    const personal = await known({ propose: okv(proposal()), approve: okv({ id: P, applied: 3, summary: SUMMARY }) }, { onWritten: (where) => told.push(where) });
+    await personal.s.propose('a note');
+    await personal.s.approve();
+    expect(told).toEqual([circle, undefined]);
+  });
+
+  it('a circle that cannot be found is said in the service\'s words, and nothing is held', async () => {
+    const { s } = await known({ propose: bad('not-found', 'No such circle, or you are not in it.', { what: 'circle' }) });
+    expect(await s.propose('a note', CIRCLE)).toMatchObject({ ok: false, kind: 'not-found', what: 'circle', message: 'No such circle, or you are not in it.' });
+    expect(s.getState().proposal).toBeNull();
+  });
+});

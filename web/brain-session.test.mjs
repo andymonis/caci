@@ -336,3 +336,179 @@ describe('listeners and construction', () => {
     expect(() => createBrainSession({ client: {} })).toThrow(TypeError);
   });
 });
+
+// R-009: reading another scope
+const C1 = 'c0123456789abcdef';
+const ME = { kind: 'personal' };
+const P1 = { kind: 'circle', circleId: C1, circleName: 'Parent' };
+const P2 = { kind: 'circle', circleId: 'cabcdefghij012345', circleName: 'In-law' };
+const mcat = (id, scope) => ({ ...cat(id), scope });
+const mitm = (id, scope) => ({ ...itm(id), scope });
+
+describe('reading a circle\'s brain', () => {
+  const circle = async (script = {}) => {
+    const f = fakeClient({ categoriesIn: page([cat('c1'), cat('c2')]), categoryItemsIn: items({ id: 'c1' }, [itm('i1')]), itemIn: detail('i1'), ...script });
+    const s = createBrainSession({ client: f.client });
+    s.setScope(P1);
+    await s.load();
+    return { s, ...f };
+  };
+
+  it('the scope is the person\'s own brain until it is changed, and the old calls are used', async () => {
+    const { client, calls } = fakeClient({ categories: page([cat('c1')]) });
+    const s = createBrainSession({ client });
+    expect(s.getState().scope).toBe('personal');
+    await s.load();
+    expect(names(calls)).toEqual(['categories']);
+  });
+
+  it('a circle scope reads through the scoped calls, with the scope, and nothing else is asked', async () => {
+    const { s, calls } = await circle();
+    expect(s.getState().scope).toEqual(P1);
+    await s.selectCategory('c1');
+    await s.selectItem('i1');
+    expect(calls.map((c) => [c.name, JSON.stringify(c.args[0]) === JSON.stringify(P1)])).toEqual([['categoriesIn', true], ['categoryItemsIn', true], ['itemIn', true]]);
+    expect(calls[0]?.args[1]).toEqual({ limit: 50 });
+    expect(calls[1]?.args.slice(1, 3)).toEqual(['c1', { limit: 50 }]);
+    expect(calls[2]?.args[1]).toBe('i1');
+    expect(s.getState().view).toBe('item');
+  });
+
+  it('shows more, in the same scope', async () => {
+    const { s, calls } = await circle({ categoriesIn: [page([cat('c1')], 'p2'), page([cat('c2')])], categoryItemsIn: [items({ id: 'c1' }, [itm('i1')], 'q2'), items({ id: 'c1' }, [itm('i2')])] });
+    await s.moreCategories();
+    expect(s.getState().categories.items.map((c) => c.id)).toEqual(['c1', 'c2']);
+    await s.selectCategory('c1');
+    await s.moreItems();
+    expect(s.getState().category.items.map((i) => i.id)).toEqual(['i1', 'i2']);
+    expect(calls.filter((c) => c.name.endsWith('In')).every((c) => JSON.stringify(c.args[0]) === JSON.stringify(P1))).toBe(true);
+  });
+
+  it('changing the scope forgets what was shown, drops answers on their way, and needs a load; the same scope again changes nothing', async () => {
+    const d = deferred();
+    const f = fakeClient({ categories: page([cat('a')]), categoriesIn: () => d.promise });
+    const s = createBrainSession({ client: f.client });
+    await s.load();
+    expect(s.setScope(P1)).toBe(true);
+    expect(s.getState()).toMatchObject({ scope: P1, needsLoad: true, categories: { status: 'idle', items: [] }, category: null, item: null });
+    const first = s.load();
+    expect(s.setScope(ME)).toBe(true);
+    d.resolve(page([cat('late')]));
+    expect(await first).toMatchObject({ kind: 'dropped' });
+    expect(s.getState()).toMatchObject({ scope: 'personal', busy: false });
+    expect(s.getState().categories.items).toEqual([]);
+    expect(s.setScope('personal')).toBe(false);
+    expect(s.setScope({ kind: 'personal' })).toBe(false);
+    expect(s.setScope(undefined)).toBe(false);
+    expect(s.setScope(P1)).toBe(true);
+    expect(s.setScope({ kind: 'circle', circleId: C1 })).toBe(false); // the same circle, whatever name it was shown with
+    expect(s.setScope(P2)).toBe(true); // another circle is another scope
+    expect(s.getState().scope).toEqual(P2);
+  });
+
+  it('something that is not a scope is refused and changes nothing', async () => {
+    const { s } = await circle();
+    for (const bad of [null, 5, 'circle', 'everything', {}, { kind: 'circle' }, { kind: 'circle', circleId: '' }, { kind: 'other' }]) {
+      expect(s.setScope(bad), JSON.stringify(bad)).toBe(false);
+      expect(s.getState().scope).toEqual(P1);
+    }
+  });
+
+  it('a circle that cannot be found is gone, in the service\'s words, with nothing shown', async () => {
+    const { s } = await circle({ categoriesIn: bad('not-found', 'No such circle, or you are not in it.', { what: 'circle' }) });
+    expect(s.getState().categories).toMatchObject({ status: 'gone', error: 'No such circle, or you are not in it.', items: [] });
+    expect(s.getState().needsLoad).toBe(false);
+  });
+
+  it('reset goes back to the person\'s own brain', async () => {
+    const { s } = await circle();
+    s.reset();
+    expect(s.getState()).toMatchObject({ scope: 'personal', needsLoad: true });
+  });
+});
+
+describe('My Brain', () => {
+  const mine = async (script = {}) => {
+    const f = fakeClient({
+      mineCategories: page([mcat('shared', ME), mcat('shared', P1), mcat('shared', P2)]),
+      mineCategoryItems: items({ id: 'shared' }, [mitm('i1', P1)]),
+      mineItem: okv({ scope: P1, item: mitm('i1', P1), categories: [{ id: 'shared', name: 'Name shared', weight: 1, scope: P1 }] }),
+      ...script,
+    });
+    const s = createBrainSession({ client: f.client });
+    s.setScope('mine');
+    await s.load();
+    return { s, ...f };
+  };
+
+  it('lists every scope\'s categories, and the same id in two scopes is two rows', async () => {
+    const { s, calls } = await mine();
+    expect(s.getState().scope).toBe('mine');
+    expect(s.getState().categories.items.map((c) => [c.id, c.scope.kind, c.scope.circleName])).toEqual([['shared', 'personal', undefined], ['shared', 'circle', 'Parent'], ['shared', 'circle', 'In-law']]);
+    expect(calls[0]).toEqual({ name: 'mineCategories', args: [{ limit: 50 }] });
+  });
+
+  it('a category is chosen by where it is and its id: the name comes from that row, and the source goes with the request', async () => {
+    const { s, calls } = await mine({ mineCategories: page([{ ...mcat('shared', ME), name: 'Mine' }, { ...mcat('shared', P1), name: 'Parent one' }]) });
+    await s.selectCategory('shared', P1);
+    expect(s.getState().category).toMatchObject({ id: 'shared', name: 'Parent one', source: P1, status: 'loaded' });
+    expect(calls.at(-1)).toEqual({ name: 'mineCategoryItems', args: [P1, 'shared', { limit: 50 }] });
+    s.back();
+    await s.selectCategory('shared', ME);
+    expect(s.getState().category).toMatchObject({ name: 'Mine', source: ME });
+    expect(calls.at(-1)?.args[0]).toEqual(ME);
+  });
+
+  it('two circles with a category of the same id are told apart by the circle', async () => {
+    const { s } = await mine({ mineCategories: page([{ ...mcat('shared', P1), name: 'In Parent' }, { ...mcat('shared', P2), name: 'In In-law' }]) });
+    await s.selectCategory('shared', P2);
+    expect(s.getState().category.name).toBe('In In-law');
+    s.back();
+    await s.selectCategory('shared', P1);
+    expect(s.getState().category.name).toBe('In Parent');
+  });
+
+  it('an item is chosen by where it is and its id, and shows more items in the same place', async () => {
+    const { s, calls } = await mine({ mineCategoryItems: [items({ id: 'shared' }, [mitm('i1', P1)], 'q2'), items({ id: 'shared' }, [mitm('i2', P1)])] });
+    await s.selectCategory('shared', P1);
+    await s.moreItems();
+    expect(s.getState().category.items.map((i) => i.id)).toEqual(['i1', 'i2']);
+    expect(calls.at(-1)).toEqual({ name: 'mineCategoryItems', args: [P1, 'shared', { limit: 50, cursor: 'q2' }] });
+    await s.selectItem('i1', P1);
+    expect(s.getState().item).toMatchObject({ id: 'i1', source: P1, status: 'loaded' });
+    expect(calls.at(-1)).toEqual({ name: 'mineItem', args: [P1, 'i1'] });
+  });
+
+  it('without a source nothing is chosen and nothing is sent', async () => {
+    const { s, calls } = await mine();
+    const before = calls.length;
+    for (const source of [undefined, null, 'circle', 5]) {
+      expect(await s.selectCategory('shared', source), String(source)).toMatchObject({ ok: false, kind: 'invalid' });
+      expect(await s.selectItem('i1', source), String(source)).toMatchObject({ ok: false, kind: 'invalid' });
+    }
+    expect(calls).toHaveLength(before);
+    expect(s.getState()).toMatchObject({ view: 'categories', category: null, item: null });
+  });
+
+  it('a category or item that is gone keeps its source and has a way back', async () => {
+    const { s } = await mine({ mineCategoryItems: bad('not-found', 'Not found: it may have been removed.', { what: 'category' }) });
+    await s.selectCategory('shared', P2);
+    expect(s.getState().category).toMatchObject({ status: 'gone', source: P2, error: 'Not found: it may have been removed.' });
+    expect(s.back()).toBe(true);
+    const gone = await mine({ mineItem: bad('not-found', 'Not found: it may have been removed.', { what: 'item' }) });
+    await gone.s.selectItem('i1', P1);
+    expect(gone.s.getState().item).toMatchObject({ status: 'gone', source: P1 });
+  });
+
+  it('the single-scope calls take no source and ignore one', async () => {
+    const f = fakeClient({ categoriesIn: page([cat('c1')]), categoryItemsIn: items({ id: 'c1' }, [itm('i1')]), itemIn: detail('i1') });
+    const s = createBrainSession({ client: f.client });
+    s.setScope(P1);
+    await s.load();
+    await s.selectCategory('c1', P2);
+    expect(s.getState().category.source).toBeUndefined();
+    await s.selectItem('i1', P2);
+    expect(s.getState().item.source).toBeUndefined();
+    expect(f.calls.at(-1)?.args[0]).toEqual(P1);
+  });
+});
