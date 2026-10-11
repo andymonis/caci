@@ -3,6 +3,10 @@
 import process from 'node:process';
 import { serve } from '../dist/service/index.js';
 
+// Listen on loopback and the machine's IPv4 interfaces for trusted-LAN use. Override either setting for HTTPS deployments.
+process.env.CACI_BIND ??= '0.0.0.0';
+process.env.CACI_ALLOW_INSECURE ??= 'true';
+
 const result = await serve(process.env, { stdout: (text) => process.stdout.write(text), stderr: (text) => process.stderr.write(text) });
 if (result.code !== 0) process.exit(result.code);
 
