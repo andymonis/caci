@@ -31,6 +31,12 @@ export type DbErrorCode =
 /** Another connection held the write lock for longer than the busy timeout. Nothing was changed by the failed statement. */
 | 'BUSY' | 'CLOSED';
 
+// @public
+export const GRAPH_APPLICATION_ID = 1130447721;
+
+// @public
+export const GRAPH_SCHEMA_VERSION = 1;
+
 // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
 //
 // @public

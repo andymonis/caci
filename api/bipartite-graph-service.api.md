@@ -4,6 +4,23 @@
 
 ```ts
 
+// @public (undocumented)
+export const BACKUP_USAGE = "Usage: npm run backup -- --dest DIR [--keep N]   (DIR is outside the data folder; N is how many snapshots to keep, 1 to 1000, default 14)";
+
+// Warning: (ae-forgotten-export) The symbol "Env" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function backupData(args: readonly string[], env: Env, io: BackupIo): 0 | 1 | 2;
+
+// @public (undocumented)
+export interface BackupIo {
+    readonly now?: () => number;
+    // (undocumented)
+    readonly stderr: (text: string) => void;
+    // (undocumented)
+    readonly stdout: (text: string) => void;
+}
+
 // @public
 export interface ConfigError {
     // (undocumented)
@@ -13,7 +30,13 @@ export interface ConfigError {
 }
 
 // @public (undocumented)
+export const DEFAULT_KEEP = 14;
+
+// @public (undocumented)
 export const isLoopbackAddress: (bind: string) => boolean;
+
+// @public (undocumented)
+export const MAX_KEEP = 1000;
 
 // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
 //

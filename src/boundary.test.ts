@@ -65,8 +65,8 @@ export function violations(files: Record<string, string>): string[] {
       if (/^(?:graph_store|llm|app|sqlite)\//.test(file) && /^users(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: only the API may depend on the users component`);
       }
-      if (file.startsWith('service/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target) && !['llm/index', 'llm/anthropic/index', 'app/index'].includes(target)) {
-        problems.push(`${file} imports ${specifier}: the service may use the LLM component only through llm/index and llm/anthropic/index, the application only through app/index, and not the SQLite wrapper`);
+      if (file.startsWith('service/') && /^(?:llm|app|sqlite)(?:\/|$)/.test(target) && !['llm/index', 'llm/anthropic/index', 'app/index', 'sqlite/snapshot'].includes(target)) {
+        problems.push(`${file} imports ${specifier}: the service may use the LLM component only through llm/index and llm/anthropic/index, the application only through app/index, and of the SQLite wrapper only its snapshot module`);
       }
       if (file.startsWith('service/') && target.startsWith('caci/') && target !== 'caci/index') {
         problems.push(`${file} imports ${specifier}: the service may use the CaCi controller only through caci/index`);
@@ -158,8 +158,8 @@ export function violations(files: Record<string, string>): string[] {
       if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes)\//.test(file) && /^api(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: nothing may depend on the API`);
       }
-      if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/') || file.startsWith('circles/'))) {
-        problems.push(`${file} imports ${specifier}: only the graph store, the users component and the circles component may use the shared SQLite driver wrapper`);
+      if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/') || file.startsWith('circles/') || (file.startsWith('service/') && target === 'sqlite/snapshot'))) {
+        problems.push(`${file} imports ${specifier}: only the graph store, the users component and the circles component may use the shared SQLite driver wrapper (the service may also use its snapshot module)`);
       }
       if (file.startsWith('sqlite/') && !target.startsWith('sqlite/')) {
         problems.push(`${file} imports ${specifier}: the shared SQLite driver wrapper must not depend on any other component`);
@@ -225,6 +225,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'api/share.ts': `import { createSharing } from '../sharing/index.js';`,
         'service/share.ts': `import { createSharing } from '../sharing/index.js';`,
         'api/circ.test.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';`,
+        'service/backup.ts': `import { snapshotDatabase } from '../sqlite/snapshot.js'; import { GRAPH_APPLICATION_ID } from '../graph_store/adapters/sqlite/index.js';`,
         'service/circ.ts': `import { createCircleController } from '../circles/index.js'; import { createSqliteCircleStore } from '../circles/sqlite/index.js';`,
         'service/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js'; import { createUserController } from '../users/index.js'; import { createSqliteUserStore } from '../users/sqlite/index.js'; import { createApiServer } from '../api/index.js'; import { ok } from '../graph_store/index.js'; import { y } from './y.js';`,
         'api/c.ts': `import { createCaciController } from '../caci/index.js';`,
