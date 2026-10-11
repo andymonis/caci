@@ -243,6 +243,7 @@ describe('a deploy key for a private repository', () => {
     expect(w.mode('/opt/caci/.ssh/deploy_key')).toBe(0o600);
     expect(readFileSync(w.at('/opt/caci/.ssh/deploy_key'), 'utf8')).toContain('SECRETKEYMATERIAL');
     expect(r.out + r.err).not.toContain('SECRETKEYMATERIAL');
+    expect(w.logLines()).toContain(`runuser -u caci -- env GIT_SSH_COMMAND=ssh -i /opt/caci/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new git clone ${w.origin} ${w.at(LAYOUT.appDir)}`);
     const config = execFileSync('git', ['-C', w.at(LAYOUT.appDir), 'config', 'core.sshCommand'], { encoding: 'utf8' });
     expect(config).toContain('-i /opt/caci/.ssh/deploy_key');
     expect(config).toContain('IdentitiesOnly=yes');

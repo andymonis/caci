@@ -87,6 +87,7 @@ act install -d -m 0750 -o root -g "$APP_USER" "$(p "$ENV_DIR")"
 
 # 3. A deploy key for a private repository, copied once and never overwritten.
 KEY_TARGET="$APP_HOME/.ssh/deploy_key"
+SSH_COMMAND=""
 if [ -n "$DEPLOY_KEY" ]; then
   act install -d -m 0700 -o "$APP_USER" -g "$APP_USER" "$(p "$APP_HOME/.ssh")"
   if [ -e "$(p "$KEY_TARGET")" ]; then
@@ -94,16 +95,21 @@ if [ -n "$DEPLOY_KEY" ]; then
   else
     act install -m 0600 -o "$APP_USER" -g "$APP_USER" "$DEPLOY_KEY" "$(p "$KEY_TARGET")"
   fi
+  SSH_COMMAND="ssh -i $KEY_TARGET -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 fi
 
 # 4. The checkout, cloned once as the service account.
 if [ -d "$(p "$APP_DIR")/.git" ]; then
   say "ok: the checkout exists at $APP_DIR"
 else
-  as_app git clone "$REPO" "$(p "$APP_DIR")"
+  if [ -n "$SSH_COMMAND" ]; then
+    as_app env "GIT_SSH_COMMAND=$SSH_COMMAND" git clone "$REPO" "$(p "$APP_DIR")"
+  else
+    as_app git clone "$REPO" "$(p "$APP_DIR")"
+  fi
 fi
 if [ -n "$DEPLOY_KEY" ]; then
-  as_app git -C "$(p "$APP_DIR")" config core.sshCommand "ssh -i $KEY_TARGET -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+  as_app git -C "$(p "$APP_DIR")" config core.sshCommand "$SSH_COMMAND"
 fi
 
 # 5. The systemd units, from the checkout: installed or updated, reloaded only if something changed.
