@@ -1,0 +1,29 @@
+[Unit]
+Description=CaCi snapshot of the databases
+Documentation=https://github.com/andymonis/caci
+
+[Service]
+Type=oneshot
+User=caci
+Group=caci
+WorkingDirectory=/opt/caci/app
+# Only the data folder is named here; the settings file is never loaded by this unit.
+Environment=CACI_DATA_DIR=/var/lib/caci
+ExecStart=/usr/bin/env node scripts/backup.mjs --dest /var/backups/caci --keep 14
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0077
+# It opens the live databases (SQLite needs the log files beside them) and writes the snapshots.
+ReadWritePaths=/var/lib/caci /var/backups/caci

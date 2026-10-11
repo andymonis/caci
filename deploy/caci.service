@@ -1,0 +1,39 @@
+[Unit]
+Description=CaCi (family test service)
+Documentation=https://github.com/andymonis/caci
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=caci
+Group=caci
+WorkingDirectory=/opt/caci/app
+# The settings and the Anthropic key. No leading "-": if the file is missing the service must not start.
+EnvironmentFile=/etc/caci/caci.env
+# Not "npm run serve": that rebuilds (and deletes dist/) on every start.
+ExecStart=/usr/bin/env node scripts/serve.mjs
+Restart=on-failure
+RestartSec=5
+# A clean close takes a moment (the databases are closed); a stop that hangs is killed after this.
+TimeoutStopSec=30
+
+# Hardening: the process may write only to the data folder, and has no extra privileges.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0077
+ReadWritePaths=/var/lib/caci
+
+[Install]
+WantedBy=multi-user.target

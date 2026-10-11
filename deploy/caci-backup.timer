@@ -1,0 +1,12 @@
+[Unit]
+Description=Nightly CaCi snapshot
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+# A Pi that was off at 02:30 takes the missed snapshot when it next starts.
+Persistent=true
+RandomizedDelaySec=10min
+Unit=caci-backup.service
+
+[Install]
+WantedBy=timers.target
