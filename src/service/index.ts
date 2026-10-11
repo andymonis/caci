@@ -9,5 +9,7 @@ export { serve } from './cli.js';
 export type { ServeIo, ServeResult } from './cli.js';
 export { backupData, BACKUP_USAGE, DEFAULT_KEEP, MAX_KEEP } from './backup.js';
 export type { BackupIo } from './backup.js';
+export { restoreData, RESTORE_USAGE } from './restore.js';
+export type { RestoreIo } from './restore.js';
 export { recoverAdmin, USAGE as RECOVER_USAGE } from './recover.js';
 export type { RecoverIo } from './recover.js';

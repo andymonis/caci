@@ -125,6 +125,7 @@
     "live": "bash -c 'source ./set-key.sh && CACI_LLM=anthropic npm run serve'",
     "users": "npm run build && node scripts/users.mjs",
     "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs",
     "dev:lab": "bash -c 'source ./set-key.sh && npm run build && node dev/llm-lab/server.mjs'",
     "eval": "npm run build && node dev/eval/run.mjs",
     "bench:sqlite": "npm run build && node dev/bench/run.mjs"

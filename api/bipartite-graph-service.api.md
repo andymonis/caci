@@ -59,6 +59,24 @@ export interface RecoverIo {
 }
 
 // @public (undocumented)
+export const RESTORE_USAGE = "Usage: npm run restore -- <snapshot folder> --yes   (stop the service first; the files being replaced are copied aside)";
+
+// Warning: (ae-forgotten-export) The symbol "Env_2" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function restoreData(args: readonly string[], env: Env_2, io: RestoreIo): 0 | 1 | 2;
+
+// @public (undocumented)
+export interface RestoreIo {
+    // (undocumented)
+    readonly now?: () => number;
+    // (undocumented)
+    readonly stderr: (text: string) => void;
+    // (undocumented)
+    readonly stdout: (text: string) => void;
+}
+
+// @public (undocumented)
 export interface RunningService {
     close(): Promise<void>;
     readonly dataDir: string;
