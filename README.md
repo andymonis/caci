@@ -654,6 +654,148 @@ The capture screen asks **Where should this note go?** and offers your own notes
 - **Nobody is told** when a note is added, and the files are plain text to whoever can read the data folder.
 - **The release gates are not met.** Before anyone else's data is held, the plan needs pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, and a statement of who may use the service. Do not use circle brains with other people's data until they are done.
 
+## Running on a Raspberry Pi
+
+A step-by-step runbook for running CaCi on a Raspberry Pi in the house, so family members can try it from phones and laptops on the home Wi-Fi. It is specified in `specs/R-010-pi-deployment.md`. **Nothing here has been run on a real Pi by the person who wrote it**: the tooling is tested with stand-ins, and your first run is the real proof. Run `npm run doctor` when you reach step 7 and keep its output.
+
+What you get: a service that starts at boot and after a power cut, plain HTTP on your home network, the real Anthropic model, **nightly snapshots** of the databases, and **one command** that updates it from GitHub and undoes itself if the new version does not come up.
+
+You need: a Pi 4 or 5 (2 GB or more; a 1 GB Pi may run out of memory while building, so add swap), a good power supply and SD card, Pi OS Lite (64-bit), a way to give the Pi a fixed address on your router, a GitHub account that can read the repository, and an Anthropic API key.
+
+### 1. Prepare the Pi
+
+Flash Pi OS Lite with Raspberry Pi Imager and, in its settings, give the Pi a hostname (for example `pi`), turn on SSH and set your Wi-Fi or use a cable. Start it, `ssh` in, and run `sudo apt update && sudo apt full-upgrade`. Then **give it a fixed address**: in your router, reserve an address for the Pi's network card (a DHCP reservation). The rest of this runbook uses `192.168.1.50` and `pi.local`; use yours. **Some Android phones cannot open `.local` names**: tell the family the numeric address instead, and list both in step 5.
+
+### 2. Install Node 22 and git
+
+CaCi needs Node 22.13 or later, installed for the whole system. Do not pipe a download into a shell: fetch the NodeSource script, read it, then run it.
+
+```
+curl -fsSL https://deb.nodesource.com/setup_22.x -o nodesource_setup.sh
+less nodesource_setup.sh
+sudo bash nodesource_setup.sh
+sudo apt install -y nodejs git
+node --version
+node -e "import('node:sqlite').then(() => console.log('node:sqlite loads'))"
+```
+
+The version must be 22.13 or later and the last command must print that it loads (it also prints a warning that `node:sqlite` is experimental; that is expected).
+
+### 3. GitHub access
+
+If the repository is public, skip this. If it is private, make a key that can only **read** it: `ssh-keygen -t ed25519 -f ~/caci_deploy_key -N '' -C caci-pi`, then add `~/caci_deploy_key.pub` in the repository's Settings, Deploy keys (leave "Allow write access" off).
+
+### 4. Install
+
+Fetch the project once to run its install script, then run it first with `--dry-run` to read the plan:
+
+```
+git clone https://github.com/andymonis/caci.git ~/caci-src
+sudo bash ~/caci-src/deploy/install.sh --dry-run
+sudo bash ~/caci-src/deploy/install.sh
+```
+
+For a private repository add `--repo git@github.com:andymonis/caci.git --deploy-key ~/caci_deploy_key` to both commands (and clone it the same way with `GIT_SSH_COMMAND='ssh -i ~/caci_deploy_key'`). The script creates the `caci` account (no login), the folders (`/opt/caci/app`, `/var/lib/caci`, `/var/backups/caci`, `/etc/caci`), the checkout, the systemd units and `/etc/caci/caci.env`; it enables the service and the backup timer but starts nothing, and it never overwrites the settings file or any data. Running it again is safe. Afterwards delete the temporary clone and, if you used one, the key copy in your home folder.
+
+### 5. Settings and the key
+
+Edit the settings file with an editor, so the key never lands in your shell history: `sudo nano /etc/caci/caci.env`. Set `ANTHROPIC_API_KEY`, and set `CACI_ALLOWED_HOSTS` to the exact names and addresses the family will type, each with its port, for example `pi.local:8080,192.168.1.50:8080`; the service answers no other `Host`. The file is readable by root and the `caci` account only. The key lives **only** here: it is not in the repository, in a command line, in a snapshot or in the backup service, and neither the deploy command nor `npm run doctor` prints it.
+
+### 6. Build and start
+
+```
+sudo -u caci sh -c 'cd /opt/caci/app && npm ci && npm run build'
+sudo systemctl start caci
+sudo systemctl status caci
+sudo journalctl -u caci -f
+```
+
+### 7. Check it with the doctor
+
+```
+sudo -u caci sh -c 'cd /opt/caci/app && npm run doctor'
+```
+
+It prints one line per check (`[PASS]`, `[WARN]`, `[FAIL]`, with what to do under each warning or failure): Node, the settings file's permissions, whether the service runs, whether it answers on the network address and with each allowed `Host`, the snapshots, disk, the clock and how long one password hash takes (scrypt is slow on a Pi). Fix every `[FAIL]`. If something is unclear, paste the output when you ask for help; it never contains the key.
+
+### 8. Limit it to the home network
+
+The service speaks plain HTTP, so only your home network should reach it. With `ufw` (adjust the network to yours, and allow SSH **before** enabling):
+
+```
+sudo apt install -y ufw
+sudo ufw allow from 192.168.1.0/24 to any port 22 proto tcp
+sudo ufw allow from 192.168.1.0/24 to any port 8080 proto tcp
+sudo ufw enable
+```
+
+### 9. The first accounts
+
+Open `http://192.168.1.50:8080/` on your phone. **Register yourself first**: the first account becomes the administrator. Then let the family register. When everyone has an account, set `CACI_ALLOW_REGISTRATION=false` in `/etc/caci/caci.env` and run `sudo systemctl restart caci`. The app is a plain web page, not an installable app: bookmark it.
+
+### 10. Updating
+
+Push to GitHub (run `npm run gate` on your laptop first: the Pi does not run the tests), then on the Pi:
+
+```
+sudo node /opt/caci/app/deploy/run.mjs
+```
+
+It deploys `origin/main`; give it a branch, tag or commit to deploy another (`sudo node /opt/caci/app/deploy/run.mjs v1.2`). It refuses unless Node is new enough, the checkout is clean and there is room for a snapshot; it **snapshots the data first**, pulls, runs `npm ci` and `npm run build` without touching the running service, restarts, and waits until the page and the API answer. If the new version does not come up it stops the service, puts the previous code back, **restores the snapshot** (an older build cannot read a newer database, so the data goes back too) and starts it again.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | deployed |
+| 10 | failed and rolled back: the previous version is running again |
+| 11 | failed and the rollback failed too: the message says what to do by hand |
+| 12 | refused before anything changed (bad ref, old Node, local changes, no snapshot) |
+
+An update never changes `/etc/caci/caci.env`. If a change touches the systemd units, run the install script again afterwards.
+
+### 11. Snapshots and restoring
+
+The nightly timer is `caci-backup.timer` (02:30; a missed night runs at the next start). Start it once with `sudo systemctl start caci-backup.timer` and check it with `systemctl list-timers caci-backup.timer`. Each snapshot is a folder named by its UTC time in `/var/backups/caci` holding `graphs.db` and `users.db`, taken while the service runs; the newest 14 are kept. To take one now:
+
+```
+sudo -u caci sh -c 'cd /opt/caci/app && CACI_DATA_DIR=/var/lib/caci npm run backup -- --dest /var/backups/caci'
+```
+
+**The snapshots are on the same SD card as the data**, so a dead card loses both: now and then copy `/var/backups/caci` to your laptop (`scp -r`). To restore a snapshot, stop the service first:
+
+```
+sudo systemctl stop caci
+sudo -u caci sh -c 'cd /opt/caci/app && CACI_DATA_DIR=/var/lib/caci npm run restore -- /var/backups/caci/20261011T023000Z --yes'
+sudo systemctl start caci
+```
+
+It checks the snapshot first, copies the files it replaces into a `pre-restore-` folder beside the snapshots, and refuses a snapshot made by a newer version than the one installed.
+
+### 12. Power cuts, a dead card and a forgotten password
+
+After a power cut the Pi starts the service by itself (SQLite recovers its own write-ahead log). Shut down with `sudo shutdown -h now` rather than pulling the plug. If the card dies: new card, repeat steps 1 to 6, then restore a copied snapshot. If the administrator forgets their password, run this on the Pi (it asks twice, without showing what you type, and signs that account out everywhere): `sudo -u caci env CACI_DATA_DIR=/var/lib/caci node /opt/caci/app/scripts/users.mjs recover-admin <username>`.
+
+### What goes where, and what leaves the house
+
+| Thing | Where | Who can read it |
+|---|---|---|
+| Notes, categories, circles, accounts | `/var/lib/caci` (`graphs.db`, `users.db`) | the `caci` account (mode 0700), in plain text |
+| Snapshots | `/var/backups/caci` | the `caci` account |
+| Settings and the Anthropic key | `/etc/caci/caci.env` | root and the `caci` account |
+| Logs | the journal (`journalctl -u caci`) | root; they hold no notes, passwords or key |
+
+**Every account's notes, and the names of its categories, are sent to Anthropic, unanonymised, whenever a note is filed** (`CACI_LLM=anthropic`). Session cookies and everything else cross your Wi-Fi in plain HTTP. This is set up for an internal family test; the release gates in **Shared circle brains** and **The shared circle brain** (pseudonymisation, a data processing agreement, a lawful basis, a risk assessment and a statement of who may use the service) stand for anything wider, and **HTTPS and remote access are not part of this setup**.
+
+### Troubleshooting
+
+| Symptom | What to look at |
+|---|---|
+| The service will not start | `sudo journalctl -u caci -n 50`: usually a missing `ANTHROPIC_API_KEY` or a setting the service refuses (the doctor names it) |
+| A phone cannot connect | the doctor's "Reachable on the network" and "Host" lines; the firewall; that the address typed is exactly one in `CACI_ALLOWED_HOSTS` |
+| The page says forbidden or shows nothing for one name only | that name is not in `CACI_ALLOWED_HOSTS` (an Android phone may need the numeric address) |
+| Everything is slow | the doctor's password-hash line; a Pi 3 or a busy card |
+| Dates and expiries look wrong | the doctor's clock lines: `sudo timedatectl set-ntp true` |
+| A deploy ended with 10, 11 or 12 | the table in step 10; the lines it printed say which step failed |
+
 ## Writing a storage adapter
 
 An adapter is an object implementing `StorageAdapter` (exported from `bipartite-graph`): a `name`, its `capabilities`, a `transaction(graphId, fn)` method, and `graphs` (`create`, `exists`, `list`, `drop`). All graph rules (validation, the bipartite rule, cascading deletes, query planning) live in the core, so an adapter only provides storage primitives. It does not check that edge endpoints exist and it does not cascade.
