@@ -3,7 +3,10 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, re
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Each test builds a real git repository and runs bash; under the load of the whole gate that can pass five seconds.
+vi.setConfig({ testTimeout: 60_000 });
 import { LAYOUT } from './layout.mjs';
 
 // install.sh run for real in a scratch folder: every path is put under CACI_INSTALL_ROOT, and the few commands that need

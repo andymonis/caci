@@ -6,9 +6,9 @@ import { LAYOUT } from './layout.mjs';
 // only setting passed on the command line is the data folder, never the key), and `systemctl` as the caller (root).
 
 /** How `waitHealthy` talks to the service: one GET, answering `{ status, headers, body }` or throwing. */
-export function httpGet({ port, host, path, timeoutMs = 5000 }) {
+export function httpGet({ address = '127.0.0.1', port, host, path, timeoutMs = 5000 }) {
   return new Promise((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers: { host }, timeout: timeoutMs }, (res) => {
+    const req = httpRequest({ host: address, port, path, method: 'GET', headers: { host }, timeout: timeoutMs }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') }));
