@@ -126,6 +126,7 @@
     "users": "npm run build && node scripts/users.mjs",
     "backup": "node scripts/backup.mjs",
     "restore": "node scripts/restore.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "dev:lab": "bash -c 'source ./set-key.sh && npm run build && node dev/llm-lab/server.mjs'",
     "eval": "npm run build && node dev/eval/run.mjs",
     "bench:sqlite": "npm run build && node dev/bench/run.mjs"
