@@ -52,6 +52,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-007 | [Web App: Notes — Specification](specs/R-007-web-notes.md) |
 | R-008 | [Shared Circle Brains — Specification](specs/R-008-shared-brains.md) |
 | R-009 | [Shared Circle Brains (circle-owned graph) — Specification](specs/R-009-shared-circle-brains.md) |
+| R-010 | [Raspberry Pi Deployment — Specification](specs/R-010-pi-deployment.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -102,6 +103,7 @@ Local-only development tools live under `dev/` and are never published: `dev/gra
 - **Done (2026-10):** W3 the web app with notes (R-007): capture with a preview and approval, a notice of which model files the note shown before it is sent, read-only browsing of your own categories and items, an end-to-end test and a security review.
 - **Done (2026-10):** S1 shared circle brains (R-008): read-only sharing of chosen categories between circle members; the owner grants to a named member, withdrawable at any time, ended by leaving, removal, account deletion or circle deletion in the same step; reads are live and re-checked on every request; a private category and what is reachable only through it read like a made-up id; routes, the web app's *What you share* and *Shared with you*, an end-to-end test, a hand check and a security review. **Pseudonymisation and the legal groundwork remain release gates before anyone but the owner uses it.**
 - **Done (2026-10):** S2 the shared circle brain (R-009): a circle owns one graph that owners, managers and members capture into and observers read; scoped capture and browse, a My Brain aggregate with provenance on every result, contribution stamps, circle record and circle graph kept in step (ordered steps plus a reconcile at start-up), a scope choice in the web app with the sharing notice before a circle capture, a hand check and a security review. It coexists with R-008 and carries the same release gates: **pseudonymisation and the legal groundwork are required before anyone but the owner uses it.**
+- **Next (planned as D1):** a Raspberry Pi family test (R-010): a systemd service on a dedicated account, plain HTTP on the home Wi-Fi, the real model with its key in an environment file, a one-command update with rollback, nightly snapshots, a doctor command and a runbook. The personal-data release gates stand for anything beyond that test.
 - **After that, to be planned:** writing into another brain via approval (with "request update"), relationship labels, invitation notifications.
 - **After that, to be planned:** making the web app installable, deployment to a Raspberry Pi, M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Each roadmap item in the Backlog needs its own spec first.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.

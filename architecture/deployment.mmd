@@ -1,0 +1,30 @@
+C4Deployment
+    title Deployment Diagram for the CaCi family test (Raspberry Pi)
+
+    Deployment_Node(devices, "Family devices", "Phones and laptops on the home Wi-Fi") {
+        Container(browser, "Browser", "Plain HTTP", "Uses the CaCi web app")
+    }
+
+    Deployment_Node(pi, "Raspberry Pi", "Pi OS, Node 22.13 or later") {
+        Deployment_Node(systemd, "systemd", "caci.service, caci-backup.timer") {
+            Container(service, "CaCi service", "node scripts/serve.mjs, user caci", "HTTP API, web app, controllers")
+            ContainerDb(data, "Data", "graphs.db and users.db in /var/lib/caci", "SQLite, owner-only")
+            ContainerDb(snaps, "Snapshots", "/var/backups/caci", "Nightly, last 14 kept")
+        }
+        Container(deploy, "Deploy command", "sudo node deploy/run.mjs", "Snapshot, pull, build, restart, health check, roll back")
+    }
+
+    Deployment_Node(github, "GitHub", "Repository") {
+        Container(repo, "caci repository", "git over SSH, read-only deploy key", "Source of every release")
+    }
+
+    Deployment_Node(anthropic, "Anthropic", "API") {
+        Container(llm, "Model API", "HTTPS", "Files notes when CACI_LLM=anthropic; key from the env file")
+    }
+
+    Rel(browser, service, "Uses", "HTTP")
+    Rel(service, data, "Reads and writes")
+    Rel(service, snaps, "Nightly snapshot of data")
+    Rel(service, llm, "Sends notes and category names", "HTTPS")
+    Rel(deploy, repo, "Pulls")
+    Rel(deploy, service, "Restarts and checks")
