@@ -26,7 +26,7 @@ describe('the dev tools are never part of a release', () => {
     expect(paths.length).toBeGreaterThan(0);
     const allowed = (path) => path === 'package.json' || /^(README\.md|LICENSE.*)$/i.test(path) || path.startsWith('dist/') || path.startsWith('schema/') || /^web\/[a-z-]+\.(html|js|css)$/.test(path);
     expect(paths.filter((p) => !allowed(p))).toEqual([]);
-    expect(paths.filter((p) => /explorer|lab|server-kit|^dev\//.test(p))).toEqual([]);
+    expect(paths.filter((p) => /explorer|lab|server-kit|^dev\/|^deploy\//.test(p))).toEqual([]);
   });
 
   it('the web app is published as its files and none of its tests', () => {
