@@ -1,6 +1,6 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createAccountRoutes, createApiServer, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createWebRoutes } from '../api/index.js';
+import { createAccountRoutes, createApiServer, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
 import { createCaciController } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
@@ -89,14 +89,16 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     };
     const baseUsers = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration } });
     const controller = afterAccountDeletion(baseUsers, reconcile); // deleting an account can dissolve a circle, which leaves its graph behind
-    const capture = createController({ adapter: graphs, llm: createLlm({ client }) });
+    const llm = createLlm({ client }); // one model component for filing notes and for status updates
+    const capture = createController({ adapter: graphs, llm });
     const caci = createCaciController({
       users: controller,
       capture,
       graphAdapter: graphs,
       scopes: createScopeResolver({ users: controller, store: circleStore, maxScopes: config.maxBrainScopes }),
       mode: config.llm,
-      limits: { maxPendingPerUser: config.maxPendingPerUser, proposalsPerHour: config.proposalsPerHour },
+      llm,
+      limits: { maxPendingPerUser: config.maxPendingPerUser, proposalsPerHour: config.proposalsPerHour, statusPerHour: config.statusPerHour },
     });
     const circles = withCircleGraphs(createCircleController({
       users: controller,
@@ -111,6 +113,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       ...createCaptureRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createReadRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createBrainRoutes({ caci, secureCookies: config.cookieSecure }),
+      ...createStatusRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createCircleRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createInvitationRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createSharingRoutes({ sharing, secureCookies: config.cookieSecure }),
