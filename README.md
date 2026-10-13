@@ -346,7 +346,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these twenty-nine, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these thirty, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -376,6 +376,7 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `share-page.js` | puts "What you share" on a circle's screen: the other members, what is shared with each, a picker of your own categories and stopping (rows cloned from templates, text only) |
 | `shared-page.js` | puts "Shared with you" on a circle's screen: who has shared, their categories, a category's items and one item, read-only (rows cloned from templates, text only) |
 | `grants-session.js` | what the "What you share" part of a circle's screen shows and does: the other members, your categories to choose from, saving and stopping (stopping asks first) |
+| `status-session.js` | what the status screen shows and does: ask for a status update, hold the one answer in memory, forget it when you leave the screen or sign out |
 | `shared-session.js` | what the "Shared with you" part shows: who has shared, their categories, a category's items and one item (read-only, the selection is page state) |
 | `sharing-client.js` | the code that talks to the sharing routes: what you share and what is shared with you |
 | `permissions.js` | what each role may do in a circle, as a hint for which buttons to show |

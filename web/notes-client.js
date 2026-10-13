@@ -13,12 +13,15 @@
 import { cleanMessage, createRequester, fail, parseRetryAfter, SERVER } from './api-client.js';
 
 export const NOTE_MAX = 8000;
+/** A status request is at most 500 characters (R-011). */
+export const STATUS_MAX = 500;
+const TIME_ZONE_MAX = 64;
 const ID_MAX = 256;
 const PROPOSAL_ID = /^prop-[a-z0-9-]{1,60}$/;
 const CURSOR = /^[A-Za-z0-9_.~-]{1,2048}$/;
 const GONE_PROPOSAL = 'That proposal is gone or has expired. Make it again.';
 export const NO_CIRCLE = 'No such circle, or you are not in it.';
-const NOT_FOUND = Object.freeze({ proposal: GONE_PROPOSAL, category: 'Not found: it may have been removed.', item: 'Not found: it may have been removed.', circle: NO_CIRCLE });
+const NOT_FOUND = Object.freeze({ proposal: GONE_PROPOSAL, category: 'Not found: it may have been removed.', item: 'Not found: it may have been removed.', circle: NO_CIRCLE, status: 'Status updates are not available here.' });
 const CIRCLE_ID = /^c[a-z0-9]{16}$/;
 const SIGNED_OUT = 'Your session has ended. Sign in again.';
 
@@ -184,9 +187,27 @@ function errorFor(what, fields, status, json, retryAfter) {
   if (status === 429) return { kind: 'limit', message: cleanMessage(error.message, 'A limit has been reached. Try again later.'), ...wait };
   if (status === 502 || status === 503) {
     const reason = error.code === 'MODEL_TIMEOUT' ? 'timeout' : error.code === 'MODEL_REFUSED' ? 'refused' : error.code === 'MODEL_BUSY' ? 'busy' : 'error';
-    return { kind: 'model', reason, message: cleanMessage(error.message, 'The model could not file this note: try again.'), ...wait };
+    return { kind: 'model', reason, message: cleanMessage(error.message, what === 'status' ? 'The model could not make your status: try again.' : 'The model could not file this note: try again.'), ...wait };
   }
   return { kind: 'server', message: SERVER };
+}
+
+/** A status answer: a headline, short points each with the places it came from, and counts. Anything else is not shaped right. */
+function statusOf(json) {
+  const v = isObject(json) ? json.status : undefined;
+  if (!isObject(v) || typeof v.headline !== 'string' || v.headline === '' || typeof v.nothing !== 'boolean' || !whole(v.generatedAt) || !MODES.includes(v.mode) || !whole(v.entriesUsed) || !whole(v.entriesLeftOut) || !Array.isArray(v.points) || v.points.length > 5) return undefined;
+  const points = [];
+  for (const raw of v.points) {
+    if (!isObject(raw) || typeof raw.text !== 'string' || raw.text === '' || !Array.isArray(raw.sources) || raw.sources.length > 5) return undefined;
+    const sources = [];
+    for (const src of raw.sources) {
+      const tag = provenanceOf(src);
+      if (tag === undefined) return undefined;
+      sources.push(tag);
+    }
+    points.push(Object.freeze({ text: raw.text, sources: Object.freeze(sources) }));
+  }
+  return Object.freeze({ headline: v.headline, points: Object.freeze(points), nothing: v.nothing, generatedAt: v.generatedAt, mode: v.mode, entriesUsed: v.entriesUsed, entriesLeftOut: v.entriesLeftOut });
 }
 
 /** `?limit=&cursor=` from page options, or the problem with them. */
@@ -303,6 +324,18 @@ export function createNotesClient({ fetchFn }) {
       const target = proposeScope(scope);
       if (target === null) return Promise.resolve(badScope());
       return call({ method: 'POST', path: () => '/api/capture/propose', body: { text: note, ...(target === undefined ? {} : { scope: target }) }, parse: proposalOf, fields: ['text', 'scope'] });
+    },
+    /**
+     * Asks CaCi for a status update (R-011): free text of 1 to 500 characters after trimming, and optionally the
+     * person's IANA time zone. Only `{ text, timeZone }` is sent; nothing is filed. The service reads the person's
+     * own notes and their circles' and says where each point came from.
+     */
+    status(text, timeZone) {
+      const request = typeof text === 'string' ? text.trim() : '';
+      if (request === '') return Promise.resolve(fail({ kind: 'invalid', field: 'text', message: 'Say what you would like a status on.' }));
+      if ([...request].length > STATUS_MAX) return Promise.resolve(fail({ kind: 'invalid', field: 'text', message: 'A request is at most 500 characters.' }));
+      const zone = typeof timeZone === 'string' && timeZone !== '' && timeZone.length <= TIME_ZONE_MAX ? timeZone : undefined;
+      return call({ method: 'POST', path: () => '/api/status', body: { text: request, ...(zone === undefined ? {} : { timeZone: zone }) }, parse: statusOf, what: 'status', fields: ['text', 'timeZone'] });
     },
     getProposal: (id) => call({ method: 'GET', proposal: [id], path: (p) => `/api/capture/proposals/${p}`, parse: proposalOf }),
     approve: (id) => call({ method: 'POST', proposal: [id], path: (p) => `/api/capture/proposals/${p}/approve`, parse: writtenOf }),

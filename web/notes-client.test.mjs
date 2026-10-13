@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createNotesClient, isCircleId, isNodeId, isProposalId, NOTE_MAX, provenanceOf, scopeText } from './notes-client.js';
+import { createNotesClient, isCircleId, isNodeId, isProposalId, NOTE_MAX, provenanceOf, scopeText, STATUS_MAX } from './notes-client.js';
 
 it('the note limit is 8,000 characters', () => expect(NOTE_MAX).toBe(8000));
 
@@ -476,3 +476,83 @@ describe('My Brain', () => {
   });
 });
 
+
+describe('status updates (R-011)', () => {
+  const CIRCLE = 'c0123456789abcdef';
+  const VIEW = { headline: 'A quiet morning.', points: [{ text: 'Mum has new tablets.', sources: [{ kind: 'circle', circleId: CIRCLE, circleName: 'Parent care' }, { kind: 'personal' }] }], nothing: false, generatedAt: 5, mode: 'demo', entriesUsed: 3, entriesLeftOut: 1 };
+  const answer = { status: 200, body: { status: VIEW } };
+
+  it('the limit is 500 characters', () => expect(STATUS_MAX).toBe(500));
+
+  it('sends only a trimmed text and the time zone, to the one route, by POST', async () => {
+    const { calls, client } = fake(answer);
+    await client.status('  Give me a morning status check  ', 'Europe/London');
+    await client.status('no zone');
+    await client.status('bad zone type', 5);
+    await client.status('empty zone', '');
+    await client.status('long zone', 'Z'.repeat(65));
+    expect(calls.map((c) => `${c.init.method} ${c.path}`)).toEqual(Array(5).fill('POST /api/status'));
+    expect(calls.map((c) => c.body)).toEqual([{ text: 'Give me a morning status check', timeZone: 'Europe/London' }, { text: 'no zone' }, { text: 'bad zone type' }, { text: 'empty zone' }, { text: 'long zone' }]);
+    for (const c of calls) {
+      expect(c.init.credentials).toBe('same-origin');
+      expect(Object.keys(c.init.headers).map((k) => k.toLowerCase())).not.toContain('authorization');
+    }
+  });
+
+  it('checks the text first: blank, not text, or over 500 characters is refused naming text, and nothing is sent', async () => {
+    const { calls, client } = fake(answer);
+    for (const bad of ['', '   ', 5, null, undefined, 'x'.repeat(501)]) expect((await client.status(bad)).error, String(bad)).toMatchObject({ kind: 'invalid', field: 'text' });
+    expect((await client.status('x'.repeat(500))).ok).toBe(true);
+    expect((await client.status('😀'.repeat(500))).ok).toBe(true);
+    expect((await client.status('😀'.repeat(501))).ok).toBe(false);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('cuts the answer down to the view, frozen all the way down', async () => {
+    const { client } = fake({ status: 200, body: { status: { ...VIEW, graphId: 'user-x', usage: { inputTokens: 1 }, model: 'm' } } });
+    const r = await client.status('x');
+    expect(r.value).toEqual(VIEW);
+    expect(Object.keys(r.value).sort()).toEqual(['entriesLeftOut', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
+    expect(Object.isFrozen(r.value) && Object.isFrozen(r.value.points) && Object.isFrozen(r.value.points[0]) && Object.isFrozen(r.value.points[0].sources) && Object.isFrozen(r.value.points[0].sources[0])).toBe(true);
+  });
+
+  it.each([
+    ['no status', {}],
+    ['empty headline', { headline: '' }],
+    ['nothing not a boolean', { nothing: 'no' }],
+    ['bad mode', { mode: 'other' }],
+    ['negative count', { entriesUsed: -1 }],
+    ['left-out count missing', { entriesLeftOut: undefined }],
+    ['fractional time', { generatedAt: 1.5 }],
+    ['six points', { points: Array(6).fill({ text: 't', sources: [] }) }],
+    ['empty point text', { points: [{ text: '', sources: [] }] }],
+    ['point without sources', { points: [{ text: 't' }] }],
+    ['six sources', { points: [{ text: 't', sources: Array(6).fill({ kind: 'personal' }) }] }],
+    ['a source not shaped right', { points: [{ text: 't', sources: [{ kind: 'circle', circleId: 'x', circleName: 'n' }] }] }],
+    ['a non-object point', { points: ['t'] }],
+  ])('an answer that is not shaped right is a server problem: %s', async (_name, change) => {
+    const body = _name === 'no status' ? {} : { status: { ...VIEW, ...change } };
+    const r = await fake({ status: 200, body }).client.status('x');
+    expect(r.error).toEqual({ kind: 'server', message: 'Something went wrong on the service. Try again in a moment.' });
+  });
+
+  it('turns refusals into kinds and words', async () => {
+    const run = (status, error, headers) => fake(err(status, error, headers)).client.status('x', 'Europe/London').then((r) => r.error);
+    expect(await run(401, { code: 'UNAUTHENTICATED', message: 'not signed in' })).toEqual({ kind: 'signed-out', message: 'Your session has ended. Sign in again.' });
+    expect(await run(404, { code: 'NOT_FOUND', message: 'status updates are not available' })).toEqual({ kind: 'not-found', what: 'status', message: 'Status updates are not available here.' });
+    expect(await run(422, { code: 'INVALID_INPUT', message: 'text is too long', field: 'text' })).toEqual({ kind: 'invalid', field: 'text', message: 'text is too long' });
+    expect(await run(422, { code: 'INVALID_INPUT', message: 'unknown zone', field: 'timeZone' })).toMatchObject({ kind: 'invalid', field: 'timeZone' });
+    expect(await run(422, { code: 'INVALID_INPUT', message: 'odd', field: 'scope' })).toEqual({ kind: 'invalid', message: 'odd' });
+    expect(await run(429, { code: 'THROTTLED', message: 'you have asked for the most statuses allowed in an hour (20)' }, { 'retry-after': '120' })).toEqual({ kind: 'limit', message: 'you have asked for the most statuses allowed in an hour (20)', retryAfterSeconds: 120 });
+    expect(await run(502, { code: 'MODEL_TIMEOUT', message: 'the model took too long: try again' })).toEqual({ kind: 'model', reason: 'timeout', message: 'the model took too long: try again' });
+    expect(await run(502, { code: 'MODEL_REFUSED', message: 'the model declined to answer' })).toMatchObject({ kind: 'model', reason: 'refused' });
+    expect(await run(503, { code: 'MODEL_BUSY', message: 'the model is busy: try again shortly' }, { 'retry-after': '30' })).toMatchObject({ kind: 'model', reason: 'busy', retryAfterSeconds: 30 });
+    expect(await run(502, { code: 'MODEL_ERROR', message: '' })).toEqual({ kind: 'model', reason: 'error', message: 'The model could not make your status: try again.' });
+    expect(await run(500, { code: 'INTERNAL_ERROR', message: 'secret detail' })).toEqual({ kind: 'server', message: 'Something went wrong on the service. Try again in a moment.' });
+  });
+
+  it('a network failure is a network problem and never throws', async () => {
+    const r = await fake(new Error('offline')).client.status('x');
+    expect(r.error.kind).toBe('network');
+  });
+});

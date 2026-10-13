@@ -15,6 +15,7 @@ import { createCirclesSession } from './circles-session.js';
 import { fakePage, fill, visibleScreens, waitFor } from './fake-page.test-util.mjs';
 import { mount } from './mount.js';
 import { createSession } from './session.js';
+import { createStatusSession } from './status-session.js';
 
 // The web app's own code against the real service: real SQLite files, real HTTP, nothing mocked except
 // that the page is a stand-in (the hand check in a real browser is recorded in STATE.md).
@@ -27,7 +28,7 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-const config = (dataDir, extra = {}) => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 1, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, ...extra });
+const config = (dataDir, extra = {}) => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 1, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, statusPerHour: 20, ...extra });
 async function start(extra) {
   const dir = mkdtempSync(join(tmpdir(), 'caci-web-e2e-'));
   dirs.push(dir);
@@ -777,6 +778,65 @@ describe('the capture logic against the real service (demo model)', () => {
     expect(out).toBe(1);
     expect(ann.capture.getState().phase).toBe('preview');
     expect(await ann.capture.propose('a second note')).toMatchObject({ ok: false, kind: 'pending' });
+  });
+});
+
+describe('the status logic against the real service (demo model)', () => {
+  const person = async (port, name, extra = {}) => {
+    const jar = browserFetch(port);
+    const session = createSession({ api: createApiClient({ fetchFn: jar }) });
+    expect(await session.register({ username: name, displayName: `Display ${name}`, password: PW })).toEqual({ ok: true });
+    const notes = createNotesClient({ fetchFn: jar });
+    return { notes, circles: createCirclesClient({ fetchFn: jar }), status: createStatusSession({ client: notes, timeZone: () => 'Europe/London', ...extra }) };
+  };
+
+  it('asks for a status, shows the answer with where each point came from, writes nothing, and forgets it on reset', async () => {
+    const { port } = await start();
+    await person(port, 'root');
+    const ann = await person(port, 'ann');
+    const made = (await ann.circles.createCircle({ name: 'Parent care' })).value.id;
+    for (const [text, scope] of [['Dentist appointment on Friday morning', undefined], ['Mum new tablets one a day with food', { kind: 'circle', circleId: made }]]) {
+      const p = await ann.notes.propose(text, scope);
+      expect(p.ok, JSON.stringify(p)).toBe(true);
+      expect((await ann.notes.approve(p.value.id)).ok).toBe(true);
+    }
+    const before = JSON.stringify((await ann.notes.mineSummary()).value);
+    const r = await ann.status.ask('How is Mum doing with her tablets?');
+    expect(r.ok).toBe(true);
+    const answer = ann.status.getState().answer;
+    expect(answer).toMatchObject({ mode: 'demo', nothing: false, entriesUsed: 2, entriesLeftOut: 0 });
+    expect(answer.points[0].text).toContain('Mum new tablets');
+    expect(answer.points[0].sources).toEqual([{ kind: 'circle', circleId: made, circleName: 'Parent care' }]);
+    expect(ann.status.getState().asked).toBe('How is Mum doing with her tablets?');
+    expect(Object.isFrozen(answer) && Object.isFrozen(answer.points[0])).toBe(true);
+    expect(JSON.stringify((await ann.notes.mineSummary()).value)).toBe(before); // nothing was filed
+    ann.status.reset();
+    expect(ann.status.getState()).toMatchObject({ answer: null, asked: '', busy: false });
+  });
+
+  it('field problems come back beside the field, a person with no notes gets "nothing", and the limit is in the service\'s words', async () => {
+    const { port } = await start({ statusPerHour: 2 });
+    await person(port, 'root');
+    const bob = await person(port, 'bob');
+    expect(await bob.status.ask('   ')).toMatchObject({ ok: false, kind: 'invalid', errors: { text: expect.any(String) } });
+    expect(await bob.status.ask('x'.repeat(501))).toMatchObject({ ok: false, kind: 'invalid' });
+    const bad = await person(port, 'cat', { timeZone: () => 'Mars/Base' });
+    expect(await bad.status.ask('hello')).toMatchObject({ ok: false, kind: 'invalid', errors: { timeZone: expect.any(String) } });
+    expect((await bob.status.ask('status')).ok).toBe(true);
+    expect(bob.status.getState().answer).toMatchObject({ nothing: true, entriesUsed: 0 });
+    expect((await bob.status.ask('again')).ok).toBe(true);
+    const third = await bob.status.ask('third');
+    expect(third).toMatchObject({ ok: false, kind: 'limit' });
+    expect(third.retryAfterSeconds).toBeGreaterThan(0);
+    expect(bob.status.getState().answer).not.toBeNull(); // the last good answer is kept
+  });
+
+  it('a signed-out client is told so', async () => {
+    const { port } = await start();
+    let out = 0;
+    const stranger = createStatusSession({ client: createNotesClient({ fetchFn: browserFetch(port) }), onSignedOut: () => out++ });
+    expect(await stranger.ask('status')).toMatchObject({ ok: false, kind: 'signed-out' });
+    expect(out).toBe(1);
   });
 });
 
