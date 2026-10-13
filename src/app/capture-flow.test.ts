@@ -16,6 +16,7 @@ import { createLlm } from '../llm/index.js';
 import { createScriptedModelClient, type ScriptStep } from '../llm/testing/index.js';
 import { createController, type Controller } from './controller.js';
 import { recordAdapter } from './recording-adapter.test-util.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 // ---- a scripted model that files notes by keyword, reading the real prompt ----
 
@@ -96,7 +97,7 @@ async function world(script: (request: Request, n: number) => ScriptStep = filin
   const adapter = options.wrap ? options.wrap(recording.adapter) : recording.adapter;
   const client = createScriptedModelClient(script);
   let n = 0;
-  const controller = createController({ adapter, llm: createLlm({ client }), ids: () => `${options.prefix ?? 'note'}-${++n}` });
+  const controller = createController({ adapter, llm: createLlm({ controls: SHIPPED_CONTROLS, client }), ids: () => `${options.prefix ?? 'note'}-${++n}` });
   return { controller, adapter: inner, client, writes: recording.writes, transactions: () => recording.calls.filter((c) => c === 'transaction').length };
 }
 
@@ -332,7 +333,7 @@ for (const candidate of BACKENDS) {
           const inner = createMemoryAdapter();
           await createGraph(inner, 'notes');
           let clock = 1_000_000;
-          const controller = createController({ adapter: inner, llm: createLlm({ client: createScriptedModelClient(filing), now: () => clock }), now: () => clock, ttlMs: 60_000 });
+          const controller = createController({ adapter: inner, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient(filing), now: () => clock }), now: () => clock, ttlMs: 60_000 });
           const p = must(await controller.propose('notes', text('Dr Patel')));
           clock += 60_000;
           expect(await controller.approve(p.id)).toMatchObject({ ok: false, error: { error: { code: 'PROPOSAL_EXPIRED' } } });

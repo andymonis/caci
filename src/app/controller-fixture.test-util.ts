@@ -5,6 +5,7 @@ import { createLlm } from '../llm/index.js';
 import { createScriptedModelClient, type ScriptStep } from '../llm/testing/index.js';
 import { createController, type ControllerInit } from './controller.js';
 import { recordAdapter } from './recording-adapter.test-util.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 export const category = (id: string, name = id): Op => ({ op: 'upsertNode', partition: 'category', id, mode: 'merge', data: { name } });
 export const item = (id: string): Op => ({ op: 'upsertNode', partition: 'item', id, mode: 'merge', data: { title: id } });
@@ -36,7 +37,7 @@ export async function setup(options: { script?: Script; existing?: Op[]; init?: 
   let minted = 0;
   const controller = createController({
     adapter: options.wrap ? options.wrap(recording.adapter) : recording.adapter,
-    llm: createLlm({ client, now: clockControl.now }),
+    llm: createLlm({ controls: SHIPPED_CONTROLS, client, now: clockControl.now }),
     ids: () => `note-${++minted}`,
     now: clockControl.now,
     ...options.init,

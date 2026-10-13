@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import * as llm from '../../src/llm/index.ts';
 import * as testing from '../../src/llm/testing/index.ts';
 import { createDemoClient, demoReply, readRequest } from './capture-model.mjs';
+import * as controlsFiles from '../../src/service/controls-files.ts';
+import { loadControlsOrThrow, withControls } from '../shared/controls.mjs';
 
+
+const createLlmWithControls = withControls(llm.createLlm, loadControlsOrThrow(controlsFiles));
 /** The demo model through the real `categorise`, so it sees the real prompt. */
 async function file(text, categories = []) {
   const events = [];
-  const result = await llm.createLlm({ client: createDemoClient(testing) }).categorise(
+  const result = await createLlmWithControls({ client: createDemoClient(testing) }).categorise(
     { text, graphId: 'g', itemId: 'note-7', categories },
     { trace: (e) => void events.push(e) },
   );
@@ -118,7 +122,7 @@ describe('readRequest and demoReply', () => {
   it('reads the note, its id and the categories from a real prompt', async () => {
     const seen = [];
     const client = testing.createScriptedModelClient((request) => (seen.push(request), { reply: '{"ops":[]}' }));
-    await llm.createLlm({ client }).categorise({ text: 'A <b>note</b> & more', graphId: 'g', itemId: 'note-42', categories: CATS }, {});
+    await createLlmWithControls({ client }).categorise({ text: 'A <b>note</b> & more', graphId: 'g', itemId: 'note-42', categories: CATS }, {});
     const read = readRequest(seen[0]);
     expect(read.itemId).toBe('note-42');
     expect(read.note).toBe('A <b>note</b> & more'); // unescaped back to what was written
@@ -129,7 +133,7 @@ describe('readRequest and demoReply', () => {
   it('reads category names and notes back exactly, even with characters that are escaped in the prompt', async () => {
     const seen = [];
     const client = testing.createScriptedModelClient((request) => (seen.push(request), { reply: '{"ops":[]}' }));
-    await llm.createLlm({ client }).categorise({ text: 'R&D <plan>', graphId: 'g', itemId: 'n-1', categories: [{ id: 'rd', data: { name: 'R&D <x>' } }] }, {});
+    await createLlmWithControls({ client }).categorise({ text: 'R&D <plan>', graphId: 'g', itemId: 'n-1', categories: [{ id: 'rd', data: { name: 'R&D <x>' } }] }, {});
     const read = readRequest(seen[0]);
     expect(read.note).toBe('R&D <plan>');
     expect(read.categories[0].data.name).toBe('R&D <x>');

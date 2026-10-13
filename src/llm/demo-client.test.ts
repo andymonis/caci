@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createLlm, type CategoryEntry } from './index.js';
 import { createDemoModelClient, demoReply } from './demo-client.js';
 import type { ModelRequest } from './model-client.js';
+import { SHIPPED_CONTROLS } from './testing/shipped-controls.test-util.js';
 
-const llm = createLlm({ client: createDemoModelClient() });
+const llm = createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() });
 const INPUT = { text: 'Dr Patel booked my blood test', graphId: 'notes', itemId: 'note-1', categories: [] as CategoryEntry[] };
 /** Does the text hold only whole characters (no half of an emoji)? */
 const wellFormed = (text: string): boolean => (text as unknown as { isWellFormed(): boolean }).isWellFormed();

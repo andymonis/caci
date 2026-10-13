@@ -10,6 +10,7 @@ import { createCaptureRoutes } from './capture-routes.js';
 import { createReadRoutes } from './read-routes.js';
 import { createAccountRoutes } from './routes.js';
 import { createApiServer, type ApiServer } from './server.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 const PW = 'correct horse 7 staple';
 const COOKIE = 'caci_session';
@@ -76,7 +77,7 @@ async function start(people: string[] = ['ann', 'bob']): Promise<App> {
     loginThrottle: createLoginThrottle(),
     registrationThrottle: createRegistrationThrottle({ max: 1000 }),
   });
-  const capture = createController({ adapter: graphs, llm: createLlm({ client: createDemoModelClient() }) });
+  const capture = createController({ adapter: graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() }) });
   const caci = createCaciController({ users, capture, graphAdapter: graphs });
   const api = createApiServer({ routes: [...createAccountRoutes({ controller: users }), ...createCaptureRoutes({ caci }), ...createReadRoutes({ caci })] });
   const port = await api.listen(0);

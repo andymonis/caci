@@ -4,6 +4,7 @@ import { dropGraph, write } from '../graph_store/index.js';
 import { createDemoModelClient, createLlm } from '../llm/index.js';
 import { createCaciController } from './index.js';
 import { ownErrorOf, world, type World } from './controller.test-util.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 const must = <T>(r: { ok: boolean; value?: T; error?: unknown }): T => {
   if (!r.ok) throw new Error(`expected success: ${JSON.stringify(r.error)}`);
@@ -133,7 +134,7 @@ describe('browsing one circle', () => {
 
   it('without a scope resolver, a circle is simply not found', async () => {
     const { w, a } = await setup();
-    const capture = createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }) });
+    const capture = createController({ adapter: w.graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() }) });
     const bare = createCaciController({ users: w.users, capture, graphAdapter: w.graphs });
     expect(await bare.summary(w.tokens.bob, circleScope(a))).toEqual({ ok: false, error: NO_CIRCLE });
     expect((await bare.summary(w.tokens.bob)).ok).toBe(true);

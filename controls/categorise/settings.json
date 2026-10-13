@@ -1,0 +1,17 @@
+{
+  "maxOps": 25,
+  "maxTextChars": 8000,
+  "maxContextChars": 12000,
+  "maxDataBytes": 2048,
+  "maxIdLength": 128,
+  "maxOutputChars": 32000,
+  "maxRationaleChars": 500,
+  "titleMaxChars": 120,
+  "summaryMaxChars": 300,
+  "categoryNameMaxChars": 60,
+  "descriptions": {
+    "title": "A short title for the note.",
+    "summary": "One line saying what the note is about.",
+    "name": "A short readable name for the category."
+  }
+}

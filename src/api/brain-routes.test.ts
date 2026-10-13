@@ -8,6 +8,7 @@ import { addMember, call, secrets, signIn, startCircleApp, type CircleApp } from
 import { createBrainRoutes } from './brain-routes.js';
 import { createCaptureRoutes } from './capture-routes.js';
 import { createReadRoutes } from './read-routes.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 let app: CircleApp | undefined;
 const all: string[] = [];
@@ -46,7 +47,7 @@ async function fill(a: CircleApp, graphId: string, ids: string[], label: string)
 async function started() {
   app = await startCircleApp({
     more: ({ users, store, graphs, now }) => {
-      const capture = createController({ adapter: graphs, llm: createLlm({ client: createDemoModelClient() }), now: () => now.value });
+      const capture = createController({ adapter: graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() }), now: () => now.value });
       const scopes = createScopeResolver({ users, store });
       const caci = createCaciController({ users, capture, graphAdapter: graphs, scopes, clock: () => now.value });
       return [...createCaptureRoutes({ caci }), ...createReadRoutes({ caci }), ...createBrainRoutes({ caci })];

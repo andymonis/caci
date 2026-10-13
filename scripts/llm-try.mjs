@@ -8,6 +8,7 @@
 // The key is read here, from the environment, and handed to the client; it is never printed.
 
 import { createLlm } from '../dist/llm/index.js';
+import { defaultControlsDir, loadControlsFolder } from '../dist/service/controls-files.js';
 import { createAnthropicClient, readAnthropicKey } from '../dist/llm/anthropic/index.js';
 
 const args = process.argv.slice(2);
@@ -31,7 +32,12 @@ const categories = [
   { id: 'errands', data: { name: 'Errands' }, linkCount: 3 },
 ];
 
-const llm = createLlm({ client: createAnthropicClient({ apiKey: key.value }) });
+const controls = loadControlsFolder(defaultControlsDir());
+if (!controls.ok) {
+  console.error(`The LLM controls are not valid:\n${controls.error.map((p) => `  - ${p}`).join('\n')}`);
+  process.exit(1);
+}
+const llm = createLlm({ client: createAnthropicClient({ apiKey: key.value }), controls: controls.value });
 console.log(`Sending one sample note to Anthropic${model ? ` (model ${model})` : tier ? ` (tier ${tier})` : ' (default tier for categorise)'}...`);
 
 const started = Date.now();

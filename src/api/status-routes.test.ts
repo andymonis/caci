@@ -7,6 +7,7 @@ import { createScopeResolver } from '../scopes/index.js';
 import { addMember, call, secrets, signIn, startCircleApp, type CircleApp } from './circle-routes.test-util.js';
 import { createCaptureRoutes } from './capture-routes.js';
 import { createStatusRoutes } from './status-routes.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 let app: CircleApp | undefined;
 const all: string[] = [];
@@ -43,7 +44,7 @@ async function started(limits: { statusPerHour?: number } = {}) {
   };
   app = await startCircleApp({
     more: ({ users, store, graphs, now }) => {
-      const llm = createLlm({ client });
+      const llm = createLlm({ controls: SHIPPED_CONTROLS, client });
       const capture = createController({ adapter: graphs, llm, now: () => now.value });
       const scopes = createScopeResolver({ users, store });
       const caci = createCaciController({ users, capture, graphAdapter: graphs, scopes, clock: () => now.value, llm, limits });
@@ -167,7 +168,7 @@ describe('POST /api/status', () => {
       await a.api.close();
       return startCircleApp({
         more: ({ users, store, graphs, now }) => {
-          const llm = createLlm({ client: createDemoModelClient() });
+          const llm = createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() });
           const capture = createController({ adapter: graphs, llm, now: () => now.value });
           const caci = createCaciController({ users, capture, graphAdapter: graphs, scopes: createScopeResolver({ users, store }), clock: () => now.value });
           return createStatusRoutes({ caci });

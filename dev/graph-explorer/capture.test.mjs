@@ -6,12 +6,16 @@ import * as anthropic from '../../src/llm/anthropic/index.ts';
 import * as llm from '../../src/llm/index.ts';
 import * as testing from '../../src/llm/testing/index.ts';
 import { createApp } from './app.mjs';
+import * as controlsFiles from '../../src/service/controls-files.ts';
+import { loadControlsOrThrow, withControls } from '../shared/controls.mjs';
 
+
+const createLlmWithControls = withControls(llm.createLlm, loadControlsOrThrow(controlsFiles));
 const KEY = 'sk-ant-api03-EXPLORER-SECRET-KEY-1234567890';
 const graphLib = { ...library, createMemoryAdapter };
 const captureLib = (extra = {}) => ({
   createController: appLayer.createController,
-  createLlm: llm.createLlm,
+  createLlm: createLlmWithControls,
   createScriptedModelClient: testing.createScriptedModelClient,
   createAnthropicClient: anthropic.createAnthropicClient,
   ...extra,

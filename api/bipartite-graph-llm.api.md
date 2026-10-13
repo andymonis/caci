@@ -220,6 +220,7 @@ export interface LlmErrorOptions {
 export interface LlmInit {
     readonly client: ModelClient;
     readonly config?: LlmConfig;
+    readonly controls: Controls;
     readonly now?: () => number;
 }
 

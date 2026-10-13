@@ -5,10 +5,14 @@ import * as llm from '../../src/llm/index.ts';
 import * as testing from '../../src/llm/testing/index.ts';
 import { assertLocalDevelopment, createApp, HISTORY_LIMIT, MAX_COMPARE_MODELS, MAX_NOTE_CHARS } from './app.mjs';
 import { scenarioNames, SCENARIOS } from './scenarios.mjs';
+import * as controlsFiles from '../../src/service/controls-files.ts';
+import { loadControlsOrThrow, withControls } from '../shared/controls.mjs';
 
+
+const createLlmWithControls = withControls(llm.createLlm, loadControlsOrThrow(controlsFiles));
 const KEY = 'sk-ant-api03-LAB-SECRET-KEY-1234567890';
 const lib = {
-  createLlm: llm.createLlm,
+  createLlm: createLlmWithControls,
   CAPABILITIES: llm.CAPABILITIES,
   MODEL_TIERS: llm.MODEL_TIERS,
   DEFAULT_TIERS: llm.DEFAULT_TIERS,

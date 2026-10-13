@@ -6,6 +6,7 @@ import { createLoginThrottle, createMemorySessionStore, createMemoryUserStore, c
 import { createMemoryCircleStore, type CircleRole, type CircleStore } from '../circles/index.js';
 import { circleGraphId, createScopeResolver } from '../scopes/index.js';
 import { createCaciController, type BrainLimits, type CaciController, type CaciLimits, type StatusContextLimits } from './index.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 export const PW = 'correct horse 7 staple';
 export const T0 = 1_700_000_000_000;
@@ -42,7 +43,7 @@ export async function world(extra: { limits?: CaciLimits & BrainLimits & { statu
   const modelCalls: ModelRequest[] = [];
   const inner = extra.client ?? createDemoModelClient();
   const client: ModelClient = { complete: (request) => (modelCalls.push(request), inner.complete(request)) };
-  const llm = createLlm({ client, now: () => now.value });
+  const llm = createLlm({ controls: SHIPPED_CONTROLS, client, now: () => now.value });
   const capture = createController({ adapter: extra.captureAdapter?.(graphs) ?? graphs, llm, now: () => now.value + skew.value, ...(extra.capturePending === undefined ? {} : { maxPending: extra.capturePending }), ...(extra.ttlMs === undefined ? {} : { ttlMs: extra.ttlMs }) });
   const circleStore = createMemoryCircleStore();
   const scopes = createScopeResolver({ users, store: circleStore, ...(extra.maxScopes === undefined ? {} : { maxScopes: extra.maxScopes }) });

@@ -6,6 +6,7 @@ import { llmError } from '../../errors.js';
 import type { ModelClient, ModelRequest, ModelResponse } from '../../model-client.js';
 import { createScriptedModelClient, type ScriptStep } from '../../testing/index.js';
 import type { CategoriseInput } from './categorise.js';
+import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
 
 const ITEM = { op: 'upsertNode', partition: 'item', id: 'note-1', data: { title: 'Dr X visit', summary: 'Follow up.' } };
 const CATEGORY = { op: 'upsertNode', partition: 'category', id: 'doctor-x', data: { name: 'Dr X' } };
@@ -23,7 +24,7 @@ const INPUT: CategoriseInput = {
 const reply = (value: unknown, extra: Partial<Extract<ScriptStep, { reply: string }>> = {}): ScriptStep => ({ reply: JSON.stringify(value), ...extra });
 const setup = (script: Parameters<typeof createScriptedModelClient>[0], init: { now?: () => number } = {}) => {
   const client = createScriptedModelClient(script);
-  return { client, llm: createLlm({ client, ...init }) };
+  return { client, llm: createLlm({ controls: SHIPPED_CONTROLS, client, ...init }) };
 };
 
 /** A client with full control of what it returns, for replies the scripted client would not produce. */
@@ -35,7 +36,7 @@ function custom(handler: (request: ModelRequest, n: number) => Promise<unknown> 
       return (await handler(request, requests.length)) as never;
     },
   };
-  return { client, requests, llm: createLlm({ client }) };
+  return { client, requests, llm: createLlm({ controls: SHIPPED_CONTROLS, client }) };
 }
 const answer = (text: string, usage = { inputTokens: 10, outputTokens: 5 }): ReturnType<typeof ok<ModelResponse>> => ok({ model: 'm', output: { kind: 'text', text }, usage });
 
@@ -110,7 +111,7 @@ describe('categorise: the happy path', () => {
 describe('categorise: which model', () => {
   const models = async (options: Parameters<ReturnType<typeof createLlm>['categorise']>[1], config?: Parameters<typeof createLlm>[0]['config']) => {
     const client = createScriptedModelClient([reply(GOOD)]);
-    const llm = createLlm({ client, ...(config === undefined ? {} : { config }) });
+    const llm = createLlm({ controls: SHIPPED_CONTROLS, client, ...(config === undefined ? {} : { config }) });
     await llm.categorise(INPUT, options);
     return client.requests[0]?.model;
   };
@@ -231,7 +232,7 @@ describe('categorise: time limit and cancellation', () => {
     let clock = 1_000;
     const base = createScriptedModelClient([reply(BAD), reply(GOOD)]);
     const spy: ModelClient = { complete: async (q) => ((clock += 20_000), base.complete(q)) }; // the first call "takes" 20 s
-    const r = await createLlm({ client: spy, now: () => clock }).categorise(INPUT, { timeoutMs: 30_000 });
+    const r = await createLlm({ controls: SHIPPED_CONTROLS, client: spy, now: () => clock }).categorise(INPUT, { timeoutMs: 30_000 });
     expect(r.ok).toBe(true);
     expect(base.requests[0]?.timeoutMs).toBe(30_000 - 0);
     expect(base.requests[1]?.timeoutMs).toBe(10_000);
@@ -241,7 +242,7 @@ describe('categorise: time limit and cancellation', () => {
     let clock = 0;
     const base = createScriptedModelClient([reply(BAD), reply(GOOD)]);
     const spy: ModelClient = { complete: async (q) => ((clock += 5_000), base.complete(q)) };
-    const r = await createLlm({ client: spy, now: () => clock }).categorise(INPUT, { timeoutMs: 5_000 });
+    const r = await createLlm({ controls: SHIPPED_CONTROLS, client: spy, now: () => clock }).categorise(INPUT, { timeoutMs: 5_000 });
     expect(r).toMatchObject({ ok: false, error: { code: 'TIMEOUT', retryable: true } });
     expect(base.callCount).toBe(1);
   });
@@ -250,7 +251,7 @@ describe('categorise: time limit and cancellation', () => {
     let clock = 0;
     const base = createScriptedModelClient([reply(BAD), reply(GOOD)]);
     const spy: ModelClient = { complete: async (q) => ((clock += 5_000), base.complete(q)) };
-    const r = await createLlm({ client: spy, now: () => clock }).categorise(INPUT, { timeoutMs: 5_001 });
+    const r = await createLlm({ controls: SHIPPED_CONTROLS, client: spy, now: () => clock }).categorise(INPUT, { timeoutMs: 5_001 });
     expect(r.ok).toBe(true);
     expect(base.requests[1]?.timeoutMs).toBe(1);
   });
@@ -275,7 +276,7 @@ describe('categorise: time limit and cancellation', () => {
     const controller = new AbortController();
     const base = createScriptedModelClient([reply(BAD), reply(GOOD)]);
     const spy: ModelClient = { complete: async (q) => { const r = await base.complete(q); controller.abort(); return r; } };
-    const r = await createLlm({ client: spy }).categorise(INPUT, { signal: controller.signal });
+    const r = await createLlm({ controls: SHIPPED_CONTROLS, client: spy }).categorise(INPUT, { signal: controller.signal });
     expect(r).toMatchObject({ ok: false, error: { code: 'CANCELLED' } });
     expect(base.callCount).toBe(1);
   });
@@ -368,7 +369,7 @@ describe('categorise: what is refused before any model call', () => {
 
 describe('createLlm', () => {
   it('returns a frozen object whose only methods are the capabilities', () => {
-    const llm = createLlm({ client: createScriptedModelClient([]) });
+    const llm = createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([]) });
     expect(Object.isFrozen(llm)).toBe(true);
     expect(Object.keys(llm)).toEqual(['categorise', 'status']);
   });

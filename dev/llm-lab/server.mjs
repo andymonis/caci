@@ -8,10 +8,12 @@ const llm = await import('../../dist/llm/index.js');
 const testing = await import('../../dist/llm/testing/index.js');
 const anthropic = await import('../../dist/llm/anthropic/index.js');
 const app = await import('../../dist/app/index.js');
+const controls = (await import('../shared/controls.mjs')).loadControlsOrThrow(await import('../../dist/service/controls-files.js'));
+const { withControls } = await import('../shared/controls.mjs');
 
 const key = anthropic.readAnthropicKey(process.env);
 const lib = {
-  createLlm: llm.createLlm,
+  createLlm: withControls(llm.createLlm, controls),
   CAPABILITIES: llm.CAPABILITIES,
   MODEL_TIERS: llm.MODEL_TIERS,
   DEFAULT_TIERS: llm.DEFAULT_TIERS,

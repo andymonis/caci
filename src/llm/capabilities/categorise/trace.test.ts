@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createLlm } from '../../create-llm.js';
 import { createScriptedModelClient, type ScriptStep } from '../../testing/index.js';
 import type { CategoriseEvent } from './categorise.js';
+import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
 
 const GOOD = {
   ops: [
@@ -17,7 +18,7 @@ const INPUT = { text: 'Saw Dr X on Tuesday.', graphId: 'notes', itemId: 'note-1'
 async function traced(script: Parameters<typeof createScriptedModelClient>[0], options: Record<string, unknown> = {}, now?: () => number) {
   const client = createScriptedModelClient(script);
   const events: CategoriseEvent[] = [];
-  const llm = createLlm({ client, ...(now === undefined ? {} : { now }) });
+  const llm = createLlm({ controls: SHIPPED_CONTROLS, client, ...(now === undefined ? {} : { now }) });
   const result = await llm.categorise(INPUT, { ...options, trace: (e: CategoriseEvent) => void events.push(e) } as never);
   return { client, events, result };
 }
@@ -123,7 +124,7 @@ describe('failures', () => {
 
   it('a call refused before anything is built has only done', async () => {
     const events: CategoriseEvent[] = [];
-    const llm = createLlm({ client: createScriptedModelClient([reply(GOOD)]) });
+    const llm = createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([reply(GOOD)]) });
     await llm.categorise({ ...INPUT, text: '  ' }, { trace: (e) => void events.push(e) });
     expect(types(events)).toEqual(['done']);
     expect(events[0]).toMatchObject({ type: 'done', ok: false, attempts: 0, error: { code: 'CONFIG' } });
@@ -134,7 +135,7 @@ describe('failures', () => {
     const base = createScriptedModelClient([reply(BAD), reply(GOOD)]);
     const events: CategoriseEvent[] = [];
     const client = { complete: async (q: Parameters<typeof base.complete>[0]) => ((clock += 5000), base.complete(q)) };
-    await createLlm({ client, now: () => clock }).categorise(INPUT, { timeoutMs: 5000, trace: (e) => void events.push(e) });
+    await createLlm({ controls: SHIPPED_CONTROLS, client, now: () => clock }).categorise(INPUT, { timeoutMs: 5000, trace: (e) => void events.push(e) });
     expect(events.at(-1)).toMatchObject({ type: 'done', ok: false, attempts: 1, error: { code: 'TIMEOUT' } });
     expect(types(events)).toEqual(['prompt', 'request', 'response', 'verdict', 'repair', 'done']);
   });
@@ -143,14 +144,14 @@ describe('failures', () => {
     let clock = 0;
     const client = { complete: async () => ((clock += 250), { ok: false as const, error: { code: 'MODEL_ERROR' as const, message: 'down', retryable: true } }) };
     const events: CategoriseEvent[] = [];
-    await createLlm({ client, now: () => clock }).categorise(INPUT, { trace: (e) => void events.push(e) });
+    await createLlm({ controls: SHIPPED_CONTROLS, client, now: () => clock }).categorise(INPUT, { trace: (e) => void events.push(e) });
     expect(events.find((e) => e.type === 'failure')).toMatchObject({ type: 'failure', attempt: 1, elapsedMs: 250 });
     expect(events.at(-1)).toMatchObject({ type: 'done', elapsedMs: 250 });
   });
 
   it('a client that throws is traced as a failure', async () => {
     const events: CategoriseEvent[] = [];
-    const llm = createLlm({ client: { complete: () => { throw new Error('boom'); } } });
+    const llm = createLlm({ controls: SHIPPED_CONTROLS, client: { complete: () => { throw new Error('boom'); } } });
     await llm.categorise(INPUT, { trace: (e) => void events.push(e) });
     expect(events.find((e) => e.type === 'failure')).toMatchObject({ error: { code: 'MODEL_ERROR' } });
   });
@@ -159,8 +160,8 @@ describe('failures', () => {
 describe('the trace cannot change the call', () => {
   it('a callback that throws changes nothing', async () => {
     const client = createScriptedModelClient([reply(BAD), reply(GOOD)]);
-    const withThrow = await createLlm({ client }).categorise(INPUT, { trace: () => { throw new Error('nope'); } });
-    const plain = await createLlm({ client: createScriptedModelClient([reply(BAD), reply(GOOD)]) }).categorise(INPUT);
+    const withThrow = await createLlm({ controls: SHIPPED_CONTROLS, client }).categorise(INPUT, { trace: () => { throw new Error('nope'); } });
+    const plain = await createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([reply(BAD), reply(GOOD)]) }).categorise(INPUT);
     expect(withThrow).toEqual(plain);
   });
 
@@ -169,7 +170,7 @@ describe('the trace cannot change the call', () => {
     const listener = (reason: unknown): number => unhandled.push(reason);
     process.on('unhandledRejection', listener);
     try {
-      const r = await createLlm({ client: createScriptedModelClient([reply(GOOD)]) }).categorise(INPUT, { trace: () => Promise.reject(new Error('async nope')) });
+      const r = await createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([reply(GOOD)]) }).categorise(INPUT, { trace: () => Promise.reject(new Error('async nope')) });
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(r.ok).toBe(true);
       expect(unhandled).toEqual([]);
@@ -180,13 +181,13 @@ describe('the trace cannot change the call', () => {
 
   it('no callback: the same result as with one', async () => {
     const withTrace = await traced([reply(BAD), reply(GOOD)]);
-    const without = await createLlm({ client: createScriptedModelClient([reply(BAD), reply(GOOD)]) }).categorise(INPUT);
+    const without = await createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([reply(BAD), reply(GOOD)]) }).categorise(INPUT);
     expect(withTrace.result).toEqual(without);
   });
 
   it('events are copies: changing them changes nothing about the request or the result', async () => {
     const client = createScriptedModelClient([reply(BAD), reply(GOOD)]);
-    const llm = createLlm({ client });
+    const llm = createLlm({ controls: SHIPPED_CONTROLS, client });
     const r = await llm.categorise(INPUT, {
       trace: (e) => {
         try {
@@ -222,7 +223,7 @@ describe('the trace cannot change the call', () => {
 
   it('a trace that is not a function is a CONFIG error before any call', async () => {
     const client = createScriptedModelClient([reply(GOOD)]);
-    const r = await createLlm({ client }).categorise(INPUT, { trace: 'log' as never });
+    const r = await createLlm({ controls: SHIPPED_CONTROLS, client }).categorise(INPUT, { trace: 'log' as never });
     expect(r).toMatchObject({ ok: false, error: { code: 'CONFIG' } });
     expect(client.callCount).toBe(0);
   });
@@ -235,7 +236,7 @@ describe('the trace cannot change the call', () => {
 
   it('a client that returns something that cannot be copied does not break the call', async () => {
     const events: CategoriseEvent[] = [];
-    const llm = createLlm({ client: { complete: async () => ({ ok: true as const, value: { model: 'm', output: { kind: 'json' as const, value: (() => 1) as never }, usage: { inputTokens: 1, outputTokens: 1 } } }) } });
+    const llm = createLlm({ controls: SHIPPED_CONTROLS, client: { complete: async () => ({ ok: true as const, value: { model: 'm', output: { kind: 'json' as const, value: (() => 1) as never }, usage: { inputTokens: 1, outputTokens: 1 } } }) } });
     const r = await llm.categorise(INPUT, { trace: (e) => void events.push(e) });
     expect(r.ok).toBe(false); // the reply is not acceptable, but the call ended cleanly
     expect(events.at(-1)).toMatchObject({ type: 'done', ok: false });

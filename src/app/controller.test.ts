@@ -5,6 +5,7 @@ import { createLlm } from '../llm/index.js';
 import { createScriptedModelClient, type ScriptStep } from '../llm/testing/index.js';
 import { createController } from './controller.js';
 import { category, EXISTING, item, NOTE, PROPOSAL, reply, setup, type Script } from './controller-fixture.test-util.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 describe('propose: a proposal for a note', () => {
   it('returns a pending proposal with the mutation, summary and plain text', async () => {
@@ -289,7 +290,7 @@ describe('proposals expire and are limited in number', () => {
 });
 
 describe('createController', () => {
-  const base = { adapter: createMemoryAdapter(), llm: createLlm({ client: createScriptedModelClient([]) }) };
+  const base = { adapter: createMemoryAdapter(), llm: createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([]) }) };
 
   it('returns a frozen object with propose, approve, reject and get', () => {
     const c = createController(base);
@@ -324,7 +325,7 @@ describe('createController', () => {
       const id = /"(note-[a-z0-9-]+)"/.exec(q.system ?? '')?.[1] ?? 'x';
       return reply({ ops: [{ op: 'upsertNode', partition: 'item', id }, { op: 'link', item: id, category: 'errands' }] });
     });
-    const controller = createController({ adapter: inner, llm: createLlm({ client }) });
+    const controller = createController({ adapter: inner, llm: createLlm({ controls: SHIPPED_CONTROLS, client }) });
     const r = await controller.propose('notes', NOTE);
     expect(r.ok && r.value.itemId).toMatch(/^note-[0-9a-z]{9}-00-[0-9a-z]{6}$/);
   });

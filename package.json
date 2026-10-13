@@ -90,6 +90,7 @@
   "files": [
     "dist",
     "schema",
+    "controls",
     "web/*.html",
     "web/*.js",
     "web/*.css"

@@ -12,6 +12,7 @@ import { createDemoModelClient, createLlm, type ModelClient } from '../llm/index
 import { createUserController } from '../users/index.js';
 import { createSqliteSessionStore, createSqliteUserStore } from '../users/sqlite/index.js';
 import type { ServiceConfig } from './config.js';
+import { defaultControlsDir, loadControlsFolder } from './controls-files.js';
 import { defaultWebDir, WEB_FILE_SPECS } from './web-app.js';
 import { loadWebFiles } from './web-files.js';
 
@@ -34,6 +35,8 @@ export interface ServiceOptions {
   readonly anthropic?: { readonly fetch?: typeof fetch };
   /** For tests: a model client to use instead of the demo or the Anthropic one. */
   readonly llmClient?: ModelClient;
+  /** For tests: the folder to read the LLM controls from (R-012), instead of `controls/` beside the code. */
+  readonly controlsDir?: string;
   /** For tests: the folder to read the web app's files from, instead of `web/` beside the code. */
   readonly webDir?: string;
   /** Told the outcome of every reconcile of circle records and circle graphs: at start-up and after each account deletion. */
@@ -55,6 +58,9 @@ async function modelFor(config: ServiceConfig, options: ServiceOptions): Promise
  * already opened is closed again, and the error says what was wrong.
  */
 export async function startService(config: ServiceConfig, options: ServiceOptions = {}): Promise<RunningService> {
+  const controlsDir = options.controlsDir ?? defaultControlsDir();
+  const controls = loadControlsFolder(controlsDir); // first of all: a bad controls file must stop the start, naming the file, and leave nothing behind
+  if (!controls.ok) throw new Error(`the LLM controls in ${controlsDir} are not valid:\n${controls.error.map((p) => `  - ${p}`).join('\n')}`);
   const client = await modelFor(config, options); // first, before any folder or file is made: a missing key must leave nothing behind
   const webFiles = loadWebFiles(options.webDir ?? defaultWebDir(), WEB_FILE_SPECS); // also before any file is made: a missing web file must leave nothing behind
   const dataDir = resolve(config.dataDir);
@@ -89,7 +95,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     };
     const baseUsers = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration } });
     const controller = afterAccountDeletion(baseUsers, reconcile); // deleting an account can dissolve a circle, which leaves its graph behind
-    const llm = createLlm({ client }); // one model component for filing notes and for status updates
+    const llm = createLlm({ client, controls: controls.value }); // one model component for filing notes and for status updates
     const capture = createController({ adapter: graphs, llm });
     const caci = createCaciController({
       users: controller,

@@ -4,6 +4,7 @@ import { createCaciController } from './index.js';
 import { createController } from '../app/index.js';
 import { createDemoModelClient, createLlm } from '../llm/index.js';
 import { ownErrorOf, world, type World } from './controller.test-util.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 const must = <T>(r: { ok: boolean; value?: T; error?: unknown }): T => {
   if (!r.ok) throw new Error(`expected success: ${JSON.stringify(r.error)}`);
@@ -69,7 +70,7 @@ describe('the scopes a person may use', () => {
 
   it('without a resolver there is only the personal brain', async () => {
     const { w } = await setup();
-    const capture = createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }) });
+    const capture = createController({ adapter: w.graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() }) });
     const bare = createCaciController({ users: w.users, capture, graphAdapter: w.graphs });
     expect(must(await bare.brainScopes(w.tokens.ann)).items).toEqual([{ scope: PERSON, canCapture: true }]);
     expect(must(await bare.mineCategories(w.tokens.ann)).items.every((c) => c.scope.kind === 'personal')).toBe(true);
@@ -326,7 +327,7 @@ describe('My Brain, a category\'s items and one item', () => {
 
   it('without a resolver a circle is not found and the personal brain works', async () => {
     const { w, c1 } = await setup();
-    const capture = createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }) });
+    const capture = createController({ adapter: w.graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() }) });
     const bare = createCaciController({ users: w.users, capture, graphAdapter: w.graphs });
     expect(await bare.mineItem(w.tokens.ann, ref(circleScope(c1), 'item-shared'))).toMatchObject({ ok: false, error: { error: { code: 'NOT_FOUND' } } });
     expect(must(await bare.mineItem(w.tokens.ann, ref(PERSON, 'item-shared'))).scope).toEqual(PERSON);

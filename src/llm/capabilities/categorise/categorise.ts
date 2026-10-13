@@ -1,12 +1,13 @@
 import { err, ok, type Result } from '../../../graph_store/index.js';
+import type { Controls } from '../../controls/controls.js';
 import { resolveModel, type LlmConfig, type ModelTier } from '../../config.js';
 import { llmError, type LlmError } from '../../errors.js';
 import type { ModelClient, ModelMessage, ModelOutput, ModelResponse } from '../../model-client.js';
 import { makeEmitter, type Emit, type TraceEvent } from '../../trace.js';
 import { addUsage, isValidUsage, NO_USAGE, type TokenUsage } from '../../usage.js';
 import { buildContext, CATEGORISE_OPS, type CategoryEntry, type ContextOptions } from './context.js';
-import { guardReply, inspectReply, rejectionError, type GuardedReply } from './guard.js';
-import { buildPrompt, DEFAULT_PROMPT_OPTIONS } from './prompt.js';
+import { guardReply, guardSettingsOf, inspectReply, rejectionError, type GuardedReply, type GuardSettings } from './guard.js';
+import { buildPrompt } from './prompt.js';
 
 /** What the controller hands over for one note. */
 export interface CategoriseInput {
@@ -63,6 +64,8 @@ export interface Proposal {
 export interface CategoriseDeps {
   readonly client: ModelClient;
   readonly config: LlmConfig;
+  /** The instructions, framing and limits (R-012), read from the controls folder. */
+  readonly controls: Controls;
   /** The clock, in milliseconds. Tests replace it. */
   readonly now: () => number;
 }
@@ -93,7 +96,7 @@ function checkOptions(options: unknown): LlmError | undefined {
 }
 
 /** Checks the input's own fields, including the ids the guard will later enforce, before any model call is paid for. */
-function checkInput(input: unknown): LlmError | undefined {
+function checkInput(input: unknown, guard: GuardSettings): LlmError | undefined {
   if (!isObject(input)) return config('categorise input: must be an object like { text, graphId, itemId, categories }');
   for (const key of Object.keys(input)) if (!INPUT_FIELDS.includes(key)) return config(`categorise input: unknown field "${key}"`);
   const { graphId, itemId, requestId, categories } = input;
@@ -104,6 +107,7 @@ function checkInput(input: unknown): LlmError | undefined {
   const probe = guardReply(
     { kind: 'json', value: { ops: [{ op: 'upsertNode', partition: 'item', id: itemId }, { op: 'link', item: itemId, category: 'probe' }] } },
     { graphId, itemId, ...(requestId === undefined ? {} : { requestId }) },
+    guard,
   );
   return probe.ok ? undefined : config(`categorise input.graphId, itemId or requestId: ${probe.error.message.replace('The reply was not accepted: ', '')}`);
 }
@@ -151,9 +155,10 @@ async function run(
 ): Promise<Result<Proposal, LlmError>> {
   const optionProblem = checkOptions(options);
   if (optionProblem !== undefined) return err(optionProblem);
-  const inputProblem = checkInput(input);
+  const limits = deps.controls.categorise.settings;
+  const inputProblem = checkInput(input, guardSettingsOf(limits));
   if (inputProblem !== undefined) return err(inputProblem);
-  const settings = { ...DEFAULT_CATEGORISE_OPTIONS, maxOps: DEFAULT_PROMPT_OPTIONS.maxOps, ...options };
+  const settings = { ...DEFAULT_CATEGORISE_OPTIONS, maxOps: limits.maxOps, ...options };
 
   const model = resolveModel(deps.config, 'categorise', {
     ...(settings.model === undefined ? {} : { model: settings.model }),
@@ -164,6 +169,7 @@ async function run(
   const context = buildContext({ categories: input.categories, allowedOps: CATEGORISE_OPS }, options?.context);
   if (!context.ok) return context;
   const prompt = buildPrompt(
+    deps.controls.categorise,
     { text: input.text, context: context.value.text, itemId: input.itemId },
     {
       maxOps: settings.maxOps,
@@ -208,7 +214,7 @@ async function run(
       return failed(llmError('MODEL_ERROR', 'the model client returned a reply that is not a valid response'));
     }
     emit({ type: 'response', attempt: number, output: response.output, usage: response.usage, model: response.model, elapsedMs: deps.now() - asked });
-    const verdict = inspectReply(response.output, guardContext, { maxOps: settings.maxOps });
+    const verdict = inspectReply(response.output, guardContext, { ...guardSettingsOf(limits), maxOps: settings.maxOps });
     emit({ type: 'verdict', attempt: number, accepted: verdict.ok, problems: verdict.ok ? [] : verdict.error });
     return ok({ response, verdict });
   };

@@ -4,6 +4,7 @@ import type { JsonObject } from '../../graph_store/index.js';
 import { createLlm } from '../index.js';
 import { createScriptedModelClient } from '../testing/index.js';
 import { toProviderSchema } from './schema.js';
+import { SHIPPED_CONTROLS } from '../testing/shipped-controls.test-util.js';
 
 const convert = (schema: Record<string, unknown>) => {
   const r = toProviderSchema(schema as never);
@@ -103,7 +104,7 @@ describe('toProviderSchema: purity', () => {
 /** The schema the categoriser really sends, captured from a call made through the public API. */
 async function categoriserSchema(): Promise<JsonObject> {
   const client = createScriptedModelClient([{ refusal: true }]);
-  await createLlm({ client }).categorise({ text: 'a note', graphId: 'g', itemId: 'note-1', categories: [] });
+  await createLlm({ controls: SHIPPED_CONTROLS, client }).categorise({ text: 'a note', graphId: 'g', itemId: 'note-1', categories: [] });
   const schema = client.requests[0]?.outputSchema;
   if (schema === undefined) throw new Error('the categoriser sent no schema');
   return schema;

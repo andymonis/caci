@@ -5,6 +5,7 @@ import { describeGraph, query, write } from '../graph_store/index.js';
 import { createDemoModelClient, createLlm } from '../llm/index.js';
 import { ownErrorOf, world, type World } from './controller.test-util.js';
 import type { ModelClient } from '../llm/index.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 const must = <T>(r: { ok: boolean; value?: T; error?: unknown }): T => {
   if (!r.ok) throw new Error(`expected success: ${JSON.stringify(r.error)}`);
@@ -97,7 +98,7 @@ describe('a circle scope', () => {
   it('without a scope resolver only personal works: a circle is simply not found', async () => {
     const w = await setup();
     const c = await w.circle(1, 'ann');
-    const capture = createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }) });
+    const capture = createController({ adapter: w.graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() }) });
     const bare = createCaciController({ users: w.users, capture, graphAdapter: w.graphs });
     expect(await bare.propose(w.tokens.ann, { text: NOTE, scope: circleScope(c) })).toEqual({ ok: false, error: NO_CIRCLE });
     expect((await bare.propose(w.tokens.ann, { text: NOTE })).ok).toBe(true);
@@ -248,7 +249,7 @@ describe('how scope problems are put', () => {
   it('a resolver that answers with each kind of failure is turned into this controller\'s words', async () => {
     const w = await setup();
     const c = await w.circle(1, 'ann');
-    const capture = createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }) });
+    const capture = createController({ adapter: w.graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() }) });
     const answering = (error: { code: string; message: string; field?: string }) =>
       createCaciController({ users: w.users, capture, graphAdapter: w.graphs, scopes: { who: async () => ({ ok: true, value: 'x' }), resolve: async () => ({ ok: false, error }) } as never });
     const ask = (error: { code: string; message: string; field?: string }) => answering(error).propose(w.tokens.ann, { text: NOTE, scope: circleScope(c) });

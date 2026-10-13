@@ -3,7 +3,7 @@ import { type LlmError } from '../../errors.js';
 import type { ModelOutput } from '../../model-client.js';
 import { rejectionError } from '../../text-blocks.js';
 import { CATEGORISE_OPS, type AllowedOp } from './context.js';
-import { DEFAULT_PROMPT_OPTIONS } from './prompt.js';
+import type { CategoriseSettings } from '../../controls/settings.js';
 
 /** What the controller knows and the model must not choose. */
 export interface GuardContext {
@@ -23,13 +23,13 @@ export interface GuardOptions {
   readonly maxRationaleChars?: number;
 }
 
-export const DEFAULT_GUARD_OPTIONS = Object.freeze({
-  maxOps: DEFAULT_PROMPT_OPTIONS.maxOps,
-  maxDataBytes: 2048,
-  maxIdLength: 128,
-  maxOutputChars: 32_000,
-  maxRationaleChars: 500,
-});
+/** What the guard enforces, all of it: it comes from the controls' settings (and per call, from the options), never from constants here. */
+export type GuardSettings = Required<GuardOptions>;
+
+/** The guard's settings from the controls, so the guard, the prompt and the schema all follow the same numbers. */
+export function guardSettingsOf(settings: CategoriseSettings): GuardSettings {
+  return { maxOps: settings.maxOps, maxDataBytes: settings.maxDataBytes, maxIdLength: settings.maxIdLength, maxOutputChars: settings.maxOutputChars, maxRationaleChars: settings.maxRationaleChars };
+}
 
 /** A reply that passed every check: a mutation the controller can preview, and the model's reason. */
 export interface GuardedReply {
@@ -114,9 +114,9 @@ function checkShape(value: unknown, context: GuardContext, options: Required<Gua
  * unexpected (prose, extra fields, other operations) rejects the whole reply; nothing is repaired
  * or dropped silently.
  */
-export function inspectReply(output: ModelOutput, context: GuardContext, options: GuardOptions = {}): Result<GuardedReply, readonly string[]> {
+export function inspectReply(output: ModelOutput, context: GuardContext, options: GuardSettings): Result<GuardedReply, readonly string[]> {
   try {
-    const settings: Required<GuardOptions> = { ...DEFAULT_GUARD_OPTIONS, ...options };
+    const settings = options;
     const raw = readValue(output, settings.maxOutputChars);
     if (!raw.ok) return raw;
     const { problems, ops, rationale } = checkShape(raw.value, context, settings);
@@ -144,7 +144,7 @@ export function inspectReply(output: ModelOutput, context: GuardContext, options
 }
 
 /** Like `inspectReply`, but a rejection is a `BAD_OUTPUT` error whose message numbers the first problems. */
-export function guardReply(output: ModelOutput, context: GuardContext, options: GuardOptions = {}): Result<GuardedReply, LlmError> {
+export function guardReply(output: ModelOutput, context: GuardContext, options: GuardSettings): Result<GuardedReply, LlmError> {
   const inspected = inspectReply(output, context, options);
   return inspected.ok ? inspected : err(rejectionError(inspected.error));
 }

@@ -28,7 +28,7 @@ const ASSEMBLY: readonly string[] = Object.freeze(['llm/index.ts', 'llm/create-l
 const APP_MAY_USE: readonly string[] = Object.freeze(['graph_store/index']);
 const APP_TEST_MAY_USE: readonly string[] = Object.freeze(['graph_store/index', 'graph_store/adapters/memory/index', 'graph_store/adapters/sqlite/index']);
 const APP_LLM: readonly string[] = Object.freeze(['llm/index']);
-const APP_TEST_LLM: readonly string[] = Object.freeze(['llm/index', 'llm/testing/index']);
+const APP_TEST_LLM: readonly string[] = Object.freeze(['llm/index', 'llm/testing/index', 'llm/testing/shipped-controls.test-util']);
 
 /** Describes every dependency that breaks the rules. `files` maps a path under src (like `llm/x.ts`) to its source. */
 export function violations(files: Record<string, string>): string[] {
@@ -448,7 +448,7 @@ describe('no ambient input', () => {
   it.each(['llm', 'app', 'sharing', 'scopes'])('keeps the %s component free of environment and file access', (component) => {
     const files = sourcesUnder(join(srcRoot, component));
     const offenders = Object.entries(files)
-      .filter(([file]) => !file.endsWith('.test.ts'))
+      .filter(([file]) => !file.endsWith('.test.ts') && !file.endsWith('.test-util.ts'))
       .filter(([, source]) => forbidden.some((pattern) => pattern.test(source)))
       .map(([file]) => file);
     expect(Object.keys(files).length).toBeGreaterThan(2);

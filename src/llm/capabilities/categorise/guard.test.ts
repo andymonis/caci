@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelOutput } from '../../model-client.js';
-import { DEFAULT_GUARD_OPTIONS, guardReply, type GuardContext, type GuardOptions } from './guard.js';
+import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
+import { guardReply, guardSettingsOf, type GuardContext, type GuardOptions } from './guard.js';
+
+const SETTINGS = guardSettingsOf(SHIPPED_CONTROLS.categorise.settings);
 
 const CONTEXT: GuardContext = { graphId: 'my-notes', itemId: 'note-1', requestId: 'req-7' };
 const ITEM = { op: 'upsertNode', partition: 'item', id: 'note-1', data: { title: 'Dr X visit', summary: 'Follow up on blood test.' } };
@@ -10,7 +13,7 @@ const GOOD = { ops: [ITEM, CATEGORY, LINK], rationale: 'It is about a doctor.' }
 
 const json = (value: unknown): ModelOutput => ({ kind: 'json', value: value as never });
 const text = (value: string): ModelOutput => ({ kind: 'text', text: value });
-const guard = (output: ModelOutput, options?: GuardOptions, context: GuardContext = CONTEXT) => guardReply(output, context, options);
+const guard = (output: ModelOutput, options?: GuardOptions, context: GuardContext = CONTEXT) => guardReply(output, context, { ...SETTINGS, ...options });
 const message = (output: ModelOutput, options?: GuardOptions): string => {
   const r = guard(output, options);
   if (r.ok) throw new Error('expected a rejection');
@@ -233,8 +236,10 @@ describe('size limits', () => {
     expect(() => guard(json({ ops: [{ ...ITEM, data: nested as never }, LINK] }))).not.toThrow();
   });
 
-  it('exposes its defaults', () => {
-    expect(DEFAULT_GUARD_OPTIONS).toEqual({ maxOps: 25, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32_000, maxRationaleChars: 500 });
+  it('takes its limits from the controls and from nowhere else', () => {
+    expect(SETTINGS).toEqual({ maxOps: 25, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32_000, maxRationaleChars: 500 });
+    const tight = guardSettingsOf({ ...SHIPPED_CONTROLS.categorise.settings, maxOps: 2, maxOutputChars: 1500, maxRationaleChars: 5, maxIdLength: 10, maxDataBytes: 500 });
+    expect(tight).toEqual({ maxOps: 2, maxDataBytes: 500, maxIdLength: 10, maxOutputChars: 1500, maxRationaleChars: 5 });
   });
 });
 
@@ -263,22 +268,22 @@ describe('never throws', () => {
   it('survives hostile objects, getters and odd contexts', () => {
     const getter = { get ops(): never { throw new Error('boom'); } };
     expect(guard(json(getter))).toMatchObject({ ok: false, error: { code: 'BAD_OUTPUT' } });
-    expect(guardReply(json(GOOD), { graphId: 'Bad Graph!', itemId: 'note-1' })).toMatchObject({ ok: false });
-    expect(guardReply(json(GOOD), null as never)).toMatchObject({ ok: false });
-    expect(guardReply(null as never, CONTEXT)).toMatchObject({ ok: false });
+    expect(guardReply(json(GOOD), { graphId: 'Bad Graph!', itemId: 'note-1' }, SETTINGS)).toMatchObject({ ok: false });
+    expect(guardReply(json(GOOD), null as never, SETTINGS)).toMatchObject({ ok: false });
+    expect(guardReply(null as never, CONTEXT, SETTINGS)).toMatchObject({ ok: false });
   });
 });
 
 describe('inspectReply: the complete list of problems', () => {
   it('is the accepted reply when there are none', async () => {
     const { inspectReply } = await import('./guard.js');
-    const r = inspectReply(json(GOOD), CONTEXT);
+    const r = inspectReply(json(GOOD), CONTEXT, SETTINGS);
     expect(r.ok && r.value.mutation.ops).toHaveLength(3);
   });
 
   it('lists every problem, where the error message shows only five', async () => {
     const { inspectReply } = await import('./guard.js');
-    const r = inspectReply(json({ ops: Array.from({ length: 9 }, () => ({ op: 'deleteNode' })) }), CONTEXT);
+    const r = inspectReply(json({ ops: Array.from({ length: 9 }, () => ({ op: 'deleteNode' })) }), CONTEXT, SETTINGS);
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error.length).toBeGreaterThan(9);
@@ -288,14 +293,14 @@ describe('inspectReply: the complete list of problems', () => {
 
   it('gives one problem for text that is not JSON, and for an oversized reply', async () => {
     const { inspectReply } = await import('./guard.js');
-    expect(inspectReply(text('hello'), CONTEXT)).toMatchObject({ ok: false, error: [expect.stringContaining('not a single JSON object')] });
-    expect(inspectReply(text('x'.repeat(40_000)), CONTEXT)).toMatchObject({ ok: false, error: [expect.stringContaining('over the limit of 32000')] });
+    expect(inspectReply(text('hello'), CONTEXT, SETTINGS)).toMatchObject({ ok: false, error: [expect.stringContaining('not a single JSON object')] });
+    expect(inspectReply(text('x'.repeat(40_000)), CONTEXT, SETTINGS)).toMatchObject({ ok: false, error: [expect.stringContaining('over the limit of 32000')] });
   });
 
   it('agrees with guardReply: the same reasons, the same acceptance', async () => {
     const { inspectReply, rejectionError } = await import('./guard.js');
     for (const reply of [GOOD, BAD_CASE, { ops: [] }, { ...GOOD, extra: 1 }]) {
-      const inspected = inspectReply(json(reply), CONTEXT);
+      const inspected = inspectReply(json(reply), CONTEXT, SETTINGS);
       const guarded = guard(json(reply));
       expect(inspected.ok).toBe(guarded.ok);
       if (!inspected.ok && !guarded.ok) expect(guarded.error).toEqual(rejectionError(inspected.error));

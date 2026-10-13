@@ -3,6 +3,7 @@ import { describeGraph, query, type AdapterTx, type StorageAdapter } from '../gr
 import { createDemoModelClient, llmError, type ModelClient } from '../llm/index.js';
 import { ownErrorOf, world, PW, type World } from './controller.test-util.js';
 import type { ApprovedView, ProposalView } from './index.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 const must = <T>(r: { ok: boolean; value?: T; error?: unknown }): T => {
   if (!r.ok) throw new Error(`expected success: ${JSON.stringify(r.error)}`);
@@ -245,7 +246,7 @@ describe('what a restart does', () => {
     const { createController } = await import('../app/index.js');
     const { createLlm } = await import('../llm/index.js');
     const { createCaciController } = await import('./index.js');
-    const after = createCaciController({ users: w.users, graphAdapter: w.graphs, capture: createController({ adapter: w.graphs, llm: createLlm({ client: createDemoModelClient() }), now: () => w.now.value }), clock: () => w.now.value });
+    const after = createCaciController({ users: w.users, graphAdapter: w.graphs, capture: createController({ adapter: w.graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient() }), now: () => w.now.value }), clock: () => w.now.value });
     expect(ownErrorOf(await after.get(w.tokens.ann, pending.id))).toMatchObject({ code: 'NOT_FOUND' });
     expect(ownErrorOf(await after.approve(w.tokens.ann, pending.id))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await describeGraph(w.graphs, w.graphIds.ann as string)).toMatchObject({ value: { itemCount: 1 } });

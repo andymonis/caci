@@ -2,7 +2,14 @@ import { Ajv2020 } from 'ajv/dist/2020.js';
 import { describe, expect, it } from 'vitest';
 import { mutationJsonSchema } from '../../../graph_store/index.js';
 import { buildContext, CATEGORISE_OPS } from './context.js';
-import { buildOutputSchema, buildPrompt, buildSystemPrompt, buildUserMessage, DEFAULT_PROMPT_OPTIONS, escapeForBlock, type PromptInput } from './prompt.js';
+import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
+import { buildOutputSchema, buildPrompt as buildPromptWith, buildSystemPrompt as buildSystemPromptWith, buildUserMessage as buildUserMessageWith, escapeForBlock, type PromptInput } from './prompt.js';
+
+const CONTROLS = SHIPPED_CONTROLS.categorise;
+const SETTINGS = CONTROLS.settings;
+const buildPrompt = (input: PromptInput, options?: Parameters<typeof buildPromptWith>[2]) => buildPromptWith(CONTROLS, input, options);
+const buildSystemPrompt = (itemId: string, ops: Parameters<typeof buildSystemPromptWith>[2], maxOps: number) => buildSystemPromptWith(CONTROLS, itemId, ops, maxOps);
+const buildUserMessage = (context: string, text: string) => buildUserMessageWith(CONTROLS, context, text);
 
 const ITEM_ID = 'note-01j8zk3q7m';
 const TEXT = 'Saw Dr X on Tuesday about the blood test results. Need to book a follow-up.';
@@ -20,7 +27,7 @@ function context(): string {
   return r.value.text;
 }
 const input = (extra: Partial<PromptInput> = {}): PromptInput => ({ text: TEXT, context: context(), itemId: ITEM_ID, ...extra });
-function prompt(extra: Partial<PromptInput> = {}, options?: Parameters<typeof buildPrompt>[1]) {
+function prompt(extra: Partial<PromptInput> = {}, options?: Parameters<typeof buildPromptWith>[2]) {
   const r = buildPrompt(input(extra), options);
   if (!r.ok) throw new Error(`prompt failed: ${r.error.message}`);
   return r.value;
@@ -106,7 +113,7 @@ describe('the system prompt does not depend on the note or the graph', () => {
     expect(buildSystemPrompt('a2', CATEGORISE_OPS, 25)).not.toBe(base);
     expect(buildSystemPrompt('a1', CATEGORISE_OPS, 26)).not.toBe(base);
     expect(buildSystemPrompt('a1', ['link'], 25)).not.toBe(base);
-    expect(buildSystemPrompt('a1', ['link'], 25)).not.toContain('upsertNode');
+    expect(buildSystemPrompt('a1', ['link'], 25)).toContain('Allowed operations: link.');
     expect(buildSystemPrompt('a1', CATEGORISE_OPS, 25)).toBe(base);
   });
 });
@@ -228,7 +235,7 @@ describe('what is refused', () => {
 
 describe('the output schema is the real mutation schema, narrowed', () => {
   const schema = () => {
-    const r = buildOutputSchema(CATEGORISE_OPS, DEFAULT_PROMPT_OPTIONS.maxOps);
+    const r = buildOutputSchema(SETTINGS, CATEGORISE_OPS, SETTINGS.maxOps);
     if (!r.ok) throw new Error(r.error.message);
     return r.value;
   };
@@ -289,9 +296,9 @@ describe('the output schema is the real mutation schema, narrowed', () => {
   });
 
   it('can be narrowed to fewer operations, and an unknown one is an error', () => {
-    const onlyLink = buildOutputSchema(['link'], 5);
+    const onlyLink = buildOutputSchema(SETTINGS, ['link'], 5);
     expect(onlyLink.ok && JSON.stringify(onlyLink.value)).not.toContain('upsertNode');
-    expect(buildOutputSchema(['deleteNode' as never], 5)).toMatchObject({ ok: false, error: { code: 'CONFIG', message: expect.stringContaining('deleteNode') } });
+    expect(buildOutputSchema(SETTINGS, ['deleteNode' as never], 5)).toMatchObject({ ok: false, error: { code: 'CONFIG', message: expect.stringContaining('deleteNode') } });
   });
 
   it('is independent of the real schema object (changing it changes nothing)', () => {
@@ -307,7 +314,7 @@ describe('the output schema is the real mutation schema, narrowed', () => {
 
 describe('the data each kind of node may carry', () => {
   const validate = () => {
-    const r = buildOutputSchema(CATEGORISE_OPS, 25);
+    const r = buildOutputSchema(SETTINGS, CATEGORISE_OPS, 25);
     if (!r.ok) throw new Error(r.error.message);
     return new Ajv2020({ strict: false }).compile(r.value);
   };
@@ -344,7 +351,7 @@ describe('the data each kind of node may carry', () => {
   });
 
   it('every object in the schema is closed, as providers that enforce a schema require', () => {
-    const r = buildOutputSchema(CATEGORISE_OPS, 25);
+    const r = buildOutputSchema(SETTINGS, CATEGORISE_OPS, 25);
     if (!r.ok) throw new Error(r.error.message);
     const open: string[] = [];
     const walk = (node: unknown, path: string): void => {

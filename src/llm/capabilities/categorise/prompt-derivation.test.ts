@@ -10,18 +10,21 @@ vi.mock('../../../graph_store/index.js', async (importActual) => {
   return { ...actual, mutationJsonSchema: () => ((globalThis as { __brokenShape?: boolean }).__brokenShape ? {} : changed) };
 });
 
+import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
 import { buildOutputSchema } from './prompt.js';
+
+const SETTINGS = SHIPPED_CONTROLS.categorise.settings;
 
 describe('the output schema follows the real schema', () => {
   it('picks up a field added to the real operation definition', () => {
-    const r = buildOutputSchema(['link'], 5);
+    const r = buildOutputSchema(SETTINGS, ['link'], 5);
     expect(r.ok && JSON.stringify(r.value)).toContain('"confidence"');
   });
 
   it('is a CONFIG error, not a wrong schema, if the real schema changes shape', () => {
     (globalThis as { __brokenShape?: boolean }).__brokenShape = true;
     try {
-      expect(buildOutputSchema(['link'], 5)).toMatchObject({ ok: false, error: { code: 'CONFIG', message: expect.stringContaining('expected shape') } });
+      expect(buildOutputSchema(SETTINGS, ['link'], 5)).toMatchObject({ ok: false, error: { code: 'CONFIG', message: expect.stringContaining('expected shape') } });
     } finally {
       (globalThis as { __brokenShape?: boolean }).__brokenShape = false;
     }

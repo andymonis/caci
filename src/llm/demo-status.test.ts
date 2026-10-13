@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoModelClient } from './demo-client.js';
 import { createLlm, type StatusEntry } from './index.js';
+import { SHIPPED_CONTROLS } from './testing/shipped-controls.test-util.js';
 
 const NOW = Date.UTC(2026, 9, 15, 7, 30, 0);
-const llm = createLlm({ client: createDemoModelClient(), now: () => NOW });
+const llm = createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient(), now: () => NOW });
 const ENTRIES: StatusEntry[] = [
   { where: 'personal', text: 'Dentist appointment: Friday morning at 9', when: NOW - 86_400_000 },
   { where: 'circle "Parent care"', text: 'Mum: new tablets from the pharmacy, one a day with food', when: NOW - 2 * 86_400_000 },
@@ -56,9 +57,9 @@ describe('the demo model answers a status request', () => {
 
   it('uses the day in the person\'s time zone', async () => {
     const late = Date.UTC(2026, 9, 14, 23, 30, 0);
-    const there = await createLlm({ client: createDemoModelClient(), now: () => late }).status({ text: 'hi', entries: [], timeZone: 'Asia/Tokyo' });
+    const there = await createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient(), now: () => late }).status({ text: 'hi', entries: [], timeZone: 'Asia/Tokyo' });
     expect(there.ok && there.value.headline).toContain('Thursday 15 October 2026');
-    const here = await createLlm({ client: createDemoModelClient(), now: () => late }).status({ text: 'hi', entries: [], timeZone: 'UTC' });
+    const here = await createLlm({ controls: SHIPPED_CONTROLS, client: createDemoModelClient(), now: () => late }).status({ text: 'hi', entries: [], timeZone: 'UTC' });
     expect(here.ok && here.value.headline).toContain('Wednesday 14 October 2026');
   });
 

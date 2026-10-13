@@ -3,9 +3,13 @@ import * as app from '../../src/app/index.ts';
 import * as anthropic from '../../src/llm/anthropic/index.ts';
 import * as llm from '../../src/llm/index.ts';
 import * as testing from '../../src/llm/testing/index.ts';
+import * as controlsFiles from '../../src/service/controls-files.ts';
+import { loadControlsOrThrow, withControls } from '../shared/controls.mjs';
 
+
+const createLlmWithControls = withControls(llm.createLlm, loadControlsOrThrow(controlsFiles));
 export const lib = {
-  createLlm: llm.createLlm,
+  createLlm: createLlmWithControls,
   DEFAULT_TIERS: llm.DEFAULT_TIERS,
   createScriptedModelClient: testing.createScriptedModelClient,
   createAnthropicClient: anthropic.createAnthropicClient,

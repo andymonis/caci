@@ -7,6 +7,7 @@ import type { ModelClient, ModelRequest, ModelResponse } from '../../model-clien
 import type { TraceEvent } from '../../trace.js';
 import { createScriptedModelClient, type ScriptStep } from '../../testing/index.js';
 import type { StatusInput } from './status.js';
+import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
 
 const NOW = Date.UTC(2026, 9, 15, 7, 30, 0);
 const INPUT: StatusInput = {
@@ -22,7 +23,7 @@ const BAD = { headline: 'x', points: [{ text: 'cites a note that is not there', 
 const reply = (value: unknown, extra: Partial<Extract<ScriptStep, { reply: string }>> = {}): ScriptStep => ({ reply: JSON.stringify(value), ...extra });
 const setup = (script: Parameters<typeof createScriptedModelClient>[0], init: { now?: () => number } = {}) => {
   const client = createScriptedModelClient(script);
-  return { client, llm: createLlm({ client, now: () => NOW, ...init }) };
+  return { client, llm: createLlm({ controls: SHIPPED_CONTROLS, client, now: () => NOW, ...init }) };
 };
 function custom(handler: (request: ModelRequest, n: number) => Promise<unknown> | unknown) {
   const requests: ModelRequest[] = [];
@@ -32,7 +33,7 @@ function custom(handler: (request: ModelRequest, n: number) => Promise<unknown> 
       return (await handler(request, requests.length)) as never;
     },
   };
-  return { requests, llm: createLlm({ client, now: () => NOW }) };
+  return { requests, llm: createLlm({ controls: SHIPPED_CONTROLS, client, now: () => NOW }) };
 }
 const textAnswer = (text: string, usage = { inputTokens: 10, outputTokens: 5 }): ReturnType<typeof ok<ModelResponse>> => ok({ model: 'm', output: { kind: 'text', text }, usage });
 
@@ -108,7 +109,7 @@ describe('status: choosing the model', () => {
     const config = createLlmConfig({ capabilities: { status: { tier: 'fast' } } });
     if (!config.ok) throw new Error('config');
     const client = createScriptedModelClient([reply(GOOD)]);
-    await createLlm({ client, config: config.value, now: () => NOW }).status(INPUT);
+    await createLlm({ controls: SHIPPED_CONTROLS, client, config: config.value, now: () => NOW }).status(INPUT);
     expect(client.requests[0]?.model).toBe(DEFAULT_TIERS.fast);
   });
 });
@@ -179,7 +180,7 @@ describe('status: time and cancellation', () => {
     expect(client.callCount).toBe(1);
   });
   it('a call that hangs ends with TIMEOUT, and a cancelled signal never starts', async () => {
-    const hung = await createLlm({ client: createScriptedModelClient([{ hang: true }]) }).status(INPUT, { timeoutMs: 50 });
+    const hung = await createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([{ hang: true }]) }).status(INPUT, { timeoutMs: 50 });
     expect(!hung.ok && hung.error.code).toBe('TIMEOUT');
     const controller = new AbortController();
     controller.abort();
@@ -202,7 +203,7 @@ describe('status: the clock, the signal and surprises', () => {
         return seen.length === 1 ? textAnswer(JSON.stringify(BAD)) : textAnswer(JSON.stringify(GOOD));
       },
     };
-    const r = await createLlm({ client, now: () => clock }).status(INPUT, { timeoutMs: 1000, signal: controller.signal });
+    const r = await createLlm({ controls: SHIPPED_CONTROLS, client, now: () => clock }).status(INPUT, { timeoutMs: 1000, signal: controller.signal });
     expect(r.ok).toBe(true);
     expect(seen[0]?.timeoutMs).toBe(1000);
     expect(seen[1]?.timeoutMs).toBe(600);
@@ -300,7 +301,7 @@ describe('status: the trace', () => {
 
 describe('createLlm', () => {
   it('has status beside categorise', () => {
-    const llm = createLlm({ client: createScriptedModelClient([]) });
+    const llm = createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([]) });
     expect(Object.keys(llm)).toEqual(['categorise', 'status']);
   });
 });

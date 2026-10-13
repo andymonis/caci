@@ -16,6 +16,8 @@ const app = await import('../../dist/app/index.js');
 const llm = await import('../../dist/llm/index.js');
 const testing = await import('../../dist/llm/testing/index.js');
 const anthropic = await import('../../dist/llm/anthropic/index.js');
+const controls = (await import('../shared/controls.mjs')).loadControlsOrThrow(await import('../../dist/service/controls-files.js'));
+const { withControls } = await import('../shared/controls.mjs');
 
 const realModel = process.argv.includes('--real-model');
 const key = realModel ? anthropic.readAnthropicKey(process.env) : null;
@@ -36,7 +38,7 @@ const explorer = createApp(lib, {
   storage: store.storage,
   capture: {
     createController: app.createController,
-    createLlm: llm.createLlm,
+    createLlm: withControls(llm.createLlm, controls),
     createScriptedModelClient: testing.createScriptedModelClient,
     createAnthropicClient: anthropic.createAnthropicClient,
     realModel,

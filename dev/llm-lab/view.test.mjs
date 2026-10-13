@@ -8,13 +8,17 @@ import * as llm from '../../src/llm/index.ts';
 import * as testing from '../../src/llm/testing/index.ts';
 import { createApp } from './app.mjs';
 import { askedLabel, attemptsOf, buildRequest, choiceFrom, compareChoices, compareRows, formatMs, formatTokens, historyLabel, networkSwitch, outputText, parseCategories, promptOf, statusOf } from './public/view.js';
+import * as controlsFiles from '../../src/service/controls-files.ts';
+import { loadControlsOrThrow, withControls } from '../shared/controls.mjs';
 
+
+const createLlmWithControls = withControls(llm.createLlm, loadControlsOrThrow(controlsFiles));
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), 'public');
 
 /** Real records, from the real server code with the scripted model, so the helpers are tested on what they will actually get. */
 async function records(...bodies) {
   const lib = {
-    createLlm: llm.createLlm, CAPABILITIES: llm.CAPABILITIES, MODEL_TIERS: llm.MODEL_TIERS, DEFAULT_TIERS: llm.DEFAULT_TIERS, DEFAULT_ROUTES: llm.DEFAULT_ROUTES,
+    createLlm: createLlmWithControls, CAPABILITIES: llm.CAPABILITIES, MODEL_TIERS: llm.MODEL_TIERS, DEFAULT_TIERS: llm.DEFAULT_TIERS, DEFAULT_ROUTES: llm.DEFAULT_ROUTES,
     createScriptedModelClient: testing.createScriptedModelClient, createAnthropicClient: anthropic.createAnthropicClient, summarise: app.summarise, describeSummary: app.describeSummary,
   };
   const lab = createApp(lib);

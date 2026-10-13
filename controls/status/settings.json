@@ -1,0 +1,17 @@
+{
+  "maxHeadline": 160,
+  "maxPoints": 5,
+  "maxPointChars": 240,
+  "maxRefs": 5,
+  "maxRequestChars": 500,
+  "maxEntries": 500,
+  "maxEntryChars": 1500,
+  "maxTotalChars": 30000,
+  "maxOutputChars": 8000,
+  "descriptions": {
+    "headline": "One line saying how things stand.",
+    "pointText": "One short line.",
+    "refs": "Numbers of the entries this point is based on.",
+    "nothing": "True only when no entry is relevant and points is empty."
+  }
+}

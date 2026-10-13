@@ -9,6 +9,7 @@ import { createLoginThrottle, createMemorySessionStore, createMemoryUserStore, c
 import { createCaptureRoutes, mapCaciError } from './capture-routes.js';
 import { createAccountRoutes } from './routes.js';
 import { createApiServer, type ApiServer } from './server.js';
+import { SHIPPED_CONTROLS } from '../llm/testing/shipped-controls.test-util.js';
 
 const PW = 'correct horse 7 staple';
 const COOKIE = 'caci_session';
@@ -46,7 +47,7 @@ async function start(extra: { mode?: 'demo' | 'anthropic'; client?: ModelClient;
   const inner = extra.client ?? createDemoModelClient();
   const state = { calls: 0 };
   const client: ModelClient = { complete: (request) => (state.calls++, inner.complete(request)) };
-  const capture = createController({ adapter: graphs, llm: createLlm({ client }), now: () => now.value });
+  const capture = createController({ adapter: graphs, llm: createLlm({ controls: SHIPPED_CONTROLS, client }), now: () => now.value });
   const caci = createCaciController({ users, capture, graphAdapter: graphs, clock: () => now.value, ...(extra.mode === undefined ? {} : { mode: extra.mode }), ...(extra.limits === undefined ? {} : { limits: extra.limits }) });
   const secureCookies = extra.secure ?? false;
   const api = createApiServer({ routes: [...createAccountRoutes({ controller: users, secureCookies }), ...createCaptureRoutes({ caci, secureCookies })] });

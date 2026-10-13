@@ -1,4 +1,5 @@
 import { createLlmConfig, type LlmConfig } from './config.js';
+import type { Controls } from './controls/controls.js';
 import { categorise, type CategoriseInput, type CategoriseOptions, type Proposal } from './capabilities/categorise/index.js';
 import { status, type StatusAnswer, type StatusInput, type StatusOptions } from './capabilities/status/index.js';
 import type { LlmError } from './errors.js';
@@ -8,6 +9,8 @@ import type { Result } from '../graph_store/index.js';
 export interface LlmInit {
   /** The only way the component reaches a model. */
   readonly client: ModelClient;
+  /** The instructions, framing and limits for every capability (R-012), from the controls folder. There is no built-in fallback. */
+  readonly controls: Controls;
   /** Which model each capability uses; from `createLlmConfig`. Defaults to the built-in routes. */
   readonly config?: LlmConfig;
   /** The clock in milliseconds, for tests. */
@@ -30,13 +33,17 @@ export function createLlm(init: LlmInit): Llm {
   if (typeof init !== 'object' || init === null || typeof init.client?.complete !== 'function') {
     throw new TypeError('createLlm: `client` must be a ModelClient with a complete() method');
   }
+  const c = init.controls as Partial<Controls> | undefined;
+  if (typeof c !== 'object' || c === null || typeof c.categorise?.system?.text !== 'string' || typeof c.status?.system?.text !== 'string') {
+    throw new TypeError('createLlm: `controls` must be the checked controls from parseControls (there is no built-in text)');
+  }
   let config = init.config;
   if (config === undefined) {
     const defaults = createLlmConfig();
     if (!defaults.ok) throw new TypeError(`createLlm: ${defaults.error.message}`);
     config = defaults.value;
   }
-  const deps = { client: init.client, config, now: init.now ?? Date.now };
+  const deps = { client: init.client, config, controls: init.controls, now: init.now ?? Date.now };
   return Object.freeze({
     categorise: (input: CategoriseInput, options?: CategoriseOptions) => categorise(deps, input, options),
     status: (input: StatusInput, options?: StatusOptions) => status(deps, input, options),

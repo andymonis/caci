@@ -11,7 +11,11 @@ import * as testing from '../../src/llm/testing/index.ts';
 import { createApp } from './app.mjs';
 import { resetLabels, resetTitle, storageLabel } from './public/storage.js';
 import { dbPathFrom, openStorage } from './storage.mjs';
+import * as controlsFiles from '../../src/service/controls-files.ts';
+import { loadControlsOrThrow, withControls } from '../shared/controls.mjs';
 
+
+const createLlmWithControls = withControls(llm.createLlm, loadControlsOrThrow(controlsFiles));
 const lib = { ...library, createMemoryAdapter, createSqliteAdapter };
 const dirs = [];
 const stops = [];
@@ -31,7 +35,7 @@ async function start(argv, capture = true) {
   const explorer = createApp(lib, {
     adapter: store.adapter,
     storage: store.storage,
-    ...(capture ? { capture: { createController: appLayer.createController, createLlm: llm.createLlm, createScriptedModelClient: testing.createScriptedModelClient } } : {}),
+    ...(capture ? { capture: { createController: appLayer.createController, createLlm: createLlmWithControls, createScriptedModelClient: testing.createScriptedModelClient } } : {}),
   });
   const base = `http://127.0.0.1:${await explorer.listen(0)}`;
   stops.push(async () => {
