@@ -1,6 +1,7 @@
 import { err, ok, parseMutation, type JsonValue, type Mutation, type Result } from '../../../graph_store/index.js';
-import { llmError, type LlmError } from '../../errors.js';
+import { type LlmError } from '../../errors.js';
 import type { ModelOutput } from '../../model-client.js';
+import { rejectionError } from '../../text-blocks.js';
 import { CATEGORISE_OPS, type AllowedOp } from './context.js';
 import { DEFAULT_PROMPT_OPTIONS } from './prompt.js';
 
@@ -42,12 +43,9 @@ const FIELDS: Readonly<Record<AllowedOp, readonly string[]>> = Object.freeze({
   link: Object.freeze(['op', 'item', 'category', 'weight']),
 });
 const CONTROLLER_FIELDS: readonly string[] = Object.freeze(['mode', 'ensureNodes', 'graphId', 'requestId', 'createIfMissing', 'version', 'kind']);
-const MAX_PROBLEMS = 5;
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
-/** The error for a rejected reply: up to five numbered problems, so one repair attempt can fix them together. */
-export const rejectionError = (problems: readonly string[]): LlmError =>
-  llmError('BAD_OUTPUT', `The reply was not accepted: ${problems.slice(0, MAX_PROBLEMS).map((p, i) => `(${i + 1}) ${p}`).join(' ')}${problems.length > MAX_PROBLEMS ? ` (and ${problems.length - MAX_PROBLEMS} more)` : ''}`);
+export { rejectionError };
 const unknownKey = (where: string, key: string): string =>
   CONTROLLER_FIELDS.includes(key) ? `${where}: "${key}" is set by the system, not by you; leave it out` : `${where}: unknown field "${key}"`;
 

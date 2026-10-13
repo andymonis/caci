@@ -1,6 +1,7 @@
 import { err, mutationJsonSchema, ok, type JsonObject, type Result } from '../../../graph_store/index.js';
 import { llmError, type LlmError } from '../../errors.js';
 import type { ModelMessage } from '../../model-client.js';
+import { escapeForBlock } from '../../text-blocks.js';
 import { CATEGORISE_OPS, type AllowedOp } from './context.js';
 
 /** What the controller hands over for one note. The note's item id is minted by the controller, never chosen by the model. */
@@ -67,14 +68,7 @@ const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const bad = (where: string, message: string) => err(llmError('CONFIG', `${where}: ${message}`));
 
-/**
- * Makes text safe to place between tags: `&`, `<` and `>` become entities, so nothing inside can
- * look like a tag, and the exact original is recoverable. This is how user text is kept from
- * closing its own block and passing for instructions.
- */
-export function escapeForBlock(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+export { escapeForBlock };
 
 /** The trusted instructions. They depend only on the item id, the operations allowed and the size limit. */
 export function buildSystemPrompt(itemId: string, allowedOps: readonly AllowedOp[], maxOps: number): string {
