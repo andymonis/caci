@@ -26,6 +26,16 @@ export type CapabilityRoute = {
     readonly model: string;
 };
 
+// @public (undocumented)
+export interface CategoriseControls {
+    // (undocumented)
+    readonly frame: Template;
+    // (undocumented)
+    readonly settings: CategoriseSettings;
+    // (undocumented)
+    readonly system: Template;
+}
+
 // @public
 export type CategoriseEvent = TraceEvent;
 
@@ -57,6 +67,36 @@ export interface CategoriseOptions {
     readonly trace?: (event: CategoriseEvent) => void | Promise<void>;
 }
 
+// @public (undocumented)
+export interface CategoriseSettings {
+    // (undocumented)
+    readonly categoryNameMaxChars: number;
+    // (undocumented)
+    readonly descriptions: {
+        readonly title: string;
+        readonly summary: string;
+        readonly name: string;
+    };
+    // (undocumented)
+    readonly maxContextChars: number;
+    // (undocumented)
+    readonly maxDataBytes: number;
+    // (undocumented)
+    readonly maxIdLength: number;
+    // (undocumented)
+    readonly maxOps: number;
+    // (undocumented)
+    readonly maxOutputChars: number;
+    // (undocumented)
+    readonly maxRationaleChars: number;
+    // (undocumented)
+    readonly maxTextChars: number;
+    // (undocumented)
+    readonly summaryMaxChars: number;
+    // (undocumented)
+    readonly titleMaxChars: number;
+}
+
 // @public
 export interface CategoryEntry {
     // Warning: (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
@@ -82,6 +122,20 @@ export interface ContextOptions {
     readonly maxDataChars?: number;
     // (undocumented)
     readonly maxItemsPerCategory?: number;
+}
+
+// @public
+export const CONTROL_FILES: readonly ["categorise/system.txt", "categorise/frame.txt", "categorise/settings.json", "status/system.txt", "status/frame.txt", "status/settings.json"];
+
+// @public (undocumented)
+export type ControlFile = (typeof CONTROL_FILES)[number];
+
+// @public (undocumented)
+export interface Controls {
+    // (undocumented)
+    readonly categorise: CategoriseControls;
+    // (undocumented)
+    readonly status: StatusControls;
 }
 
 // @public
@@ -169,6 +223,9 @@ export interface LlmInit {
     readonly now?: () => number;
 }
 
+// @public (undocumented)
+export const MAX_TEMPLATE_CHARS = 16000;
+
 // @public
 export const MODEL_TIERS: readonly ["fast", "balanced", "deep"];
 
@@ -233,6 +290,18 @@ export type ModelTier = (typeof MODEL_TIERS)[number];
 export const NO_USAGE: TokenUsage;
 
 // @public
+export function parseControls(files: unknown): Result<Controls, readonly string[]>;
+
+// @public
+export function parseTemplate(file: string, source: unknown, rules: TemplateRules): {
+    readonly ok: true;
+    readonly value: Template;
+} | {
+    readonly ok: false;
+    readonly problems: readonly string[];
+};
+
+// @public
 export interface Proposal {
     readonly attempts: 1 | 2;
     readonly model: string;
@@ -247,10 +316,32 @@ export interface Proposal {
 export function readAnthropicKey(env: Readonly<Record<string, string | undefined>>): Result<string, LlmError>;
 
 // @public
+export function renderTemplate(template: Template, values: Readonly<Record<string, string>>): string;
+
+// @public
 export function resolveModel(config: LlmConfig, capability: Capability, choice?: ModelChoice): Result<string, LlmError>;
 
 // @public
 export function runWithDeadline<T>(work: (signal: AbortSignal) => Promise<Result<T, LlmError>>, options: DeadlineOptions): Promise<Result<T, LlmError>>;
+
+// @public
+export const SLOT_RULES: Readonly<{
+    'categorise/system.txt': Readonly<{
+        allowed: string[];
+        required: string[];
+    }>;
+    'categorise/frame.txt': Readonly<{
+        allowed: string[];
+        once: string[];
+    }>;
+    'status/system.txt': Readonly<{
+        allowed: string[];
+    }>;
+    'status/frame.txt': Readonly<{
+        allowed: string[];
+        once: string[];
+    }>;
+}>;
 
 // @public
 export interface StatusAnswer {
@@ -265,6 +356,16 @@ export interface StatusAnswer {
         readonly refs: readonly number[];
     }[];
     readonly usage: TokenUsage;
+}
+
+// @public (undocumented)
+export interface StatusControls {
+    // (undocumented)
+    readonly frame: Template;
+    // (undocumented)
+    readonly settings: StatusSettings;
+    // (undocumented)
+    readonly system: Template;
 }
 
 // @public
@@ -298,6 +399,49 @@ export interface StatusOptions {
     readonly tier?: ModelTier;
     readonly timeoutMs?: number;
     readonly trace?: (event: TraceEvent) => void | Promise<void>;
+}
+
+// @public (undocumented)
+export interface StatusSettings {
+    // (undocumented)
+    readonly descriptions: {
+        readonly headline: string;
+        readonly pointText: string;
+        readonly refs: string;
+        readonly nothing: string;
+    };
+    // (undocumented)
+    readonly maxEntries: number;
+    // (undocumented)
+    readonly maxEntryChars: number;
+    // (undocumented)
+    readonly maxHeadline: number;
+    // (undocumented)
+    readonly maxOutputChars: number;
+    // (undocumented)
+    readonly maxPointChars: number;
+    // (undocumented)
+    readonly maxPoints: number;
+    // (undocumented)
+    readonly maxRefs: number;
+    // (undocumented)
+    readonly maxRequestChars: number;
+    // (undocumented)
+    readonly maxTotalChars: number;
+}
+
+// @public
+export interface Template {
+    readonly parts: readonly string[];
+    readonly slots: readonly string[];
+    readonly text: string;
+}
+
+// @public (undocumented)
+export interface TemplateRules {
+    readonly allowed: readonly string[];
+    readonly once?: readonly string[];
+    readonly required?: readonly string[];
 }
 
 // @public
