@@ -10,7 +10,7 @@ export const MODEL_TIERS = ['fast', 'balanced', 'deep'] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
 /** The things the LLM component can do. A new capability adds its name here and a default route below. */
-export const CAPABILITIES = ['categorise'] as const;
+export const CAPABILITIES = ['categorise', 'status'] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 /** A capability uses either a tier (resolved through the tier table) or one exact model id. */
@@ -38,6 +38,8 @@ export const DEFAULT_TIERS: Readonly<Record<ModelTier, string>> = Object.freeze(
 /** Categorising is a simple job, so it starts on the fast tier. Heavier future capabilities start on `deep`. */
 export const DEFAULT_ROUTES: Readonly<Record<Capability, CapabilityRoute>> = Object.freeze({
   categorise: Object.freeze({ tier: 'fast' }),
+  // A status draws on many notes at once, so it starts on the balanced tier (provisional until the evaluation of T-192).
+  status: Object.freeze({ tier: 'balanced' }),
 });
 
 /** Chosen for one call: it beats the configuration. `model` wins over `tier` if both are given. */

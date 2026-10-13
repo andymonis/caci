@@ -2,7 +2,9 @@
 // Capabilities (categorise, and later others) live in `capabilities/`, one folder each.
 
 export type { CategoriseEvent, CategoriseInput, CategoriseOptions, CategoryEntry, ContextOptions, Proposal } from './capabilities/categorise/index.js';
+export type { StatusAnswer, StatusEntry, StatusInput, StatusOptions } from './capabilities/status/index.js';
 export { createLlm } from './create-llm.js';
+export type { TraceEvent } from './trace.js';
 export type { Llm, LlmInit } from './create-llm.js';
 export { CAPABILITIES, createLlmConfig, DEFAULT_ROUTES, DEFAULT_TIERS, MODEL_TIERS, resolveModel } from './config.js';
 export type { Capability, CapabilityRoute, LlmConfig, LlmConfigInput, ModelChoice, ModelTier } from './config.js';

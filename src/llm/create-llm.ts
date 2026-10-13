@@ -1,5 +1,6 @@
 import { createLlmConfig, type LlmConfig } from './config.js';
 import { categorise, type CategoriseInput, type CategoriseOptions, type Proposal } from './capabilities/categorise/index.js';
+import { status, type StatusAnswer, type StatusInput, type StatusOptions } from './capabilities/status/index.js';
 import type { LlmError } from './errors.js';
 import type { ModelClient } from './model-client.js';
 import type { Result } from '../graph_store/index.js';
@@ -17,6 +18,8 @@ export interface LlmInit {
 export interface Llm {
   /** Suggests how to file one note, as a proposal to preview. Writes nothing. */
   categorise(input: CategoriseInput, options?: CategoriseOptions): Promise<Result<Proposal, LlmError>>;
+  /** Answers a status request from numbered entries of what the person can read: short, in a fixed format, citing the entries by number. Writes nothing. */
+  status(input: StatusInput, options?: StatusOptions): Promise<Result<StatusAnswer, LlmError>>;
 }
 
 /**
@@ -34,5 +37,8 @@ export function createLlm(init: LlmInit): Llm {
     config = defaults.value;
   }
   const deps = { client: init.client, config, now: init.now ?? Date.now };
-  return Object.freeze({ categorise: (input: CategoriseInput, options?: CategoriseOptions) => categorise(deps, input, options) });
+  return Object.freeze({
+    categorise: (input: CategoriseInput, options?: CategoriseOptions) => categorise(deps, input, options),
+    status: (input: StatusInput, options?: StatusOptions) => status(deps, input, options),
+  });
 }

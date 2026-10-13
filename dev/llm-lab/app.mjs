@@ -68,7 +68,8 @@ export function createApp(lib, options = {}) {
   const scrub = (value) => (apiKey === undefined ? value : JSON.parse(JSON.stringify(value).split(apiKey).join('[redacted]')));
 
   const status = () => ({
-    capabilities: [...lib.CAPABILITIES],
+    // the lab runs only the categoriser; a status lab would be new work (the status capability has its own evaluation, T-192)
+    capabilities: lib.CAPABILITIES.filter((c) => c === 'categorise'),
     tiers: Object.fromEntries(lib.MODEL_TIERS.map((tier) => [tier, lib.DEFAULT_TIERS[tier]])),
     routes: Object.fromEntries(lib.CAPABILITIES.map((c) => [c, lib.DEFAULT_ROUTES[c]])),
     scenarios: scenarioNames().map((name) => ({ name, description: SCENARIOS[name].description })),

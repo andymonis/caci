@@ -37,7 +37,11 @@ describe('defaults', () => {
 
   it('routes categorise to the fast tier', () => {
     expect(DEFAULT_ROUTES.categorise).toEqual({ tier: 'fast' });
-    expect([...CAPABILITIES]).toEqual(['categorise']);
+    expect([...CAPABILITIES]).toEqual(['categorise', 'status']);
+  });
+
+  it('routes status to the balanced tier', () => {
+    expect(DEFAULT_ROUTES.status).toEqual({ tier: 'balanced' });
   });
 
   it('a config made with no input is exactly the defaults', () => {
@@ -230,6 +234,6 @@ describe('types', () => {
     const neither: CapabilityRoute = {};
     expect([tier, model, neither]).toHaveLength(3);
     expectTypeOf<ModelTier>().toEqualTypeOf<'fast' | 'balanced' | 'deep'>();
-    expectTypeOf<Capability>().toEqualTypeOf<'categorise'>();
+    expectTypeOf<Capability>().toEqualTypeOf<'categorise' | 'status'>();
   });
 });

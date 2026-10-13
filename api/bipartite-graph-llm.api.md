@@ -14,7 +14,7 @@ export const ANTHROPIC_KEY_SHAPE: RegExp;
 export const ANTHROPIC_KEY_VARIABLE = "ANTHROPIC_API_KEY";
 
 // @public
-export const CAPABILITIES: readonly ["categorise"];
+export const CAPABILITIES: readonly ["categorise", "status"];
 
 // @public (undocumented)
 export type Capability = (typeof CAPABILITIES)[number];
@@ -27,56 +27,7 @@ export type CapabilityRoute = {
 };
 
 // @public
-export type CategoriseEvent =
-/** What was built to send: the fixed instructions, the messages and the output schema. */
-    {
-    readonly type: 'prompt';
-    readonly system: string;
-    readonly messages: readonly ModelMessage[];
-    readonly schema: JsonObject;
-}
-/** A call to the model is about to be made. Attempt 2 is the repair. */
-| {
-    readonly type: 'request';
-    readonly attempt: 1 | 2;
-    readonly model: string;
-    readonly timeoutMs: number;
-    readonly messages: readonly ModelMessage[];
-} | {
-    readonly type: 'response';
-    readonly attempt: 1 | 2;
-    readonly output: ModelOutput;
-    readonly usage: TokenUsage;
-    readonly model: string;
-    readonly elapsedMs: number;
-}
-/** The call failed (a provider error, a time-out, a cancellation). */
-| {
-    readonly type: 'failure';
-    readonly attempt: 1 | 2;
-    readonly error: LlmError;
-    readonly elapsedMs: number;
-}
-/** What the output guard made of a reply: accepted, or every problem it found. */
-| {
-    readonly type: 'verdict';
-    readonly attempt: 1 | 2;
-    readonly accepted: boolean;
-    readonly problems: readonly string[];
-}
-/** The reasons being sent back for the repair attempt. */
-| {
-    readonly type: 'repair';
-    readonly feedback: string;
-}
-/** Always last, once per call. `attempts` is how many calls to the model were started. */
-| {
-    readonly type: 'done';
-    readonly ok: boolean;
-    readonly attempts: number;
-    readonly elapsedMs: number;
-    readonly error?: LlmError;
-};
+export type CategoriseEvent = TraceEvent;
 
 // @public
 export interface CategoriseInput {
@@ -108,6 +59,8 @@ export interface CategoriseOptions {
 
 // @public
 export interface CategoryEntry {
+    // Warning: (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
+    //
     // (undocumented)
     readonly data?: JsonObject;
     // (undocumented)
@@ -161,6 +114,7 @@ export function isValidUsage(usage: TokenUsage): boolean;
 // @public
 export interface Llm {
     categorise(input: CategoriseInput, options?: CategoriseOptions): Promise<Result<Proposal, LlmError>>;
+    status(input: StatusInput, options?: StatusOptions): Promise<Result<StatusAnswer, LlmError>>;
 }
 
 // @public
@@ -296,6 +250,54 @@ export function resolveModel(config: LlmConfig, capability: Capability, choice?:
 export function runWithDeadline<T>(work: (signal: AbortSignal) => Promise<Result<T, LlmError>>, options: DeadlineOptions): Promise<Result<T, LlmError>>;
 
 // @public
+export interface StatusAnswer {
+    readonly attempts: 1 | 2;
+    // (undocumented)
+    readonly headline: string;
+    readonly model: string;
+    // (undocumented)
+    readonly nothing: boolean;
+    readonly points: readonly {
+        readonly text: string;
+        readonly refs: readonly number[];
+    }[];
+    readonly usage: TokenUsage;
+}
+
+// @public
+export interface StatusEntry {
+    readonly text: string;
+    readonly when?: number;
+    readonly where: string;
+}
+
+// @public
+export interface StatusInput {
+    readonly entries: readonly StatusEntry[];
+    readonly text: string;
+    readonly timeZone?: string;
+}
+
+// @public (undocumented)
+export interface StatusOptions {
+    // (undocumented)
+    readonly maxEntries?: number;
+    // (undocumented)
+    readonly maxEntryChars?: number;
+    readonly maxOutputTokens?: number;
+    // (undocumented)
+    readonly maxRequestChars?: number;
+    // (undocumented)
+    readonly maxTotalChars?: number;
+    readonly model?: string;
+    // (undocumented)
+    readonly signal?: AbortSignal;
+    readonly tier?: ModelTier;
+    readonly timeoutMs?: number;
+    readonly trace?: (event: TraceEvent) => void | Promise<void>;
+}
+
+// @public
 export interface TokenUsage {
     // (undocumented)
     readonly inputTokens: number;
@@ -306,9 +308,60 @@ export interface TokenUsage {
 // @public (undocumented)
 export function totalTokens(usage: TokenUsage): number;
 
+// @public
+export type TraceEvent =
+/** What was built to send: the fixed instructions, the messages and the output schema. */
+    {
+    readonly type: 'prompt';
+    readonly system: string;
+    readonly messages: readonly ModelMessage[];
+    readonly schema: JsonObject;
+}
+/** A call to the model is about to be made. Attempt 2 is the repair. */
+| {
+    readonly type: 'request';
+    readonly attempt: 1 | 2;
+    readonly model: string;
+    readonly timeoutMs: number;
+    readonly messages: readonly ModelMessage[];
+} | {
+    readonly type: 'response';
+    readonly attempt: 1 | 2;
+    readonly output: ModelOutput;
+    readonly usage: TokenUsage;
+    readonly model: string;
+    readonly elapsedMs: number;
+}
+/** The call failed (a provider error, a time-out, a cancellation). */
+| {
+    readonly type: 'failure';
+    readonly attempt: 1 | 2;
+    readonly error: LlmError;
+    readonly elapsedMs: number;
+}
+/** What the output guard made of a reply: accepted, or every problem it found. */
+| {
+    readonly type: 'verdict';
+    readonly attempt: 1 | 2;
+    readonly accepted: boolean;
+    readonly problems: readonly string[];
+}
+/** The reasons being sent back for the repair attempt. */
+| {
+    readonly type: 'repair';
+    readonly feedback: string;
+}
+/** Always last, once per call. `attempts` is how many calls to the model were started. */
+| {
+    readonly type: 'done';
+    readonly ok: boolean;
+    readonly attempts: number;
+    readonly elapsedMs: number;
+    readonly error?: LlmError;
+};
+
 // Warnings were encountered during analysis:
 //
-// dist/llm/capabilities/categorise/categorise.d.ts:49:5 - (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
 // dist/llm/model-client.d.ts:30:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)

@@ -370,7 +370,7 @@ describe('createLlm', () => {
   it('returns a frozen object whose only methods are the capabilities', () => {
     const llm = createLlm({ client: createScriptedModelClient([]) });
     expect(Object.isFrozen(llm)).toBe(true);
-    expect(Object.keys(llm)).toEqual(['categorise']);
+    expect(Object.keys(llm)).toEqual(['categorise', 'status']);
   });
 
   it.each([

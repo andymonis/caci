@@ -1,7 +1,8 @@
-import { err, ok, type JsonObject, type Result } from '../../../graph_store/index.js';
+import { err, ok, type Result } from '../../../graph_store/index.js';
 import { resolveModel, type LlmConfig, type ModelTier } from '../../config.js';
 import { llmError, type LlmError } from '../../errors.js';
 import type { ModelClient, ModelMessage, ModelOutput, ModelResponse } from '../../model-client.js';
+import { makeEmitter, type Emit, type TraceEvent } from '../../trace.js';
 import { addUsage, isValidUsage, NO_USAGE, type TokenUsage } from '../../usage.js';
 import { buildContext, CATEGORISE_OPS, type CategoryEntry, type ContextOptions } from './context.js';
 import { guardReply, inspectReply, rejectionError, type GuardedReply } from './guard.js';
@@ -43,21 +44,8 @@ export interface CategoriseOptions {
   readonly trace?: (event: CategoriseEvent) => void | Promise<void>;
 }
 
-/** One step of a `categorise` call. The data is a copy of what the call really used. */
-export type CategoriseEvent =
-  /** What was built to send: the fixed instructions, the messages and the output schema. */
-  | { readonly type: 'prompt'; readonly system: string; readonly messages: readonly ModelMessage[]; readonly schema: JsonObject }
-  /** A call to the model is about to be made. Attempt 2 is the repair. */
-  | { readonly type: 'request'; readonly attempt: 1 | 2; readonly model: string; readonly timeoutMs: number; readonly messages: readonly ModelMessage[] }
-  | { readonly type: 'response'; readonly attempt: 1 | 2; readonly output: ModelOutput; readonly usage: TokenUsage; readonly model: string; readonly elapsedMs: number }
-  /** The call failed (a provider error, a time-out, a cancellation). */
-  | { readonly type: 'failure'; readonly attempt: 1 | 2; readonly error: LlmError; readonly elapsedMs: number }
-  /** What the output guard made of a reply: accepted, or every problem it found. */
-  | { readonly type: 'verdict'; readonly attempt: 1 | 2; readonly accepted: boolean; readonly problems: readonly string[] }
-  /** The reasons being sent back for the repair attempt. */
-  | { readonly type: 'repair'; readonly feedback: string }
-  /** Always last, once per call. `attempts` is how many calls to the model were started. */
-  | { readonly type: 'done'; readonly ok: boolean; readonly attempts: number; readonly elapsedMs: number; readonly error?: LlmError };
+/** One step of a `categorise` call (see `TraceEvent`). */
+export type CategoriseEvent = TraceEvent;
 
 /** What the model suggests, ready to preview. Nothing has been written. */
 export interface Proposal {
@@ -131,22 +119,6 @@ function describeReply(output: ModelOutput): string {
 interface Attempt {
   readonly response: ModelResponse;
   readonly verdict: Result<GuardedReply, readonly string[]>;
-}
-
-type Emit = (event: CategoriseEvent) => void;
-
-/** Hands events to the trace callback as frozen copies, and swallows anything it does wrong. */
-function makeEmitter(options: unknown): Emit {
-  const trace = isObject(options) && typeof options.trace === 'function' ? (options.trace as (event: CategoriseEvent) => unknown) : undefined;
-  if (trace === undefined) return () => undefined;
-  return (event) => {
-    try {
-      const outcome = trace(Object.freeze(structuredClone(event)));
-      if (typeof (outcome as { then?: unknown } | undefined)?.then === 'function') (outcome as Promise<unknown>).then(undefined, () => undefined);
-    } catch {
-      // a trace is for watching; it must never change what the call does
-    }
-  };
 }
 
 /**
