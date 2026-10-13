@@ -19,6 +19,7 @@ add `--yes`. The key is read once, passed to the client and never printed or sav
 
 | Option | Meaning |
 | --- | --- |
+| `--capability c` | What to evaluate: `categorise` (default) or `status` (R-011) |
 | `--models a,b,c` | Tiers (`fast`, `balanced`, `deep`) or exact model ids. Default: all three tiers |
 | `--repeat n` | Runs per case and model, 1 to 10. Models are not deterministic, so 3 gives a steadier pass rate |
 | `--golden file` | Your own golden set (`.json`, or `.mjs` exporting `GOLDEN`) instead of the built-in one |
@@ -65,3 +66,19 @@ duplicate, links to everything) must fail many (so the checks discriminate).
 | `runner.mjs` | Runs cases on models, one call at a time, using `categorise` and its trace |
 | `report.mjs` | Figures and the side-by-side text report |
 | `scripted.mjs` | The ideal scripted model |
+
+## Evaluating `status`
+
+```
+npm run eval -- --capability status --scripted                      # free: checks the harness
+npm run eval -- --capability status --models fast,balanced,deep     # plans; sends nothing
+npm run eval -- --capability status --models fast,balanced,deep --yes
+```
+
+Six invented cases (`status-golden.mjs`): a morning check, "I am heading into town", nothing relevant, many
+entries over the budget, an instruction hidden in a note, and two circles with conflicting facts. Checks are
+loose and each is reported: the call succeeds, the right entries are cited (and the irrelevant ones are not),
+"nothing relevant" is said exactly when it should be, the number of points is within bounds, no number appears
+that is not in the request or the entries (nothing invented), and a forbidden word (the one the hidden
+instruction asks for) never appears. The default tier for `status` (`balanced`) stays provisional until a
+real run compares the tiers; a real run sends the requests and the notes in the golden set to Anthropic.

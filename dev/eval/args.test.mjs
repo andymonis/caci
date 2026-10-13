@@ -5,12 +5,18 @@ const parse = (...argv) => parseArgs(argv);
 
 describe('parseArgs', () => {
   it('has sensible defaults: all three tiers, one run, real calls need --yes', () => {
-    expect(parse()).toEqual({ ok: true, value: { models: ['fast', 'balanced', 'deep'], repeat: 1, golden: undefined, only: undefined, scripted: false, yes: false, out: 'eval-results', help: false } });
+    expect(parse()).toEqual({ ok: true, value: { capability: 'categorise', models: ['fast', 'balanced', 'deep'], repeat: 1, golden: undefined, only: undefined, scripted: false, yes: false, out: 'eval-results', help: false } });
     expect(DEFAULT_MODELS).toEqual(['fast', 'balanced', 'deep']);
   });
   it('reads every option', () => {
     const r = parse('--models', 'fast, my-model-1', '--repeat', '3', '--golden', 'mine.json', '--only', 'a,b', '--out', 'results', '--yes');
     expect(r.value).toMatchObject({ models: ['fast', 'my-model-1'], repeat: 3, golden: 'mine.json', only: ['a', 'b'], out: 'results', yes: true, scripted: false });
+  });
+  it('reads the capability, and refuses one that does not exist', () => {
+    expect(parse('--capability', 'status').value.capability).toBe('status');
+    expect(parse('--capability', 'categorise').value.capability).toBe('categorise');
+    expect(parse('--capability', 'answer')).toEqual({ ok: false, message: '--capability must be one of: categorise, status' });
+    expect(parse('--capability')).toEqual({ ok: false, message: '--capability needs a value' });
   });
   it('reads the flags', () => {
     expect(parse('--scripted').value.scripted).toBe(true);

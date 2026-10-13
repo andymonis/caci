@@ -2,6 +2,10 @@
 // model, a key, a disk or a clock. `run.mjs` supplies the real ones.
 import { parseArgs, resolveModels, USAGE } from './args.mjs';
 import { validateGolden } from './evaluate.mjs';
+import { validateStatusGolden } from './status-evaluate.mjs';
+import { STATUS_GOLDEN } from './status-golden.mjs';
+import { runStatusEval } from './status-runner.mjs';
+import { idealStatusScript } from './status-scripted.mjs';
 import { GOLDEN } from './golden.mjs';
 import { formatReport } from './report.mjs';
 import { runEval, totalRuns } from './runner.mjs';
@@ -32,7 +36,12 @@ export async function main(io) {
     return 0;
   }
 
-  let cases = GOLDEN;
+  const status = args.capability === 'status';
+  const kit = status
+    ? { golden: STATUS_GOLDEN, validate: validateStatusGolden, run: runStatusEval, script: ({ caseDef }) => lib.createScriptedModelClient(idealStatusScript(caseDef)), sends: 'the requests and notes' }
+    : { golden: GOLDEN, validate: validateGolden, run: runEval, script: ({ caseDef, itemId }) => lib.createScriptedModelClient(idealScript(caseDef, itemId)), sends: 'the notes and category names' };
+
+  let cases = kit.golden;
   if (args.golden !== undefined) {
     try {
       cases = await io.loadGolden(args.golden);
@@ -41,7 +50,7 @@ export async function main(io) {
       return 2;
     }
   }
-  const problems = validateGolden(cases);
+  const problems = kit.validate(cases);
   if (problems.length > 0) {
     stderr(`The golden set has problems:\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
     return 2;
@@ -63,7 +72,7 @@ export async function main(io) {
 
   let makeClient;
   if (args.scripted) {
-    makeClient = ({ caseDef, itemId }) => lib.createScriptedModelClient(idealScript(caseDef, itemId));
+    makeClient = kit.script;
   } else {
     const key = lib.readAnthropicKey(io.env);
     if (!key.ok) {
@@ -75,7 +84,7 @@ export async function main(io) {
         [
           `Planned: ${cases.length} cases × ${models.length} models × ${args.repeat} run${args.repeat === 1 ? '' : 's'} = ${count} real calls.`,
           ...models.map((m) => `  ${m.label} = ${resolved[m.label]}`),
-          'This sends the notes and category names in the golden set to Anthropic and costs money.',
+          `This sends ${kit.sends} in the golden set to Anthropic and costs money.`,
           'Nothing was sent. Add --yes to run it.',
           '',
         ].join('\n'),
@@ -88,7 +97,7 @@ export async function main(io) {
 
   stderr(`Running ${count} ${mode} call${count === 1 ? '' : 's'}…\n`);
   const startedAt = now();
-  const { results, aborted } = await runEval({
+  const { results, aborted } = await kit.run({
     lib,
     cases,
     models,
@@ -103,7 +112,7 @@ export async function main(io) {
 
   const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
   try {
-    const path = await io.save(args.out, `${stamp}-${mode}.json`, { startedAt: new Date(startedAt).toISOString(), mode, repeat: args.repeat, aborted, models: resolved, cases: cases.map((c) => c.id), results });
+    const path = await io.save(args.out, `${stamp}-${status ? 'status-' : ''}${mode}.json`, { capability: args.capability, startedAt: new Date(startedAt).toISOString(), mode, repeat: args.repeat, aborted, models: resolved, cases: cases.map((c) => c.id), results });
     stdout(`\nSaved: ${path}\n`);
   } catch (error) {
     stderr(`Could not save the results: ${error.message}\n`);
