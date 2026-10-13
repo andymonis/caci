@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { guardStatusReply, inspectStatusReply } from './guard.js';
+import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
+import { guardStatusReply as guardWith, inspectStatusReply as inspectWith, statusGuardSettingsOf, type StatusGuardContext, type StatusGuardSettings } from './guard.js';
+
+const LIMITS = statusGuardSettingsOf(SHIPPED_CONTROLS.status.settings);
+const inspectStatusReply = (output: Parameters<typeof inspectWith>[0], context: StatusGuardContext, over: Partial<StatusGuardSettings> = {}) => inspectWith(output, context, { ...LIMITS, ...over });
+const guardStatusReply = (output: Parameters<typeof guardWith>[0], context: StatusGuardContext, over: Partial<StatusGuardSettings> = {}) => guardWith(output, context, { ...LIMITS, ...over });
 
 const json = (value: unknown) => ({ kind: 'json', value }) as never;
 const text = (t: string) => ({ kind: 'text', text: t }) as never;

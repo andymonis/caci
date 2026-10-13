@@ -11,7 +11,7 @@
   "descriptions": {
     "headline": "One line saying how things stand.",
     "pointText": "One short line.",
-    "refs": "Numbers of the entries this point is based on.",
+    "refs": "Numbers of the entries this point is based on",
     "nothing": "True only when no entry is relevant and points is empty."
   }
 }

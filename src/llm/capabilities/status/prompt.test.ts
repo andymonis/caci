@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildStatusOutputSchema, buildStatusPrompt, buildStatusSystemPrompt, buildStatusUserMessage, DEFAULT_STATUS_PROMPT_OPTIONS, describeDay, describeTime, isTimeZone, STATUS_LIMITS, type StatusEntry, type StatusPromptInput } from './prompt.js';
+import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
+import { buildStatusOutputSchema as buildSchemaWith, buildStatusPrompt as buildPromptWith, buildStatusSystemPrompt as buildSystemWith, buildStatusUserMessage as buildUserWith, describeDay, describeTime, isTimeZone, type StatusEntry, type StatusPromptInput } from './prompt.js';
+
+const CONTROLS = SHIPPED_CONTROLS.status;
+const STATUS_LIMITS = CONTROLS.settings;
+const buildStatusPrompt = (input: StatusPromptInput, options?: Parameters<typeof buildPromptWith>[2]) => buildPromptWith(CONTROLS, input, options);
+const buildStatusSystemPrompt = (count: number, now: string) => buildSystemWith(CONTROLS, count, now);
+const buildStatusUserMessage = (entries: readonly StatusEntry[], text: string, zone: string) => buildUserWith(CONTROLS, entries, text, zone);
+const buildStatusOutputSchema = (count: number) => buildSchemaWith(CONTROLS.settings, count);
 
 type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const NOW = Date.UTC(2026, 9, 15, 7, 30, 0); // Thursday 15 October 2026, 07:30 UTC (08:30 in London, BST)
@@ -9,7 +17,7 @@ const ENTRIES: StatusEntry[] = [
   { where: 'circle "Parent care"', text: 'Mum: hospital visit moved to Monday' },
 ];
 const input = (over: Partial<StatusPromptInput> = {}): StatusPromptInput => ({ text: 'Give me a morning status check', entries: ENTRIES, now: NOW, timeZone: 'Europe/London', ...over });
-const built = (over?: Partial<StatusPromptInput>, options?: Parameters<typeof buildStatusPrompt>[1]) => {
+const built = (over?: Partial<StatusPromptInput>, options?: Parameters<typeof buildPromptWith>[2]) => {
   const r = buildStatusPrompt(input(over), options);
   if (!r.ok) throw new Error(r.error.message);
   return r.value;
@@ -156,7 +164,7 @@ describe('what is refused, not cut', () => {
     expect(failure(input(), { maxRequestChars: 0 }).message).toContain('maxRequestChars');
     expect(failure(input(), { nope: 1 }).message).toContain('unknown option');
     expect(failure(input(), 'x').message).toContain('options: must be an object');
-    expect(DEFAULT_STATUS_PROMPT_OPTIONS).toEqual({ maxRequestChars: 500, maxEntries: 500, maxEntryChars: 1500, maxTotalChars: 30_000 });
+    expect(STATUS_LIMITS).toMatchObject({ maxRequestChars: 500, maxEntries: 500, maxEntryChars: 1500, maxTotalChars: 30_000 });
   });
   it('malformed input of every kind is a CONFIG error that says where, never a throw', () => {
     for (const bad of [null, undefined, 7, 'x', [], {}, { text: 'x' }, { ...input(), extra: 1 }, { ...input(), text: 5 }, { ...input(), entries: 'x' }, { ...input(), entries: [null] }, { ...input(), entries: [{ where: '', text: 'x' }] }, { ...input(), entries: [{ where: 'p', text: '' }] }, { ...input(), entries: [{ where: 'p', text: 'x', when: -1 }] }, { ...input(), entries: [{ where: 'p', text: 'x', when: 1.5 }] }, { ...input(), entries: [{ where: 'p', text: 'x', extra: 1 }] }, { ...input(), now: 'now' }, { ...input(), now: -1 }, { ...input(), now: 9e15 }, { ...input(), timeZone: 'Mars/Olympus' }, { ...input(), timeZone: 7 }]) {

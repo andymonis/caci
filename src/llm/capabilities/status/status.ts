@@ -5,7 +5,8 @@ import type { ModelClient, ModelMessage, ModelOutput, ModelResponse } from '../.
 import { rejectionError } from '../../text-blocks.js';
 import { makeEmitter, type Emit, type TraceEvent } from '../../trace.js';
 import { addUsage, isValidUsage, NO_USAGE, type TokenUsage } from '../../usage.js';
-import { inspectStatusReply, type GuardedStatus } from './guard.js';
+import type { Controls } from '../../controls/controls.js';
+import { inspectStatusReply, statusGuardSettingsOf, type GuardedStatus } from './guard.js';
 import { buildStatusPrompt, isTimeZone, type StatusEntry } from './prompt.js';
 
 /** What the controller hands over for one status request. */
@@ -53,6 +54,8 @@ export interface StatusAnswer {
 export interface StatusDeps {
   readonly client: ModelClient;
   readonly config: LlmConfig;
+  /** The instructions, framing and limits (R-012), read from the controls folder. */
+  readonly controls: Controls;
   /** The clock, in milliseconds. It is also "now" for the model. Tests replace it. */
   readonly now: () => number;
 }
@@ -134,6 +137,7 @@ async function run(deps: StatusDeps, input: StatusInput, options: StatusOptions 
   if (!model.ok) return model;
 
   const prompt = buildStatusPrompt(
+    deps.controls.status,
     { text: input.text, entries: input.entries, now: started, timeZone: input.timeZone ?? 'UTC' },
     {
       ...(options?.maxRequestChars === undefined ? {} : { maxRequestChars: options.maxRequestChars }),
@@ -178,7 +182,7 @@ async function run(deps: StatusDeps, input: StatusInput, options: StatusOptions 
       return failed(llmError('MODEL_ERROR', 'the model client returned a reply that is not a valid response'));
     }
     emit({ type: 'response', attempt: number, output: response.output, usage: response.usage, model: response.model, elapsedMs: deps.now() - asked });
-    const verdict = inspectStatusReply(response.output, guardContext);
+    const verdict = inspectStatusReply(response.output, guardContext, statusGuardSettingsOf(deps.controls.status.settings));
     emit({ type: 'verdict', attempt: number, accepted: verdict.ok, problems: verdict.ok ? [] : verdict.error });
     return ok({ response, verdict });
   };

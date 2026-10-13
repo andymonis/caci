@@ -2,7 +2,7 @@ import { err, ok, type JsonValue, type Result } from '../../../graph_store/index
 import { type LlmError } from '../../errors.js';
 import type { ModelOutput } from '../../model-client.js';
 import { rejectionError } from '../../text-blocks.js';
-import { STATUS_LIMITS } from './prompt.js';
+import type { StatusSettings } from '../../controls/settings.js';
 
 /** What the controller knows and the model must not choose. */
 export interface StatusGuardContext {
@@ -10,12 +10,19 @@ export interface StatusGuardContext {
   readonly entryCount: number;
 }
 
-export interface StatusGuardOptions {
+/** What the guard enforces: it comes from the controls' settings (R-012), never from constants here. */
+export interface StatusGuardSettings {
+  readonly maxHeadline: number;
+  readonly maxPoints: number;
+  readonly maxPointChars: number;
+  readonly maxRefs: number;
   /** Longest reply accepted, in characters, checked before any parsing. */
-  readonly maxOutputChars?: number;
+  readonly maxOutputChars: number;
 }
 
-export const DEFAULT_STATUS_GUARD_OPTIONS = Object.freeze({ maxOutputChars: 8000 });
+export function statusGuardSettingsOf(settings: StatusSettings): StatusGuardSettings {
+  return { maxHeadline: settings.maxHeadline, maxPoints: settings.maxPoints, maxPointChars: settings.maxPointChars, maxRefs: settings.maxRefs, maxOutputChars: settings.maxOutputChars };
+}
 
 /** A reply that passed every check. All text is trimmed. */
 export interface GuardedStatus {
@@ -47,9 +54,9 @@ function line(where: string, value: unknown, max: number, problems: string[]): s
  * wrong. Pure; never throws. Anything unexpected (prose, extra fields, a number outside the entries given, a
  * contradiction between `nothing` and `points`) rejects the whole reply; nothing is repaired or dropped silently.
  */
-export function inspectStatusReply(output: ModelOutput, context: StatusGuardContext, options: StatusGuardOptions = {}): Result<GuardedStatus, readonly string[]> {
+export function inspectStatusReply(output: ModelOutput, context: StatusGuardContext, limits: StatusGuardSettings): Result<GuardedStatus, readonly string[]> {
   try {
-    const maxChars = options.maxOutputChars ?? DEFAULT_STATUS_GUARD_OPTIONS.maxOutputChars;
+    const maxChars = limits.maxOutputChars;
     let value: unknown;
     if (output.kind === 'json') value = output.value;
     else {
@@ -64,7 +71,7 @@ export function inspectStatusReply(output: ModelOutput, context: StatusGuardCont
     const problems: string[] = [];
     for (const key of Object.keys(value)) if (key !== 'headline' && key !== 'points' && key !== 'nothing') problems.push(`reply: unknown field "${key}"`);
 
-    const headline = line('headline', value.headline, STATUS_LIMITS.maxHeadline, problems);
+    const headline = line('headline', value.headline, limits.maxHeadline, problems);
 
     let nothing = false;
     if ('nothing' in value) {
@@ -75,15 +82,15 @@ export function inspectStatusReply(output: ModelOutput, context: StatusGuardCont
     const points: { text: string; refs: number[] }[] = [];
     if (!Array.isArray(value.points)) problems.push('points: must be a list');
     else {
-      if (value.points.length > STATUS_LIMITS.maxPoints) problems.push(`points: ${value.points.length} points, over the limit of ${STATUS_LIMITS.maxPoints}`);
-      value.points.slice(0, STATUS_LIMITS.maxPoints).forEach((point: unknown, i) => {
+      if (value.points.length > limits.maxPoints) problems.push(`points: ${value.points.length} points, over the limit of ${limits.maxPoints}`);
+      value.points.slice(0, limits.maxPoints).forEach((point: unknown, i) => {
         const where = `points[${i}]`;
         if (!isObject(point)) return void problems.push(`${where}: must be an object like {"text": "...", "refs": [1]}`);
         for (const key of Object.keys(point)) if (key !== 'text' && key !== 'refs') problems.push(`${where}: unknown field "${key}"`);
-        const text = line(`${where}.text`, point.text, STATUS_LIMITS.maxPointChars, problems);
+        const text = line(`${where}.text`, point.text, limits.maxPointChars, problems);
         let refs: number[] | undefined;
-        if (!Array.isArray(point.refs) || point.refs.length === 0) problems.push(`${where}.refs: must be a list of 1 to ${STATUS_LIMITS.maxRefs} entry numbers`);
-        else if (point.refs.length > STATUS_LIMITS.maxRefs) problems.push(`${where}.refs: ${point.refs.length} numbers, over the limit of ${STATUS_LIMITS.maxRefs}`);
+        if (!Array.isArray(point.refs) || point.refs.length === 0) problems.push(`${where}.refs: must be a list of 1 to ${limits.maxRefs} entry numbers`);
+        else if (point.refs.length > limits.maxRefs) problems.push(`${where}.refs: ${point.refs.length} numbers, over the limit of ${limits.maxRefs}`);
         else {
           const numbers = point.refs as unknown[];
           const wrong = numbers.filter((n) => !(typeof n === 'number' && Number.isSafeInteger(n) && n >= 1 && n <= context.entryCount));
@@ -106,7 +113,7 @@ export function inspectStatusReply(output: ModelOutput, context: StatusGuardCont
 }
 
 /** Like `inspectStatusReply`, but a rejection is a `BAD_OUTPUT` error whose message numbers the first problems. */
-export function guardStatusReply(output: ModelOutput, context: StatusGuardContext, options: StatusGuardOptions = {}): Result<GuardedStatus, LlmError> {
-  const inspected = inspectStatusReply(output, context, options);
+export function guardStatusReply(output: ModelOutput, context: StatusGuardContext, limits: StatusGuardSettings): Result<GuardedStatus, LlmError> {
+  const inspected = inspectStatusReply(output, context, limits);
   return inspected.ok ? inspected : err(rejectionError(inspected.error));
 }
