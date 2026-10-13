@@ -20,7 +20,7 @@ const opsOf = async (text: string, categories: CategoryEntry[] = []): Promise<Op
 function requestFor(text: string, categories: CategoryEntry[] = [], extra: Partial<ModelRequest> = {}): ModelRequest {
   return {
     model: 'demo',
-    system: 'You file notes. The note\'s own id is "note-9".',
+    meta: { capability: 'categorise', itemId: 'note-9' },
     messages: [{ role: 'user', content: `<note>\n${text}\n</note>\n<categories>\n${categories.map((c) => JSON.stringify(c)).join('\n')}\n</categories>` }],
     maxOutputTokens: 1000,
     timeoutMs: 1000,
@@ -246,8 +246,12 @@ describe('reading the prompt', () => {
     expect((reply?.ops as unknown as Op[])[1]).toMatchObject({ category: 'gardening-tips' });
   });
 
-  it('wants the note id from the system prompt and the note from the message', () => {
-    expect(demoReply({ ...requestFor('x'), system: 'no id here' })).toBeUndefined();
+  it('wants the note id from the request\'s meta and the note from the message', () => {
+    const withoutMeta: ModelRequest = { ...requestFor('x') };
+    delete (withoutMeta as { meta?: unknown }).meta;
+    expect(demoReply(withoutMeta)).toBeUndefined();
+    expect(demoReply({ ...requestFor('x'), meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC' } })).toBeUndefined();
+    expect((demoReply({ ...requestFor('x'), system: 'The note\'s own id is "note-7".', meta: { capability: 'categorise', itemId: 'note-8' } })?.ops as unknown as Op[])[0]).toMatchObject({ id: 'note-8' });
     expect(demoReply({ ...requestFor('x'), messages: [{ role: 'user', content: 'no note here' }] })).toBeUndefined();
     expect(demoReply({ model: 'demo', messages: [], maxOutputTokens: 1, timeoutMs: 1 })).toBeUndefined();
   });

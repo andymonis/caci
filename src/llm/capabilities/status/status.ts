@@ -168,6 +168,7 @@ async function run(deps: StatusDeps, input: StatusInput, options: StatusOptions 
         system: prompt.value.system,
         messages,
         outputSchema: prompt.value.outputSchema,
+        meta: { capability: 'status', entryCount: input.entries.length, now: started, timeZone: input.timeZone ?? 'UTC' },
         maxOutputTokens: settings.maxOutputTokens,
         timeoutMs: remaining,
         ...(options?.signal === undefined ? {} : { signal: options.signal }),

@@ -27,6 +27,13 @@ describe('the request sent to the provider', () => {
     expect(sent?.headers.authorization).toBeUndefined();
   });
 
+  it('never sends the meta (it is only for the demo and test clients)', async () => {
+    const p = ok200();
+    await make(p).complete(request({ meta: { capability: 'categorise', itemId: 'note-SENTINEL-1' } }));
+    expect(p.seen[0]?.body).not.toHaveProperty('meta');
+    expect(JSON.stringify(p.seen[0]?.body)).not.toContain('note-SENTINEL-1');
+  });
+
   it('carries the model, token limit, system prompt and messages exactly as asked', async () => {
     const p = ok200();
     await make(p).complete(request({ messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }, { role: 'user', content: 'c' }] }));

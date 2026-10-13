@@ -200,6 +200,7 @@ async function run(
         system: prompt.value.system,
         messages,
         outputSchema: prompt.value.outputSchema,
+        meta: { capability: 'categorise', itemId: input.itemId },
         maxOutputTokens: settings.maxOutputTokens,
         timeoutMs: remaining,
         ...(options?.signal === undefined ? {} : { signal: options.signal }),

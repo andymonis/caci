@@ -45,7 +45,7 @@ interface CategoryLine {
 
 /** What the categoriser put in the prompt. */
 function readRequest(request: ModelRequest): { itemId: string | undefined; note: string | undefined; categories: CategoryLine[] } {
-  const itemId = /The note's own id is "([^"]+)"/.exec(request.system ?? '')?.[1];
+  const itemId = request.meta?.capability === 'categorise' ? request.meta.itemId : undefined;
   const content = request.messages[0]?.content ?? '';
   const note = /<note>\n([\s\S]*?)\n<\/note>/.exec(content)?.[1];
   const block = /<categories>\n([\s\S]*?)\n<\/categories>/.exec(content)?.[1] ?? '';
@@ -62,6 +62,17 @@ function readRequest(request: ModelRequest): { itemId: string | undefined; note:
   return { itemId, note: note === undefined ? undefined : unescapeBlock(note), categories };
 }
 
+/** `Thursday 15 October 2026` in the zone, from the request's own facts (not from the wording of any prompt). */
+function dayText(now: number, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).formatToParts(now);
+    const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '';
+    return `${get('weekday')} ${get('day')} ${get('month')} ${get('year')}`;
+  } catch {
+    return 'today';
+  }
+}
+
 const MAX_HEADLINE = 160;
 const MAX_POINT = 240;
 const MAX_POINTS = 5;
@@ -73,13 +84,14 @@ const oneLine = (text: string): string => text.replace(/\p{Cc}/gu, ' ').replace(
  * citing its number; or "nothing" when there are no entries. Deterministic, and valid for any entries.
  */
 function demoStatusReply(request: ModelRequest): JsonObject | undefined {
-  const system = request.system ?? '';
-  const count = Number(/numbered 1 to (\d+)/.exec(system)?.[1]);
+  const meta = request.meta;
+  if (meta?.capability !== 'status') return undefined;
+  const count = meta.entryCount;
   const content = request.messages[0]?.content ?? '';
   const block = /<entries>\n([\s\S]*?)\n<\/entries>/.exec(content)?.[1];
   const asked = /<request>\n([\s\S]*?)\n<\/request>/.exec(content)?.[1];
   if (!Number.isSafeInteger(count) || block === undefined || asked === undefined) return undefined;
-  const day = /current date and time is ([A-Za-z]+ \d{1,2} [A-Za-z]+ \d{4})/.exec(system)?.[1] ?? 'today';
+  const day = dayText(meta.now, meta.timeZone);
   const entries: { n: number; where: string; text: string }[] = [];
   for (const line of unescapeBlock(block).split('\n')) {
     const m = /^\[(\d+)\] \(([^)]*?)(?:, \d{4}-\d{2}-\d{2})?\) ([\s\S]*)$/.exec(line);
@@ -99,7 +111,7 @@ function demoStatusReply(request: ModelRequest): JsonObject | undefined {
 
 /** The reply the demo model gives for a prompt, as the JSON object the capability expects; `undefined` if the prompt is not one it understands. */
 export function demoReply(request: ModelRequest): JsonObject | undefined {
-  if ((request.system ?? '').startsWith('You are the status assistant')) return demoStatusReply(request);
+  if (request.meta?.capability === 'status') return demoStatusReply(request);
   const { itemId, note, categories } = readRequest(request);
   if (itemId === undefined || note === undefined) return undefined;
   const noteWords = wordsOf(note);

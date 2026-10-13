@@ -267,6 +267,8 @@ export interface ModelRequest {
     readonly maxOutputTokens: number;
     // (undocumented)
     readonly messages: readonly ModelMessage[];
+    // Warning: (ae-forgotten-export) The symbol "ModelMeta" needs to be exported by the entry point index.d.ts
+    readonly meta?: ModelMeta;
     readonly model: string;
     readonly outputSchema?: JsonObject;
     readonly signal?: AbortSignal;
@@ -510,7 +512,7 @@ export type TraceEvent =
 
 // Warnings were encountered during analysis:
 //
-// dist/llm/model-client.d.ts:30:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
+// dist/llm/model-client.d.ts:45:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

@@ -128,19 +128,22 @@ describe('every reply passes the guard, for any entries', () => {
 });
 
 describe('details of reading the prompt', () => {
-  const direct = async (system: string, content: string) => {
-    const r = await createDemoModelClient().complete({ model: 'demo', system, messages: [{ role: 'user', content }], outputSchema: { type: 'object' }, maxOutputTokens: 100, timeoutMs: 1000 });
+  const meta = (entryCount: number, timeZone = 'UTC') => ({ capability: 'status' as const, entryCount, now: Date.UTC(2026, 9, 15, 7, 30), timeZone });
+  const direct = async (m: ReturnType<typeof meta>, content: string) => {
+    const r = await createDemoModelClient().complete({ model: 'demo', system: 'wording that does not matter', meta: m, messages: [{ role: 'user', content }], outputSchema: { type: 'object' }, maxOutputTokens: 100, timeoutMs: 1000 });
     if (!r.ok) throw new Error(r.error.message);
     return (r.value.output as unknown as { value: { headline: string; points: { text: string; refs: number[] }[] } }).value;
   };
-  it('says "today" when the prompt gives no date, and ignores an entry numbered beyond the count', async () => {
-    const reply = await direct('You are the status assistant. The entries are numbered 1 to 2.', '<entries>\n[1] (personal) first\n[9] (personal) beyond\n</entries>\n<request>\nhi\n</request>');
+  it('says "today" when the zone is not one, and ignores an entry numbered beyond the count', async () => {
+    const reply = await direct(meta(2, 'Mars/Base'), '<entries>\n[1] (personal) first\n[9] (personal) beyond\n</entries>\n<request>\nhi\n</request>');
     expect(reply.headline).toBe('today: I read 1 note; here is the one most relevant.');
     expect(reply.points.map((p) => p.refs)).toEqual([[1]]);
   });
   it('a prompt without a count, entries or request is not understood', async () => {
-    for (const [system, content] of [['You are the status assistant.', '<entries>\n[1] (personal) x\n</entries>\n<request>\nhi\n</request>'], ['You are the status assistant. numbered 1 to 1', '<request>\nhi\n</request>'], ['You are the status assistant. numbered 1 to 1', '<entries>\n[1] (personal) x\n</entries>']]) {
-      const r = await createDemoModelClient().complete({ model: 'demo', system: system as string, messages: [{ role: 'user', content: content as string }], maxOutputTokens: 100, timeoutMs: 1000 });
+    const noMeta = await createDemoModelClient().complete({ model: 'demo', system: 'You are the status assistant. numbered 1 to 1', messages: [{ role: 'user', content: '<entries>\n[1] (personal) x\n</entries>\n<request>\nhi\n</request>' }], maxOutputTokens: 100, timeoutMs: 1000 });
+    expect(!noMeta.ok && noMeta.error.message).toContain('does not understand');
+    for (const content of ['<request>\nhi\n</request>', '<entries>\n[1] (personal) x\n</entries>']) {
+      const r = await createDemoModelClient().complete({ model: 'demo', meta: meta(1), messages: [{ role: 'user', content }], maxOutputTokens: 100, timeoutMs: 1000 });
       expect(!r.ok && r.error.message).toContain('does not understand');
     }
   });
@@ -160,7 +163,7 @@ describe('the categoriser is unaffected', () => {
     expect(r.ok).toBe(true);
   });
   it('a prompt it does not understand is a MODEL_ERROR', async () => {
-    const r = await createDemoModelClient().complete({ model: 'demo', system: 'You are the status assistant. Nothing else.', messages: [{ role: 'user', content: 'hello' }], maxOutputTokens: 100, timeoutMs: 1000 });
+    const r = await createDemoModelClient().complete({ model: 'demo', meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC' }, system: 'You are the status assistant. Nothing else.', messages: [{ role: 'user', content: 'hello' }], maxOutputTokens: 100, timeoutMs: 1000 });
     expect(!r.ok && r.error.code).toBe('MODEL_ERROR');
   });
 });

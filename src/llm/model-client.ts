@@ -8,6 +8,14 @@ export interface ModelMessage {
 }
 
 /**
+ * Facts about a request that a client may use but that are **never sent to a provider** (R-012). They exist so the
+ * free demo model and the test clients do not have to read the wording of the controls, which anyone may edit.
+ */
+export type ModelMeta =
+  | { readonly capability: 'categorise'; readonly itemId: string }
+  | { readonly capability: 'status'; readonly entryCount: number; readonly now: number; readonly timeZone: string };
+
+/**
  * One call to a model. Every request names its model, so no client hides a default and the model
  * can be chosen per capability, per call or per run.
  */
@@ -21,6 +29,8 @@ export interface ModelRequest {
   readonly maxOutputTokens: number;
   /** Give up after this long and return a `TIMEOUT` error. */
   readonly timeoutMs: number;
+  /** Machine-readable facts for the demo and test clients. A real client must not send them. */
+  readonly meta?: ModelMeta;
   /** Lets the caller cancel the call; a cancelled call ends with a `CANCELLED` error result, not an exception. */
   readonly signal?: AbortSignal;
 }

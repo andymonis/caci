@@ -20,6 +20,11 @@ describe('checkRequest accepts', () => {
     expect(checkRequest({ model: 'm', messages: [{ role: 'user', content: 'x' }], maxOutputTokens: 1, timeoutMs: 1 })).toBeUndefined();
   });
 
+  it('either kind of meta, which is for the demo and test clients', () => {
+    expect(checkRequest(good({ meta: { capability: 'categorise', itemId: 'note-1' } }))).toBeUndefined();
+    expect(checkRequest(good({ meta: { capability: 'status', entryCount: 0, now: 0, timeZone: 'UTC' } }))).toBeUndefined();
+  });
+
   it('a conversation, a schema and a real cancellation signal', () => {
     const controller = new AbortController();
     const request = good({
@@ -38,6 +43,17 @@ describe('checkRequest accepts', () => {
 
 describe('checkRequest refuses, as CONFIG, saying which part is wrong', () => {
   const cases: Array<[string, unknown, RegExp]> = [
+    ['a meta that is not an object', good({ meta: 'x' }), /request\.meta.*object/],
+    ['a meta with another capability', good({ meta: { capability: 'answer' } }), /request\.meta.*capability/],
+    ['a categorise meta without an item id', good({ meta: { capability: 'categorise' } }), /request\.meta.*itemId/],
+    ['a categorise meta with an empty item id', good({ meta: { capability: 'categorise', itemId: '' } }), /request\.meta.*itemId/],
+    ['a categorise meta with a stray field', good({ meta: { capability: 'categorise', itemId: 'a', extra: 1 } }), /request\.meta.*only/],
+    ['a status meta with a fractional count', good({ meta: { capability: 'status', entryCount: 1.5, now: 0, timeZone: 'UTC' } }), /request\.meta.*entryCount/],
+    ['a status meta with a negative count', good({ meta: { capability: 'status', entryCount: -1, now: 0, timeZone: 'UTC' } }), /request\.meta.*entryCount/],
+    ['a status meta with a bad time', good({ meta: { capability: 'status', entryCount: 1, now: -1, timeZone: 'UTC' } }), /request\.meta.*now/],
+    ['a status meta with an empty zone', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: '' } }), /request\.meta.*timeZone/],
+    ['a status meta with no zone', good({ meta: { capability: 'status', entryCount: 1, now: 0 } }), /request\.meta.*timeZone/],
+    ['a status meta with a stray field', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', extra: 1 } }), /request\.meta.*only/],
     ['no model', good({ model: undefined }), /request\.model/],
     ['an empty model', good({ model: '' }), /request\.model.*empty/],
     ['a model with a space', good({ model: 'a b' }), /request\.model.*spaces/],

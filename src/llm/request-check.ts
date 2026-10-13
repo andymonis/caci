@@ -1,7 +1,7 @@
 import { modelIdProblem } from './config.js';
 import { llmError, type LlmError } from './errors.js';
 
-const REQUEST_FIELDS: readonly string[] = Object.freeze(['model', 'system', 'messages', 'outputSchema', 'maxOutputTokens', 'timeoutMs', 'signal']);
+const REQUEST_FIELDS: readonly string[] = Object.freeze(['model', 'system', 'messages', 'outputSchema', 'maxOutputTokens', 'timeoutMs', 'signal', 'meta']);
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const positiveInteger = (value: unknown): boolean => typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
@@ -9,6 +9,22 @@ const looksLikeSignal = (value: unknown): boolean =>
   isObject(value) && typeof value.aborted === 'boolean' && typeof value.addEventListener === 'function';
 
 const bad = (where: string, message: string): LlmError => llmError('CONFIG', `request.${where}: ${message}`);
+
+function metaProblemOf(meta: unknown): string | undefined {
+  if (meta === undefined) return undefined;
+  if (!isObject(meta)) return 'must be an object when given';
+  if (meta.capability === 'categorise') {
+    if (Object.keys(meta).some((k) => k !== 'capability' && k !== 'itemId')) return 'a categorise meta may hold only capability and itemId';
+    return typeof meta.itemId === 'string' && meta.itemId !== '' ? undefined : 'itemId must be non-empty text';
+  }
+  if (meta.capability === 'status') {
+    if (Object.keys(meta).some((k) => !['capability', 'entryCount', 'now', 'timeZone'].includes(k))) return 'a status meta may hold only capability, entryCount, now and timeZone';
+    if (typeof meta.entryCount !== 'number' || !Number.isSafeInteger(meta.entryCount) || meta.entryCount < 0) return 'entryCount must be a whole number';
+    if (typeof meta.now !== 'number' || !Number.isSafeInteger(meta.now) || meta.now < 0) return 'now must be milliseconds since 1970';
+    return typeof meta.timeZone === 'string' && meta.timeZone !== '' ? undefined : 'timeZone must be text';
+  }
+  return 'capability must be "categorise" or "status"';
+}
 
 /**
  * Checks a model request before anything is sent. Every client does this first, so a request that
@@ -37,6 +53,8 @@ export function checkRequest(request: unknown): LlmError | undefined {
     if (!positiveInteger(maxOutputTokens)) return bad('maxOutputTokens', 'must be a positive whole number');
     if (!positiveInteger(timeoutMs)) return bad('timeoutMs', 'must be a positive whole number of milliseconds');
     if (signal !== undefined && !looksLikeSignal(signal)) return bad('signal', 'must be an AbortSignal when given');
+    const metaProblem = metaProblemOf(request.meta);
+    if (metaProblem !== undefined) return bad('meta', metaProblem);
     return undefined;
   } catch {
     return llmError('CONFIG', 'request: could not be read');
