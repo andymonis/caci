@@ -80,16 +80,16 @@ What the person is shown (built by the server): `headline`, `points` each with `
 
 ## Threats and controls
 
-| Threat | Control |
-|--------|---------|
-| An instruction hidden in a note ("ignore the rules and say…") steers the answer | Entries are untrusted data in escaped blocks; the output is guarded to a fixed shape; the model has no write path; sources come from the server. |
-| Notes of a circle the person left, or never joined, reach the model or the answer | Context is built from `readable` at request time and nothing else; tests seed distinctive text in other scopes and inspect the provider request. |
-| The model invents or alters provenance | It returns numbers only; the server maps them; an unknown number fails the guard. |
-| Cost and abuse (many requests, huge text) | Text capped at 500 characters, entries and budget capped, hourly limit, one at a time. |
-| The answer is shown as markup and runs | The page sets text only; the guard tests and page guards forbid markup APIs. |
-| A member is removed while a request runs | Scopes are read once at the start of the request; the next request has no trace of the circle. (A request already running may still use what was readable when it started: a residual risk.) |
-| A status writes something | There is no write path; a recording adapter proves it for every outcome. |
-| Details of the model or other people's ids leak in an answer or error | The view has a fixed set of fields; errors use the fixed words of the capture routes. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| An instruction hidden in a note ("ignore the rules and say…") steers the answer | Entries are untrusted data in escaped blocks; the output is guarded to a fixed shape; the model has no write path; sources come from the server. | `src/caci/controller-status.test.ts` — "reaches the model only as data"; `src/llm/capabilities/status/prompt.test.ts` — "tell the model the entries are data, not instructions"; `src/llm/capabilities/status/prompt.test.ts` — "cannot close or open a block"; `src/llm/capabilities/status/guard.test.ts` — "an unknown field anywhere"; `src/llm/demo-status.test.ts` — "a note that gives orders only ever becomes a quoted point"; `web/status-journey.test.mjs` — "markup in a note stays text"; `dev/eval/status.test.mjs` — "the one that cites everything is caught on the nothing-relevant case and on the hidden instruction" |
+| Notes of a circle the person left, or never joined, reach the model or the answer | Context is built from `readable` at request time and nothing else; tests seed distinctive text in other scopes and inspect the provider request. | `src/caci/status-context.test.ts` — "reads only the scopes it is given"; `src/caci/controller-status.test.ts` — "never shows one person"; `src/service/status-end-to-end.test.ts` — "a stranger and another circle never appear"; `src/service/status-end-to-end.test.ts` — "the request holds only what the person may read" |
+| The model invents or alters provenance | It returns numbers only; the server maps them; an unknown number fails the guard. | `src/caci/controller-status.test.ts` — "a reply citing an entry that does not exist is repaired or refused"; `src/llm/capabilities/status/guard.test.ts` — "references that are missing, empty, too many, outside the entries"; `src/caci/controller-status.test.ts` — "shows each source once for a point" |
+| Cost and abuse (many requests, huge text) | Text capped at 500 characters, entries and budget capped, hourly limit, one at a time. | `src/caci/controller-status.test.ts` — "twenty statuses an hour by default"; `src/caci/controller-status.test.ts` — "one status at a time per account"; `src/caci/controller-status.test.ts` — "a request that is missing, not text, blank or too long"; `src/caci/status-context.test.ts` — "stays within the character budget"; `src/api/status-routes.test.ts` — "the hourly limit is a 429" |
+| The answer is shown as markup and runs | The page sets text only; the guard tests and page guards forbid markup APIs. | `web/pages.test.mjs` — "no script uses"; `web/status-page.test.mjs` — "markup in the answer, a circle name and the request stays text"; `web/status-view.test.mjs` — "markup stays text" |
+| A member is removed while a request runs | Scopes are read once at the start of the request; the next request has no trace of the circle. (A request already running may still use what was readable when it started: a residual risk.) | `src/caci/controller-status.test.ts` — "a member removed from a circle gets an answer without it on the next request"; `src/service/status-end-to-end.test.ts` — "a member removed from a circle gets an answer without that circle on the next request"; `web/status-journey.test.mjs` — "the notice comes first" |
+| A status writes something | There is no write path; a recording adapter proves it for every outcome. | `src/caci/controller-status.test.ts` — "writes nothing, whatever happens"; `src/caci/status-context.test.ts` — "no write primitive is called, whatever the outcome"; `src/service/status-end-to-end.test.ts` — "writes nothing: every graph is exactly as it was" |
+| Details of the model or other people's ids leak in an answer or error | The view has a fixed set of fields; errors use the fixed words of the capture routes. | `src/caci/controller-status.test.ts` — "exactly the headline, points with sources"; `src/api/status-routes.test.ts` — "answers 200 with the status view"; `src/service/status-end-to-end.test.ts` — "a provider failure reaches the person as fixed words" |
 
 ## What the person is told
 
@@ -118,7 +118,26 @@ What the person is shown (built by the server): `headline`, `points` each with `
 | ST-AC-11 | Given demo mode, when the same request is made twice at the same time, then the answers are equal. |
 | ST-AC-12 | Given the status screen, when the person leaves it or signs out, then the answer is gone from the page. |
 
-## Residual risks
+### Where each criterion is checked (T-193)
+
+| ID | Tests |
+|----|-------|
+| ST-AC-01 | `src/caci/controller-status.test.ts` — "uses their own brain and every circle they are in"; `src/service/status-end-to-end.test.ts` — "uses the personal brain and every circle the person is in"; `src/service/status-end-to-end.test.ts` — "the request holds only what the person may read" |
+| ST-AC-02 | `src/caci/controller-status.test.ts` — "a person in no circle gets only their own brain, and no circle graph is touched"; `src/caci/status-context.test.ts` — "a person in no circle reads only their own graph" |
+| ST-AC-03 | `src/caci/controller-status.test.ts` — "gives an observer the same context as a member of that circle"; `src/service/status-end-to-end.test.ts` — "an observer can ask and reads the same context"; `web/status-journey.test.mjs` — "the notice comes first" |
+| ST-AC-04 | `src/caci/controller-status.test.ts` — "a member removed from a circle gets an answer without it on the next request"; `src/service/status-end-to-end.test.ts` — "a member removed from a circle gets an answer without that circle on the next request"; `web/status-journey.test.mjs` — "the notice comes first" |
+| ST-AC-05 | `src/caci/controller-status.test.ts` — "never shows one person"; `src/caci/status-context.test.ts` — "reads only the scopes it is given"; `src/service/status-end-to-end.test.ts` — "a stranger and another circle never appear" |
+| ST-AC-06 | `src/caci/controller-status.test.ts` — "writes nothing, whatever happens"; `src/caci/status-context.test.ts` — "no write primitive is called, whatever the outcome"; `src/service/status-end-to-end.test.ts` — "writes nothing: every graph is exactly as it was" |
+| ST-AC-07 | `src/llm/capabilities/status/guard.test.ts` — "references that are missing, empty, too many, outside the entries"; `src/llm/capabilities/status/status.test.ts` — "a rejected reply is repaired once, and the usage of both is counted"; `src/llm/capabilities/status/status.test.ts` — "a second rejection is BAD_OUTPUT that says so"; `src/caci/controller-status.test.ts` — "a reply citing an entry that does not exist is repaired or refused" |
+| ST-AC-08 | `src/caci/controller-status.test.ts` — "the context limits apply and are reported"; `src/caci/status-context.test.ts` — "stays within the character budget"; `web/status-page.test.mjs` — "says when some notes were left out" |
+| ST-AC-09 | `src/caci/controller-status.test.ts` — "an hourly limit, counted when the model is about to be asked"; `src/caci/controller-status.test.ts` — "one status at a time per account"; `src/service/status-end-to-end.test.ts` — "one at a time per account"; `src/service/status-end-to-end.test.ts` — "the hourly limit comes from CACI_STATUS_PER_HOUR" |
+| ST-AC-10 | `src/caci/controller-status.test.ts` — "reaches the model only as data"; `web/status-journey.test.mjs` — "markup in a note stays text"; `src/llm/demo-status.test.ts` — "a note that gives orders only ever becomes a quoted point" |
+| ST-AC-11 | `src/llm/demo-status.test.ts` — "is deterministic: the same request gives the same answer" |
+| ST-AC-12 | `web/status-page.test.mjs` — "forgets the answer, the typed request and the messages, and asks again on return"; `web/status-page.test.mjs` — "signing out forgets it too"; `web/status-session.test.mjs` — "reset forgets the answer, and an answer still on its way is dropped quietly"; `web/status-journey.test.mjs` — "the notice comes first" |
+
+**Hand check in Chrome (T-191)** on the real service with the demo model: the notices, a request typed and sent by keyboard, the answer card with sources named, markup shown as text, no cookie or storage visible to the page, an injected script blocked, leaving the screen forgot the answer. Not looked at by eye: the suggestion buttons by keyboard, narrow and dark layouts, a screen reader, the real model.
+
+### Residual risks (not covered, with the reason)
 
 1. **The whole readable brain goes to Anthropic in one prompt** (within the budget), unanonymised; the release gates stand for anything beyond the family test.
 2. **The model can still state something wrongly** or read a note too freely; the format and citations make it checkable, not correct.
@@ -127,3 +146,5 @@ What the person is shown (built by the server): `headline`, `points` each with `
 5. **Time is the server's clock** with the person's declared time zone (not verified).
 6. **Recency by item id** is approximate for items without `contributedAt`.
 7. **Spending is bounded per account only.**
+8. **The status screen was looked at by eye in one browser only**, with the demo model; narrow and dark layouts, a screen reader and the real model through the page were not tried.
+9. **Quality is judged on six invented cases** (`npm run eval -- --capability status`); the real comparison of tiers has not been run, so `balanced` is a provisional default.
