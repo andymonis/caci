@@ -5,6 +5,9 @@ import { parseScope, PERSONAL, type Provenance, type ResolvedScope, type ScopeRe
 import { createBrain, type BrainLimits, type BrainScope, type MineCategoryItemsPage, type MineCategoryPage, type MineItemDetail, type MineSummary } from './brain.js';
 import { createBrowser, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
+import { createStatusContext, type StatusContextLimits } from './status-context.js';
+import type { Llm } from '../llm/index.js';
+import { isTimeZone } from '../llm/index.js';
 
 /** The longest note accepted: the categoriser's own limit, so a refusal here is clear and costs no model call. */
 export const MAX_NOTE_CHARS = 8000;
@@ -17,6 +20,8 @@ export interface CaciLimits {
   readonly maxPendingPerUser?: number;
   /** New proposals one account may start in an hour (each costs a model call). Default 30. */
   readonly proposalsPerHour?: number;
+  /** Status requests one account may make in an hour (each costs a model call over a large prompt). Default 20. */
+  readonly statusPerHour?: number;
 }
 
 export interface CaciControllerInit {
@@ -30,7 +35,9 @@ export interface CaciControllerInit {
   readonly mode?: 'demo' | 'anthropic';
   /** The clock in milliseconds. Use the capture controller's clock too, so expiry agrees. */
   readonly clock?: () => number;
-  readonly limits?: CaciLimits & BrainLimits;
+  readonly limits?: CaciLimits & BrainLimits & { readonly status?: StatusContextLimits };
+  /** The LLM component, for status updates (R-011). Without it `status` is not available. */
+  readonly llm?: Pick<Llm, 'status'>;
   /** Resolves a circle scope to its graph for the current member (R-009). Without it only the personal scope works. */
   readonly scopes?: ScopeResolver;
 }
@@ -50,6 +57,22 @@ export interface ProposalView {
   readonly rationale?: string;
   /** Where it will be written, for a circle proposal (the circle's name and id). Absent for a personal one, as before R-009. */
   readonly scope?: Provenance;
+}
+
+/** The longest request accepted for a status. */
+export const MAX_STATUS_REQUEST_CHARS = 500;
+
+/** A status as a person is allowed to see it: the short answer, where each point came from, and nothing about the plumbing. */
+export interface StatusView {
+  readonly headline: string;
+  readonly points: ReadonlyArray<{ readonly text: string; readonly sources: readonly Provenance[] }>;
+  /** True when nothing relevant was found (and there are no points). */
+  readonly nothing: boolean;
+  readonly generatedAt: number;
+  readonly mode: 'demo' | 'anthropic';
+  /** How many notes the model was shown, and how many it was not (too many for one request: the newest were used). */
+  readonly entriesUsed: number;
+  readonly entriesLeftOut: number;
 }
 
 /** What approving a proposal reports: which proposal, how many operations were written, and what they were. */
@@ -76,6 +99,12 @@ export interface CaciController {
    * proposal stays pending, so it can be tried again or rejected. Approving twice, or twice at once, writes once.
    */
   approve(token: unknown, proposalId: unknown): Promise<Result<ApprovedView, CaciError>>;
+  /**
+   * A short status, in a fixed format, for **the person who asks and nobody else**, from everything they can read
+   * right now: their own brain and every circle brain they belong to (any role). Free text in (`text`, 1 to 500
+   * characters; optional `timeZone`, an IANA name, default UTC). Writes nothing and keeps nothing.
+   */
+  status(token: unknown, input: { readonly text: unknown; readonly timeZone?: unknown }): Promise<Result<StatusView, CaciError>>;
   /** Which model files this person's notes: `demo` (nothing leaves the machine) or `anthropic` (the note and category names go to Anthropic). Nothing else is said. */
   mode(token: unknown): Promise<Result<{ readonly mode: 'demo' | 'anthropic' }, CaciError>>;
   /** The scopes the person may use, their own brain first: where each is, their role there and whether they may capture. */
@@ -147,6 +176,12 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   const maxPending = whole(init.limits?.maxPendingPerUser, 10, 'maxPendingPerUser');
   const perHour = whole(init.limits?.proposalsPerHour, 30, 'proposalsPerHour');
   const hourly = createWindowLimiter({ max: perHour, windowMs: HOUR_MS });
+  const statusPerHour = whole(init.limits?.statusPerHour, 20, 'statusPerHour');
+  const statusHourly = createWindowLimiter({ max: statusPerHour, windowMs: HOUR_MS });
+  const statusContext = createStatusContext(graphAdapter, init.limits?.status);
+  const statusLlm = init.llm;
+  /** Accounts with a status being made right now: one at a time each. */
+  const making = new Set<string>();
   /** Every pending proposal with its owner. */
   const held = new Map<string, Held>();
   /** Places kept for proposals whose model call is still running, by owner: the place is taken before the call, not after it. */
@@ -272,6 +307,64 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   };
 
   return {
+    async status(token, input) {
+      const me = await whoIs(token);
+      if (!me.ok) return me;
+      if (statusLlm === undefined) return err(caciError('NOT_FOUND', 'status updates are not available'));
+      const userId = me.value.user.id;
+      if (typeof input !== 'object' || input === null || Array.isArray(input)) return err(caciError('INVALID_INPUT', 'send { text }', { field: 'text' }));
+      for (const key of Object.keys(input)) if (key !== 'text' && key !== 'timeZone') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
+      const asked = input.text;
+      if (typeof asked !== 'string') return err(caciError('INVALID_INPUT', 'text must be text', { field: 'text' }));
+      const text = asked.trim();
+      if (text === '') return err(caciError('INVALID_INPUT', 'text must not be empty', { field: 'text' }));
+      if ([...text].length > MAX_STATUS_REQUEST_CHARS) return err(caciError('INVALID_INPUT', `text is over the limit of ${MAX_STATUS_REQUEST_CHARS} characters`, { field: 'text' }));
+      if (input.timeZone !== undefined && !isTimeZone(input.timeZone)) return err(caciError('INVALID_INPUT', 'timeZone must be a time zone name such as "Europe/London" or "UTC"', { field: 'timeZone' }));
+      const timeZone = input.timeZone === undefined ? 'UTC' : (input.timeZone as string);
+
+      // one at a time per account, and an hourly limit: both are checked before anything is read or any model is asked, and a refusal is not counted
+      if (making.has(userId)) return err(caciError('THROTTLED', 'a status for you is already being made: wait for it', { retryAfterMs: 5000 }));
+      const wait = statusHourly.check(userId, clock());
+      if (!wait.allowed) return err(caciError('THROTTLED', `you have asked for the most statuses allowed in an hour (${statusPerHour})`, { retryAfterMs: wait.retryAfterMs }));
+      making.add(userId);
+      try {
+        const all = await readableScopes(token);
+        if (!all.ok) return all;
+        const context = await statusContext.read(all.value, clock());
+        if (!context.ok) return context;
+        statusHourly.record(userId, clock()); // the model is about to be asked
+        const answered = await statusLlm.status({ text, entries: context.value.entries, timeZone });
+        if (!answered.ok) return err({ source: 'llm' as const, error: answered.error });
+        const provenance = context.value.provenance;
+        const points = answered.value.points.map((p) => {
+          const seen = new Set<string>();
+          const sources: Provenance[] = [];
+          for (const ref of p.refs) {
+            const where = provenance[ref - 1];
+            if (where === undefined) continue;
+            const key = where.kind === 'personal' ? 'personal' : `circle:${where.circleId}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            sources.push(Object.freeze(where.kind === 'personal' ? { kind: 'personal' as const } : { kind: 'circle' as const, circleId: where.circleId, circleName: where.circleName }));
+          }
+          return Object.freeze({ text: p.text, sources: Object.freeze(sources) });
+        });
+        return ok(
+          Object.freeze({
+            headline: answered.value.headline,
+            points: Object.freeze(points),
+            nothing: answered.value.nothing,
+            generatedAt: clock(),
+            mode,
+            entriesUsed: context.value.entries.length,
+            entriesLeftOut: context.value.entriesLeftOut,
+          }),
+        );
+      } finally {
+        making.delete(userId);
+      }
+    },
+
     async mode(token) {
       const me = await whoIs(token);
       return me.ok ? ok(Object.freeze({ mode })) : me;

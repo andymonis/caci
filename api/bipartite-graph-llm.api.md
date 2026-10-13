@@ -109,6 +109,9 @@ export const DEFAULT_ROUTES: Readonly<Record<Capability, CapabilityRoute>>;
 export const DEFAULT_TIERS: Readonly<Record<ModelTier, string>>;
 
 // @public
+export function isTimeZone(name: unknown): name is string;
+
+// @public
 export function isValidUsage(usage: TokenUsage): boolean;
 
 // @public

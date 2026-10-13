@@ -63,6 +63,10 @@ export interface CaciController {
     reject(token: unknown, proposalId: unknown): Promise<Result<{
         readonly id: string;
     }, CaciError>>;
+    status(token: unknown, input: {
+        readonly text: unknown;
+        readonly timeZone?: unknown;
+    }): Promise<Result<StatusView, CaciError>>;
     summary(token: unknown, scope?: unknown): Promise<Result<GraphSummary, CaciError>>;
 }
 
@@ -74,7 +78,11 @@ export interface CaciControllerInit {
     // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
     readonly graphAdapter: StorageAdapter;
     // (undocumented)
-    readonly limits?: CaciLimits & BrainLimits;
+    readonly limits?: CaciLimits & BrainLimits & {
+        readonly status?: StatusContextLimits;
+    };
+    // Warning: (ae-forgotten-export) The symbol "Llm" needs to be exported by the entry point index.d.ts
+    readonly llm?: Pick<Llm, 'status'>;
     readonly mode?: 'demo' | 'anthropic';
     // Warning: (ae-forgotten-export) The symbol "ScopeResolver" needs to be exported by the entry point index.d.ts
     readonly scopes?: ScopeResolver;
@@ -103,6 +111,7 @@ export type CaciErrorCode = (typeof CACI_ERROR_CODES)[number];
 export interface CaciLimits {
     readonly maxPendingPerUser?: number;
     readonly proposalsPerHour?: number;
+    readonly statusPerHour?: number;
 }
 
 // @public (undocumented)
@@ -207,6 +216,9 @@ export const MAX_NOTE_CHARS = 8000;
 // @public (undocumented)
 export const MAX_PAGE = 100;
 
+// @public
+export const MAX_STATUS_REQUEST_CHARS = 500;
+
 // @public (undocumented)
 export interface MineCategory extends CategoryView {
     // (undocumented)
@@ -278,6 +290,34 @@ export interface ProposalView {
     // (undocumented)
     readonly summary: ProposalSummary;
     readonly text: string;
+}
+
+// @public (undocumented)
+export interface StatusContextLimits {
+    readonly maxConcurrentReads?: number;
+    readonly maxEntryChars?: number;
+    readonly maxPerScope?: number;
+    readonly maxReadPerScope?: number;
+    readonly maxTotalChars?: number;
+}
+
+// @public
+export interface StatusView {
+    // (undocumented)
+    readonly entriesLeftOut: number;
+    readonly entriesUsed: number;
+    // (undocumented)
+    readonly generatedAt: number;
+    // (undocumented)
+    readonly headline: string;
+    // (undocumented)
+    readonly mode: 'demo' | 'anthropic';
+    readonly nothing: boolean;
+    // (undocumented)
+    readonly points: ReadonlyArray<{
+        readonly text: string;
+        readonly sources: readonly Provenance[];
+    }>;
 }
 
 // Warning: (ae-forgotten-export) The symbol "PendingProposal" needs to be exported by the entry point index.d.ts
