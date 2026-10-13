@@ -62,8 +62,44 @@ function readRequest(request: ModelRequest): { itemId: string | undefined; note:
   return { itemId, note: note === undefined ? undefined : unescapeBlock(note), categories };
 }
 
-/** The reply the demo model gives for a prompt, as the JSON object the categoriser expects; `undefined` if the prompt is not one it understands. */
+const MAX_HEADLINE = 160;
+const MAX_POINT = 240;
+const MAX_POINTS = 5;
+const oneLine = (text: string): string => text.replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * The reply for a status prompt: a headline with the date and how many notes were read, and up to five points
+ * quoting the entries (the ones sharing words with the request first, else the newest, in the order given), each
+ * citing its number; or "nothing" when there are no entries. Deterministic, and valid for any entries.
+ */
+function demoStatusReply(request: ModelRequest): JsonObject | undefined {
+  const system = request.system ?? '';
+  const count = Number(/numbered 1 to (\d+)/.exec(system)?.[1]);
+  const content = request.messages[0]?.content ?? '';
+  const block = /<entries>\n([\s\S]*?)\n<\/entries>/.exec(content)?.[1];
+  const asked = /<request>\n([\s\S]*?)\n<\/request>/.exec(content)?.[1];
+  if (!Number.isSafeInteger(count) || block === undefined || asked === undefined) return undefined;
+  const day = /current date and time is ([A-Za-z]+ \d{1,2} [A-Za-z]+ \d{4})/.exec(system)?.[1] ?? 'today';
+  const entries: { n: number; where: string; text: string }[] = [];
+  for (const line of unescapeBlock(block).split('\n')) {
+    const m = /^\[(\d+)\] \(([^)]*?)(?:, \d{4}-\d{2}-\d{2})?\) ([\s\S]*)$/.exec(line);
+    if (m === null) continue;
+    const n = Number(m[1]);
+    if (n >= 1 && n <= count) entries.push({ n, where: m[2] ?? '', text: oneLine(m[3] ?? '') });
+  }
+  if (entries.length === 0) return { headline: clip(`${day}: nothing relevant was found in your notes.`, MAX_HEADLINE), points: [], nothing: true };
+  const wanted = wordsOf(unescapeBlock(asked));
+  const scored = entries
+    .map((e, i) => ({ ...e, i, score: [...new Set(wordsOf(e.text))].filter((w) => wanted.some((x) => same(x, w))).length }))
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .slice(0, MAX_POINTS);
+  const points = scored.map((e) => ({ text: clip(`${e.text || '(no text)'}${e.where === 'personal' || e.where === '' ? '' : ` (${oneLine(e.where)})`}`, MAX_POINT), refs: [e.n] }));
+  return { headline: clip(`${day}: I read ${entries.length} note${entries.length === 1 ? '' : 's'}; here ${points.length === 1 ? 'is the one' : `are the ${points.length}`} most relevant.`, MAX_HEADLINE), points, nothing: false };
+}
+
+/** The reply the demo model gives for a prompt, as the JSON object the capability expects; `undefined` if the prompt is not one it understands. */
 export function demoReply(request: ModelRequest): JsonObject | undefined {
+  if ((request.system ?? '').startsWith('You are the status assistant')) return demoStatusReply(request);
   const { itemId, note, categories } = readRequest(request);
   if (itemId === undefined || note === undefined) return undefined;
   const noteWords = wordsOf(note);
