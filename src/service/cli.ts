@@ -49,6 +49,7 @@ export async function serve(env: Readonly<Record<string, string | undefined>>, i
     io.stdout(`Listening on http://${shown}:${service.port}\n`);
     io.stdout(`Open http://${shown}:${service.port}/ in a browser to register and sign in.\n`);
     io.stdout(`Data is kept in ${service.dataDir} (graphs.db and users.db, not encrypted).\n`);
+    io.stdout(`Model instructions and limits: ${service.controlsDir} (six text files).\n`);
     io.stdout(
       config.value.llm === 'anthropic'
         ? "Model: Anthropic (the real model). Every account's notes, and the names of their categories, are sent to Anthropic, and nothing is anonymised.\n"

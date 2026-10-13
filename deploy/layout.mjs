@@ -8,6 +8,8 @@ export const LAYOUT = Object.freeze({
   appDir: '/opt/caci/app',
   /** `graphs.db` and `users.db`. */
   dataDir: '/var/lib/caci',
+  /** The LLM controls (R-012): instructions, framing and limits, as text files in the checkout. */
+  controlsDir: '/opt/caci/app/controls',
   /** Settings and the Anthropic key, read by systemd and by the deploy command. Never in the repository. */
   envFile: '/etc/caci/caci.env',
   /** Snapshots (a folder per snapshot). */

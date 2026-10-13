@@ -14,6 +14,7 @@ function good(over = {}) {
     sqliteLoads: async () => true,
     commit: async () => ({ sha: 'abc1234', committedAtMs: NOW - 86_400_000, dirty: false }),
     settings: async () => ({ exists: true, readable: true, path: '/etc/caci/caci.env', mode: 0o640, uid: 0, config: config(), keyPresent: true }),
+    controls: async () => ({ ok: true, dir: '/opt/caci/app/controls' }),
     dataDir: async () => ({ exists: true, path: '/var/lib/caci', mode: 0o700, files: [{ name: 'graphs.db', mode: 0o600 }, { name: 'users.db', mode: 0o600 }] }),
     serviceState: async () => ({ active: true, enabled: true }),
     addresses: async () => ['192.168.1.60'],
@@ -65,6 +66,38 @@ describe('Node', () => {
     const r = await doctor({ nodeVersion: async () => 'v18.0.0' });
     expect(r.code).toBe(1);
     expect(r.text).toContain('-> Install Node 22');
+  });
+});
+
+describe('the LLM controls', () => {
+  it('load: one pass line naming the folder', async () => {
+    const r = await doctor();
+    expect(r.results.find((x) => x.name === 'LLM controls')).toMatchObject({ status: 'pass', text: '/opt/caci/app/controls: the six files load and check out' });
+  });
+  it('a bad file fails the doctor, names the problems and says how to undo a bad edit', async () => {
+    const r = await doctor({ controls: async () => ({ ok: false, dir: '/opt/caci/app/controls', problems: ['status/system.txt: line 2: unknown slot "x"', 'status/settings.json: "maxPoints" is 99, outside 1 to 20'] }) });
+    expect(statusOf(r, 'LLM controls')).toBe('fail');
+    expect(r.code).toBe(1);
+    expect(r.text).toContain('status/system.txt: line 2: unknown slot "x"; status/settings.json');
+    expect(r.text).toContain('git checkout -- controls/');
+    expect(r.text).toContain('git diff controls/ in /opt/caci/app');
+    expect(r.text).toContain('sudo systemctl restart caci');
+  });
+  it('only the first five problems are shown, with a count of the rest', async () => {
+    const problems = Array.from({ length: 7 }, (_, i) => `f${i}: bad`);
+    const r = await doctor({ controls: async () => ({ ok: false, dir: '/c/controls', problems }) });
+    expect(r.text).toContain('f4: bad (and 2 more)');
+    expect(r.text).not.toContain('f5: bad');
+    const six = await doctor({ controls: async () => ({ ok: false, dir: '/c/controls', problems: problems.slice(0, 6) }) });
+    expect(six.text).toContain('f4: bad (and 1 more)');
+    const five = await doctor({ controls: async () => ({ ok: false, dir: '/c/controls', problems: problems.slice(0, 5) }) });
+    expect(five.text).toContain('f4: bad');
+    expect(five.text).not.toContain('more)');
+  });
+  it('a probe that throws is one failed check, not a crash', async () => {
+    const r = await doctor({ controls: async () => { throw new Error('boom'); } });
+    expect(statusOf(r, 'LLM controls')).toBe('fail');
+    expect(r.text).toContain('could not be checked (boom)');
   });
 });
 

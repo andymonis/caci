@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseServiceConfig } from '../src/service/config.ts';
+import { loadControlsFolder } from '../src/service/controls-files.ts';
+import { shippedFiles } from '../src/llm/testing/shipped-controls.test-util.ts';
 import { createProbes } from './doctor-host.mjs';
 import { LAYOUT } from './layout.mjs';
 
@@ -16,15 +18,43 @@ const FAIL = () => ({ ok: false, code: 1, stdout: '', stderr: '', detail: 'no' }
 function setup(over = {}) {
   const base = mkdtempSync(join(tmpdir(), 'caci-doctor-'));
   dirs.push(base);
-  const layout = { ...LAYOUT, appDir: join(base, 'app'), dataDir: join(base, 'data'), envFile: join(base, 'caci.env'), backupDir: join(base, 'backups') };
+  const layout = { ...LAYOUT, appDir: join(base, 'app'), controlsDir: join(base, 'controls'), dataDir: join(base, 'data'), envFile: join(base, 'caci.env'), backupDir: join(base, 'backups') };
   const calls = [];
   const run = over.run ?? (async (file, args) => {
     calls.push([file, ...args].join(' '));
     return OK();
   });
-  const probes = createProbes({ layout, run, parseServiceConfig, hashOnce: async () => {}, ...over.deps });
+  const probes = createProbes({ layout, run, parseServiceConfig, loadControls: loadControlsFolder, hashOnce: async () => {}, ...over.deps });
   return { base, layout, probes, calls };
 }
+
+describe('the controls probe', () => {
+  it('reports the folder when the six files are good, with no contents', async () => {
+    const { layout, probes } = setup();
+    const files = shippedFiles();
+    mkdirSync(layout.controlsDir, { recursive: true });
+    for (const [name, text] of Object.entries(files)) {
+      mkdirSync(join(layout.controlsDir, name.split('/')[0]), { recursive: true });
+      writeFileSync(join(layout.controlsDir, ...name.split('/')), text);
+    }
+    expect(await probes.controls()).toEqual({ ok: true, dir: layout.controlsDir });
+  });
+  it('reports the problems, naming files, when the folder is bad or missing', async () => {
+    const { layout, probes } = setup();
+    expect(await probes.controls()).toMatchObject({ ok: false, dir: layout.controlsDir, problems: [expect.stringContaining('does not exist')] });
+    const files = { ...shippedFiles(), 'status/system.txt': 'x {{bad}}' };
+    for (const [name, text] of Object.entries(files)) {
+      mkdirSync(join(layout.controlsDir, name.split('/')[0]), { recursive: true });
+      writeFileSync(join(layout.controlsDir, ...name.split('/')), text);
+    }
+    const r = await probes.controls();
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p) => p.startsWith('status/system.txt'))).toBe(true);
+  });
+  it('is the real layout\'s controls folder in the checkout', () => {
+    expect(LAYOUT.controlsDir).toBe(`${LAYOUT.appDir}/controls`);
+  });
+});
 
 describe('the settings probe', () => {
   it('reads mode, owner and the parsed configuration, and says only whether the key is set', async () => {

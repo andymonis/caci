@@ -86,6 +86,12 @@ export async function runDoctor({ probes, log }) {
     return out;
   });
 
+  await check('LLM controls', async () => {
+    const c = await probes.controls();
+    if (c.ok) return pass('LLM controls', `${c.dir}: the six files load and check out`);
+    return fail('LLM controls', `${c.dir}: ${c.problems.slice(0, 5).join('; ')}${c.problems.length > 5 ? ` (and ${c.problems.length - 5} more)` : ''}`, `Fix the file named above (git diff controls/ in ${c.dir.replace(/\/controls\/?$/, '')} shows what changed), or undo it with git checkout -- controls/, then: sudo systemctl restart caci`);
+  });
+
   await check('Data folder', async () => {
     const d = await probes.dataDir();
     if (!d.exists) return fail('Data folder', `${d.path} does not exist`, 'Run the install script, then start the service.');

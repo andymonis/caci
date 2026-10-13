@@ -4,10 +4,10 @@ import process from 'node:process';
 import { runDoctor } from '../deploy/doctor.mjs';
 import { createProbes } from '../deploy/doctor-host.mjs';
 import { createRunner } from '../deploy/exec.mjs';
-import { parseServiceConfig } from '../dist/service/index.js';
+import { loadControlsFolder, parseServiceConfig } from '../dist/service/index.js';
 import { createPasswordHasher } from '../dist/users/index.js';
 
 const hasher = createPasswordHasher();
-const probes = createProbes({ run: createRunner(), parseServiceConfig, hashOnce: (password) => hasher.hash(password) });
+const probes = createProbes({ run: createRunner(), parseServiceConfig, loadControls: loadControlsFolder, hashOnce: (password) => hasher.hash(password) });
 const { code } = await runDoctor({ probes, log: (line) => process.stdout.write(`${line}\n`) });
 process.exit(code);

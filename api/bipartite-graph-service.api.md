@@ -86,6 +86,7 @@ export interface RestoreIo {
 // @public (undocumented)
 export interface RunningService {
     close(): Promise<void>;
+    readonly controlsDir: string;
     readonly dataDir: string;
     // (undocumented)
     readonly host: string;

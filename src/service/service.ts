@@ -2,7 +2,7 @@ import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createAccountRoutes, createApiServer, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
-import { createCaciController } from '../caci/index.js';
+import { createCaciController, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
 import { afterAccountDeletion, createScopeResolver, reconcileCircleGraphs, withCircleGraphs, type ReconcileReport, type ScopesResult } from '../scopes/index.js';
 import { createSharing } from '../sharing/index.js';
@@ -22,6 +22,8 @@ export interface RunningService {
   readonly host: string;
   /** The absolute folder holding `graphs.db` and `users.db`. */
   readonly dataDir: string;
+  /** The folder the LLM controls were read from (R-012). */
+  readonly controlsDir: string;
   /** Stops listening, then closes both databases. Safe to call twice. */
   close(): Promise<void>;
 }
@@ -61,6 +63,13 @@ export async function startService(config: ServiceConfig, options: ServiceOption
   const controlsDir = options.controlsDir ?? defaultControlsDir();
   const controls = loadControlsFolder(controlsDir); // first of all: a bad controls file must stop the start, naming the file, and leave nothing behind
   if (!controls.ok) throw new Error(`the LLM controls in ${controlsDir} are not valid:\n${controls.error.map((p) => `  - ${p}`).join('\n')}`);
+  // the controls must allow at least what the API itself accepts, or a valid request would fail inside the LLM component (R-012 D12)
+  const { categorise, status } = controls.value;
+  const tooLow = [
+    ...(categorise.settings.maxTextChars < MAX_NOTE_CHARS ? [`categorise/settings.json: "maxTextChars" is ${categorise.settings.maxTextChars}, below the ${MAX_NOTE_CHARS} characters the service accepts for a note`] : []),
+    ...(status.settings.maxRequestChars < MAX_STATUS_REQUEST_CHARS ? [`status/settings.json: "maxRequestChars" is ${status.settings.maxRequestChars}, below the ${MAX_STATUS_REQUEST_CHARS} characters the service accepts for a status request`] : []),
+  ];
+  if (tooLow.length > 0) throw new Error(`the LLM controls in ${controlsDir} are not valid:\n${tooLow.map((p) => `  - ${p}`).join('\n')}`);
   const client = await modelFor(config, options); // first, before any folder or file is made: a missing key must leave nothing behind
   const webFiles = loadWebFiles(options.webDir ?? defaultWebDir(), WEB_FILE_SPECS); // also before any file is made: a missing web file must leave nothing behind
   const dataDir = resolve(config.dataDir);
@@ -139,7 +148,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     closers.push(() => api.close());
 
     let closing: Promise<void> | undefined;
-    return { port, host: config.bind, dataDir, close: () => (closing ??= closeAll()) };
+    return { port, host: config.bind, dataDir, controlsDir, close: () => (closing ??= closeAll()) };
   } catch (cause) {
     await closeAll();
     throw cause;

@@ -15,6 +15,7 @@ export function createProbes({
   run,
   parseServiceConfig,
   hashOnce,
+  loadControls,
   get = httpGet,
   now = Date.now,
   interfaces = networkInterfaces,
@@ -62,6 +63,10 @@ export function createProbes({
         config: parsed.ok ? { ok: true, value: parsed.value } : { ok: false, errors: parsed.error.map((e) => ({ variable: e.variable, message: e.message })) },
         keyPresent: String(values.ANTHROPIC_API_KEY ?? '').trim() !== '',
       };
+    },
+    controls: async () => {
+      const result = loadControls(layout.controlsDir);
+      return result.ok ? { ok: true, dir: layout.controlsDir } : { ok: false, dir: layout.controlsDir, problems: result.error };
     },
     dataDir: async () => {
       const path = layout.dataDir;
