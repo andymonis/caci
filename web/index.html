@@ -81,6 +81,7 @@
     <section id="screen-signed-in" hidden>
       <nav id="nav" aria-label="Main">
         <a id="nav-home" href="#/">Home</a>
+        <a id="nav-status" href="#/status">Status</a>
         <a id="nav-capture" href="#/capture">Capture</a>
         <a id="nav-brain" href="#/brain">Brain</a>
         <a id="nav-circles" href="#/circles">Circles</a>
@@ -101,7 +102,7 @@
         <p id="home-invitations-count" role="status"></p>
         <p class="hint">This is checked when the page opens or when you press Refresh. It does not update by itself.</p>
         <button type="button" id="home-refresh">Refresh</button>
-        <p><a href="#/capture">File a note</a> · <a href="#/brain">Browse your notes</a> · <a href="#/invitations">See your invitations</a> · <a href="#/circles">See your circles</a></p>
+        <p><a href="#/status">Ask for a status</a> · <a href="#/capture">File a note</a> · <a href="#/brain">Browse your notes</a> · <a href="#/invitations">See your invitations</a> · <a href="#/circles">See your circles</a></p>
         <button type="button" id="signout">Sign out</button>
       </section>
 
@@ -280,6 +281,41 @@
             </div>
           </section>
         </div>
+      </section>
+
+      <section id="view-status" hidden>
+        <h2 id="status-heading" tabindex="-1">Status update</h2>
+        <p id="status-mode-notice" class="notice" role="status"></p>
+        <p id="status-context-notice" class="notice"></p>
+        <button type="button" id="status-mode-retry" class="secondary" hidden>Try again</button>
+
+        <form id="status-form" method="post" novalidate>
+          <p id="status-error" class="error" role="alert" tabindex="-1" hidden></p>
+          <div class="field">
+            <label for="status-request">What would you like a status on?</label>
+            <textarea id="status-request" name="request" rows="3" autocomplete="off" aria-describedby="status-count status-request-error"></textarea>
+            <p id="status-count" class="hint"></p>
+            <p id="status-request-error" class="error" hidden></p>
+          </div>
+          <p class="hint">Or press one to fill the box:</p>
+          <div class="actions">
+            <button type="button" id="status-suggest-0" class="secondary"></button>
+            <button type="button" id="status-suggest-1" class="secondary"></button>
+            <button type="button" id="status-suggest-2" class="secondary"></button>
+          </div>
+          <button type="submit" id="status-submit">Ask CaCi</button>
+        </form>
+
+        <section id="status-answer" hidden>
+          <h3 id="status-answer-heading" tabindex="-1">Your status</h3>
+          <p id="status-headline" class="row-title"></p>
+          <ul id="status-points" class="plain"></ul>
+          <p id="status-nothing" role="status" hidden></p>
+          <p id="status-left-out" class="hint" hidden></p>
+          <p id="status-meta" class="hint"></p>
+          <p id="status-not-saved" class="hint"></p>
+          <button type="button" id="status-clear" class="secondary">Clear this status</button>
+        </section>
       </section>
 
       <section id="view-capture" hidden>

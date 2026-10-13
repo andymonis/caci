@@ -95,7 +95,7 @@ What the person is shown (built by the server): `headline`, `points` each with `
 
 | Situation | Words |
 |-----------|-------|
-| Mode notice | The capture screen's `demo` and `anthropic` sentences, plus "Your status uses everything you can read: your own notes and the circles you are in. It is sent with your request." |
+| Mode notice | Status-specific sentences (the capture screen's say "filed", which is wrong here): `demo` "Answered by the free demo model: nothing leaves this machine."; `anthropic` "Answered by Anthropic's model: your request and the notes you can read, yours and your circles', are sent to Anthropic and are not anonymised."; plus "Your status uses everything you can read: your own notes and the circles you are in. It is sent with your request." |
 | Nothing found | "Nothing relevant was found in what you can read." |
 | Entries left out | "Some notes were left out because there were too many; the newest were used." |
 | Limit | The service's words with the wait. |

@@ -5,6 +5,8 @@
 // - The answer is held in memory only and forgotten by `reset()` (sign-out, or leaving the screen).
 // - Asking again replaces the answer; a failed ask keeps the last good answer and says why.
 // - The person's time zone comes from the browser (`Intl`) and is sent only as a hint; the service checks it.
+// - The mode (which model answers) comes from the service; until it is known nothing can be asked, so the notice
+//   is always shown before the first request is sent.
 // - Nothing here writes anything: a status is not filed in any brain.
 
 import { failed } from './circles-session.js';
@@ -26,11 +28,12 @@ export function createStatusSession({ client, onSignedOut, timeZone = browserTim
   if (!client || typeof client.status !== 'function') throw new TypeError('createStatusSession needs a notes client');
   let epoch = 0;
   let busy = false;
+  let mode = { status: 'unknown', value: null, error: null };
   let answer = null;
   let asked = '';
   const listeners = new Set();
 
-  const snapshot = () => Object.freeze({ answer, asked, busy });
+  const snapshot = () => Object.freeze({ mode: Object.freeze({ ...mode }), answer, asked, busy, canAsk: mode.status === 'known' && !busy });
 
   function notify() {
     const view = snapshot();
@@ -40,6 +43,15 @@ export function createStatusSession({ client, onSignedOut, timeZone = browserTim
       } catch {
         // a broken listener must not stop the others
       }
+    }
+  }
+
+  function signedOut(error) {
+    if (error.kind !== 'signed-out' || typeof onSignedOut !== 'function') return;
+    try {
+      onSignedOut();
+    } catch {
+      // ignored
     }
   }
 
@@ -54,9 +66,33 @@ export function createStatusSession({ client, onSignedOut, timeZone = browserTim
     reset() {
       epoch += 1;
       busy = false;
+      mode = { status: 'unknown', value: null, error: null };
       answer = null;
       asked = '';
       notify();
+    },
+
+    /** Ask which model answers. Calling it again is the way to try after a failure. */
+    async loadMode() {
+      if (busy) return BUSY;
+      busy = true;
+      const mine = epoch;
+      mode = { status: 'loading', value: null, error: null };
+      notify();
+      try {
+        const r = await client.mode();
+        if (mine !== epoch) return DROPPED;
+        if (!r.ok) {
+          mode = { status: 'error', value: null, error: r.error.message };
+          signedOut(r.error);
+          return failed(r.error);
+        }
+        mode = { status: 'known', value: r.value.mode, error: null };
+        return { ok: true };
+      } finally {
+        if (mine === epoch) busy = false;
+        notify();
+      }
     },
 
     /** Closes the answer and shows the empty form again. Nothing is sent. */
@@ -70,6 +106,7 @@ export function createStatusSession({ client, onSignedOut, timeZone = browserTim
 
     /** Asks for a status. The text is checked first by the client; a field problem comes back beside its field. */
     async ask(text) {
+      if (mode.status !== 'known') return { ok: false, kind: 'mode-unknown', message: 'Could not tell which model answers.' };
       if (busy) return BUSY;
       busy = true;
       const mine = epoch;
@@ -79,13 +116,7 @@ export function createStatusSession({ client, onSignedOut, timeZone = browserTim
         const r = zone === undefined ? await client.status(text) : await client.status(text, zone);
         if (mine !== epoch) return DROPPED;
         if (!r.ok) {
-          if (r.error.kind === 'signed-out' && typeof onSignedOut === 'function') {
-            try {
-              onSignedOut();
-            } catch {
-              // ignored
-            }
-          }
+          signedOut(r.error);
           return r.error.field === undefined ? failed(r.error) : { ...failed(r.error), errors: { [r.error.field]: r.error.message } };
         }
         answer = r.value;

@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'scope-session.js', 'session.js', 'share-page.js', 'shared-page.js', 'shared-session.js', 'sharing-client.js', 'status-session.js', 'style.css', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'scope-session.js', 'session.js', 'share-page.js', 'shared-page.js', 'shared-session.js', 'sharing-client.js', 'status-page.js', 'status-session.js', 'status-view.js', 'style.css', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -158,7 +158,7 @@ describe('the page', () => {
   });
 
   it('refers to nothing but files of the app by absolute path, plus the empty icon', () => {
-    const served = new Set(['/app.js', '/style.css', '#/', '#/circles', '#/invitations', '#/capture', '#/brain']);
+    const served = new Set(['/app.js', '/style.css', '#/', '#/circles', '#/invitations', '#/status', '#/capture', '#/brain']);
     for (const t of tags) {
       for (const name of ['src', 'href', 'action', 'formaction', 'poster', 'data', 'srcset', 'ping', 'cite', 'longdesc']) {
         const value = attr(t, name);
@@ -172,7 +172,7 @@ describe('the page', () => {
 
   it('every form is a post with browser validation off, so a failed script can never put a password in an address', () => {
     const forms = tags.filter((t) => t.name === 'form');
-    expect(forms).toHaveLength(6);
+    expect(forms).toHaveLength(7);
     for (const f of forms) {
       expect(attr(f, 'method')).toBe('post');
       expect(f.attrs).toMatch(/\bnovalidate\b/);
@@ -198,13 +198,16 @@ describe('the page', () => {
     }
   });
 
-  it('the note box is a labelled text area with a name and a count that describes it', () => {
-    const area = tags.find((t) => t.name === 'textarea');
-    expect(area).toBeDefined();
-    expect(attr(area, 'id')).toBe('capture-note');
-    expect(attr(area, 'name')).toBeTruthy();
-    expect(tags.some((t) => t.name === 'label' && attr(t, 'for') === 'capture-note')).toBe(true);
-    expect(attr(area, 'aria-describedby')).toBe('capture-count capture-note-error');
+  it('the note box and the status request box are labelled text areas with a name and a count that describes them', () => {
+    const areas = tags.filter((t) => t.name === 'textarea');
+    expect(areas.map((a) => attr(a, 'id')).sort()).toEqual(['capture-note', 'status-request']);
+    const described = { 'capture-note': 'capture-count capture-note-error', 'status-request': 'status-count status-request-error' };
+    for (const area of areas) {
+      const id = attr(area, 'id');
+      expect(attr(area, 'name'), id).toBeTruthy();
+      expect(tags.some((t) => t.name === 'label' && attr(t, 'for') === id), id).toBe(true);
+      expect(attr(area, 'aria-describedby'), id).toBe(described[id]);
+    }
   });
 
   it('gives every field a visible label, a name and the right autocomplete value', () => {

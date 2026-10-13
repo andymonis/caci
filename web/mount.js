@@ -6,6 +6,7 @@
 import { createApiClient } from './api-client.js';
 import { mountBrainPage } from './brain-page.js';
 import { mountCapturePage } from './capture-page.js';
+import { mountStatusPage } from './status-page.js';
 import { createNotesClient } from './notes-client.js';
 import { mountCirclePage } from './circle-page.js';
 import { mountSharePage } from './share-page.js';
@@ -19,8 +20,8 @@ import { createSession } from './session.js';
 import { FORMS, formFeedback, viewOf } from './view.js';
 
 const SCREENS = ['loading', 'unreachable', 'signed-out', 'signed-in'];
-const VIEWS = ['home', 'circles', 'circle', 'invitations', 'capture', 'brain'];
-const NAV = ['home', 'capture', 'brain', 'circles', 'invitations'];
+const VIEWS = ['home', 'circles', 'circle', 'invitations', 'status', 'capture', 'brain'];
+const NAV = ['home', 'status', 'capture', 'brain', 'circles', 'invitations'];
 const NO_ENV = Object.freeze({ getHash: () => '', setHash: () => {}, onHashChange: () => {} });
 
 /**
@@ -43,6 +44,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
   const notesClient = createNotesClient({ fetchFn });
   const brainPage = mountBrainPage(document, { client: notesClient, onSignedOut: recheck });
   const capturePage = mountCapturePage(document, { client: notesClient, onWritten: () => brainPage.markStale(), onSignedOut: recheck });
+  const statusPage = mountStatusPage(document, { client: notesClient, onSignedOut: recheck });
   const sharingClient = createSharingClient({ fetchFn });
   const sharePage = mountSharePage(document, { sharing: sharingClient, circles: circlesClient, notes: notesClient, onSignedOut: recheck });
   const sharedPage = mountSharedPage(document, { client: sharingClient, onSignedOut: recheck });
@@ -120,6 +122,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
         sharedPage.reset();
         capturePage.reset();
         brainPage.reset();
+        statusPage.reset();
       }
       shown = null;
       document.title = 'CaCi';
@@ -143,6 +146,8 @@ export function mount(document, fetchFn, env = NO_ENV) {
     else sharePage.reset();
     if (route.name === 'circle') sharedPage.show(route.id);
     else sharedPage.reset();
+    if (route.name === 'status') statusPage.show();
+    else statusPage.reset();
     if (route.name === 'capture') capturePage.show();
     else capturePage.reset();
     if (route.name === 'brain') brainPage.show();

@@ -801,6 +801,8 @@ describe('the status logic against the real service (demo model)', () => {
       expect((await ann.notes.approve(p.value.id)).ok).toBe(true);
     }
     const before = JSON.stringify((await ann.notes.mineSummary()).value);
+    expect(await ann.status.ask('too early')).toMatchObject({ ok: false, kind: 'mode-unknown' });
+    expect(await ann.status.loadMode()).toEqual({ ok: true });
     const r = await ann.status.ask('How is Mum doing with her tablets?');
     expect(r.ok).toBe(true);
     const answer = ann.status.getState().answer;
@@ -811,16 +813,18 @@ describe('the status logic against the real service (demo model)', () => {
     expect(Object.isFrozen(answer) && Object.isFrozen(answer.points[0])).toBe(true);
     expect(JSON.stringify((await ann.notes.mineSummary()).value)).toBe(before); // nothing was filed
     ann.status.reset();
-    expect(ann.status.getState()).toMatchObject({ answer: null, asked: '', busy: false });
+    expect(ann.status.getState()).toMatchObject({ answer: null, asked: '', busy: false, mode: { status: 'unknown' } });
   });
 
   it('field problems come back beside the field, a person with no notes gets "nothing", and the limit is in the service\'s words', async () => {
     const { port } = await start({ statusPerHour: 2 });
     await person(port, 'root');
     const bob = await person(port, 'bob');
+    await bob.status.loadMode();
     expect(await bob.status.ask('   ')).toMatchObject({ ok: false, kind: 'invalid', errors: { text: expect.any(String) } });
     expect(await bob.status.ask('x'.repeat(501))).toMatchObject({ ok: false, kind: 'invalid' });
     const bad = await person(port, 'cat', { timeZone: () => 'Mars/Base' });
+    await bad.status.loadMode();
     expect(await bad.status.ask('hello')).toMatchObject({ ok: false, kind: 'invalid', errors: { timeZone: expect.any(String) } });
     expect((await bob.status.ask('status')).ok).toBe(true);
     expect(bob.status.getState().answer).toMatchObject({ nothing: true, entriesUsed: 0 });
@@ -835,7 +839,7 @@ describe('the status logic against the real service (demo model)', () => {
     const { port } = await start();
     let out = 0;
     const stranger = createStatusSession({ client: createNotesClient({ fetchFn: browserFetch(port) }), onSignedOut: () => out++ });
-    expect(await stranger.ask('status')).toMatchObject({ ok: false, kind: 'signed-out' });
+    expect(await stranger.loadMode()).toMatchObject({ ok: false, kind: 'signed-out' });
     expect(out).toBe(1);
   });
 });
