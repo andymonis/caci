@@ -5,6 +5,7 @@ import { renderTemplate } from '../../controls/template.js';
 import { llmError, type LlmError } from '../../errors.js';
 import type { ModelMessage } from '../../model-client.js';
 import { escapeForBlock } from '../../text-blocks.js';
+import type { PromptParts } from '../../trace.js';
 
 // The `status` capability (R-011): the person asks for a short status and the model answers from numbered entries of
 // what they can read. This file builds everything sent to the model; `guard.ts` checks what comes back. Both are pure.
@@ -44,6 +45,8 @@ export interface BuiltStatusPrompt {
   readonly system: string;
   readonly messages: readonly ModelMessage[];
   readonly outputSchema: JsonObject;
+  /** The same message as three separate parts (R-012), for the trace and the lab. */
+  readonly parts: PromptParts;
 }
 
 const PROMPT_OPTION_NAMES: readonly string[] = Object.freeze(['maxRequestChars', 'maxEntries', 'maxEntryChars', 'maxTotalChars']);
@@ -94,13 +97,18 @@ function formatEntry(entry: StatusEntry, number: number, timeZone: string): stri
   return `[${number}] (${entry.where}${when}) ${entry.text}`;
 }
 
-/** The single user message: the controls' `frame.txt` with the numbered entries and the request, each in its own escaped block. */
-export function buildStatusUserMessage(controls: StatusControls, entries: readonly StatusEntry[], text: string, timeZone: string): string {
+/** The two blocks of the user message: the numbered entries (part 2) and the request (part 1), each escaped, in its own block. */
+export function statusBlocks(entries: readonly StatusEntry[], text: string, timeZone: string): { readonly entriesBlock: string; readonly requestBlock: string } {
   const lines = entries.map((e, i) => formatEntry(e, i + 1, timeZone).replace(/[\r\n]+/g, ' '));
-  return renderTemplate(controls.frame, {
+  return {
     entriesBlock: `<entries>\n${lines.length === 0 ? '(there are no entries)' : escapeForBlock(lines.join('\n'))}\n</entries>`,
     requestBlock: `<request>\n${escapeForBlock(text)}\n</request>`,
-  });
+  };
+}
+
+/** The single user message: the controls' `frame.txt` with the numbered entries and the request, each in its own escaped block. */
+export function buildStatusUserMessage(controls: StatusControls, entries: readonly StatusEntry[], text: string, timeZone: string): string {
+  return renderTemplate(controls.frame, statusBlocks(entries, text, timeZone));
 }
 
 /** The JSON Schema the reply must match. */
@@ -179,10 +187,13 @@ export function buildStatusPrompt(controls: StatusControls, input: StatusPromptI
       total += size;
     }
     if (total > settings.maxTotalChars) return bad('prompt input.entries', `${total} characters in all, over the limit of ${settings.maxTotalChars}`);
+    const system = buildStatusSystemPrompt(controls, input.entries.length, describeTime(input.now, input.timeZone));
+    const blocks = statusBlocks(input.entries, input.text, input.timeZone);
     return ok({
-      system: buildStatusSystemPrompt(controls, input.entries.length, describeTime(input.now, input.timeZone)),
-      messages: [{ role: 'user', content: buildStatusUserMessage(controls, input.entries, input.text, input.timeZone) }],
+      system,
+      messages: [{ role: 'user', content: renderTemplate(controls.frame, blocks) }],
       outputSchema: buildStatusOutputSchema(controls.settings, input.entries.length),
+      parts: { controls: { system, frame: controls.frame.text }, request: blocks.requestBlock, context: blocks.entriesBlock },
     });
   } catch {
     return bad('prompt', 'could not be built from the input given');

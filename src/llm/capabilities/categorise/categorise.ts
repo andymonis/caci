@@ -178,7 +178,7 @@ async function run(
     },
   );
   if (!prompt.ok) return prompt;
-  emit({ type: 'prompt', system: prompt.value.system, messages: prompt.value.messages, schema: prompt.value.outputSchema });
+  emit({ type: 'prompt', system: prompt.value.system, messages: prompt.value.messages, schema: prompt.value.outputSchema, parts: prompt.value.parts });
 
   const guardContext = { graphId: input.graphId, itemId: input.itemId, ...(input.requestId === undefined ? {} : { requestId: input.requestId }) };
 

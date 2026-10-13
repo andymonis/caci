@@ -466,6 +466,7 @@ export type TraceEvent =
     readonly system: string;
     readonly messages: readonly ModelMessage[];
     readonly schema: JsonObject;
+    readonly parts: PromptParts;
 }
 /** A call to the model is about to be made. Attempt 2 is the repair. */
 | {
@@ -513,6 +514,7 @@ export type TraceEvent =
 // Warnings were encountered during analysis:
 //
 // dist/llm/model-client.d.ts:45:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
+// dist/llm/trace.d.ts:26:5 - (ae-forgotten-export) The symbol "PromptParts" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

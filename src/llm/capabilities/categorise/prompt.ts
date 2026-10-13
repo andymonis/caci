@@ -5,6 +5,7 @@ import { renderTemplate } from '../../controls/template.js';
 import { llmError, type LlmError } from '../../errors.js';
 import type { ModelMessage } from '../../model-client.js';
 import { escapeForBlock } from '../../text-blocks.js';
+import type { PromptParts } from '../../trace.js';
 import { CATEGORISE_OPS, type AllowedOp } from './context.js';
 
 /** What the controller hands over for one note. The note's item id is minted by the controller, never chosen by the model. */
@@ -33,6 +34,8 @@ export interface BuiltPrompt {
   readonly messages: readonly ModelMessage[];
   /** The JSON Schema the reply must match. */
   readonly outputSchema: JsonObject;
+  /** The same message as three separate parts (R-012), for the trace and the lab. */
+  readonly parts: PromptParts;
 }
 
 const PROMPT_OPTION_NAMES: readonly string[] = Object.freeze(['maxOps', 'maxTextChars', 'maxContextChars']);
@@ -75,12 +78,14 @@ export function buildSystemPrompt(controls: CategoriseControls, itemId: string, 
   return renderTemplate(controls.system, { itemId, maxOps: String(maxOps), allowedOps: allowedOps.join(', ') });
 }
 
+/** The two blocks of the user message: the category context (part 2) and the note (part 1), each escaped, in its own block. */
+export function userBlocks(context: string, text: string): { readonly contextBlock: string; readonly requestBlock: string } {
+  return { contextBlock: `<categories>\n${escapeForBlock(context)}\n</categories>`, requestBlock: `<note>\n${escapeForBlock(text)}\n</note>` };
+}
+
 /** The single user message: the controls' `frame.txt` with the category context and the note, each in an escaped block of its own. */
 export function buildUserMessage(controls: CategoriseControls, context: string, text: string): string {
-  return renderTemplate(controls.frame, {
-    contextBlock: `<categories>\n${escapeForBlock(context)}\n</categories>`,
-    requestBlock: `<note>\n${escapeForBlock(text)}\n</note>`,
-  });
+  return renderTemplate(controls.frame, userBlocks(context, text));
 }
 
 type Json = Record<string, unknown>;
@@ -166,10 +171,13 @@ export function buildPrompt(controls: CategoriseControls, input: PromptInput, op
 
     const schema = buildOutputSchema(controls.settings, CATEGORISE_OPS, settings.maxOps);
     if (!schema.ok) return schema;
+    const system = buildSystemPrompt(controls, input.itemId, CATEGORISE_OPS, settings.maxOps);
+    const blocks = userBlocks(input.context, input.text);
     return ok({
-      system: buildSystemPrompt(controls, input.itemId, CATEGORISE_OPS, settings.maxOps),
-      messages: [{ role: 'user', content: buildUserMessage(controls, input.context, input.text) }],
+      system,
+      messages: [{ role: 'user', content: renderTemplate(controls.frame, blocks) }],
       outputSchema: schema.value,
+      parts: { controls: { system: system, frame: controls.frame.text }, request: blocks.requestBlock, context: blocks.contextBlock },
     });
   } catch {
     return bad('prompt', 'could not be built from the input given');

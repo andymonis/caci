@@ -91,6 +91,12 @@ describe('promptOf and attemptsOf on real runs', () => {
     expect(prompt.system).toContain('"note-lab-1"');
     expect(prompt.user).toContain('<note>');
     expect(prompt.schema.type).toBe('object');
+    expect(prompt.parts.controls.system).toBe(prompt.system);
+    expect(prompt.parts.request.startsWith('<note>\n')).toBe(true);
+    expect(prompt.parts.context.startsWith('<categories>\n')).toBe(true);
+    expect(prompt.user).toContain(prompt.parts.request);
+    expect(prompt.user).toContain(prompt.parts.context);
+    expect(promptOf([{ type: 'prompt', system: 's', messages: [{ role: 'user', content: 'u' }], schema: {} }]).parts).toBeNull();
     expect(promptOf([])).toBeNull();
     expect(promptOf(undefined)).toBeNull();
   });
@@ -274,6 +280,21 @@ describe('the page cannot be turned against its user', () => {
       const text = readFileSync(join(publicDir, file), 'utf8');
       expect(text, file).not.toMatch(/https?:\/\/|@import|url\(\s*['"]?(?!data:)/);
     }
+  });
+
+  it('the page shows the three parts of a message in three labelled panels, in order, as text', () => {
+    const script = readFileSync(join(publicDir, 'app.js'), 'utf8');
+    const at = (text) => script.indexOf(text);
+    expect(at('1. The request')).toBeGreaterThan(-1);
+    expect(at('2. The context')).toBeGreaterThan(at('1. The request'));
+    expect(at('3. The controls')).toBeGreaterThan(at('2. The context'));
+    for (const cls of ['part-request', 'part-context', 'part-controls']) expect(script).toContain(`class: '${cls}'`);
+    expect(script).toContain('parts.request');
+    expect(script).toContain('parts.context');
+    expect(script).toContain('parts.controls.system');
+    expect(script).toContain('parts.controls.frame');
+    expect(script).toContain('...partsPanels(prompt.parts)');
+    expect(script.indexOf('...partsPanels(prompt.parts)')).toBeLessThan(script.indexOf("'As sent: system"));
   });
 
   it('every id the script looks up exists in the page', () => {

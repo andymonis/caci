@@ -156,6 +156,19 @@ function attemptsSection(record) {
   );
 }
 
+/** The three parts of a message (R-012): 1 the request, 2 the context, 3 the controls (instructions, and the words around the blocks). */
+function partsPanels(parts) {
+  if (!parts) return [];
+  return [
+    el('h3', { text: '1. The request (part 1: what was typed or being done, escaped, in its block)' }),
+    el('pre', { class: 'part-request', text: parts.request }),
+    el('h3', { text: '2. The context (part 2: the combined brain context, escaped, in its block)' }),
+    el('pre', { class: 'part-context', text: parts.context }),
+    el('h3', { text: '3. The controls (part 3: instructions and the words around the blocks, from the controls folder)' }),
+    el('pre', { class: 'part-controls', text: `${parts.controls.system}\n\n--- the words around the two blocks (frame.txt) ---\n${parts.controls.frame}` }),
+  ];
+}
+
 function promptSection(record) {
   const prompt = promptOf(record.trace);
   if (!prompt) return null;
@@ -163,9 +176,10 @@ function promptSection(record) {
     'details',
     {},
     el('summary', { text: 'Prompt that was sent' }),
-    el('h3', { text: 'System (fixed instructions, no user text)' }),
+    ...partsPanels(prompt.parts),
+    el('h3', { text: 'As sent: system (the controls, no user text)' }),
     el('pre', { text: prompt.system }),
-    el('h3', { text: 'User message (the note and categories sit in their own escaped blocks)' }),
+    el('h3', { text: 'As sent: user message (the controls\' framing around the two blocks)' }),
     el('pre', { text: prompt.user }),
     el('h3', { text: 'Output schema' }),
     el('pre', { text: JSON.stringify(prompt.schema, null, 2) }),

@@ -47,7 +47,7 @@ export function outputText(output) {
 export function promptOf(trace) {
   const event = (trace ?? []).find((e) => e.type === 'prompt');
   if (event === undefined) return null;
-  return { system: event.system, user: event.messages.map((m) => m.content).join('\n\n'), schema: event.schema };
+  return { system: event.system, user: event.messages.map((m) => m.content).join('\n\n'), schema: event.schema, parts: event.parts ?? null };
 }
 
 /**
