@@ -129,6 +129,9 @@ export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
 export function createSharingRoutes(options: SharingRoutesOptions): readonly Route[];
 
 // @public
+export function createStatusRoutes(options: StatusRoutesOptions): readonly Route[];
+
+// @public
 export function createWebRoutes(options: WebRoutesOptions): readonly Route[];
 
 // @public
@@ -167,7 +170,7 @@ export function isJsonContentType(value: string | undefined): boolean;
 // Warning: (ae-forgotten-export) The symbol "Mapped" needs to be exported by the entry point index.d.ts
 //
 // @public
-export function mapCaciError(error: CaciError): Mapped;
+export function mapCaciError(error: CaciError, topic?: 'note' | 'status'): Mapped;
 
 // @public (undocumented)
 export type Match = {
@@ -241,6 +244,14 @@ export interface SharingRoutesOptions extends Pick<CircleRoutesOptions, 'cookieN
 
 // @public
 export const STATUS_OF: Readonly<Record<UsersError['code'], number>>;
+
+// @public (undocumented)
+export interface StatusRoutesOptions {
+    // (undocumented)
+    readonly caci: CaciController;
+    readonly cookieName?: string;
+    readonly secureCookies?: boolean;
+}
 
 // @public
 export const WEB_POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";

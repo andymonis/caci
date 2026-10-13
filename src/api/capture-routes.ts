@@ -28,7 +28,8 @@ const seconds = (ms: number | undefined): Pick<Mapped, 'retryAfterSeconds'> => (
  * text of a provider, a store or a path: a front end learns what happened and what it can do, and nothing
  * from the inside.
  */
-export function mapCaciError(error: CaciError): Mapped {
+export function mapCaciError(error: CaciError, topic: 'note' | 'status' = 'note'): Mapped {
+  const status = topic === 'status';
   switch (error.source) {
     case 'caci': {
       const e = error.error;
@@ -40,7 +41,7 @@ export function mapCaciError(error: CaciError): Mapped {
         case 'EXPIRED':
           return fixed(410, 'EXPIRED', 'that proposal has expired: make it again');
         case 'THROTTLED':
-          return fixed(429, 'THROTTLED', 'you have made the most proposals allowed in an hour', seconds(e.retryAfterMs));
+          return fixed(429, 'THROTTLED', status ? e.message : 'you have made the most proposals allowed in an hour', seconds(e.retryAfterMs)); // the controller's own fixed words for a status: the hourly limit, or one already being made
         case 'TOO_MANY_PENDING':
           return fixed(429, 'TOO_MANY_PENDING', 'you have too many proposals waiting: approve or reject one first', seconds(e.retryAfterMs));
         case 'INVALID_INPUT':
@@ -71,7 +72,7 @@ export function mapCaciError(error: CaciError): Mapped {
         case 'VALIDATION_ERROR':
           return fixed(409, 'WRITE_REFUSED', 'this proposal can no longer be applied');
         default:
-          return fixed(500, 'STORAGE_ERROR', 'your notes could not be read or saved: try again');
+          return fixed(500, 'STORAGE_ERROR', status ? 'your notes could not be read: try again' : 'your notes could not be read or saved: try again');
       }
     }
     case 'llm': {
@@ -79,21 +80,21 @@ export function mapCaciError(error: CaciError): Mapped {
         case 'TIMEOUT':
           return fixed(502, 'MODEL_TIMEOUT', 'the model took too long: try again');
         case 'REFUSED':
-          return fixed(502, 'MODEL_REFUSED', 'the model declined to file this note');
+          return fixed(502, 'MODEL_REFUSED', status ? 'the model declined to answer' : 'the model declined to file this note');
         case 'RATE_LIMITED':
           return fixed(503, 'MODEL_BUSY', 'the model is busy: try again shortly', seconds(error.error.retryAfterMs ?? 30_000));
         case 'CONFIG':
         case 'CANCELLED':
           return fixed(500, 'INTERNAL_ERROR', 'internal error');
         default:
-          return fixed(502, 'MODEL_ERROR', 'the model could not file this note: try again');
+          return fixed(502, 'MODEL_ERROR', status ? 'the model could not make your status: try again' : 'the model could not file this note: try again');
       }
     }
   }
 }
 
-export function respond(error: CaciError, cookies?: readonly string[]): ApiResponse {
-  const m = mapCaciError(error);
+export function respond(error: CaciError, cookies?: readonly string[], topic: 'note' | 'status' = 'note'): ApiResponse {
+  const m = mapCaciError(error, topic);
   return {
     status: m.status,
     body: { error: { code: m.code, message: m.message, ...(m.field === undefined ? {} : { field: m.field }) } },

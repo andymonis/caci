@@ -12,6 +12,8 @@ export { createAccountRoutes, errorResponse, STATUS_OF } from './routes.js';
 export type { AccountRoutesOptions } from './routes.js';
 export { createCaptureRoutes, mapCaciError } from './capture-routes.js';
 export type { CaptureRoutesOptions } from './capture-routes.js';
+export { createStatusRoutes } from './status-routes.js';
+export type { StatusRoutesOptions } from './status-routes.js';
 export { createBrainRoutes } from './brain-routes.js';
 export type { BrainRoutesOptions } from './brain-routes.js';
 export { createReadRoutes } from './read-routes.js';

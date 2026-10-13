@@ -120,6 +120,7 @@ export interface ServiceConfig {
     readonly maxPendingPerUser: number;
     readonly port: number;
     readonly proposalsPerHour: number;
+    readonly statusPerHour: number;
     readonly trustedProxies: number;
 }
 

@@ -19,7 +19,7 @@ const tmp = (): string => {
   dirs.push(dir);
   return dir;
 };
-const config = (dataDir: string, cookieSecure = false): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25 });
+const config = (dataDir: string, cookieSecure = false): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, statusPerHour: 20 });
 async function start(dataDir: string, cookieSecure = false): Promise<RunningService> {
   const service = await startService(config(dataDir, cookieSecure));
   running.push(service);
