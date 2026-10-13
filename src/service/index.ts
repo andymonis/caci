@@ -13,3 +13,4 @@ export { restoreData, RESTORE_USAGE } from './restore.js';
 export type { RestoreIo } from './restore.js';
 export { recoverAdmin, USAGE as RECOVER_USAGE } from './recover.js';
 export type { RecoverIo } from './recover.js';
+export { defaultControlsDir, loadControlsFolder } from './controls-files.js';

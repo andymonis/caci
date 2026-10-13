@@ -32,14 +32,21 @@ export interface ConfigError {
 // @public (undocumented)
 export const DEFAULT_KEEP = 14;
 
+// @public
+export function defaultControlsDir(): string;
+
 // @public (undocumented)
 export const isLoopbackAddress: (bind: string) => boolean;
+
+// Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "Controls" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function loadControlsFolder(dir: string): Result<Controls, readonly string[]>;
 
 // @public (undocumented)
 export const MAX_KEEP = 1000;
 
-// Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
-//
 // @public
 export function parseServiceConfig(env: Readonly<Record<string, string | undefined>>): Result<ServiceConfig, readonly ConfigError[]>;
 
