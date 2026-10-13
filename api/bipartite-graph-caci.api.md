@@ -173,6 +173,15 @@ export function createCaciController(init: CaciControllerInit): CaciController;
 export const DEFAULT_PAGE = 50;
 
 // @public (undocumented)
+export const DEFAULT_STATUS_CONTEXT_LIMITS: Readonly<{
+    maxTotalChars: 12000;
+    maxEntryChars: 600;
+    maxPerScope: 200;
+    maxReadPerScope: 2000;
+    maxConcurrentReads: 4;
+}>;
+
+// @public (undocumented)
 export interface GraphSummary {
     // (undocumented)
     readonly categoryCount: number;

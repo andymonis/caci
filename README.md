@@ -292,6 +292,7 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_MAX_MEMBERS_PER_CIRCLE` | People one circle may hold (1 to 1,000) | `50` |
 | `CACI_INVITATION_DAYS` | How long an invitation to a circle stays open (1 to 365) | `7` |
 | `CACI_MAX_BRAIN_SCOPES` | Most brains My Brain may combine: your own plus circles (2 to 100) | `25` |
+| `CACI_STATUS_PER_HOUR` | Status updates one account may ask for in an hour (1 to 1,000), see [Asking for a status update](#asking-for-a-status-update) | `20` |
 
 Listening on anything but this machine (`CACI_BIND=0.0.0.0`, say) is refused unless `CACI_COOKIE_SECURE=true`, or you also set `CACI_ALLOW_INSECURE=true` to say you accept that session cookies cross the network in the clear.
 
@@ -336,7 +337,7 @@ It asks for the new password on the terminal (not shown, typed twice), or reads 
 
 ## Using the web app
 
-The service also serves a small web app from the same address as the API. It lets you **register**, **sign in and out**, visit a **temporary home page** (your name, your username and how many invitations are waiting for you), **use circles** (create one, accept or decline an invitation, leave, look at who is in a circle and manage it), and **file notes and look through them**: type a note, see the model's proposed filing as a preview, approve or reject it, and browse your own categories and items (read-only). **Nothing else is built yet**: the app cannot edit, delete or search what you filed, cannot take pictures or voice, and cannot answer questions from your notes. It is specified in `specs/R-005-web-app.md` (the first slice), `specs/R-006-web-circles.md` (circles) and `specs/R-007-web-notes.md` (notes).
+The service also serves a small web app from the same address as the API. It lets you **register**, **sign in and out**, visit a **temporary home page** (your name, your username and how many invitations are waiting for you), **use circles** (create one, accept or decline an invitation, leave, look at who is in a circle and manage it), and **file notes and look through them**: type a note, see the model's proposed filing as a preview, approve or reject it, and browse your own categories and items (read-only), and **ask CaCi for a status update** (see **Asking for a status update** below). **Nothing else is built yet**: the app cannot edit, delete or search what you filed, cannot take pictures or voice, and cannot answer questions from your notes. It is specified in `specs/R-005-web-app.md` (the first slice), `specs/R-006-web-circles.md` (circles) and `specs/R-007-web-notes.md` (notes).
 
 ### Open it
 
@@ -421,10 +422,11 @@ What the web app does **not** do with circles: everyone in a circle sees everyon
 
 ### Notes in the web app
 
-Two more screens, with the same address rules as the rest (anything that is not exactly one of these is the home screen):
+Three more screens (the first is described under **Asking for a status update**), with the same address rules as the rest (anything that is not exactly one of these is the home screen):
 
 | Address | Screen |
 |---|---|
+| `#/status` | ask CaCi for a status update: which model answers and what is sent, the request box, the answer |
 | `#/capture` | file a note: which model files it, the note box, the preview, approve or reject |
 | `#/brain` | browse your own notes: the categories, the items in one, one item (read-only) |
 
@@ -656,6 +658,43 @@ The capture screen asks **Where should this note go?** and offers your own notes
 - **Separating circles is not pseudonymisation.** It limits who reads a brain, not what the operator or the model provider can see, and **with `CACI_LLM=anthropic` the note and the names of the circle's categories go to Anthropic, unanonymised**.
 - **Nobody is told** when a note is added, and the files are plain text to whoever can read the data folder.
 - **The release gates are not met.** Before anyone else's data is held, the plan needs pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, and a statement of who may use the service. Do not use circle brains with other people's data until they are done.
+
+## Asking for a status update
+
+You can ask CaCi for **a short status** by typing what you want in your own words: "Give me a morning status check", "I am heading into town". CaCi reads **everything you can read** (your own notes and every circle you are in, observers included) and answers **you alone**, in a fixed format. **It is not a question to another person, nothing you ask or get back is filed in any brain, and no history is kept.** It is specified in `specs/R-011-status-updates.md`, which holds its threat table, its residual risks and the release gates that stand for anything beyond the family test.
+
+### What is read, and what is sent to the model
+
+The newest notes you can read, from every scope, are numbered and sent with your request: up to 200 per scope and 12,000 characters in all, newest first; when more exist the answer says some were left out. Each note carries its text, the names of its categories and where it came from; it never carries who wrote it. What you may read is decided when you ask, so a circle you have left, or were never in, is not in the request. **With the default model (`CACI_LLM=demo`) nothing leaves the machine. With `CACI_LLM=anthropic` your request and the notes you can read are sent to Anthropic and are not anonymised**, for every account at once.
+
+A status reads everything you can read, so a person in more circles than `CACI_MAX_BRAIN_SCOPES` allows (default 25 brains including their own) is told to leave some out first and is not answered.
+
+### The answer
+
+A headline, at most five short points, and counts. The model only names the numbers of the notes a point is based on; **the service turns those into where each came from** (your own notes, or the circle's name), so the model cannot invent a source, and a reply that cites a note that does not exist is repaired once and then refused. When nothing relevant is found the answer says so (`nothing`), never with points. The time the model is told is the server's clock in the time zone your browser reports.
+
+### The route
+
+| Route | What it does |
+|-------|--------------|
+| `POST /api/status` | Body `{ text, timeZone? }` and nothing else (any other field or query parameter is refused by name); needs the session cookie; answers `{ status }` |
+
+Statuses are the usual ones: 401 without a session, 422 for a bad request with its field named, 429 with `Retry-After` for the hourly limit or a status already being made, 502 or 503 with fixed words when the model fails or is busy, 404 when status updates are not available.
+
+### Limits
+
+The request is at most 500 characters. Each account may ask for `CACI_STATUS_PER_HOUR` statuses an hour (default 20, counted when the model is about to be asked, so a request refused earlier costs nothing) and has one status in progress at a time. Pending proposals and statuses have separate limits.
+
+### In the web app
+
+The **Status** screen (`#/status`) says which model answers and that everything you can read is sent with your request **before anything is asked**, and keeps the Ask button disabled until it knows. The words are: "Answered by the free demo model: nothing leaves this machine." or "Answered by Anthropic's model: your request and the notes you can read, yours and your circles', are sent to Anthropic and are not anonymised.", then "Your status uses everything you can read: your own notes and the circles you are in. It is sent with your request." There are three suggestions that only fill the box. The answer is a card with the headline, each point with where it came from, "Nothing relevant was found in what you can read." when that is so, "Some notes were left out because there were too many; the newest were used." when that is so, how many notes it used and when it was made (UTC). It is only text, **is not saved anywhere, and is gone when you leave the screen or sign out**.
+
+### What is not protected, and what is not done
+
+- **The whole readable brain goes to the model in one request** (within the limits), and with the real model that is Anthropic, unanonymised. The release gates (pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, a statement of who may use the service) are not met: do not use it with other people's data until they are.
+- **The model can still state something wrongly.** The format and the numbered sources make an answer checkable, not correct. The quality of the real model has been measured only on a small invented set (`npm run eval -- --capability status`), and the default model for status is provisional.
+- **A request already running when a member is removed** may still use what they could read when it started.
+- **Not built:** location, weather or calendars as context, restricting a status to one circle, a history, free questions beyond a status, notices to other people.
 
 ## Running on a Raspberry Pi
 

@@ -40,6 +40,7 @@ C4Container
     Rel(caci_controller, user_controller, "Resolves the session to a user and their graph")
     Rel(caci_controller, caci_app, "Propose, approve, reject")
     Rel(caci_app, llm_adapter, "Sends input to categorise; shows the proposal for approval")
+    Rel(caci_controller, llm_adapter, "Asks for a status answer from the notes the person can read; writes nothing")
     Rel(llm_adapter, System_llm, "Asks for a structured categorisation (only when the real model is switched on)")
     Rel(caci_app, graph_store, "Calls write and query")
     Rel(caci_controller, graph_store, "Browses the person's graph")

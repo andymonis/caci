@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CIRCLE_STATUS_OF, createAccountRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
+import { CIRCLE_STATUS_OF, createAccountRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
 import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
-import { CACI_ERROR_CODES, caciError, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
+import { CACI_ERROR_CODES, caciError, DEFAULT_STATUS_CONTEXT_LIMITS, MAX_STATUS_REQUEST_CHARS, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
 import { DEFAULT_GRANT_LIMITS } from '../sharing/index.js';
@@ -25,7 +25,7 @@ function section(title: string): string {
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
 /** Settings the service reads that the README does not describe yet (emptied by the README task, T-194). */
-const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_STATUS_PER_HOUR'];
+const NOT_DOCUMENTED_YET: readonly string[] = [];
 const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
 
 describe('the user accounts section of the README', () => {
@@ -241,10 +241,11 @@ describe('the web app section of the README', () => {
     expect(webSection).toContain('the fifteen circle and invitation routes');
   });
 
-  it('lists exactly the six addresses the router knows, and each one is a screen the router returns', async () => {
+  it('lists exactly the seven addresses the router knows, and each one is a screen the router returns', async () => {
     const { parseHash } = await loadWeb<{ parseHash: (hash: string) => Route }>('router.js');
     const documented = [...webSection.matchAll(/^\| `(#\/[^`]*)` \|/gm)].map((m) => m[1] as string);
-    expect(documented).toEqual(['#/', '#/circles', '#/circles/<id>', '#/invitations', '#/capture', '#/brain']);
+    expect(documented).toEqual(['#/', '#/circles', '#/circles/<id>', '#/invitations', '#/status', '#/capture', '#/brain']);
+    expect(parseHash('#/status')).toEqual({ name: 'status' });
     expect(parseHash('#/capture')).toEqual({ name: 'capture' });
     expect(parseHash('#/brain')).toEqual({ name: 'brain' });
     expect(parseHash('#/')).toEqual({ name: 'home' });
@@ -374,5 +375,47 @@ describe('the shared circle brain section of the README', () => {
     expect(webSection).toContain('The shared circle brain');
     for (const v of brainSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
     for (const m of brainSection.matchAll(/npm run ([\w:-]+)/g)) expect(pkg.scripts, m[1]).toHaveProperty(m[1] as string);
+  });
+});
+
+const statusSection = section('Asking for a status update');
+
+describe('the status update section of the README', () => {
+  it('lists exactly the status route the server has', () => {
+    const real = createStatusRoutes({ caci: {} as never }).map((r) => `${r.method} ${r.path}`);
+    const documented = [...statusSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented).toEqual(real);
+    expect(real).toEqual(['POST /api/status']);
+  });
+
+  it('states the numbers that are in the code, and the setting with its default', () => {
+    expect(MAX_STATUS_REQUEST_CHARS).toBe(500);
+    expect(statusSection).toContain(`at most ${MAX_STATUS_REQUEST_CHARS} characters`);
+    expect(defaults.ok ? defaults.value.statusPerHour : 0).toBe(20);
+    expect(statusSection).toContain(`(default ${defaults.ok ? defaults.value.statusPerHour : 0}, counted`);
+    expect(statusSection).toContain(`up to ${DEFAULT_STATUS_CONTEXT_LIMITS.maxPerScope} per scope and ${DEFAULT_STATUS_CONTEXT_LIMITS.maxTotalChars.toLocaleString('en-US')} characters in all`);
+    expect(readme).toMatch(/\| `CACI_STATUS_PER_HOUR` \|[^|]*\| `20` \|/);
+    expect(statusSection).toContain(`default ${defaults.ok ? defaults.value.maxBrainScopes : 0} brains including their own`);
+  });
+
+  it('prints the notices in exactly the words the page uses, and names its specification, which exists', async () => {
+    const view = await loadWeb<{ STATUS_MODE_WORDS: Record<string, string>; STATUS_CONTEXT: string; STATUS_NOTHING: string; STATUS_LEFT_OUT: string }>('status-view.js');
+    for (const words of [view.STATUS_MODE_WORDS.demo, view.STATUS_MODE_WORDS.anthropic, view.STATUS_CONTEXT, view.STATUS_NOTHING, view.STATUS_LEFT_OUT]) expect(statusSection).toContain(words as string);
+    expect(statusSection).toContain('specs/R-011-status-updates.md');
+    expect(existsSync(new URL('../../specs/R-011-status-updates.md', import.meta.url))).toBe(true);
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['It is not a question to another person', 'nothing you ask or get back is filed in any brain', 'no history is kept', 'everything you can read', 'observers included', 'you alone', 'never carries who wrote it', 'nothing leaves the machine', 'are not anonymised', 'for every account at once', 'the service turns those into where each came from', 'repaired once and then refused', 'any other field or query parameter is refused by name', 'one status in progress at a time', 'before anything is asked', 'is not saved anywhere', 'gone when you leave the screen or sign out', 'The model can still state something wrongly', 'The release gates (pseudonymisation', 'a data processing agreement', 'a lawful basis', 'a risk assessment', 'do not use it with other people', 'location, weather or calendars']) {
+      expect(statusSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+
+  it('is linked from the web part, and every setting and command it names exists', () => {
+    expect(webSection).toContain('Asking for a status update');
+    for (const v of statusSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+    for (const m of statusSection.matchAll(/npm run ([\w:-]+)/g)) expect(pkg.scripts, m[1]).toHaveProperty(m[1] as string);
+    expect(webSection).toContain('`#/status`');
+    expect(webSection).toContain('and **ask CaCi for a status update** (see **Asking for a status update** below)');
   });
 });
