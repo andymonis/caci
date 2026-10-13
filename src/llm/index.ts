@@ -21,6 +21,7 @@ export { addUsage, isValidUsage, NO_USAGE, totalTokens } from './usage.js';
 export type { TokenUsage } from './usage.js';
 export { CONTROL_FILES, parseControls, SLOT_RULES } from './controls/controls.js';
 export type { CategoriseControls, ControlFile, Controls, StatusControls } from './controls/controls.js';
+export { SETTING_RANGES } from './controls/settings.js';
 export type { CategoriseSettings, StatusSettings } from './controls/settings.js';
 export { MAX_TEMPLATE_CHARS, parseTemplate, renderTemplate } from './controls/template.js';
 export type { Template, TemplateRules } from './controls/template.js';

@@ -696,6 +696,87 @@ The **Status** screen (`#/status`) says which model answers and that everything 
 - **A request already running when a member is removed** may still use what they could read when it started.
 - **Not built:** location, weather or calendars as context, restricting a status to one circle, a history, free questions beyond a status, notices to other people.
 
+## Controlling what the model is told
+
+Every message CaCi sends to a language model is made of **three separate parts**: (1) **the request** (what the person typed, or what the system is doing), (2) **the context** (the combined brain context: the existing categories, or the numbered notes a person can read) and (3) **the controls** (the instructions, guardrails and definitions that steer the exchange). The first two are data and come from people and their brains. **The controls are plain text files in the `controls/` folder of the repository**, read once when the service starts, so they can be adjusted and maintained on their own without touching the code. It is specified in `specs/R-012-controllable-llm.md`, which holds its threat table, its residual risks and its acceptance checks.
+
+### The files
+
+Exactly these six files are read, and nothing else in the folder:
+
+| File | What it holds | Slots it may use |
+|---|---|---|
+| `controls/categorise/system.txt` | The filing assistant's instructions | `{{itemId}}` (required), `{{maxOps}}`, `{{allowedOps}}` |
+| `controls/categorise/frame.txt` | The words around the two blocks in the user message | `{{contextBlock}}` and `{{requestBlock}}`, each exactly once |
+| `controls/categorise/settings.json` | The limits and the descriptions in the reply schema | none |
+| `controls/status/system.txt` | The status assistant's instructions | `{{entryCount}}`, `{{now}}`, `{{maxHeadline}}`, `{{maxPoints}}`, `{{maxPointChars}}`, `{{maxRefs}}` |
+| `controls/status/frame.txt` | The words around the two blocks in the user message | `{{entriesBlock}}` and `{{requestBlock}}`, each exactly once |
+| `controls/status/settings.json` | The limits and the descriptions in the reply schema | none |
+
+A **slot** is written `{{name}}`: a letter first, then letters or digits, and nothing else is logic (no loops, no includes). The service fills a slot with a value from code, **inserts it as it is and never reads it again for slots**, so a note, a request or a circle name that happens to contain `{{itemId}}` stays plain text. The request and the context only ever enter through their block slots, escaped, between their own delimiters (`<note>`, `<categories>`, `<request>`, `<entries>`). An unknown slot, a stray `{{` or `}}`, an empty file, a file over 16,000 characters or a control character (other than line breaks and tabs) is an error; a final line break is ignored.
+
+### The settings
+
+All numbers must be whole and inside their range; unknown settings are refused. The reply schema, the guard and the instructions are all built from these same numbers, so changing one moves all three together. A per-call option in code still overrides a setting for one call.
+
+**`categorise/settings.json`**
+
+| Setting | Meaning | Shipped | Range |
+|---|---|---|---|
+| `maxOps` | Most operations the model may return; told to the model, put in the reply schema and enforced on the reply | `25` | 1 to 100 |
+| `maxTextChars` | Longest note accepted (must not be below the service's own 8,000) | `8000` | 1 to 100,000 |
+| `maxContextChars` | Longest category list sent | `12000` | 1 to 100,000 |
+| `maxDataBytes` | Largest `data` on any operation the guard accepts | `2048` | 64 to 65,536 |
+| `maxIdLength` | Longest id the guard accepts | `128` | 8 to 256 |
+| `maxOutputChars` | Longest reply accepted before it is read | `32000` | 1,000 to 200,000 |
+| `maxRationaleChars` | Longest reason | `500` | 1 to 2,000 |
+| `titleMaxChars` | Longest item title, in the reply schema | `120` | 1 to 500 |
+| `summaryMaxChars` | Longest item summary, in the reply schema | `300` | 1 to 1,000 |
+| `categoryNameMaxChars` | Longest category name, in the reply schema | `60` | 1 to 200 |
+
+It also holds `descriptions` with `title`, `summary` and `name` (one line each, up to 300 characters), which are placed in the reply schema.
+
+**`status/settings.json`**
+
+| Setting | Meaning | Shipped | Range |
+|---|---|---|---|
+| `maxHeadline` | Longest headline | `160` | 1 to 500 |
+| `maxPoints` | Most points | `5` | 1 to 20 |
+| `maxPointChars` | Longest point | `240` | 1 to 1,000 |
+| `maxRefs` | Most note numbers one point may cite | `5` | 1 to 20 |
+| `maxRequestChars` | Longest request (must not be below the service's own 500) | `500` | 1 to 5,000 |
+| `maxEntries` | Most notes sent as context | `500` | 1 to 2,000 |
+| `maxEntryChars` | Longest single note sent | `1500` | 1 to 10,000 |
+| `maxTotalChars` | Most characters of notes sent in all | `30000` | 1 to 200,000 |
+| `maxOutputChars` | Longest reply accepted before it is read | `8000` | 500 to 100,000 |
+
+It also holds `descriptions` with `headline`, `pointText`, `refs` and `nothing`. Some combinations are refused because the guard could never be satisfied: `maxDataBytes` must hold the longest title, summary and category name; `maxOutputChars` must hold the longest reply the other limits allow; an entry may not be longer than the total; and `maxRefs` may not exceed `maxEntries`.
+
+### What stays in code
+
+The **shape of the reply** and **every check of the guard** (only the operations allowed, the item id the system minted, citations that exist, one line of plain text, the numbers above), the **escaping and the block delimiters** that keep a person's text from passing as instructions, and the **limits the service itself puts on the API** (a note of at most 8,000 characters and a status request of at most 500). The service **refuses to start** if the controls allow less than that. Two small pieces of wording are also still in code: the header of the category list, and the repair turn (when a reply is rejected, the second call carries the guard's numbered reasons and one fixed closing line, "Reply again with the corrected JSON object only.").
+
+### Trying a change without deploying it
+
+Copy the folder, edit the copy, and run the same evaluation sets against it (the checks are the same, only the controls differ):
+
+```
+cp -r controls /tmp/candidate
+npm run eval -- --scripted --controls /tmp/candidate      # does it load and run? free, nothing sent
+npm run eval -- --controls /tmp/candidate --yes            # the real model, the same golden set
+npm run dev:lab -- --controls /tmp/candidate               # the lab shows the three parts of each message
+```
+
+A bad folder stops with every problem listed before any call is made. The reports and the lab name the folder used.
+
+### Changing it for real
+
+Edit the files in `controls/`, commit them, and update as usual (`sudo node /opt/caci/app/deploy/run.mjs` on the Pi). **A bad file stops the service from starting**, naming the file and the problem, and a failed deploy rolls back like any other service that does not come up; `npm run doctor` has an **LLM controls** check that says which file to fix. There is **no versioning** of the controls beyond git, and a change applies only after a restart.
+
+### What is not protected
+
+Anyone who can edit the repository can change what the model is told, within the guard's checks. The guard checks the form of a reply, not the meaning, so a rule weakened in wording (for example dropping "cite your sources") is not caught until you compare runs of the evaluation set with the real model. The shipped `controls/` folder is part of the package and is never served over HTTP.
+
 ## Running on a Raspberry Pi
 
 A step-by-step runbook for running CaCi on a Raspberry Pi in the house, so family members can try it from phones and laptops on the home Wi-Fi. It is specified in `specs/R-010-pi-deployment.md`. **Nothing here has been run on a real Pi by the person who wrote it**: the tooling is tested with stand-ins, and your first run is the real proof. Run `npm run doctor` when you reach step 7 and keep its output.
@@ -793,6 +874,8 @@ It deploys `origin/main`; give it a branch, tag or commit to deploy another (`su
 | 12 | refused before anything changed (bad ref, old Node, local changes, no snapshot) |
 
 An update never changes `/etc/caci/caci.env`. If a change touches the systemd units, run the install script again afterwards.
+
+The words and limits the model is told live in the `controls/` folder of the checkout (see **Controlling what the model is told**): editing them is a commit and this same update. A bad file stops the service from starting, so the update rolls back like any other that does not come up, and `npm run doctor` says which file to fix.
 
 ### 11. Snapshots and restoring
 

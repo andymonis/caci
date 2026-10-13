@@ -107,6 +107,9 @@ describe('the Pi runbook in the README', () => {
       'pseudonymisation',
       'pre-restore-',
       'recover-admin',
+      'the `controls/` folder of the checkout',
+      'A bad file stops the service from starting',
+      'says which file to fix',
     ]) expect(lower, phrase).toContain(phrase.toLowerCase());
   });
 

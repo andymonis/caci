@@ -105,6 +105,21 @@ describe('the running service serves the web app', () => {
     }
   });
 
+  it('no controls file is ever served, at any path, and none of the served files contains their wording', async () => {
+    const { base } = await start();
+    const paths = ['/controls', '/controls/', '/controls/status/system.txt', '/controls/categorise/system.txt', '/controls/status/frame.txt', '/controls/categorise/settings.json', '/status/system.txt', '/categorise/settings.json', '/system.txt', '/frame.txt', '/settings.json', '/%63ontrols/status/system.txt', '/controls/../controls/status/system.txt', '/web/../controls/status/system.txt'];
+    for (const path of paths) {
+      const res = await fetch(`${base}${path}`);
+      expect(res.status, path).toBe(404);
+      expect(res.headers.get('content-type'), path).toBe('application/json; charset=utf-8');
+      expect(await res.text(), path).not.toMatch(/status assistant|filing assistant|maxHeadline/);
+    }
+    for (const spec of WEB_FILE_SPECS) {
+      const res = await fetch(`${base}${spec.path}`);
+      expect(await res.text(), spec.path).not.toMatch(/You are the (status|filing) assistant|maxHeadline|\{\{entriesBlock\}\}/);
+    }
+  });
+
   it('only GET: a POST to the page is 405', async () => {
     const { base } = await start();
     const res = await fetch(`${base}/`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });

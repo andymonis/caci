@@ -55,6 +55,9 @@ const STATUS_RANGES: Readonly<Record<Exclude<keyof StatusSettings, 'descriptions
   maxOutputChars: [500, 100_000],
 });
 
+/** The allowed range of every numeric setting, for the documentation and its tests (the parsers use the same table). */
+export const SETTING_RANGES = Object.freeze({ categorise: CATEGORISE_RANGES, status: STATUS_RANGES });
+
 const CATEGORISE_DESCRIPTIONS = ['title', 'summary', 'name'] as const;
 const STATUS_DESCRIPTIONS = ['headline', 'pointText', 'refs', 'nothing'] as const;
 export const MAX_DESCRIPTION_CHARS = 300;

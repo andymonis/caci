@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 // the review is brought up to date. One block per spec.
 
 const root = new URL('../../', import.meta.url);
-const REFERENCE = /`((?:src|web)\/[\w/.-]+\.(?:ts|mjs))` — "([^"]+)"/g;
+const REFERENCE = /`((?:src|web|dev|deploy)\/[\w/.-]+\.(?:ts|mjs))` — "([^"]+)"/g;
 
 const SPECS = [
   { name: 'R-002', file: 'specs/R-002-user-accounts.md', minReferences: 45, minThreats: 14, criteria: 12, prefix: 'UA-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 8 },
@@ -19,6 +19,7 @@ const SPECS = [
   { name: 'R-008', file: 'specs/R-008-shared-brains.md', minReferences: 55, minThreats: 9, criteria: 10, prefix: 'WS-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 8 },
   { name: 'R-009', file: 'specs/R-009-shared-circle-brains.md', minReferences: 60, minThreats: 10, criteria: 14, prefix: 'SC-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 12 },
   { name: 'R-011', file: 'specs/R-011-status-updates.md', minReferences: 45, minThreats: 8, criteria: 12, prefix: 'ST-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
+  { name: 'R-012', file: 'specs/R-012-controllable-llm.md', minReferences: 40, minThreats: 7, criteria: 12, prefix: 'CL-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 7 },
 ] as const;
 
 for (const info of SPECS) {

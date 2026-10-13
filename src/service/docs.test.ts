@@ -6,6 +6,7 @@ import { CACI_ERROR_CODES, caciError, DEFAULT_STATUS_CONTEXT_LIMITS, MAX_STATUS_
 import { DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
 import { DEFAULT_GRANT_LIMITS } from '../sharing/index.js';
+import { CONTROL_FILES, SETTING_RANGES, SLOT_RULES } from '../llm/index.js';
 import { authoriseBrain } from '../scopes/index.js';
 import { parseServiceConfig, VARIABLES } from './config.js';
 import { WEB_FILE_SPECS } from './web-app.js';
@@ -417,5 +418,66 @@ describe('the status update section of the README', () => {
     for (const m of statusSection.matchAll(/npm run ([\w:-]+)/g)) expect(pkg.scripts, m[1]).toHaveProperty(m[1] as string);
     expect(webSection).toContain('`#/status`');
     expect(webSection).toContain('and **ask CaCi for a status update** (see **Asking for a status update** below)');
+  });
+});
+
+const controlsSection = section('Controlling what the model is told');
+
+describe('the controls section of the README', () => {
+  it('lists exactly the six files the service reads, and says nothing else is read', () => {
+    const documented = [...controlsSection.matchAll(/^\| `(controls\/[a-z]+\/[a-z]+\.(?:txt|json))` \|/gm)].map((m) => m[1] as string);
+    expect(documented.sort()).toEqual(CONTROL_FILES.map((f) => `controls/${f}`).sort());
+    expect(controlsSection).toContain('Exactly these six files are read, and nothing else in the folder');
+  });
+
+  it('names exactly the slots each template may use, and which are required', () => {
+    for (const [name, rules] of Object.entries(SLOT_RULES)) {
+      const row = controlsSection.split('\n').find((l) => l.startsWith(`| \`controls/${name}\``));
+      expect(row, name).toBeDefined();
+      const slots = [...(row as string).matchAll(/\{\{([A-Za-z0-9]+)\}\}/g)].map((m) => m[1] as string);
+      expect(slots.sort(), name).toEqual([...rules.allowed].sort());
+      const once = (rules as { once?: readonly string[] }).once ?? [];
+      const required = (rules as { required?: readonly string[] }).required ?? [];
+      for (const slot of required) expect(row, `${name} ${slot}`).toContain(`{{${slot}}}\` (required)`);
+      if (once.length > 0) expect(row, name).toContain('each exactly once');
+    }
+  });
+
+  it('prints every setting with its shipped value and its range, as the code has them', () => {
+    for (const capability of ['categorise', 'status'] as const) {
+      const shipped = JSON.parse(readFileSync(new URL(`../../controls/${capability}/settings.json`, import.meta.url), 'utf8')) as Record<string, unknown>;
+      for (const [setting, [lo, hi]] of Object.entries(SETTING_RANGES[capability])) {
+        const rows = controlsSection.split('\n').filter((l) => l.startsWith(`| \`${setting}\` |`));
+        const row = rows.find((l) => l.includes(`\`${String(shipped[setting])}\``) && l.includes(`${lo.toLocaleString('en-US')} to ${hi.toLocaleString('en-US')}`));
+        expect(row, `${capability} ${setting}`).toBeDefined();
+      }
+    }
+    expect(Object.keys(SETTING_RANGES.categorise)).toHaveLength(10);
+    expect(Object.keys(SETTING_RANGES.status)).toHaveLength(9);
+  });
+
+  it('states the API limits the controls may not go below, and they are the ones in the code', () => {
+    expect(MAX_NOTE_CHARS).toBe(8000);
+    expect(MAX_STATUS_REQUEST_CHARS).toBe(500);
+    expect(controlsSection).toContain("must not be below the service's own 8,000");
+    expect(controlsSection).toContain("must not be below the service's own 500");
+  });
+
+  it('shows the commands, and every npm script and setting it names exists', () => {
+    for (const command of ['npm run eval -- --scripted --controls /tmp/candidate', 'npm run eval -- --controls /tmp/candidate --yes', 'npm run dev:lab -- --controls /tmp/candidate']) expect(controlsSection).toContain(command);
+    for (const m of controlsSection.matchAll(/npm run ([\w:-]+)/g)) expect(pkg.scripts, m[1]).toHaveProperty(m[1] as string);
+    for (const v of controlsSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+    expect(controlsSection).toContain('specs/R-012-controllable-llm.md');
+    expect(existsSync(new URL('../../specs/R-012-controllable-llm.md', import.meta.url))).toBe(true);
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['three separate parts', 'plain text files in the `controls/` folder', 'never reads it again for slots', 'stays plain text', 'between their own delimiters', 'the guard and the instructions are all built from these same numbers', 'Some combinations are refused', 'The service **refuses to start** if the controls allow less', 'Reply again with the corrected JSON object only', 'A bad folder stops with every problem listed before any call is made', '**A bad file stops the service from starting**', 'There is **no versioning**', 'a change applies only after a restart', 'Edit the files in `controls/`, commit them, and update as usual', 'Anyone who can edit the repository', 'not caught until you compare runs', 'never served over HTTP']) {
+      expect(controlsSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+
+  it('the Pi runbook points at it', () => {
+    expect(section('Running on a Raspberry Pi')).toContain('Controlling what the model is told');
   });
 });

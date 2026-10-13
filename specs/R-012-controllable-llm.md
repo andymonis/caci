@@ -80,15 +80,15 @@ CL-NFR-01 no new dependency; CL-NFR-02 the controls model is pure (no files, no 
 
 ## Threats and controls
 
-| Threat | Control |
-|--------|---------|
-| A bad edit (a typo in a slot, a deleted required slot, an empty file) changes behaviour silently | Strict validation, every problem listed, the service refuses to start, the doctor and the eval tools run the same check. |
-| A person's text (a note, a request, a circle name) alters the controls through a slot | Slot values are inserted once and never re-read; request and context only enter through escaped block slots. |
-| A controls edit weakens the guard (a huge limit, a missing citation rule) | The guard and schema are generated from validated numbers within fixed ranges; the guard's checks cannot be switched off by text; a rule removed from the wording still meets the guard (the eval shows it). |
-| The prompt, schema and guard disagree after an edit | All three are built from one settings object; consistency rules are validated. |
-| The folder is read from outside the intended place (links, odd names) | Exactly six plain names, `lstat`, size cap, nothing else read; never served. |
-| Wording is hidden in code so the controls do not really control | A test with sentinel controls proves the system message is made only of the controls and code's slot values; a scan test finds any other text sent to a model. |
-| The demo model breaks when the wording changes | It reads machine-readable `meta` and blocks, never wording; tested with a rewritten folder. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| A bad edit (a typo in a slot, a deleted required slot, an empty file) changes behaviour silently | Strict validation, every problem listed, the service refuses to start, the doctor and the eval tools run the same check. | `src/llm/controls/controls.test.ts` — "reports every problem across all six files at once, each naming its file"; `src/llm/controls/controls.test.ts` — "the required slot of each template is enforced"; `src/service/controls.test.ts` — "a bad file stops the start, names the file and the problem, and leaves no data folder behind"; `deploy/doctor.test.mjs` — "a bad file fails the doctor, names the problems and says how to undo a bad edit"; `dev/eval/controls.test.mjs` — "every problem listed, exit 2, nothing printed, saved or created" |
+| A person's text (a note, a request, a circle name) alters the controls through a slot | Slot values are inserted once and never re-read; request and context only enter through escaped block slots. | `src/llm/controls/template.test.ts` — "inserts a value as it is and never reads it for slots"; `src/llm/capabilities/categorise/controls.test.ts` — "text that looks like a slot stays text and changes nothing"; `src/llm/capabilities/status/controls.test.ts` — "text that looks like a slot, in the request, an entry or a circle name, stays text and changes nothing"; `src/llm/capabilities/categorise/controls.test.ts` — "the request and the context are placed only in their blocks, escaped, wherever the frame puts them" |
+| A controls edit weakens the guard (a huge limit, a missing citation rule) | The guard and schema are generated from validated numbers within fixed ranges; the guard's checks cannot be switched off by text; a rule removed from the wording still meets the guard (the eval shows it). | `src/llm/capabilities/categorise/controls.test.ts` — "the guard enforces the same operation limit"; `src/llm/capabilities/status/controls.test.ts` — "the guard enforces the same headline, point, text and reference limits"; `src/llm/controls/settings.test.ts` — "checks the data size can hold the allowed title, summary and name"; `src/llm/controls/settings.test.ts` — "the reply limit must hold the longest reply the other limits allow" |
+| The prompt, schema and guard disagree after an edit | All three are built from one settings object; consistency rules are validated. | `src/llm/capabilities/categorise/controls.test.ts` — "the prompt and the schema carry the new numbers and descriptions"; `src/llm/capabilities/status/controls.test.ts` — "the prompt and the schema carry the new numbers and descriptions"; `src/llm/capabilities/status/controls.test.ts` — "the whole call enforces the point limit from the controls"; `src/llm/capabilities/categorise/controls.test.ts` — "the note and context size limits follow the settings, and a per-call option still wins" |
+| The folder is read from outside the intended place (links, odd names) | Exactly six plain names, `lstat`, size cap, nothing else read; never served. | `src/service/controls-files.test.ts` — "never reads or returns anything that is not one of the six files"; `src/service/controls-files.test.ts` — "a link or a folder in place of a file is refused"; `src/service/controls-files.test.ts` — "a link in place of a sub folder is refused, and a link to the folder itself too"; `src/service/web-app.test.ts` — "no controls file is ever served, at any path" |
+| Wording is hidden in code so the controls do not really control | A test with sentinel controls proves the system message is made only of the controls and code's slot values; a scan test finds any other text sent to a model. | `src/llm/parts.test.ts` — "the trace gives the three parts separately, as frozen copies, and they add up to what was sent"; `src/llm/parts.test.ts` — "changing only the request changes only the request part"; `src/llm/parts-scan.test.ts` — "are the two capabilities: no other production file calls a model client"; `src/llm/parts-scan.test.ts` — "appears in any production source file" |
+| The demo model breaks when the wording changes | It reads machine-readable `meta` and blocks, never wording; tested with a rewritten folder. | `src/llm/demo-controls.test.ts` — "files a note exactly as it does with the shipped controls"; `src/llm/demo-controls.test.ts` — "makes the same status, with the same day, count and points"; `src/llm/demo-controls.test.ts` — "the request really carried the rewritten words, and the facts as meta" |
 
 ## Acceptance criteria
 
@@ -107,11 +107,29 @@ CL-NFR-01 no new dependency; CL-NFR-02 the controls model is pure (no files, no 
 | CL-AC-11 | Given the trace of a call, when it is read, then the three parts are separate and the lab shows three panels. |
 | CL-AC-12 | Given the controls folder, when the web app is requested at any path, then no controls file is ever served. |
 
-## Residual risks
+### Where each criterion is checked (T-204)
 
-1. A person who can edit the repository can change what the model is told, within the guard's checks.
-2. The words the context builders generate (the categoriser's header and "not shown" note) are still in code.
-3. A rule weakened in wording (for example removing "cite your sources") is caught by the guard's format checks but not by meaning; the evaluation sets are the safety net.
-4. Changing the controls does not apply until a restart or a deploy.
-5. Without versioning, a run's results record only the folder path, not the content used.
-6. The repair turn's closing line and the guard's reasons are code-written text sent to the model (D17); they carry no text from the request or the context other than what the guard quotes from the rejected reply's own fields.
+| ID | Tests |
+|----|-------|
+| CL-AC-01 | `src/llm/capabilities/categorise/prompt.test.ts` — "the system prompt"; `src/llm/capabilities/categorise/prompt.test.ts` — "the user message"; `src/llm/capabilities/categorise/prompt.test.ts` — "the output schema"; `src/llm/capabilities/status/prompt.test.ts` — "the output schema" |
+| CL-AC-02 | `src/llm/controls/controls.test.ts` — "reports every problem across all six files at once, each naming its file"; `src/llm/controls/template.test.ts` — "lists every problem at once"; `src/llm/controls/template.test.ts` — "refuses an unknown slot, naming it, the line and what is allowed"; `src/llm/controls/template.test.ts` — "refuses a stray brace pair, with its line" |
+| CL-AC-03 | `src/llm/capabilities/categorise/controls.test.ts` — "text that looks like a slot stays text and changes nothing"; `src/llm/controls/template.test.ts` — "inserts a value as it is and never reads it for slots" |
+| CL-AC-04 | `src/llm/capabilities/categorise/controls.test.ts` — "the prompt and the schema carry the new numbers and descriptions"; `src/llm/capabilities/categorise/controls.test.ts` — "the guard enforces the same operation limit"; `src/llm/capabilities/status/controls.test.ts` — "the prompt and the schema carry the new numbers and descriptions"; `src/llm/capabilities/status/controls.test.ts` — "the whole call enforces the point limit from the controls" |
+| CL-AC-05 | `src/llm/demo-controls.test.ts` — "files a note exactly as it does with the shipped controls"; `src/llm/demo-controls.test.ts` — "makes the same status, with the same day, count and points"; `src/llm/demo-controls.test.ts` — "the request really carried the rewritten words, and the facts as meta" |
+| CL-AC-06 | `src/service/controls.test.ts` — "a bad file stops the start, names the file and the problem, and leaves no data folder behind"; `src/service/controls.test.ts` — "a missing folder or file is named" |
+| CL-AC-07 | `src/service/controls.test.ts` — "a status request and a note both carry the edited rule and frame, and the limits the edit set" |
+| CL-AC-08 | `src/llm/parts.test.ts` — "changing only the request changes only the request part"; `src/llm/parts-scan.test.ts` — "are the two capabilities: no other production file calls a model client"; `src/llm/parts-scan.test.ts` — "appears in any production source file" |
+| CL-AC-09 | `dev/eval/controls.test.mjs` — "every problem listed, exit 2, nothing printed, saved or created"; `dev/eval/controls.test.mjs` — "a changed limit shows up in the results" |
+| CL-AC-10 | `src/service/controls.test.ts` — "the controls must allow at least what the API accepts" |
+| CL-AC-11 | `src/llm/parts.test.ts` — "the trace gives the three parts separately, as frozen copies, and they add up to what was sent"; `dev/llm-lab/view.test.mjs` — "the page shows the three parts of a message in three labelled panels, in order, as text" |
+| CL-AC-12 | `src/service/web-app.test.ts` — "no controls file is ever served, at any path"; `dev/not-published.test.mjs` — "the LLM controls are published as exactly their six files" |
+
+### Residual risks (not covered, with the reason)
+
+1. **A person who can edit the repository can change what the model is told**, within the guard's checks. The folder is reviewed like code (git); nothing stops a wrong but valid edit.
+2. **The words the context builders generate** (the categoriser's header and "not shown" note) are still in code (D17).
+3. **A rule weakened in wording** (for example removing "cite your sources") is caught by the guard's format checks but not by meaning; the evaluation sets are the safety net, and only a real-model run can compare wording.
+4. **A change applies only after a restart or a deploy**; there is no hot reload.
+5. **No versioning**: a run's results record only the folder path, not the content used, so a folder edited after a run cannot be told from the version that ran.
+6. **The repair turn's closing line and the guard's reasons are code-written text** sent to the model (D17); they carry no text from the request or the context other than what the guard quotes from the rejected reply's own fields.
+7. **Stand-ins that do not read the controls**: the explorer's own demo model still reads the shipped wording of the categoriser's prompt, so an edited folder would break the explorer's demo (not the service's).
