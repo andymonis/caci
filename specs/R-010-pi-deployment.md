@@ -2,7 +2,7 @@
 
 Oct 11, 2026 · @Andy
 
-**Status: built as D1 (T-171 to T-180); the owner's hand run on a real Pi is still pending.** An internal family test: the service runs on a Raspberry Pi in the house, family members use it from phones and laptops on the home Wi-Fi, and the owner updates it with one command over SSH.
+**Status: built as D1 (T-171 to T-180) and running on the owner's Pi (confirmed 2026-10-13): used over the home Wi-Fi by the owner and their wife.** An internal family test: the service runs on a Raspberry Pi in the house, family members use it from phones and laptops on the home Wi-Fi, and the owner updates it with one command over SSH.
 
 ## Overview
 

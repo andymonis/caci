@@ -4,7 +4,7 @@ Format: `- [ ] T-001 (R-xxx) Imperative task title — acceptance: <how we know 
 Tasks must be atomic: one commit, one context window.
 Detailed requirement/AC ids (FR-xx, NFR-xx, AC-xx) come from `specs/R-001: Bipartite Graph Store — Library Specification.md`.
 
-## Current milestone: Q1 Status updates (planned 2026-10-13; D1 and everything before it is complete, D1's hand run on a real Pi pending)
+## Current milestone: Q1 Status updates (planned 2026-10-13; D1 and everything before it is complete; D1 is running on the owner's Pi)
 
 Order of work: **P1** (SQLite persistence: a contract fix and a guard first, then the adapter, durability, the capture flow on it, the explorer, a benchmark, and optional export/import) → then choose from the Later milestones. Decided 2026-10-05 (owner): persistence is **SQLite via `node:sqlite`** (built into Node, no new dependency); the file (JSON) adapter, M5, is **deferred** (kept as an idea, not removed) because SQLite now covers "zero-dependency local storage" with real transactions. SQL push-down for set queries and `data` matching arrives with M4b, because the core does not issue those queries yet.
 
