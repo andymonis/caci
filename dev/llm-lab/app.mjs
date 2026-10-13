@@ -56,6 +56,8 @@ const COMMON = ['capability', 'text', 'categories', 'scenario', 'network', 'time
  *            { createLlm, createScriptedModelClient, summarise, describeSummary, createAnthropicClient,
  *              CAPABILITIES, MODEL_TIERS, DEFAULT_TIERS, DEFAULT_ROUTES }
  * @param options.apiKey the API key found in the environment at start-up, if any (held here, never sent out)
+ * @param options.controls candidate LLM controls to try instead of the shipped ones (R-012), already checked
+ * @param options.controlsLabel what to call them in the status and in each record (the folder path they came from)
  * @param options.now the clock in milliseconds (tests replace it)
  */
 export function createApp(lib, options = {}) {
@@ -78,6 +80,7 @@ export function createApp(lib, options = {}) {
     network: { available: apiKey !== undefined },
     limits: { history: HISTORY_LIMIT, compareModels: MAX_COMPARE_MODELS, noteChars: MAX_NOTE_CHARS, categories: MAX_CATEGORIES },
     historyCount: history.length,
+    controls: options.controlsLabel ?? 'the shipped controls/ folder',
   });
 
   /** One run of `categorise`, recorded in the history. Anything that goes wrong inside is data in the record, not an HTTP error. */
@@ -90,7 +93,7 @@ export function createApp(lib, options = {}) {
     const client = network
       ? options.realClient?.(apiKey) ?? lib.createAnthropicClient({ apiKey })
       : lib.createScriptedModelClient(scenarioScript(scenario, { itemId, categories }));
-    const llm = lib.createLlm({ client, now });
+    const llm = lib.createLlm({ client, now, ...(options.controls === undefined ? {} : { controls: options.controls }) });
 
     const trace = [];
     const started = now();
@@ -126,6 +129,7 @@ export function createApp(lib, options = {}) {
       id: `run-${counter}`,
       at: new Date(now()).toISOString(),
       capability: body.capability ?? 'categorise',
+      controls: options.controlsLabel ?? 'the shipped controls/ folder',
       mode: network ? 'network' : 'scripted',
       scenario: scenario ?? null,
       asked: { ...(choice.tier === undefined ? {} : { tier: choice.tier }), ...(choice.model === undefined ? {} : { model: choice.model }) },

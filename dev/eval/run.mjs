@@ -38,6 +38,11 @@ const code = await main({
   stdout: (text) => process.stdout.write(text),
   stderr: (text) => process.stderr.write(text),
   signal: controller.signal,
+  loadControls: async (dir) => {
+    const loader = await import('../../dist/service/controls-files.js');
+    const result = loader.loadControlsFolder(resolve(dir));
+    return result.ok ? { ok: true, value: result.value } : { ok: false, problems: result.error };
+  },
   loadGolden: async (path) => {
     const file = resolve(path);
     if (file.endsWith('.json')) return JSON.parse(await readFile(file, 'utf8'));

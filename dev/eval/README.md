@@ -20,6 +20,7 @@ add `--yes`. The key is read once, passed to the client and never printed or sav
 | Option | Meaning |
 | --- | --- |
 | `--capability c` | What to evaluate: `categorise` (default) or `status` (R-011) |
+| `--controls DIR` | Try a candidate folder of LLM controls (the six files of `controls/`) instead of the shipped one. It is checked first, with the service's own code; a bad folder stops with every problem listed before any call |
 | `--models a,b,c` | Tiers (`fast`, `balanced`, `deep`) or exact model ids. Default: all three tiers |
 | `--repeat n` | Runs per case and model, 1 to 10. Models are not deterministic, so 3 gives a steadier pass rate |
 | `--golden file` | Your own golden set (`.json`, or `.mjs` exporting `GOLDEN`) instead of the built-in one |
@@ -82,3 +83,20 @@ loose and each is reported: the call succeeds, the right entries are cited (and 
 that is not in the request or the entries (nothing invented), and a forbidden word (the one the hidden
 instruction asks for) never appears. The default tier for `status` (`balanced`) stays provisional until a
 real run compares the tiers; a real run sends the requests and the notes in the golden set to Anthropic.
+
+## Trying a change to the controls (R-012)
+
+The words and limits that steer the model live in `controls/` (see the README's "Controlling what the model is told").
+To see what a change does without deploying it:
+
+```
+cp -r controls /tmp/candidate                       # edit the files in /tmp/candidate
+npm run eval -- --scripted --controls /tmp/candidate                     # does it still load and run? (free)
+npm run eval -- --models fast,balanced --repeat 3 --controls /tmp/candidate --yes    # real calls, the same set
+npm run eval -- --models fast,balanced --repeat 3 --yes                  # the shipped controls, for comparison
+```
+
+The report header and the saved results name the folder (`Controls: ...`, or `the shipped controls/ folder`), so two
+runs can be compared. A limit in `settings.json` moves the prompt, the schema and the guard together: for example
+`"maxPoints": 1` makes the scripted ideal model's two-point answers fail with `BAD_OUTPUT`, which is how you see a
+limit has taken effect. The LLM lab takes the same option: `npm run dev:lab -- --controls /tmp/candidate`.

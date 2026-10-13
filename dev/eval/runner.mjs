@@ -18,18 +18,19 @@ function tokensOf(result, trace) {
  * @param options.repeat     runs per case and model (models are not deterministic)
  * @param options.makeClient ({ caseDef, itemId, label, choice }) => a ModelClient
  * @param options.now        the clock in ms
+ * @param options.controls   candidate controls to use instead of the shipped ones (R-012); each is already checked
  * @param options.timeoutMs  limit for each call
  * @param options.onResult   called with each finished run (progress)
  * @param options.signal     stops the run between calls when aborted
  */
-export async function runEval({ lib, cases, models, repeat = 1, makeClient, now = Date.now, timeoutMs = 60_000, onResult, signal }) {
+export async function runEval({ lib, cases, models, repeat = 1, makeClient, now = Date.now, timeoutMs = 60_000, onResult, signal, controls }) {
   const results = [];
   for (const model of models) {
     for (const caseDef of cases) {
       for (let attempt = 1; attempt <= repeat; attempt++) {
         if (signal?.aborted) return { results, aborted: true };
         const client = makeClient({ caseDef, itemId: ITEM_ID, label: model.label, choice: model.choice });
-        const llm = lib.createLlm({ client, now });
+        const llm = lib.createLlm({ client, now, ...(controls === undefined ? {} : { controls }) });
         const trace = [];
         const started = now();
         const result = await llm.categorise(

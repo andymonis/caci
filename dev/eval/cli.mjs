@@ -17,6 +17,7 @@ import { idealScript } from './scripted.mjs';
  * @param io.lib         { createLlm, summarise, createScriptedModelClient, createAnthropicClient, readAnthropicKey, DEFAULT_TIERS }
  * @param io.stdout      (text) => void
  * @param io.stderr      (text) => void
+ * @param io.loadControls async (dir) => `{ ok: true, value }` or `{ ok: false, problems }` (a candidate controls folder)
  * @param io.loadGolden  async (path) => cases
  * @param io.save        async (dir, name, json) => path
  * @param io.now         clock in ms
@@ -65,6 +66,18 @@ export async function main(io) {
     cases = cases.filter((c) => args.only.includes(c.id));
   }
 
+  let controls;
+  if (args.controls !== undefined) {
+    // a candidate folder is checked with the service's own code before anything else happens, so a bad one never reaches a model
+    const loaded = await io.loadControls(args.controls);
+    if (!loaded.ok) {
+      stderr(`The controls in ${args.controls} are not valid:\n${loaded.problems.map((p) => `  - ${p}`).join('\n')}\n`);
+      return 2;
+    }
+    controls = loaded.value;
+  }
+  const controlsLabel = args.controls ?? 'the shipped controls/ folder';
+
   const models = resolveModels(args.models, lib.DEFAULT_TIERS);
   const resolved = Object.fromEntries(models.map((m) => [m.label, m.choice.tier ? lib.DEFAULT_TIERS[m.choice.tier] : m.choice.model]));
   const count = totalRuns({ cases, models, repeat: args.repeat });
@@ -82,6 +95,7 @@ export async function main(io) {
     if (!args.yes) {
       stdout(
         [
+          `Controls: ${controlsLabel}`,
           `Planned: ${cases.length} cases × ${models.length} models × ${args.repeat} run${args.repeat === 1 ? '' : 's'} = ${count} real calls.`,
           ...models.map((m) => `  ${m.label} = ${resolved[m.label]}`),
           `This sends ${kit.sends} in the golden set to Anthropic and costs money.`,
@@ -103,16 +117,17 @@ export async function main(io) {
     models,
     repeat: args.repeat,
     makeClient,
+    controls,
     now,
     signal: io.signal,
     onResult: (r, n) => stderr(`[${n}/${count}] ${r.model} · ${r.caseId}${r.run > 1 ? ` #${r.run}` : ''}: ${r.pass ? 'pass' : 'FAIL'} (${Math.round(r.latencyMs)} ms)\n`),
   });
 
-  stdout(`\n${formatReport({ results, cases, labels: models.map((m) => m.label), resolved, meta: { mode, repeat: args.repeat, aborted } })}\n`);
+  stdout(`\n${formatReport({ results, cases, labels: models.map((m) => m.label), resolved, meta: { mode, repeat: args.repeat, aborted, controls: controlsLabel } })}\n`);
 
   const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
   try {
-    const path = await io.save(args.out, `${stamp}-${status ? 'status-' : ''}${mode}.json`, { capability: args.capability, startedAt: new Date(startedAt).toISOString(), mode, repeat: args.repeat, aborted, models: resolved, cases: cases.map((c) => c.id), results });
+    const path = await io.save(args.out, `${stamp}-${status ? 'status-' : ''}${mode}.json`, { capability: args.capability, controls: args.controls ?? null, startedAt: new Date(startedAt).toISOString(), mode, repeat: args.repeat, aborted, models: resolved, cases: cases.map((c) => c.id), results });
     stdout(`\nSaved: ${path}\n`);
   } catch (error) {
     stderr(`Could not save the results: ${error.message}\n`);

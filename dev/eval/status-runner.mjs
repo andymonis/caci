@@ -6,14 +6,14 @@ import { evaluateStatusCase } from './status-evaluate.mjs';
 const tokensOf = (result, trace) => (result.ok ? result.value.usage : trace.filter((e) => e.type === 'response').reduce((sum, e) => ({ inputTokens: sum.inputTokens + e.usage.inputTokens, outputTokens: sum.outputTokens + e.usage.outputTokens }), { inputTokens: 0, outputTokens: 0 }));
 
 /** Same options as `runEval`; `lib` needs only `createLlm`. */
-export async function runStatusEval({ lib, cases, models, repeat = 1, makeClient, now = Date.now, timeoutMs = 60_000, onResult, signal }) {
+export async function runStatusEval({ lib, cases, models, repeat = 1, makeClient, now = Date.now, timeoutMs = 60_000, onResult, signal, controls }) {
   const results = [];
   for (const model of models) {
     for (const caseDef of cases) {
       for (let attempt = 1; attempt <= repeat; attempt++) {
         if (signal?.aborted) return { results, aborted: true };
         const client = makeClient({ caseDef, label: model.label, choice: model.choice });
-        const llm = lib.createLlm({ client, now });
+        const llm = lib.createLlm({ client, now, ...(controls === undefined ? {} : { controls }) });
         const trace = [];
         const started = now();
         const result = await llm.status({ text: caseDef.request, entries: caseDef.entries }, { ...model.choice, timeoutMs, trace: (event) => void trace.push(event) });

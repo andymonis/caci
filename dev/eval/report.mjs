@@ -85,6 +85,7 @@ export function formatReport({ results, cases, labels, resolved = {}, meta }) {
   const summaries = summarizeResults(results, labels);
   const lines = [];
   lines.push(`Evaluation: ${cases.length} cases × ${labels.length} model${labels.length === 1 ? '' : 's'} × ${meta.repeat} run${meta.repeat === 1 ? '' : 's'} (${results.length} done) — ${meta.mode} model${meta.aborted ? ' — STOPPED EARLY' : ''}`);
+  if (meta.controls !== undefined) lines.push(`Controls: ${meta.controls}`);
   for (const label of labels) if (resolved[label] && resolved[label] !== label) lines.push(`  ${label} = ${resolved[label]}`);
   lines.push('');
 
