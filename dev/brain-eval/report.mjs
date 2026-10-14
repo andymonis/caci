@@ -45,11 +45,27 @@ const lostCounts = (records) => {
 };
 
 export function formatReport({ results, filing = [], meta }) {
+  const pads = unique(results.map((r) => r.pad ?? 0)).sort((a, b) => a - b);
+  if (pads.length <= 1) return section({ results, filing, meta: { ...meta, pad: meta.pad ?? pads[0] } });
+  const parts = pads.map((pad) => `=== ${pad} filler notes per scenario ===\n${section({ results: results.filter((r) => (r.pad ?? 0) === pad), filing: filing.filter((f) => (f.pad ?? 0) === pad), meta: { ...meta, pad } })}`);
+  const s = summarise(results);
+  const rows = Object.keys(s.cells).map((key) => {
+    const [arm, model] = key.split('|');
+    return [arm, model, ...pads.map((pad) => {
+      const mine = results.filter((r) => r.arm === arm && r.model === model && (r.pad ?? 0) === pad);
+      return mine.length === 0 ? '-' : `${pct(aggregate(mine.map((r) => r.score)).passRate)} (${mine.length})`;
+    })];
+  });
+  parts.push(`=== Effect of filler on the pass rate (answers) ===\n${table([['arm', 'model', ...pads.map((p) => `${p} notes`)], ...rows])}`);
+  return parts.join('\n\n');
+}
+
+function section({ results, filing, meta }) {
   const out = [];
   const s = summarise(results);
   out.push('Brain against replay');
   out.push(`  mode ${meta.mode} · arms ${s.arms.join(', ')} · filed with ${meta.fileWith ?? 'n/a'} · repeats ${meta.repeat} · controls ${meta.controls}${meta.aborted ? ' · STOPPED EARLY' : ''}`);
-  if (meta.pad !== undefined && meta.pad > 0) out.push(`  padded with ${meta.pad} filler notes (seed ${meta.seed})`);
+  if (meta.pad !== undefined && meta.pad > 0) out.push(`  padded with ${meta.pad} filler notes (seed ${meta.seed ?? 1})`);
   out.push(`  ${results.length} answers over ${unique(results.map((r) => r.scenario)).length} scenarios`);
   if (results.length === 0) return out.join('\n');
 

@@ -156,6 +156,27 @@ describe('a demo run', () => {
     expect(h.text()).toContain('controls cand');
     expect(h.saved[0].json.results.every((r) => r.arm === 'replay')).toBe(true);
   });
+  it('--pad runs each scenario once per size, saves the sizes and the seed, and reports the effect', async () => {
+    const { h } = await run(['--pad', '0,4', '--seed', '5', '--repeat', '1', '--arms', 'brain', '--answer-with', 'fast', '--only', 'a']);
+    const { json } = h.saved[0];
+    expect(json).toMatchObject({ pads: [0, 4], seed: 5 });
+    expect(json.results.map((r) => r.pad)).toEqual([0, 4]);
+    expect(h.text()).toContain('=== 4 filler notes per scenario ===');
+    expect(h.text()).toContain('Effect of filler');
+  });
+  it('--pad on a scenario with one note is refused before anything runs', async () => {
+    const one = { ...sc('one'), notes: [sc('one').notes[0]], questions: [{ id: 'q', kind: 'recall', after: 'n1', ask: 'x?', must: [['Tablet A']] }] };
+    const h = harness({ argv: ['--demo', '--pad', '3'], loadScenarios: async () => ({ ok: true, scenarios: [one] }) });
+    expect(await main(h.io)).toBe(2);
+    expect(h.errText()).toContain('Cannot pad one with 3 notes');
+    expect(h.saved).toEqual([]);
+  });
+  it('the plan counts the filler', async () => {
+    const h = harness({ argv: ['--pad', '0,10', '--repeat', '1', '--only', 'a'], env: { ANTHROPIC_API_KEY: KEY } });
+    await main(h.io);
+    expect(h.text()).toContain('Filler: 0, 10 notes per scenario (seed 1)');
+    expect(h.text()).toContain('Planned: about 26 real calls (14 filing, 6 brain answers, 6 replay answers).');
+  });
   it('--only keeps just that scenario', async () => {
     const { h } = await run(['--only', 'a', '--repeat', '1']);
     expect(new Set(h.saved[0].json.results.map((r) => r.scenario))).toEqual(new Set(['a']));

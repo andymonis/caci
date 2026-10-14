@@ -1,6 +1,7 @@
 // The brain-eval command with everything it touches passed in, so it is tested without a model, a key, a disk or a clock.
 import { createHash } from 'node:crypto';
 import { parseArgs, resolveModels, USAGE } from './args.mjs';
+import { padScenario } from './pad.mjs';
 import { formatReport, summarise } from './report.mjs';
 import { plannedCalls, runEval } from './runner.mjs';
 
@@ -57,10 +58,21 @@ export async function main(io) {
   }
   const controlsLabel = args.controls ?? 'the shipped controls/ folder';
 
+  for (const scenario of scenarios) {
+    for (const pad of args.pad) {
+      try {
+        padScenario(scenario, pad, args.seed);
+      } catch (error) {
+        stderr(`Cannot pad ${scenario.id} with ${pad} notes: ${error.message}\n`);
+        return 2;
+      }
+    }
+  }
+
   const [fileWith] = resolveModels([args.fileWith], lib.DEFAULT_TIERS);
   const answerWith = resolveModels(args.answerWith, lib.DEFAULT_TIERS);
   const resolved = Object.fromEntries([fileWith, ...answerWith].map((m) => [m.label, m.choice.tier ? lib.DEFAULT_TIERS[m.choice.tier] : m.choice.model]));
-  const plan = plannedCalls({ scenarios, arms: args.arms, answerWith, repeat: args.repeat });
+  const plan = plannedCalls({ scenarios, arms: args.arms, answerWith, repeat: args.repeat, pads: args.pad });
   const mode = args.demo ? 'demo' : 'real';
 
   let makeClient;
@@ -77,6 +89,7 @@ export async function main(io) {
         [
           `Controls: ${controlsLabel}`,
           `Scenarios: ${scenarios.length} (${scenarios.reduce((n, s) => n + s.notes.length, 0)} notes, ${scenarios.reduce((n, s) => n + s.questions.length, 0)} questions)`,
+          ...(args.pad.some((n) => n > 0) ? [`Filler: ${args.pad.join(', ')} notes per scenario (seed ${args.seed}); the scenarios run once for each.`] : []),
           `Arms: ${args.arms.join(', ')}; each question asked ${args.repeat} time${args.repeat === 1 ? '' : 's'} of each answering model.`,
           `Planned: about ${plan.total} real calls (${plan.filing} filing, ${plan.brain} brain answers, ${plan.replay} replay answers).`,
           ...(args.arms.includes('brain') ? [`  files with ${fileWith.label} = ${resolved[fileWith.label]}`] : []),
@@ -95,16 +108,16 @@ export async function main(io) {
   stderr(`Running about ${plan.total} ${mode} call${plan.total === 1 ? '' : 's'}…\n`);
   const startedAt = now();
   const { results, filing, aborted } = await runEval({
-    lib, controls, scenarios, arms: args.arms, fileWith, answerWith, repeat: args.repeat, order: args.order, windowTokens: args.window, makeClient, signal: io.signal,
+    lib, controls, scenarios, arms: args.arms, fileWith, answerWith, repeat: args.repeat, order: args.order, windowTokens: args.window, pads: args.pad, seed: args.seed, makeClient, signal: io.signal,
     onResult: (r, n) => stderr(`[${n}] ${r.arm} ${r.model} · ${r.scenario}/${r.question}${r.run > 1 ? ` #${r.run}` : ''}: ${r.pass ? 'pass' : 'FAIL'}\n`),
   });
 
-  const meta = { mode, repeat: args.repeat, aborted, controls: controlsLabel, fileWith: fileWith.label };
+  const meta = { mode, repeat: args.repeat, aborted, controls: controlsLabel, fileWith: fileWith.label, seed: args.seed };
   stdout(`\n${formatReport({ results, filing, meta })}\n`);
 
   const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
   const json = {
-    kind: 'brain-eval', startedAt: new Date(startedAt).toISOString(), mode, controls: args.controls ?? null, repeat: args.repeat, arms: args.arms, order: args.order, windowTokens: args.window,
+    kind: 'brain-eval', startedAt: new Date(startedAt).toISOString(), mode, controls: args.controls ?? null, repeat: args.repeat, arms: args.arms, order: args.order, windowTokens: args.window, pads: args.pad, seed: args.seed,
     fileWith: fileWith.label, answerWith: answerWith.map((m) => m.label), models: resolved, aborted,
     scenarios: scenarios.map((s) => ({ id: s.id, hash: hashOf(s), notes: s.notes.length, questions: s.questions.map((q) => ({ id: q.id, kind: q.kind })) })),
     summary: summarise(results), filing, results,

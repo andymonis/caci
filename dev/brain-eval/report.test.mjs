@@ -34,6 +34,44 @@ describe('summarise', () => {
   });
 });
 
+describe('the report with several filler sizes', () => {
+  const at = (pad, rows) => rows.map((r) => ({ ...r, pad }));
+  const results = [
+    ...at(0, [rec('brain', 'fast', 'q1', 'recall', true), rec('replay', 'fast', 'q1', 'recall', true)]),
+    ...at(100, [rec('brain', 'fast', 'q1', 'recall', false), rec('replay', 'fast', 'q1', 'recall', true)]),
+  ];
+  const filing = [{ pad: 0, ok: true }, { pad: 100, ok: true }, { pad: 100, ok: false, error: { code: 'REFUSED' } }];
+  const text = formatReport({ results, filing, meta: { ...META, seed: 4 } });
+  it('has a full report for each size, in order, and the filler in each heading', () => {
+    expect(text.indexOf('=== 0 filler notes per scenario ===')).toBeLessThan(text.indexOf('=== 100 filler notes per scenario ==='));
+    expect(text).toContain('padded with 100 filler notes (seed 4)');
+    expect(text.match(/Brain against replay/g)).toHaveLength(2);
+  });
+  it('each size counts only its own answers and filing', () => {
+    const [zero, hundred] = text.split('=== 100 filler notes per scenario ===');
+    expect(zero).toContain('2 answers');
+    expect(hundred).toContain('Filing: 1 of 2 notes filed');
+    expect(zero).toContain('Filing: 1 of 1');
+  });
+  it('ends with the effect of filler on the pass rate', () => {
+    const tail = text.slice(text.indexOf('=== Effect of filler'));
+    expect(tail).toMatch(/arm\s+model\s+0 notes\s+100 notes/);
+    expect(tail).toMatch(/brain\s+fast\s+100% \(1\)\s+0% \(1\)/);
+    expect(tail).toMatch(/replay\s+fast\s+100% \(1\)\s+100% \(1\)/);
+  });
+  it('sizes are ordered by number, not as text', () => {
+    const r = [...at(100, [rec('brain', 'fast', 'q1', 'recall', true)]), ...at(20, [rec('brain', 'fast', 'q1', 'recall', true)])];
+    const t = formatReport({ results: r, meta: META });
+    expect(t.indexOf('=== 20 filler')).toBeLessThan(t.indexOf('=== 100 filler'));
+    expect(t).toMatch(/arm\s+model\s+20 notes\s+100 notes/);
+  });
+  it('one size is the plain report with no extra parts', () => {
+    const one = formatReport({ results: at(100, [rec('brain', 'fast', 'q1', 'recall', true)]), meta: { ...META, seed: 4 } });
+    expect(one).not.toContain('===');
+    expect(one).toContain('padded with 100 filler notes (seed 4)');
+  });
+});
+
 describe('the report', () => {
   const text = formatReport({ results: RESULTS, filing: [{ ok: true }, { ok: false, error: { code: 'REFUSED' } }], meta: META });
   it('names the run', () => {

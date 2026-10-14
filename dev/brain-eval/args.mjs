@@ -1,5 +1,6 @@
 // Command-line arguments for `npm run brain-eval`. Pure.
 import { resolveModels } from '../eval/args.mjs';
+import { MAX_PAD } from './pad.mjs';
 import { DEFAULT_WINDOW_TOKENS, ORDERS } from './replay-arm.mjs';
 
 export { resolveModels };
@@ -19,6 +20,8 @@ request) and replay (every raw note shown to the model in time order). Scores ea
   --answer-with a,b  the models that answer the questions. Default: ${DEFAULT_ANSWER_WITH.join(',')}
   --arms a,b         brain, replay or both. Default: brain,replay
   --repeat n         times each question is asked of each model, 1 to 10. Default: ${DEFAULT_REPEAT}
+  --pad n,m          filler notes mixed into each scenario, to test volume: one number or a list such as 0,100,300. Default: 0
+  --seed n           seed for the filler, so a run can be repeated. Default: 1
   --order o          replay order: ${ORDERS.join(' or ')}. Default: ${ORDERS[0]}
   --window n         replay: a transcript above about n tokens is not sent. Default: ${DEFAULT_WINDOW_TOKENS}
   --controls DIR     try a candidate folder of LLM controls instead of controls/ (it is checked first)
@@ -29,7 +32,7 @@ request) and replay (every raw note shown to the model in time order). Scores ea
 
 A real run needs ANTHROPIC_API_KEY, costs money, and sends the scenarios' notes to Anthropic. Use invented text only.`;
 
-const FLAGS_WITH_VALUE = ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--window', '--controls', '--out'];
+const FLAGS_WITH_VALUE = ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--out'];
 const FLAGS = ['--demo', '--yes', '--help'];
 const list = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -37,7 +40,7 @@ const list = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 export function parseArgs(argv) {
   const value = {
     scenarios: undefined, only: undefined, fileWith: DEFAULT_FILE_WITH, answerWith: [...DEFAULT_ANSWER_WITH], arms: [...ARMS], repeat: DEFAULT_REPEAT,
-    order: ORDERS[0], window: DEFAULT_WINDOW_TOKENS, controls: undefined, demo: false, yes: false, out: 'brain-eval-results', help: false,
+    order: ORDERS[0], pad: [0], seed: 1, window: DEFAULT_WINDOW_TOKENS, controls: undefined, demo: false, yes: false, out: 'brain-eval-results', help: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -76,6 +79,14 @@ export function parseArgs(argv) {
     } else if (arg === '--order') {
       if (!ORDERS.includes(next)) return { ok: false, message: `--order must be one of: ${ORDERS.join(', ')}` };
       value.order = next;
+    } else if (arg === '--pad') {
+      const pads = list(next).map(Number);
+      if (pads.length === 0 || pads.some((n) => !Number.isInteger(n) || n < 0 || n > MAX_PAD)) return { ok: false, message: `--pad must be whole numbers from 0 to ${MAX_PAD}, such as 0,100,300` };
+      value.pad = [...new Set(pads)].sort((a, b) => a - b);
+    } else if (arg === '--seed') {
+      const n = Number(next);
+      if (!Number.isInteger(n) || n < 0) return { ok: false, message: '--seed must be a whole number, 0 or more' };
+      value.seed = n;
     } else if (arg === '--window') {
       const n = Number(next);
       if (!Number.isInteger(n) || n < 1000) return { ok: false, message: '--window must be a whole number of tokens, at least 1000' };

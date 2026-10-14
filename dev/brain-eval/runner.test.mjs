@@ -15,8 +15,34 @@ describe('plannedCalls', () => {
   const scenarios = [sc('a'), sc('b')];
   it('counts filing once per note and answers per question, model and repeat', () => {
     expect(plannedCalls({ scenarios, arms: ['brain', 'replay'], answerWith: [FAST, DEEP], repeat: 3 })).toEqual({ filing: 4, brain: 12, replay: 12, total: 28 });
+    // filler adds notes to file and repeats everything for each pad size
+    expect(plannedCalls({ scenarios, arms: ['brain', 'replay'], answerWith: [FAST], repeat: 1, pads: [0, 10] })).toEqual({ filing: 4 + 24, brain: 4, replay: 4, total: 36 });
     expect(plannedCalls({ scenarios, arms: ['replay'], answerWith: [FAST], repeat: 1 })).toEqual({ filing: 0, brain: 0, replay: 2, total: 2 });
     expect(plannedCalls({ scenarios, arms: ['brain'], answerWith: [FAST], repeat: 2 })).toEqual({ filing: 4, brain: 4, replay: 0, total: 8 });
+  });
+});
+
+describe('runEval with filler', () => {
+  it('runs every scenario once for each pad size, tags the results and pads with the seed', async () => {
+    const r = await runEval({ ...base, scenarios: [sc('a')], arms: ['brain', 'replay'], pads: [0, 6], seed: 3 });
+    expect(r.results.map((x) => [x.pad, x.arm, x.entriesUsed])).toEqual([[0, 'brain', 2], [0, 'replay', 2], [6, 'brain', 8], [6, 'replay', 8]]);
+    expect(r.filing.map((f) => f.pad)).toEqual([0, 0, ...Array(8).fill(6)]);
+    const again = await runEval({ ...base, scenarios: [sc('a')], arms: ['replay'], pads: [6], seed: 3 });
+    expect(again.results[0].entriesUsed).toBe(8);
+  });
+  it('a different seed gives different filler', async () => {
+    const seen = [];
+    const run = (seed) => runEval({ ...base, scenarios: [sc('a')], arms: ['replay'], pads: [6], seed, makeClient: () => ({ complete: (req) => (seen.push(req.messages[0].content), demoClient().complete(req)) }) });
+    await run(1);
+    await run(2);
+    await run(1);
+    expect(seen[0]).toBe(seen[2]);
+    expect(seen[0]).not.toBe(seen[1]);
+  });
+  it('the numbers in the results are numbered across pad sizes', async () => {
+    const seen = [];
+    await runEval({ ...base, scenarios: [sc('a')], arms: ['replay'], pads: [0, 2], onResult: (_x, n) => seen.push(n) });
+    expect(seen).toEqual([1, 2]);
   });
 });
 
