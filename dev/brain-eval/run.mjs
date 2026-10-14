@@ -1,5 +1,5 @@
 // `npm run brain-eval`: see README.md. The API key (if any) is read here from ANTHROPIC_API_KEY and never printed or saved.
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertLocalDevelopment } from '../shared/server-kit.mjs';
@@ -44,6 +44,7 @@ process.exitCode = await main({
     return result.ok ? { ok: true, value: result.value } : { ok: false, problems: result.error };
   },
   loadScenarios: async (dir) => loadScenarios(resolve(dir)),
+  readJson: async (file) => JSON.parse(await readFile(resolve(file), 'utf8')),
   save: async (dir, name, json) => {
     await mkdir(dir, { recursive: true });
     const path = join(dir, name);

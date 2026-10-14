@@ -16,14 +16,27 @@ describe('defaults', () => {
   it('are the ones the specification names', () => {
     expect(ok([])).toEqual({
       scenarios: undefined, only: undefined, fileWith: 'fast', answerWith: ['fast', 'balanced', 'deep'], arms: ['brain', 'replay'], repeat: 3,
-      order: 'oldest-first', pad: [0], seed: 1, window: 150000, controls: undefined, demo: false, yes: false, out: 'brain-eval-results', help: false,
+      order: 'oldest-first', pad: [0], seed: 1, window: 150000, controls: undefined, compare: undefined, force: false, demo: false, yes: false, out: 'brain-eval-results', help: false,
     });
     expect(ARMS).toEqual(['brain', 'replay']);
     expect(DEFAULT_ANSWER_WITH).toEqual(['fast', 'balanced', 'deep']);
   });
   it('every option is in the usage text', () => {
-    for (const flag of ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--demo', '--yes', '--out', '--help']) expect(USAGE).toContain(flag);
+    for (const flag of ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--compare', '--force', '--demo', '--yes', '--out', '--help']) expect(USAGE).toContain(flag);
   });
+});
+
+describe('--compare', () => {
+  it('takes two files and --force', () => {
+    expect(ok(['--compare', 'a.json', 'b.json'])).toMatchObject({ compare: ['a.json', 'b.json'], force: false });
+    expect(ok(['--compare', 'a.json', 'b.json', '--force']).force).toBe(true);
+    expect(ok(['--force', '--compare', 'a.json', 'b.json']).force).toBe(true);
+    expect(ok(['--compare', 'a.json', 'b.json', '--repeat', '2']).repeat).toBe(2);
+  });
+  it.each([[['--compare']], [['--compare', 'a.json']], [['--compare', 'a.json', '--yes']], [['--compare', '--yes', 'a.json']]])('refuses %j', (argv) => {
+    expect(bad(argv)).toContain('--compare needs two files');
+  });
+  it('--force alone is refused', () => expect(bad(['--force'])).toContain('--force is only for --compare'));
 });
 
 describe('options', () => {

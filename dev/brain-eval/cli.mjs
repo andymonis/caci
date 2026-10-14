@@ -1,6 +1,7 @@
 // The brain-eval command with everything it touches passed in, so it is tested without a model, a key, a disk or a clock.
 import { createHash } from 'node:crypto';
 import { parseArgs, resolveModels, USAGE } from './args.mjs';
+import { compareRuns } from './compare.mjs';
 import { padScenario } from './pad.mjs';
 import { formatReport, summarise } from './report.mjs';
 import { plannedCalls, runEval } from './runner.mjs';
@@ -15,6 +16,7 @@ export const hashOf = (scenario) => createHash('sha256').update(JSON.stringify(s
  * @param io.defaultScenarios folder used when `--scenarios` is not given
  * @param io.loadControls async (dir) => `{ ok: true, value }` or `{ ok: false, problems }`
  * @param io.loadScenarios async (dir) => `{ ok: true, scenarios }` or `{ ok: false, problems }`
+ * @param io.readJson async (path) => a saved result (for --compare)
  * @param io.save  async (dir, name, json) => path
  * @returns the exit code
  */
@@ -28,6 +30,25 @@ export async function main(io) {
   const args = parsed.value;
   if (args.help) {
     stdout(`${USAGE}\n`);
+    return 0;
+  }
+
+  if (args.compare !== undefined) {
+    const runs = [];
+    for (const file of args.compare) {
+      try {
+        runs.push(await io.readJson(file));
+      } catch (error) {
+        stderr(`Could not read ${file}: ${error.message}\n`);
+        return 2;
+      }
+    }
+    const compared = compareRuns(runs[0], runs[1], { force: args.force });
+    if (!compared.ok) {
+      stderr(`${compared.message}\n`);
+      return 2;
+    }
+    stdout(`${compared.text}\n`);
     return 0;
   }
 

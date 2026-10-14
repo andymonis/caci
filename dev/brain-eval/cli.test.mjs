@@ -221,3 +221,33 @@ describe('a demo run', () => {
     expect(readFileSync(new URL('./run.mjs', import.meta.url), 'utf8')).toContain("new URL('./scenarios', import.meta.url)");
   });
 });
+
+describe('--compare', () => {
+  const saved = { kind: 'brain-eval', startedAt: '2026-10-14T10:00:00.000Z', mode: 'real', repeat: 1, arms: ['brain'], scenarios: [{ id: 'a', hash: 'h', notes: 2, questions: [{ id: 'q1', kind: 'recall' }] }], results: [] };
+  const files = { 'one.json': saved, 'two.json': { ...saved, startedAt: '2026-10-15T10:00:00.000Z' }, 'other.json': { ...saved, scenarios: [{ id: 'z', hash: 'h', notes: 2, questions: [] }] } };
+  const compare = (argv, over = {}) => {
+    const h = harness({ argv, readJson: async (f) => { if (!(f in files)) throw new Error('no such file'); return files[f]; }, loadScenarios: async () => { throw new Error('should not load scenarios'); }, ...over });
+    return main(h.io).then((code) => ({ code, h }));
+  };
+  it('prints the comparison and exits 0 without a key, a model or the scenarios', async () => {
+    const { code, h } = await compare(['--compare', 'one.json', 'two.json']);
+    expect(code).toBe(0);
+    expect(h.text()).toContain('Comparing two brain-eval runs');
+    expect(h.saved).toEqual([]);
+    expect(h.clients()).toBe(0);
+  });
+  it('refuses different scenarios with exit 2 unless --force', async () => {
+    const refused = await compare(['--compare', 'one.json', 'other.json']);
+    expect(refused.code).toBe(2);
+    expect(refused.h.errText()).toContain('did not use the same scenarios');
+    expect(refused.h.text()).toBe('');
+    const forced = await compare(['--compare', 'one.json', 'other.json', '--force']);
+    expect(forced.code).toBe(0);
+    expect(forced.h.text()).toContain('WARNING (--force)');
+  });
+  it('a file that cannot be read exits 2 naming it', async () => {
+    const { code, h } = await compare(['--compare', 'one.json', 'missing.json']);
+    expect(code).toBe(2);
+    expect(h.errText()).toContain('Could not read missing.json: no such file');
+  });
+});

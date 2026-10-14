@@ -27,27 +27,37 @@ request) and replay (every raw note shown to the model in time order). Scores ea
   --controls DIR     try a candidate folder of LLM controls instead of controls/ (it is checked first)
   --demo             use the free demo model: checks the plumbing, says nothing about quality
   --yes              actually call the real models. Without it a real run only prints its plan
+  --compare A B      compare two saved results (the JSON files from --out) and exit: no model is called
+  --force            with --compare: compare even if the runs used different scenarios or questions
   --out DIR          where results are saved. Default: brain-eval-results (git-ignored)
   --help             this text
 
 A real run needs ANTHROPIC_API_KEY, costs money, and sends the scenarios' notes to Anthropic. Use invented text only.`;
 
 const FLAGS_WITH_VALUE = ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--out'];
-const FLAGS = ['--demo', '--yes', '--help'];
+const FLAGS = ['--demo', '--yes', '--help', '--force'];
 const list = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 
 /** `{ ok: true, value }` or `{ ok: false, message }`. */
 export function parseArgs(argv) {
   const value = {
     scenarios: undefined, only: undefined, fileWith: DEFAULT_FILE_WITH, answerWith: [...DEFAULT_ANSWER_WITH], arms: [...ARMS], repeat: DEFAULT_REPEAT,
-    order: ORDERS[0], pad: [0], seed: 1, window: DEFAULT_WINDOW_TOKENS, controls: undefined, demo: false, yes: false, out: 'brain-eval-results', help: false,
+    order: ORDERS[0], pad: [0], seed: 1, window: DEFAULT_WINDOW_TOKENS, controls: undefined, compare: undefined, force: false, demo: false, yes: false, out: 'brain-eval-results', help: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (FLAGS.includes(arg)) {
-      if (arg === '--demo') value.demo = true;
+      if (arg === '--force') value.force = true;
+      else if (arg === '--demo') value.demo = true;
       else if (arg === '--yes') value.yes = true;
       else value.help = true;
+      continue;
+    }
+    if (arg === '--compare') {
+      const files = [argv[i + 1], argv[i + 2]];
+      if (files.some((f) => f === undefined || f.startsWith('--'))) return { ok: false, message: '--compare needs two files: --compare before.json after.json' };
+      value.compare = files;
+      i += 2;
       continue;
     }
     if (!FLAGS_WITH_VALUE.includes(arg)) return { ok: false, message: `unknown option ${arg} (try --help)` };
@@ -94,6 +104,7 @@ export function parseArgs(argv) {
     } else if (arg === '--controls') value.controls = next;
     else value.out = next;
   }
+  if (value.force && value.compare === undefined) return { ok: false, message: '--force is only for --compare' };
   if (value.demo && value.yes) return { ok: false, message: '--demo and --yes together make no sense: --yes is for real calls' };
   return { ok: true, value };
 }
