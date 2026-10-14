@@ -9,9 +9,9 @@ export const MAX_NOTE_CHARS = 8000;
 export const MAX_ASK_CHARS = 500;
 const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const ISO = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?Z?)?$/;
-const SCENARIO_FIELDS = ['id', 'title', 'description', 'notes', 'questions'];
-const NOTE_FIELDS = ['id', 'at', 'text'];
-const QUESTION_FIELDS = ['id', 'kind', 'after', 'ask', 'at', 'must', 'stale', 'expectNothing', 'why'];
+export const SCENARIO_FIELDS = ['id', 'title', 'description', 'notes', 'questions'];
+export const NOTE_FIELDS = ['id', 'at', 'text'];
+export const QUESTION_FIELDS = ['id', 'kind', 'after', 'ask', 'at', 'must', 'stale', 'expectNothing', 'why'];
 
 const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 

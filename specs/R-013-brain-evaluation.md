@@ -63,16 +63,16 @@ Unique scenario, note and question ids; every note a valid ISO date in non-decre
 | BE-FR-09 | `--controls DIR` runs both arms against a candidate controls folder (R-012). |
 | BE-FR-10 | The library's own tests prove an ideal answerer passes everything and three bad answerers fail the questions they should. |
 
-## Risks
+## Threats and controls
 
-| Risk | Control |
-|------|---------|
-| A scenario that is unfair to one arm (the answer needs detail only one arm keeps) | Scenarios are reviewed by the owner; both arms see the same notes; the diagnostic shows where each loses. |
-| A stale phrase that matches a legitimate mention | The superseded-cue rule; stale phrases are written specific; the scoring tests include such answers. |
-| Model variance | Several repeats and a pass rate, not a single answer. |
-| A scenario that leaks the answer into a distractor note | The validator and filler checks; review. |
-| Real or personal data used by accident | Invented text only, stated in the README and the plan; the real run needs `--yes`. |
-| A scoring rule that cannot tell good from bad | An ideal answerer and three bad answerers are run through the real scoring in the tests. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| A scenario that is unfair to one arm (the answer needs detail only one arm keeps) | Scenarios are reviewed by the owner; both arms see the same notes and the same question and prompt; the diagnostic shows where each loses. | `dev/brain-eval/library.test.mjs` — "the review listing is current, and lists every note and question"; `dev/brain-eval/replay-arm.test.mjs` — "asks the same question of the same model the same way in both arms except for the entries"; `dev/brain-eval/library.test.mjs` — "every fact a question needs gets into the brain through the demo filing, and into the context"; `dev/brain-eval/brain-arm.test.mjs` — "scores the answers and records tokens, attempts and the model" |
+| A stale phrase that matches a legitimate mention | The superseded-cue rule applies only when every line holding the old value also holds a cue; stale phrases are written specific. | `dev/brain-eval/score.test.mjs` — "passes with the old fact mentioned as superseded"; `dev/brain-eval/score.test.mjs` — "a cue in a different point does not excuse the old fact as current"; `dev/brain-eval/score.test.mjs` — "when it appears twice, once as current and once superseded, it is surfaced"; `dev/brain-eval/score.test.mjs` — "a phrase inside a longer word does not count" |
+| Model variance | Several repeats, a pass rate rather than a single answer, and a comparison that counts a question as passing when at least half its answers do. | `dev/brain-eval/score.test.mjs` — "turns repeats into rates"; `dev/brain-eval/compare.test.mjs` — "a question flips when its pass rate crosses a half"; `dev/brain-eval/args.test.mjs` — "are the ones the specification names"; `dev/brain-eval/brain-arm.test.mjs` — "asks every answering model, every repeat, in order" |
+| A scenario that leaks the answer into a distractor note | The validator refuses a distractor with must or stale phrases; filler never contains a scored phrase or a word of a distractor question. | `dev/brain-eval/scenario.test.mjs` — "must and stale"; `dev/brain-eval/pad.test.mjs` — "no filler contains any must or stale phrase, nor a word of a distractor question"; `dev/brain-eval/pad.test.mjs` — "picks another filler when the first would leak a phrase"; `dev/brain-eval/library.test.mjs` — "a model that always says nothing passes only the distractors" |
+| Real or personal data used by accident, or sent without the owner knowing | Invented text only, stated in every README and the plan; a real run needs `--yes`; the key is read once and never printed or saved. | `dev/brain-eval/library.test.mjs` — "invents everything: no real-looking email, url or long number is in any note"; `dev/brain-eval/cli.test.mjs` — "without --yes prints the plan and sends nothing, with no client made"; `dev/brain-eval/cli.test.mjs` — "with --yes makes exactly one client, runs, never prints or saves the key"; `dev/brain-eval/cli.test.mjs` — "is free, needs no key, makes no real client and refuses --yes"; `dev/brain-eval/brain-arm.test.mjs` — "never creates a client itself: only what makeClient gives is used" |
+| A scoring rule that cannot tell good from bad | An ideal answerer and three bad answerers are run through the real scoring, the real guard and both arms. | `dev/brain-eval/library.test.mjs` — "an ideal answerer passes every question"; `dev/brain-eval/library.test.mjs` — "a stale parrot, quoting the oldest note, fails every override question"; `dev/brain-eval/library.test.mjs` — "an amnesiac, quoting only the newest note, fails recall questions about earlier notes"; `dev/brain-eval/library.test.mjs` — "a model that always says nothing passes only the distractors" |
 
 ## Acceptance criteria
 
@@ -89,10 +89,29 @@ Unique scenario, note and question ids; every note a valid ISO date in non-decre
 | BE-AC-09 | Given two saved runs, when compared, then the changes and flipped questions are listed. |
 | BE-AC-10 | Given a question lost at filing, when the report is read, then it is counted as lost at filing, not in the answer. |
 
-## Residual risks
+### Where each criterion is checked (T-214)
+
+| ID | Tests |
+|----|-------|
+| BE-AC-01 | `dev/brain-eval/scenario.test.mjs` — "a must phrase in no note makes the question unanswerable"; `dev/brain-eval/scenario.test.mjs` — "a must phrase only in a note after the checkpoint is unanswerable too" |
+| BE-AC-02 | `dev/brain-eval/scenario.test.mjs` — "an override whose stale phrase first appears only with or after the new fact is refused, naming both notes"; `dev/brain-eval/scenario.test.mjs` — "an override whose stale phrase is in no note is refused" |
+| BE-AC-03 | `dev/brain-eval/score.test.mjs` — "passes with the old fact mentioned as superseded"; `dev/brain-eval/score.test.mjs` — "fails: %s"; `dev/brain-eval/score.test.mjs` — "passes: %s" |
+| BE-AC-04 | `dev/brain-eval/brain-arm.test.mjs` — "files every note, and each lands with its own date"; `dev/brain-eval/brain-arm.test.mjs` — "the old and the new fact are both stored: the brain does not supersede" |
+| BE-AC-05 | `dev/brain-eval/replay-arm.test.mjs` — "an over-window transcript is not sent, and says so"; `dev/brain-eval/replay-arm.test.mjs` — "just inside the window is sent" |
+| BE-AC-06 | `dev/brain-eval/cli.test.mjs` — "without --yes prints the plan and sends nothing, with no client made"; `dev/brain-eval/cli.test.mjs` — "without a key exits 1 and creates no client" |
+| BE-AC-07 | `dev/brain-eval/pad.test.mjs` — "300 filler notes make the status context leave out the oldest entries"; `dev/brain-eval/report.test.mjs` — "lists filing results and notes left out of the context" |
+| BE-AC-08 | `dev/brain-eval/library.test.mjs` — "an ideal answerer passes every question"; `dev/brain-eval/library.test.mjs` — "a stale parrot, quoting the oldest note, fails every override question" |
+| BE-AC-09 | `dev/brain-eval/compare.test.mjs` — "lists the question that went from failing to passing with both answers"; `dev/brain-eval/compare.test.mjs` — "lists the question that went from passing to failing"; `dev/brain-eval/cli.test.mjs` — "prints the comparison and exits 0 without a key, a model or the scenarios" |
+| BE-AC-10 | `dev/brain-eval/brain-arm.test.mjs` — "lostAt names the first stage that lost a fact"; `dev/brain-eval/brain-arm.test.mjs` — "a refused filing is recorded and the run goes on"; `dev/brain-eval/report.test.mjs` — "says where failed answers lost the fact" |
+
+### Residual risks (not covered, with the reason)
 
 1. **Invented scenarios are not real life**: they show whether the mechanism works, not how real notes behave.
 2. **Rules miss paraphrases**: an answer that is right in other words fails; phrases are written loosely and reviewed.
 3. **One filing model, one run**: filing is also non-deterministic; the filing is reused for all questions of a run.
 4. **The replay arm is an upper bound only while the transcript fits the window**; beyond it the comparison stops being meaningful.
 5. **A real run costs money and sends the scenario text to Anthropic.**
+6. **The brain does not resolve changed facts when storing.** The tool measures how that plays out; if the brain loses to replay on override questions that is the evidence for building supersession, and it is not built here.
+7. **The filing summary is short.** The brain keeps a title and a one-line summary, so a fact late in a long note may never be stored; the diagnostic counts this as lost at filing.
+8. **Filler is generic.** It tests volume, not realistic clutter.
+9. **Nothing here has been run against the real models by the author.** The first real run is the owner's.

@@ -67,7 +67,19 @@ A real run needs `ANTHROPIC_API_KEY` in the environment (`source ./set-key.sh` f
 `eval-results/`. Add `--repeat 3` for steadier numbers, and `--controls /tmp/candidate` to run the same set against
 changed instructions (compare the two reports). More options: `npm run eval -- --help`.
 
-## 5. The automated tests
+## 5. The brain evaluation (does the brain beat replaying the text?)
+
+```
+npm run brain-eval -- --demo                        # free: checks the plumbing with a stand-in model
+npm run brain-eval                                  # shows the plan for a real run and sends nothing
+npm run brain-eval -- --yes                         # the real run: costs money, sends the invented scenarios to Anthropic
+npm run brain-eval -- --yes --pad 0,100,300         # also with filler notes, to test volume
+npm run brain-eval -- --compare before.json after.json   # what changed between two saved runs
+```
+
+It files invented dated notes into the brain and asks questions (such as "what tablets does Mum take?" after a dose changed), then asks the same questions with all the notes shown as plain text, and scores both by rules. Needs `ANTHROPIC_API_KEY` for a real run. Results are saved in `brain-eval-results/`. The scenarios are in `dev/brain-eval/scenarios/` (read `REVIEW.md` there first). Only invented text goes in a scenario.
+
+## 6. The automated tests
 
 ```
 npm test            # all the tests
@@ -76,7 +88,7 @@ npm run gate        # the full check: types, lint, tests and the public API repo
 
 Run `npm run gate` before every commit.
 
-## 6. Other tools
+## 7. Other tools
 
 | Command | What it does |
 |---|---|

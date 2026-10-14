@@ -32,6 +32,7 @@ dev/graph-explorer/     Local-only visual tester for the graph store (never publ
 dev/shared/             The loopback server kit every dev tool is built on (never published)
 dev/llm-lab/            Local-only lab for trying the LLM component, scripted by default (never published)
 dev/eval/               Local-only evaluation harness: compares models on a golden set (never published)
+dev/brain-eval/         Local-only test of the brain against replaying the text: invented scenarios, two arms, scored by rules (never published)
 ```
 
 ### Where the code lives
@@ -776,6 +777,44 @@ Edit the files in `controls/`, commit them, and update as usual (`sudo node /opt
 ### What is not protected
 
 Anyone who can edit the repository can change what the model is told, within the guard's checks. The guard checks the form of a reply, not the meaning, so a rule weakened in wording (for example dropping "cite your sources") is not caught until you compare runs of the evaluation set with the real model. The shipped `controls/` folder is part of the package and is never served over HTTP.
+
+## Testing the brain against replaying the text
+
+CaCi stores a short title and summary of each note in a graph and builds its answers from those. The obvious alternative is to keep every note as plain text and show the model all of it every time. `npm run brain-eval` asks which of the two answers questions better, with **invented notes** (it is a development tool, never published, specified in `specs/R-013-brain-evaluation.md`). It measures **whether the right facts come back**, not speed or cost: an early fact must not be forgotten, and a later fact that overrides an earlier one must win (the dose that was `2 x Tablet A` and became `1 x Tablet B` must not come back as `2 x Tablet A`).
+
+### The two arms
+
+- **Brain**: the real product path. Each note is filed by the real categoriser into a real graph (in memory, with the clock set to the note's date), and each question is asked as a status request. Nothing is replaced when a fact changes: the old and the new note are both stored, so any resolving has to happen at answer time.
+- **Replay**: the same `status` capability, the same controls and the same answering model, but shown **every raw note up to the question, oldest first, with its date**, with the size limits lifted. A transcript estimated above 150,000 tokens (`--window`) is marked over-window and not sent. `--order newest-first` reverses it for comparison.
+
+The notes are filed once by a **filing model** (`--file-with`, default `fast`); the questions are answered by one or more **answering models** (`--answer-with`, default `fast,balanced,deep`), each question `--repeat` times (default 3) because models vary.
+
+### The scenarios and the scoring
+
+`dev/brain-eval/scenarios/` holds 8 invented scenarios (107 notes, 44 questions): a medication change, an appointment moved twice then cancelled, a changed phone number and address, facts corrected, activities cancelled, an allergy and a key place written once and followed by thirty ordinary notes, two people's facts that must not be mixed, and a changed routine. Each question is one of five kinds: `recall` (an earlier fact must still be found), `override` (a later fact replaced an earlier one), `retract` (something was cancelled), `multi` (several facts in one answer) and `distractor` (nothing answers it, so the right reply is "nothing relevant"). `dev/brain-eval/scenarios/REVIEW.md` shows the whole library on one page, and `dev/brain-eval/scenarios/README.md` explains how to write a scenario.
+
+Answers are scored **by rules, not by another model**: the answer must contain one phrase from every `must` group and must not give a `stale` phrase as current. A stale phrase in the same line as a word such as *no longer*, *instead of* or *cancelled* counts as a mention of the old value and is allowed, and is counted separately. Words are compared whole (`4 June` is not found in `14 June`), numbers written as words are read as digits, and punctuation and case are ignored. Tests prove the scoring tells good from bad: an ideal answerer passes every question, a stale parrot fails the override questions, an amnesiac fails recall of earlier notes, and a model that always says nothing passes only the distractors.
+
+### Running it
+
+```
+npm run brain-eval -- --demo                       # free: a stand-in model checks the plumbing and says nothing about quality
+npm run brain-eval                                 # a real run prints its plan and sends nothing
+npm run brain-eval -- --yes                        # the real run
+npm run brain-eval -- --yes --pad 0,100,300        # also with 100 and 300 unrelated filler notes mixed in
+npm run brain-eval -- --yes --controls /tmp/candidate   # against changed LLM controls
+npm run brain-eval -- --compare before.json after.json  # what changed between two saved runs
+```
+
+A real run needs `ANTHROPIC_API_KEY` in the environment, **costs money and sends every note and question in the scenarios to Anthropic**, which is why it prints its plan (about how many calls, which models, which controls) and stops unless you add `--yes`. **Only invented text belongs in a scenario; never put real people or real data in one.** The key is read once, handed to the client and never printed or saved. Ctrl+C stops between calls and still reports and saves what was done. Results are saved as JSON in the git-ignored `brain-eval-results/`. `--demo` and `--yes` together are refused. `--pad` mixes in seeded, unrelated filler (`--seed` repeats it) to see whether early facts are lost once there is more than the brain's context holds; the report then has a section per size and a table of the effect.
+
+### Reading the report
+
+For each arm and answering model: the pass rate, how often an old fact was given as current, how often it was mentioned as old, errors and tokens; the same by kind of question; **brain minus replay** (positive means the brain did better); a per-question table; and the failures with the answers given. Each failed answer is also traced to **where the fact was lost**: at *filing* (it never reached the brain), at *context* (stored, but not in what was sent to the model), at *answer* (the model had it and did not say it), or *stale* (the old fact was given as current). That tells you what to fix: the categoriser's summaries, the context builder, or the wording of the answer controls.
+
+### What it cannot tell you
+
+Invented scenarios show whether the mechanism works, not how real notes behave. Rules can miss a correct answer given in other words, so phrases are written loosely and reviewed. A real run varies, so use repeats and compare runs, not single answers. The replay arm is only a fair upper bound while the transcript fits the window. A real run costs money. The brain does not yet resolve changed facts when it stores them; if the report shows the brain losing to replay on `override` questions, that is the evidence for building it, and nothing in this tool changes the brain.
 
 ## Running on a Raspberry Pi
 
