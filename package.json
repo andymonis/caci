@@ -130,6 +130,7 @@
     "doctor": "node scripts/doctor.mjs",
     "dev:lab": "bash -c 'source ./set-key.sh && npm run build && node dev/llm-lab/server.mjs'",
     "eval": "npm run build && node dev/eval/run.mjs",
+    "brain-eval": "npm run build && node dev/brain-eval/run.mjs",
     "bench:sqlite": "npm run build && node dev/bench/run.mjs"
   },
   "peerDependencies": {
