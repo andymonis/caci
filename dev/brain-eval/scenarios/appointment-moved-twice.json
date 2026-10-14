@@ -1,0 +1,160 @@
+{
+  "id": "appointment-moved-twice",
+  "title": "A hospital appointment moved twice",
+  "description": "Dad's appointment is rescheduled twice and then cancelled. Only the latest arrangement is current; the ward named once at the start still applies.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-02-02",
+      "text": "Dad's hospital appointment is Tuesday 10 March at 2pm, Ward C, Riverside Hospital."
+    },
+    {
+      "id": "n02",
+      "at": "2026-02-05",
+      "text": "Dad needs to fast from midnight before the appointment."
+    },
+    {
+      "id": "n03",
+      "at": "2026-02-12",
+      "text": "Booked a taxi firm for hospital trips: Blue Line, 01632 960111."
+    },
+    {
+      "id": "n04",
+      "at": "2026-02-20",
+      "text": "The hospital rang: Dad's appointment is moved to Thursday 12 March at 9am."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-24",
+      "text": "Dad's friend Ken is lending him a walking stick."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-27",
+      "text": "Washed Dad's dressing gown for the hospital bag."
+    },
+    {
+      "id": "n07",
+      "at": "2026-03-03",
+      "text": "Hospital moved Dad's appointment again: now Monday 16 March at 11:15, same ward."
+    },
+    {
+      "id": "n08",
+      "at": "2026-03-04",
+      "text": "Told Blue Line about the new date."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-10",
+      "text": "Dad has packed his hospital bag."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-12",
+      "text": "Parking at Riverside is expensive. Take coins for the machine."
+    },
+    {
+      "id": "n11",
+      "at": "2026-03-14",
+      "text": "The hospital rang: Dad's appointment on 16 March is cancelled. They will send a new date."
+    }
+  ],
+  "questions": [
+    {
+      "id": "first-date",
+      "kind": "recall",
+      "after": "n03",
+      "ask": "When is Dad's hospital appointment?",
+      "must": [
+        [
+          "10 March"
+        ]
+      ],
+      "why": "Before any move, the first date is the answer."
+    },
+    {
+      "id": "after-first-move",
+      "kind": "override",
+      "after": "n05",
+      "ask": "When is Dad's hospital appointment?",
+      "must": [
+        [
+          "12 March"
+        ]
+      ],
+      "stale": [
+        "10 March"
+      ],
+      "why": "After one move only the second date is current."
+    },
+    {
+      "id": "latest-date",
+      "kind": "override",
+      "after": "n10",
+      "ask": "When is Dad's hospital appointment?",
+      "must": [
+        [
+          "16 March"
+        ]
+      ],
+      "stale": [
+        "10 March",
+        "12 March"
+      ],
+      "why": "After two moves only the third date is current."
+    },
+    {
+      "id": "ward",
+      "kind": "recall",
+      "after": "n10",
+      "ask": "Which ward is Dad's appointment in?",
+      "must": [
+        [
+          "Ward C"
+        ]
+      ],
+      "why": "The ward is named once, in note 1, and never repeated."
+    },
+    {
+      "id": "time-and-ward",
+      "kind": "multi",
+      "after": "n10",
+      "ask": "What time is Dad's appointment and in which ward?",
+      "must": [
+        [
+          "11:15",
+          "11.15"
+        ],
+        [
+          "Ward C"
+        ]
+      ],
+      "why": "The time comes from the newest note and the ward from the oldest."
+    },
+    {
+      "id": "cancelled",
+      "kind": "retract",
+      "after": "n11",
+      "ask": "Is Dad's hospital appointment still going ahead?",
+      "must": [
+        [
+          "cancelled",
+          "called off",
+          "no longer"
+        ]
+      ],
+      "stale": [
+        "16 March"
+      ],
+      "why": "The last note cancels the appointment; the date may be mentioned only as cancelled."
+    },
+    {
+      "id": "hospital-wifi",
+      "kind": "distractor",
+      "after": "n10",
+      "ask": "What is the Wi-Fi password at the hospital?",
+      "expectNothing": true,
+      "why": "Not in the notes."
+    }
+  ]
+}

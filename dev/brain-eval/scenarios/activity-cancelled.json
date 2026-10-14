@@ -1,0 +1,131 @@
+{
+  "id": "activity-cancelled",
+  "title": "Activities that are cancelled or called off",
+  "description": "A regular lesson is cancelled and a visit is called off. The cancelled arrangement must not be reported as happening.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-06",
+      "text": "Maya has swimming lessons every Tuesday at 4pm at the leisure centre."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-13",
+      "text": "Told Gran we will visit on 20 June."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-20",
+      "text": "Maya's swimming bag needs a new strap."
+    },
+    {
+      "id": "n04",
+      "at": "2026-02-03",
+      "text": "Maya passed her five metre badge."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-10",
+      "text": "Leisure centre email: the swimming lessons for Maya are cancelled until September."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-17",
+      "text": "Maya will try gymnastics on Saturdays instead."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-24",
+      "text": "Gran called. The visit on 20 June is off; she will be away."
+    },
+    {
+      "id": "n08",
+      "at": "2026-03-03",
+      "text": "Bought Maya a gymnastics leotard."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-10",
+      "text": "Dentist for Maya on 24 March at 3:30."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-17",
+      "text": "Maya's school trip form needs signing by Friday."
+    }
+  ],
+  "questions": [
+    {
+      "id": "swimming-before",
+      "kind": "recall",
+      "after": "n03",
+      "ask": "When does Maya have swimming?",
+      "must": [
+        [
+          "Tuesday"
+        ]
+      ],
+      "why": "Before the cancellation, the weekly slot is the answer."
+    },
+    {
+      "id": "swimming-now",
+      "kind": "retract",
+      "after": "n09",
+      "ask": "Does Maya have swimming lessons this spring?",
+      "must": [
+        [
+          "cancelled",
+          "called off",
+          "no longer",
+          "not running",
+          "suspended"
+        ]
+      ],
+      "stale": [
+        "every Tuesday at 4pm"
+      ],
+      "why": "The lessons were cancelled in note 5."
+    },
+    {
+      "id": "gran-visit",
+      "kind": "retract",
+      "after": "n09",
+      "ask": "When are we visiting Gran?",
+      "must": [
+        [
+          "off",
+          "cancelled",
+          "called off",
+          "not happening"
+        ]
+      ],
+      "stale": [
+        "20 June"
+      ],
+      "why": "The visit was called off in note 7; if the date appears it must be as cancelled."
+    },
+    {
+      "id": "maya-activities",
+      "kind": "multi",
+      "after": "n09",
+      "ask": "What is Maya doing instead of swimming?",
+      "must": [
+        [
+          "gymnastics"
+        ],
+        [
+          "Saturday"
+        ]
+      ],
+      "why": "The replacement activity and its day come from the same note."
+    },
+    {
+      "id": "piano",
+      "kind": "distractor",
+      "after": "n09",
+      "ask": "What time is Maya's piano exam?",
+      "expectNothing": true,
+      "why": "No piano in the notes."
+    }
+  ]
+}

@@ -1,0 +1,228 @@
+{
+  "id": "old-detail-still-relevant",
+  "title": "An early safety detail that stays relevant after many notes",
+  "description": "A drug allergy and the place of a spare key are written once at the start, followed by thirty ordinary notes. Nothing changes; the early facts must still be found.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-04",
+      "text": "Mum is allergic to penicillin. Remind any new doctor or pharmacist."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-04T18:00",
+      "text": "The spare front door key is under the green flowerpot by the shed."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-06",
+      "text": "Bought bread, milk and bananas."
+    },
+    {
+      "id": "n04",
+      "at": "2026-01-09",
+      "text": "Rain all day. Stayed in and tidied the spare room."
+    },
+    {
+      "id": "n05",
+      "at": "2026-01-12",
+      "text": "Called the council about the missed bin collection."
+    },
+    {
+      "id": "n06",
+      "at": "2026-01-15",
+      "text": "Watched a documentary about bees."
+    },
+    {
+      "id": "n07",
+      "at": "2026-01-18",
+      "text": "Book club meets next Thursday."
+    },
+    {
+      "id": "n08",
+      "at": "2026-01-21",
+      "text": "Fixed the squeaky door in the hall."
+    },
+    {
+      "id": "n09",
+      "at": "2026-01-24",
+      "text": "Made lentil soup. There is plenty left."
+    },
+    {
+      "id": "n10",
+      "at": "2026-01-27",
+      "text": "Washed the car and hoovered inside."
+    },
+    {
+      "id": "n11",
+      "at": "2026-01-30",
+      "text": "Posted the birthday card to Auntie Jean."
+    },
+    {
+      "id": "n12",
+      "at": "2026-02-02",
+      "text": "Cut the hedge at the front."
+    },
+    {
+      "id": "n13",
+      "at": "2026-02-05",
+      "text": "Library book due back on Friday."
+    },
+    {
+      "id": "n14",
+      "at": "2026-02-08",
+      "text": "Ran out of printer ink. Order more."
+    },
+    {
+      "id": "n15",
+      "at": "2026-02-11",
+      "text": "Neighbours' dog was barking again last night."
+    },
+    {
+      "id": "n16",
+      "at": "2026-02-14",
+      "text": "Walked to the canal and back, about an hour."
+    },
+    {
+      "id": "n17",
+      "at": "2026-02-17",
+      "text": "Changed the bed sheets."
+    },
+    {
+      "id": "n18",
+      "at": "2026-02-20",
+      "text": "Took the old microwave to the tip."
+    },
+    {
+      "id": "n19",
+      "at": "2026-02-23",
+      "text": "Planted tomato seedlings on the windowsill."
+    },
+    {
+      "id": "n20",
+      "at": "2026-02-26",
+      "text": "Phone bill came. Nothing unusual."
+    },
+    {
+      "id": "n21",
+      "at": "2026-03-01",
+      "text": "Sorted the recycling."
+    },
+    {
+      "id": "n22",
+      "at": "2026-03-04",
+      "text": "Watered the geraniums."
+    },
+    {
+      "id": "n23",
+      "at": "2026-03-07",
+      "text": "Lunch with Rita at the cafe on the high street."
+    },
+    {
+      "id": "n24",
+      "at": "2026-03-10",
+      "text": "Ordered new curtains for the living room."
+    },
+    {
+      "id": "n25",
+      "at": "2026-03-13",
+      "text": "Defrosted the freezer."
+    },
+    {
+      "id": "n26",
+      "at": "2026-03-16",
+      "text": "Heard a woodpecker in the garden this morning."
+    },
+    {
+      "id": "n27",
+      "at": "2026-03-19",
+      "text": "Bought stamps and envelopes."
+    },
+    {
+      "id": "n28",
+      "at": "2026-03-22",
+      "text": "Quiz night at the pub was fun; we came third."
+    },
+    {
+      "id": "n29",
+      "at": "2026-03-25",
+      "text": "Charged the tablet and updated the apps."
+    },
+    {
+      "id": "n30",
+      "at": "2026-03-28",
+      "text": "Cleaned the oven."
+    },
+    {
+      "id": "n31",
+      "at": "2026-03-31",
+      "text": "Collected a parcel from the post office."
+    },
+    {
+      "id": "n32",
+      "at": "2026-04-03",
+      "text": "Watched the football with Dad."
+    }
+  ],
+  "questions": [
+    {
+      "id": "allergy",
+      "kind": "recall",
+      "after": "n32",
+      "ask": "Which medicine must Mum avoid?",
+      "must": [
+        [
+          "penicillin"
+        ]
+      ],
+      "why": "Written in the first note, asked after thirty others."
+    },
+    {
+      "id": "spare-key",
+      "kind": "recall",
+      "after": "n32",
+      "ask": "Where is the spare front door key?",
+      "must": [
+        [
+          "green flowerpot"
+        ]
+      ],
+      "why": "Written in note 2, asked after thirty others."
+    },
+    {
+      "id": "allergy-and-key",
+      "kind": "multi",
+      "after": "n32",
+      "ask": "What should a visiting nurse know about Mum, and how can she get in?",
+      "must": [
+        [
+          "penicillin"
+        ],
+        [
+          "green flowerpot"
+        ]
+      ],
+      "why": "Two old facts in one answer."
+    },
+    {
+      "id": "quiz-result",
+      "kind": "recall",
+      "after": "n32",
+      "ask": "How did we do at the quiz night?",
+      "must": [
+        [
+          "third"
+        ]
+      ],
+      "why": "An ordinary fact in the middle of the notes."
+    },
+    {
+      "id": "vaccination",
+      "kind": "distractor",
+      "after": "n32",
+      "ask": "When is Mum's next flu vaccination?",
+      "expectNothing": true,
+      "why": "Not in the notes."
+    }
+  ]
+}

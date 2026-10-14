@@ -1,0 +1,139 @@
+{
+  "id": "two-people-not-mixed",
+  "title": "Facts about two people that must not be mixed up",
+  "description": "Mum and Dad each have tablets and an appointment. Dad's dose and appointment change. An answer about one person must never carry the other's details.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-05",
+      "text": "Mum takes 1 x Tablet B each morning."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-06",
+      "text": "Dad takes 1 x Tablet C each evening."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-12",
+      "text": "Dad's clinic appointment is Friday 13 March."
+    },
+    {
+      "id": "n04",
+      "at": "2026-01-19",
+      "text": "Mum's podiatry appointment is Monday 9 March."
+    },
+    {
+      "id": "n05",
+      "at": "2026-01-26",
+      "text": "Mum's eye test went well. No change to her glasses."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-02",
+      "text": "Dad's clinic has moved his appointment to Friday 20 March."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-09",
+      "text": "The clinic doctor raised Dad's dose: he now takes 3 x Tablet C each evening."
+    },
+    {
+      "id": "n08",
+      "at": "2026-02-16",
+      "text": "Mum wants a lift to the podiatrist; Dad will drive."
+    },
+    {
+      "id": "n09",
+      "at": "2026-02-23",
+      "text": "Picked up both prescriptions in one trip."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-02",
+      "text": "Refilled the weekly pill box for both of them."
+    }
+  ],
+  "questions": [
+    {
+      "id": "mum-tablets",
+      "kind": "recall",
+      "after": "n09",
+      "ask": "What does Mum take each morning?",
+      "must": [
+        [
+          "1 x Tablet B"
+        ]
+      ],
+      "why": "Her tablet never changed; Dad's tablet must not replace it."
+    },
+    {
+      "id": "dad-tablets",
+      "kind": "override",
+      "after": "n09",
+      "ask": "How much Tablet C does Dad take?",
+      "must": [
+        [
+          "3 x Tablet C"
+        ]
+      ],
+      "stale": [
+        "1 x Tablet C"
+      ],
+      "why": "Dad's dose was raised."
+    },
+    {
+      "id": "dad-appointment",
+      "kind": "override",
+      "after": "n09",
+      "ask": "When is Dad's clinic appointment?",
+      "must": [
+        [
+          "20 March"
+        ]
+      ],
+      "stale": [
+        "13 March"
+      ],
+      "why": "Dad's appointment moved."
+    },
+    {
+      "id": "mum-appointment",
+      "kind": "override",
+      "after": "n09",
+      "ask": "When is Mum's podiatry appointment?",
+      "must": [
+        [
+          "9 March"
+        ]
+      ],
+      "stale": [
+        "13 March"
+      ],
+      "why": "Mum's date is unchanged; Dad's date from an earlier note must not appear as hers."
+    },
+    {
+      "id": "mum-and-dad",
+      "kind": "multi",
+      "after": "n09",
+      "ask": "What does each of them take?",
+      "must": [
+        [
+          "1 x Tablet B"
+        ],
+        [
+          "3 x Tablet C"
+        ]
+      ],
+      "why": "Both people, each with their own current dose."
+    },
+    {
+      "id": "dad-glasses",
+      "kind": "distractor",
+      "after": "n09",
+      "ask": "What strength are Dad's glasses?",
+      "expectNothing": true,
+      "why": "Only Mum's eye test is in the notes."
+    }
+  ]
+}

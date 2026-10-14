@@ -1,0 +1,136 @@
+{
+  "id": "contact-details-change",
+  "title": "A phone number and an address change",
+  "description": "A tradesperson changes their number and a landlord moves house. Old details must not be given as current; unchanged details must stay findable.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-08",
+      "text": "Sam is our plumber. His number is 07700 900123."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-15",
+      "text": "Our landlord Mrs Alvi lives at 14 Elm Road."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-20",
+      "text": "Rent is due on the 1st of each month."
+    },
+    {
+      "id": "n04",
+      "at": "2026-02-02",
+      "text": "Dripping tap in the bathroom. Sam is coming on Friday."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-09",
+      "text": "Sam fixed the tap. Paid him by bank transfer."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-16",
+      "text": "Window cleaner comes every second Wednesday."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-27",
+      "text": "Sam has a new phone: his number is now 07700 900456."
+    },
+    {
+      "id": "n08",
+      "at": "2026-03-06",
+      "text": "Bins go out on Monday night."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-13",
+      "text": "Mrs Alvi has moved. Her new address is 3 Park Close."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-20",
+      "text": "Council tax letter arrived. Nothing to pay this month."
+    }
+  ],
+  "questions": [
+    {
+      "id": "plumber",
+      "kind": "recall",
+      "after": "n10",
+      "ask": "Who is our plumber?",
+      "must": [
+        [
+          "Sam"
+        ]
+      ],
+      "why": "Unchanged fact from the first note."
+    },
+    {
+      "id": "plumber-number-old",
+      "kind": "recall",
+      "after": "n06",
+      "ask": "What is the plumber's phone number?",
+      "must": [
+        [
+          "07700 900123"
+        ]
+      ],
+      "why": "Before the change the first number is right."
+    },
+    {
+      "id": "plumber-number",
+      "kind": "override",
+      "after": "n10",
+      "ask": "What is the plumber's phone number?",
+      "must": [
+        [
+          "07700 900456"
+        ]
+      ],
+      "stale": [
+        "07700 900123"
+      ],
+      "why": "The new number replaces the old."
+    },
+    {
+      "id": "landlord-address",
+      "kind": "override",
+      "after": "n10",
+      "ask": "Where does our landlord live?",
+      "must": [
+        [
+          "3 Park Close"
+        ]
+      ],
+      "stale": [
+        "14 Elm Road"
+      ],
+      "why": "The landlord has moved."
+    },
+    {
+      "id": "plumber-details",
+      "kind": "multi",
+      "after": "n10",
+      "ask": "Who is the plumber and how do I reach him?",
+      "must": [
+        [
+          "Sam"
+        ],
+        [
+          "07700 900456"
+        ]
+      ],
+      "why": "Name from the oldest note, number from a newer one."
+    },
+    {
+      "id": "electrician",
+      "kind": "distractor",
+      "after": "n10",
+      "ask": "What is the electrician's phone number?",
+      "expectNothing": true,
+      "why": "No electrician in the notes."
+    }
+  ]
+}

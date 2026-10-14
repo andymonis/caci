@@ -1,0 +1,141 @@
+{
+  "id": "medication-change",
+  "title": "A medication change after a check-up",
+  "description": "Mum is prescribed 2 x Tablet A a day. After a check-up the prescription becomes 1 x Tablet B a day. The old dose must not come back as current; the early prescription must still be found before the change.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-05",
+      "text": "GP prescribed Mum 2 x Tablet A a day for her blood pressure, with breakfast."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-07",
+      "text": "Collected Mum's prescription from the pharmacy on Station Road. Bought bread and milk on the way home."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-12",
+      "text": "Mum says the tablets make her a little dizzy in the mornings."
+    },
+    {
+      "id": "n04",
+      "at": "2026-01-19",
+      "text": "Mum's blood pressure check is booked at the surgery on 2 March at 10:30."
+    },
+    {
+      "id": "n05",
+      "at": "2026-01-26",
+      "text": "Joan next door is collecting Mum's shopping on Thursdays."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-03",
+      "text": "Mum's reading glasses are in the blue case on the hall table."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-10",
+      "text": "Took Mum to the garden centre. She chose two pots of lavender."
+    },
+    {
+      "id": "n08",
+      "at": "2026-02-17",
+      "text": "Boiler service done. The engineer says it is fine for another year."
+    },
+    {
+      "id": "n09",
+      "at": "2026-02-24",
+      "text": "Mum's friend Rita rang. They are going for lunch on Sunday."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-02T12:00",
+      "text": "After the check-up the GP changed Mum's tablets: she now takes 1 x Tablet B a day. Stop Tablet A."
+    },
+    {
+      "id": "n11",
+      "at": "2026-03-05",
+      "text": "Pharmacy had the new Tablet B ready. Collected 28 tablets."
+    },
+    {
+      "id": "n12",
+      "at": "2026-03-09",
+      "text": "Mum says she feels less dizzy since the change."
+    },
+    {
+      "id": "n13",
+      "at": "2026-03-16",
+      "text": "Replaced the batteries in the hall smoke alarm."
+    },
+    {
+      "id": "n14",
+      "at": "2026-03-23",
+      "text": "Mum's next review with the GP is in September."
+    }
+  ],
+  "questions": [
+    {
+      "id": "prescribed-first",
+      "kind": "recall",
+      "after": "n05",
+      "ask": "What did the GP prescribe for Mum's blood pressure?",
+      "must": [
+        [
+          "Tablet A"
+        ]
+      ],
+      "why": "An early fact, asked before anything changes."
+    },
+    {
+      "id": "check-date",
+      "kind": "recall",
+      "after": "n14",
+      "ask": "When was Mum's blood pressure check?",
+      "must": [
+        [
+          "2 March"
+        ]
+      ],
+      "why": "A fact from note 4 that must survive ten later notes."
+    },
+    {
+      "id": "tablets-now",
+      "kind": "override",
+      "after": "n14",
+      "ask": "What tablets does Mum take each day?",
+      "must": [
+        [
+          "1 x Tablet B"
+        ]
+      ],
+      "stale": [
+        "2 x Tablet A"
+      ],
+      "why": "The change in note 10 overrides the prescription in note 1."
+    },
+    {
+      "id": "tablets-changed",
+      "kind": "multi",
+      "after": "n14",
+      "ask": "What changed in Mum's tablets at the check-up?",
+      "must": [
+        [
+          "Tablet B"
+        ],
+        [
+          "Tablet A"
+        ]
+      ],
+      "why": "Both the old and the new tablet are legitimately part of the answer."
+    },
+    {
+      "id": "passport",
+      "kind": "distractor",
+      "after": "n14",
+      "ask": "What is Mum's passport number?",
+      "expectNothing": true,
+      "why": "Nothing in the notes mentions it."
+    }
+  ]
+}

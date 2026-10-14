@@ -1,0 +1,129 @@
+{
+  "id": "changed-routine",
+  "title": "A routine that changes when the carer's rota changes",
+  "description": "Gran's bath days and lunch time change. The old routine must not be given as current; the carer's name stays.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-02-02",
+      "text": "Gran's carer is Priya. She comes every morning at 8."
+    },
+    {
+      "id": "n02",
+      "at": "2026-02-03",
+      "text": "Gran has her bath on Mondays and Thursdays."
+    },
+    {
+      "id": "n03",
+      "at": "2026-02-04",
+      "text": "Lunch for Gran is delivered at 12:30 by Meals on Wheels."
+    },
+    {
+      "id": "n04",
+      "at": "2026-02-11",
+      "text": "Gran enjoyed the singing group at the church hall."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-18",
+      "text": "Asked Priya about the cold weather. She will bring an extra blanket."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-25",
+      "text": "Priya's rota has changed. Gran's baths are now on Tuesdays and Fridays."
+    },
+    {
+      "id": "n07",
+      "at": "2026-03-04",
+      "text": "Meals on Wheels now deliver lunch at 1pm."
+    },
+    {
+      "id": "n08",
+      "at": "2026-03-11",
+      "text": "Gran's hearing aid battery was replaced."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-18",
+      "text": "Gran asked for more tea in the afternoons."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-25",
+      "text": "Priya says Gran slept well all week."
+    }
+  ],
+  "questions": [
+    {
+      "id": "carer",
+      "kind": "recall",
+      "after": "n09",
+      "ask": "Who is Gran's carer?",
+      "must": [
+        [
+          "Priya"
+        ]
+      ],
+      "why": "Stated in the first note; never changed."
+    },
+    {
+      "id": "bath-days",
+      "kind": "override",
+      "after": "n09",
+      "ask": "Which days does Gran have her bath?",
+      "must": [
+        [
+          "Tuesday"
+        ],
+        [
+          "Friday"
+        ]
+      ],
+      "stale": [
+        "Mondays and Thursdays"
+      ],
+      "why": "The rota change replaces the days."
+    },
+    {
+      "id": "lunch-time",
+      "kind": "override",
+      "after": "n09",
+      "ask": "What time is Gran's lunch delivered?",
+      "must": [
+        [
+          "1pm",
+          "1 pm",
+          "13:00"
+        ]
+      ],
+      "stale": [
+        "12:30"
+      ],
+      "why": "The delivery time changed."
+    },
+    {
+      "id": "baths-before",
+      "kind": "recall",
+      "after": "n05",
+      "ask": "Which days does Gran have her bath?",
+      "must": [
+        [
+          "Monday"
+        ],
+        [
+          "Thursday"
+        ]
+      ],
+      "why": "Before the change the first routine is the answer."
+    },
+    {
+      "id": "gran-doctor",
+      "kind": "distractor",
+      "after": "n09",
+      "ask": "What is Gran's GP called?",
+      "expectNothing": true,
+      "why": "Not in the notes."
+    }
+  ]
+}

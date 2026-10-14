@@ -1,0 +1,121 @@
+{
+  "id": "fact-corrected",
+  "title": "Facts corrected by the person who wrote them",
+  "description": "A date and a car registration are written wrongly and corrected later. The wrong version must not return; an unrelated early fact stays.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-10",
+      "text": "Dad's birthday is on 14 June."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-14",
+      "text": "Mum and Dad's anniversary is 22 September."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-21",
+      "text": "Dad's car registration is AB12 CDE."
+    },
+    {
+      "id": "n04",
+      "at": "2026-02-01",
+      "text": "Car insurance renewal is due in April."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-08",
+      "text": "Bought a card for Gran's birthday."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-15",
+      "text": "Correction: Dad's birthday is 4 June, I wrote the wrong date before."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-22",
+      "text": "Dad's car registration is actually AB21 CDE; I swapped two digits."
+    },
+    {
+      "id": "n08",
+      "at": "2026-03-01",
+      "text": "Booked a table for Dad's birthday at the Fox and Hound."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-08",
+      "text": "MOT is due in May."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-15",
+      "text": "Gran wants a photo frame this year."
+    }
+  ],
+  "questions": [
+    {
+      "id": "birthday-wrong",
+      "kind": "recall",
+      "after": "n05",
+      "ask": "When is Dad's birthday?",
+      "must": [
+        [
+          "14 June"
+        ]
+      ],
+      "why": "Before the correction the written date is the answer."
+    },
+    {
+      "id": "birthday",
+      "kind": "override",
+      "after": "n10",
+      "ask": "When is Dad's birthday?",
+      "must": [
+        [
+          "4 June"
+        ]
+      ],
+      "stale": [
+        "14 June"
+      ],
+      "why": "The correction replaces the first date."
+    },
+    {
+      "id": "registration",
+      "kind": "override",
+      "after": "n10",
+      "ask": "What is Dad's car registration?",
+      "must": [
+        [
+          "AB21 CDE"
+        ]
+      ],
+      "stale": [
+        "AB12 CDE"
+      ],
+      "why": "The corrected registration wins."
+    },
+    {
+      "id": "anniversary",
+      "kind": "recall",
+      "after": "n10",
+      "ask": "When is Mum and Dad's anniversary?",
+      "must": [
+        [
+          "22 September"
+        ]
+      ],
+      "why": "An early fact that was never changed."
+    },
+    {
+      "id": "boat",
+      "kind": "distractor",
+      "after": "n10",
+      "ask": "What is the name of Dad's boat?",
+      "expectNothing": true,
+      "why": "Dad has no boat in the notes."
+    }
+  ]
+}
