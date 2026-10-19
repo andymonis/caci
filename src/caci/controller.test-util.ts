@@ -27,11 +27,12 @@ export interface World {
   circle(n: number, owner: string, others?: ReadonlyArray<readonly [string, CircleRole]>): Promise<string>;
 }
 
-export async function world(extra: { limits?: CaciLimits & BrainLimits & { status?: StatusContextLimits }; maxScopes?: number; browseAdapter?: (adapter: StorageAdapter) => StorageAdapter; client?: ModelClient; capturePending?: number; mode?: 'demo' | 'anthropic'; people?: string[]; captureAdapter?: (adapter: StorageAdapter) => StorageAdapter; ttlMs?: number; noStatus?: boolean; ledger?: LedgerStore; onLedgerFailure?: (message: string) => void } = {}): Promise<World> {
+export async function world(extra: { limits?: CaciLimits & BrainLimits & { status?: StatusContextLimits }; maxScopes?: number; browseAdapter?: (adapter: StorageAdapter) => StorageAdapter; client?: ModelClient; capturePending?: number; mode?: 'demo' | 'anthropic'; people?: string[]; captureAdapter?: (adapter: StorageAdapter) => StorageAdapter; ttlMs?: number; noStatus?: boolean; ledger?: LedgerStore; directory?: boolean | { get(id: string): Promise<{ username: string; displayName: string } | undefined> }; noScopes?: boolean; onLedgerFailure?: (message: string) => void } = {}): Promise<World> {
   const now = { value: T0 };
   const graphs = createMemoryAdapter();
+  const userStore = createMemoryUserStore();
   const users = createUserController({
-    users: createMemoryUserStore(),
+    users: userStore,
     sessions: createMemorySessionStore(),
     graphAdapter: graphs,
     hasher: createPasswordHasher({ params: { N: 16, r: 1, p: 1 } }),
@@ -48,7 +49,7 @@ export async function world(extra: { limits?: CaciLimits & BrainLimits & { statu
   const capture = createController({ adapter: extra.captureAdapter?.(graphs) ?? graphs, llm, now: () => now.value + skew.value, ...(extra.capturePending === undefined ? {} : { maxPending: extra.capturePending }), ...(extra.ttlMs === undefined ? {} : { ttlMs: extra.ttlMs }) });
   const circleStore = createMemoryCircleStore();
   const scopes = createScopeResolver({ users, store: circleStore, ...(extra.maxScopes === undefined ? {} : { maxScopes: extra.maxScopes }) });
-  const caci = createCaciController({ users, capture, graphAdapter: extra.browseAdapter?.(graphs) ?? graphs, scopes, ...(extra.noStatus === true ? {} : { llm }), ...(extra.ledger === undefined ? {} : { ledger: extra.ledger }), ...(extra.onLedgerFailure === undefined ? {} : { onLedgerFailure: extra.onLedgerFailure }), clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }), ...(extra.mode === undefined ? {} : { mode: extra.mode }) });
+  const caci = createCaciController({ users, capture, graphAdapter: extra.browseAdapter?.(graphs) ?? graphs, ...(extra.noScopes === true ? {} : { scopes }), ...(extra.noStatus === true ? {} : { llm }), ...(extra.ledger === undefined ? {} : { ledger: extra.ledger }), ...(typeof extra.directory === 'object' ? { directory: extra.directory } : extra.directory === true ? { directory: { get: async (id: string) => { const u = await userStore.get(id); return u === undefined ? undefined : { username: u.username, displayName: u.displayName }; } } } : {}), ...(extra.onLedgerFailure === undefined ? {} : { onLedgerFailure: extra.onLedgerFailure }), clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }), ...(extra.mode === undefined ? {} : { mode: extra.mode }) });
   const tokens: Record<string, string> = {};
   const graphIds: Record<string, string> = {};
   for (const name of extra.people ?? ['ann', 'bob']) {

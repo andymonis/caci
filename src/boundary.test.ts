@@ -162,7 +162,7 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('ledger/') && target.startsWith('users/') && target !== 'users/index' && !((file.startsWith('ledger/sqlite/') || ledgerTest) && target === 'users/sqlite/index') && !(ledgerTest && target === 'users/sqlite/schema')) {
         problems.push(`${file} imports ${specifier}: the ledger component may use the users component only through users/index (its SQLite store and its tests may also use users/sqlite/index, which owns the user database's schema)`);
       }
-      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes|api)\//.test(file) && /^ledger(?:\/|$)/.test(target)) {
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes|api)\//.test(file) && /^ledger(?:\/|$)/.test(target) && !(file.startsWith('api/') && apiTest && target === 'ledger/index')) {
         problems.push(`${file} imports ${specifier}: only the CaCi controller and the service may depend on the ledger component`);
       }
       if (file.startsWith('caci/') && target.startsWith('ledger/') && target !== 'ledger/index') {
@@ -241,6 +241,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'ledger/x.ts': `import { newUserId } from '../users/index.js'; import { openDb } from '../sqlite/db.js'; import { y } from './y.js';`,
         'ledger/sqlite/store.ts': `import { prepareUsersDatabase } from '../../users/sqlite/index.js'; import { openDb } from '../../sqlite/db.js';`,
         'ledger/sqlite/x.test.ts': `import { createSqliteAdapter } from '../../graph_store/adapters/sqlite/index.js'; import { createSqliteCircleStore } from '../../circles/sqlite/index.js'; import { USERS_MIGRATIONS } from '../../users/sqlite/schema.js';`,
+        'api/ledger.test.ts': `import { createMemoryLedgerStore } from '../ledger/index.js';`,
         'caci/ledger.ts': `import { createMemoryLedgerStore } from '../ledger/index.js';`,
         'service/ledger.ts': `import { createSqliteLedgerStore } from '../ledger/sqlite/index.js'; import { createMemoryLedgerStore } from '../ledger/index.js';`,
         'api/share.ts': `import { createSharing } from '../sharing/index.js';`,
@@ -329,6 +330,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the ledger component using the API', { 'ledger/x.ts': `import { createApiServer } from '../api/index.js';` }],
     ['the ledger component reaching into the users internals', { 'ledger/x.ts': `import { x } from '../users/controller.js';` }],
     ['production ledger code using the SQLite user store entry', { 'ledger/x.ts': `import { prepareUsersDatabase } from '../users/sqlite/index.js';` }],
+    ['API tests reaching into the ledger internals', { 'api/x.test.ts': `import { x } from '../ledger/store.js';` }],
     ['the API using the ledger component', { 'api/x.ts': `import { createMemoryLedgerStore } from '../ledger/index.js';` }],
     ['the circles component using the ledger component', { 'circles/x.ts': `import { createMemoryLedgerStore } from '../ledger/index.js';` }],
     ['the scopes component using the ledger component', { 'scopes/x.ts': `import { createMemoryLedgerStore } from '../ledger/index.js';` }],
@@ -437,7 +439,7 @@ describe('the ledger component, in the real tree', () => {
     expect(Object.keys(own).length).toBeGreaterThan(5);
     expect(violations(own)).toEqual([]);
     const others = { ...sourcesUnder(join(srcRoot, 'circles')), ...sourcesUnder(join(srcRoot, 'users')), ...sourcesUnder(join(srcRoot, 'sharing')), ...sourcesUnder(join(srcRoot, 'api')), ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'app')), ...sourcesUnder(join(srcRoot, 'llm')), ...sourcesUnder(join(srcRoot, 'scopes')) };
-    const dependents = Object.entries(others).filter(([, source]) => importsOf(source).some((x) => /(?:^|\/)ledger\//.test(x))).map(([file]) => file);
+    const dependents = Object.entries(others).filter(([file, source]) => !/^api\/[^/]+\.test\.ts$/.test(file) && importsOf(source).some((x) => /(?:^|\/)ledger\//.test(x))).map(([file]) => file);
     expect(Object.keys(others).length).toBeGreaterThan(50);
     expect(dependents).toEqual([]);
   });

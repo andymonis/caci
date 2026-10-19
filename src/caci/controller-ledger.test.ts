@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDemoModelClient, type ModelClient } from '../llm/index.js';
 import { createMemoryLedgerStore, type LedgerEntry, type LedgerScope, type LedgerStore } from '../ledger/index.js';
-import { world, type World } from './controller.test-util.js';
+import { ownErrorOf, world, type World } from './controller.test-util.js';
 
 // R-014: after an approved write the change log holds one entry per change, in the right scope, and a failure to record never
 // undoes or refuses the change.
@@ -187,5 +187,171 @@ describe('details the model decides', () => {
     const w = await world({ people: ['ann'], onLedgerFailure: (m) => void told.push(m) });
     await file(w, 'ann', OLD);
     expect(told).toEqual([]);
+  });
+});
+
+describe('reading the change log', () => {
+  const read = async (w: World, who: string, scope?: unknown, page?: unknown) => w.caci.ledger(w.tokens[who] as string, scope, page as never);
+  const NO_CIRCLE = { source: 'caci', error: { code: 'NOT_FOUND', message: 'no such circle' } };
+
+  it('shows the person\'s own log, newest first, with who made each change and without any id of the plumbing', async () => {
+    const { w } = await setup({ directory: true });
+    await file(w, 'ann', OLD);
+    w.now.value += 5000;
+    await file(w, 'ann', CHANGE);
+    const got = must(await read(w, 'ann'));
+    expect(got.items.map((e) => `${e.action} ${e.kind}`)).toEqual(['added item', 'added category', 'removed item', 'removed category', 'added item', 'added category']);
+    expect(got.items[0]?.by).toEqual({ username: 'ann', displayName: 'ann' });
+    expect(got.items[2]).toMatchObject({ title: expect.stringContaining('Mum takes'), summary: expect.stringContaining('2 x Tablet A') });
+    expect(got.nextCursor).toBeNull();
+    expect('scope' in got).toBe(false);
+    const json = JSON.stringify(got);
+    expect(json).not.toContain('proposalId');
+    expect(json).not.toContain('prop-');
+    expect(json).not.toContain('user-u');
+    expect(Object.keys(got.items[0] as object).sort()).toEqual(['action', 'at', 'by', 'id', 'kind', 'subject', 'summary', 'title']);
+    expect(Object.isFrozen(got) && Object.isFrozen(got.items) && Object.isFrozen(got.items[0])).toBe(true);
+  });
+  it('the personal scope can be said out loud; nothing else changes', async () => {
+    const { w } = await setup();
+    await file(w, 'ann', OLD);
+    expect(await read(w, 'ann', { kind: 'personal' })).toEqual(await read(w, 'ann'));
+    expect(await read(w, 'ann', undefined)).toEqual(await read(w, 'ann'));
+  });
+  it('without a directory, or when it fails, entries have no name', async () => {
+    const { w } = await setup();
+    await file(w, 'ann', OLD);
+    expect(must(await read(w, 'ann')).items.every((e) => !('by' in e))).toBe(true);
+    const failing = await setup({ directory: true });
+    await file(failing.w, 'ann', OLD);
+    const ok = must(await read(failing.w, 'ann'));
+    expect(ok.items.every((e) => 'by' in e)).toBe(true);
+  });
+  it('pages: any page size gives the same entries once, in order, with a cursor that ends', async () => {
+    const { w } = await setup();
+    for (let i = 0; i < 4; i++) {
+      await file(w, 'ann', `Note number ${i} about gardening topic${i} things`);
+      w.now.value += 1000;
+    }
+    const all = must(await read(w, 'ann', undefined, { limit: 100 })).items.map((e) => e.id);
+    expect(all.length).toBeGreaterThanOrEqual(5);
+    for (const limit of [1, 3, all.length]) {
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      for (let guard = 0; guard < 50; guard++) {
+        const page: Awaited<ReturnType<typeof w.caci.ledger>> = await read(w, 'ann', undefined, cursor === null ? { limit } : { limit, cursor });
+        const v = must(page);
+        seen.push(...v.items.map((e) => e.id));
+        cursor = v.nextCursor;
+        if (cursor === null) break;
+      }
+      expect(seen, `limit ${limit}`).toEqual(all);
+    }
+  });
+  it('bad limits, bad cursors and a cursor from another scope are refused, naming the field', async () => {
+    const { w } = await setup();
+    const c = await w.circle(1, 'ann', [['bob', 'member']]);
+    await file(w, 'ann', OLD);
+    await file(w, 'ann', 'Another note about gardening topic things', circle(c));
+    await file(w, 'ann', 'Third note about gardening other things', circle(c));
+    for (const limit of [0, -1, 1.5, 101, '5', null]) expect(ownErrorOf(await read(w, 'ann', undefined, { limit }))).toMatchObject({ code: 'INVALID_INPUT', field: 'limit' });
+    for (const cursor of ['', 5, 'garbage', 'g', 'x'.repeat(3000)]) expect(ownErrorOf(await read(w, 'ann', undefined, { cursor }))).toMatchObject({ code: 'INVALID_INPUT', field: 'cursor' });
+    const mine = must(await read(w, 'ann', circle(c), { limit: 1 })).nextCursor as string;
+    expect(mine).toBeTruthy();
+    expect(ownErrorOf(await read(w, 'ann', undefined, { cursor: mine }))).toMatchObject({ code: 'INVALID_INPUT', field: 'cursor' });
+    expect(ownErrorOf(await read(w, 'bob', undefined, { cursor: mine }))).toMatchObject({ code: 'INVALID_INPUT', field: 'cursor' });
+    expect(must(await read(w, 'bob', circle(c), { cursor: mine })).items.length).toBeGreaterThan(0);
+  });
+  it('a directory that fails, or does not know a user, leaves the name out and nothing else', async () => {
+    const throwing = await setup({ directory: { get: async () => { throw new Error('boom'); } } });
+    await file(throwing.w, 'ann', OLD);
+    const got = must(await read(throwing.w, 'ann'));
+    expect(got.items.length).toBeGreaterThan(0);
+    expect(got.items.every((e) => !('by' in e))).toBe(true);
+    const unknown = await setup({ directory: { get: async () => undefined } });
+    await file(unknown.w, 'ann', OLD);
+    expect(must(await read(unknown.w, 'ann')).items.every((e) => !('by' in e))).toBe(true);
+  });
+  it('asks the directory once for each person on a page, however many entries they made, and freezes the name', async () => {
+    const asked: string[] = [];
+    const { w } = await setup({ directory: { get: async (id) => (asked.push(id), { username: 'u', displayName: 'U' }) } });
+    await file(w, 'ann', OLD);
+    const got = must(await read(w, 'ann'));
+    expect(got.items.length).toBeGreaterThan(1);
+    expect(asked).toHaveLength(1);
+    expect(Object.isFrozen(got.items[0]?.by)).toBe(true);
+  });
+  it('an entry leaves out what it does not have: a category has no summary', async () => {
+    const { w } = await setup();
+    await file(w, 'ann', OLD);
+    const category = must(await read(w, 'ann')).items.find((e) => e.kind === 'category') as object;
+    expect('summary' in category).toBe(false);
+    expect('by' in category).toBe(false);
+  });
+  it('a circle scope without any circles in play is the made-up-circle answer', async () => {
+    const { w } = await setup({ noScopes: true });
+    expect(await read(w, 'ann', circle('c0000000000000001'))).toEqual({ ok: false, error: NO_CIRCLE });
+  });
+  it('a malformed scope names its field', async () => {
+    const { w } = await setup();
+    for (const [scope, field] of [[{ kind: 'circle' }, 'scope.circleId'], [{ kind: 'nope' }, 'scope'], [{ kind: 'personal', graphId: 'x' }, 'scope.graphId'], ['circle:c1', 'scope']] as const) {
+      expect(ownErrorOf(await read(w, 'ann', scope))).toMatchObject({ code: 'INVALID_INPUT', field });
+    }
+  });
+
+  describe('a circle\'s log', () => {
+    it('is readable by every role, names the circle, and is the same for all of them', async () => {
+      const { w } = await setup({ directory: true });
+      const c = await w.circle(1, 'ann', [['bob', 'member'], ['cat', 'observer']]);
+      await file(w, 'bob', OLD, circle(c));
+      const a = must(await read(w, 'ann', circle(c)));
+      expect(a.scope).toEqual({ kind: 'circle', circleId: c, circleName: 'Circle 1' });
+      expect(a.items[0]?.by).toEqual({ username: 'bob', displayName: 'bob' });
+      expect(must(await read(w, 'bob', circle(c)))).toEqual(a);
+      expect(must(await read(w, 'cat', circle(c)))).toEqual(a);
+    });
+    it('a stranger, a person in another circle only and a made-up circle get exactly the same answer', async () => {
+      const { w } = await setup();
+      const c = await w.circle(1, 'ann', [['bob', 'member']]);
+      await w.circle(2, 'cat');
+      await file(w, 'bob', OLD, circle(c));
+      const stranger = await read(w, 'cat', circle(c));
+      expect(stranger).toEqual({ ok: false, error: NO_CIRCLE });
+      expect(await read(w, 'cat', circle('c0000000000000999'))).toEqual(stranger);
+      expect(await read(w, 'cat', circle('c0000000000000003'))).toEqual(stranger);
+      expect(must(await read(w, 'cat', circle('c0000000000000002'))).items).toEqual([]);
+    });
+    it('after a member is removed they can no longer read it, and what they did stays in the log', async () => {
+      const { w } = await setup();
+      const c = await w.circle(1, 'ann', [['bob', 'member']]);
+      await file(w, 'bob', OLD, circle(c));
+      const uid = (w.graphIds.bob as string).slice(5);
+      must(await w.circleStore.removeMember(c, uid));
+      expect(ownErrorOf(await read(w, 'bob', circle(c)))).toMatchObject({ code: 'NOT_FOUND' });
+      expect(must(await read(w, 'ann', circle(c))).items.length).toBeGreaterThan(0);
+    });
+    it('a personal log is never shown through a circle, nor a circle\'s through the personal one', async () => {
+      const { w } = await setup();
+      const c = await w.circle(1, 'ann');
+      await file(w, 'ann', OLD);
+      expect(must(await read(w, 'ann', circle(c))).items).toEqual([]);
+      await file(w, 'ann', 'Dentist appointment on Friday morning here', circle(c));
+      expect(must(await read(w, 'ann')).items.every((e) => e.subject !== undefined)).toBe(true);
+      expect(must(await read(w, 'ann')).items).toHaveLength(2);
+    });
+  });
+
+  it('is refused without a session, and says so plainly when there is no change log', async () => {
+    const { w } = await setup();
+    expect(ownErrorOf(await w.caci.ledger('nonsense'))).toMatchObject({ code: 'UNAUTHENTICATED' });
+    const plain = await world({ people: ['ann'] });
+    expect(ownErrorOf(await plain.caci.ledger(plain.tokens.ann as string))).toMatchObject({ code: 'NOT_FOUND', message: 'the change log is not available' });
+  });
+  it('a failing store is the fixed storage error, never its message', async () => {
+    const bad: LedgerStore = { append: async () => ({ ok: true, value: undefined }), list: async () => { throw new Error('secret /var/db'); }, purgeBefore: async () => 0, removeScope: async () => 0 };
+    const { w } = await setup({ ledger: bad });
+    const r = await read(w, 'ann');
+    expect(r).toMatchObject({ ok: false, error: { source: 'graph', error: { code: 'STORAGE_ERROR' } } });
+    expect(JSON.stringify(r)).not.toContain('secret');
   });
 });

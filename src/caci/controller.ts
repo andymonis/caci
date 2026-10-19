@@ -3,7 +3,7 @@ import { err, ok, type JsonValue, type Result, type StorageAdapter } from '../gr
 import { createRegistrationThrottle as createWindowLimiter, type Authenticated, type UserController } from '../users/index.js';
 import { parseScope, PERSONAL, type Provenance, type ResolvedScope, type ScopeResolver, type ScopesError, type Scope } from '../scopes/index.js';
 import { createBrain, type BrainLimits, type BrainScope, type MineCategoryItemsPage, type MineCategoryPage, type MineItemDetail, type MineSummary } from './brain.js';
-import { createBrowser, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
+import { createBrowser, pageOf, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
 import { createStatusContext, type StatusContextLimits } from './status-context.js';
 import { capText, newLedgerId, SUMMARY_MAX, TITLE_MAX, type LedgerEntry, type LedgerScope, type LedgerStore } from '../ledger/index.js';
@@ -43,6 +43,8 @@ export interface CaciControllerInit {
   readonly scopes?: ScopeResolver;
   /** The change log (R-014): after an approved write, what was added, removed and updated is recorded here. Without it nothing is recorded. */
   readonly ledger?: LedgerStore;
+  /** Who is who in the change log: only the display name and username of a user id are ever read from it. Without it entries carry no names. */
+  readonly directory?: { get(id: string): Promise<{ readonly username: string; readonly displayName: string } | undefined> };
   /** Told, with one fixed sentence and no note text, when recording a change failed. The change itself stands. A throwing hook is ignored. */
   readonly onLedgerFailure?: (message: string) => void;
 }
@@ -61,6 +63,29 @@ export interface ProposalView {
   /** The model's short reason, when it gave one. */
   readonly rationale?: string;
   /** Where it will be written, for a circle proposal (the circle's name and id). Absent for a personal one, as before R-009. */
+  readonly scope?: Provenance;
+}
+
+/** One line of the change log, as a person is allowed to see it (R-014): no graph id, no proposal id, no user id. */
+export interface LedgerEntryView {
+  readonly id: string;
+  readonly at: number;
+  readonly action: 'added' | 'updated' | 'removed';
+  readonly kind: 'item' | 'category';
+  /** The id of the note or category that changed. */
+  readonly subject: string;
+  /** What it was called; for a removal, the removed text. */
+  readonly title?: string;
+  readonly summary?: string;
+  /** Who made the change, when they can still be named. */
+  readonly by?: { readonly username: string; readonly displayName: string };
+}
+
+/** A page of the change log of one brain, newest first. */
+export interface LedgerView {
+  readonly items: readonly LedgerEntryView[];
+  readonly nextCursor: string | null;
+  /** Whose log it is, for a circle (absent for the personal one). */
   readonly scope?: Provenance;
 }
 
@@ -139,6 +164,11 @@ export interface CaciController {
   categoryItems(token: unknown, categoryId: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryItemsPage, CaciError>>;
   /** One of the caller's items, and the categories it is filed under. */
   item(token: unknown, itemId: unknown, scope?: unknown): Promise<Result<ItemDetail, CaciError>>;
+  /**
+   * The change log of one brain, newest first, a page at a time: the person's own (default) or a circle they may read (R-014). It is a
+   * review log of what was added, removed and updated, not a history of the notes. A stranger gets the made-up-circle answer.
+   */
+  ledger(token: unknown, scope?: unknown, page?: PageInput): Promise<Result<LedgerView, CaciError>>;
   /** Discards the owner's pending proposal. Nothing is written. */
   reject(token: unknown, proposalId: unknown): Promise<Result<{ readonly id: string }, CaciError>>;
 }
@@ -477,6 +507,52 @@ export function createCaciController(init: CaciControllerInit): CaciController {
         return err(expired());
       }
       return ok(viewOf(proposal, mode, mine.value.held.circle?.provenance));
+    },
+
+    async ledger(token, scope, page) {
+      const me = await whoIs(token);
+      if (!me.ok) return me;
+      const store = init.ledger;
+      if (store === undefined) return err(caciError('NOT_FOUND', 'the change log is not available'));
+      const parsed = parseScope(scope);
+      if (!parsed.ok) return err(scopeProblem(parsed.error));
+      let which: LedgerScope;
+      let provenance: Provenance | undefined;
+      if (parsed.value.kind === 'personal') which = { kind: 'personal', userId: me.value.user.id };
+      else {
+        if (scopes === undefined) return err(noCircle());
+        const resolved = await scopes.resolve(token, parsed.value, 'read');
+        if (!resolved.ok) return err(scopeProblem(resolved.error));
+        which = { kind: 'circle', circleId: parsed.value.circleId };
+        provenance = resolved.value.provenance;
+      }
+      const paged = pageOf(page);
+      if (!paged.ok) return paged;
+      let listed;
+      try {
+        listed = await store.list(which, paged.value);
+      } catch (cause) {
+        if (cause instanceof RangeError) return err(caciError('INVALID_INPUT', 'cursor is not one this service gave for this request', { field: 'cursor' }));
+        return err(storage());
+      }
+      const names = new Map<string, { username: string; displayName: string } | undefined>();
+      const who = async (id: string) => {
+        if (!names.has(id)) {
+          try {
+            const u = await init.directory?.get(id);
+            names.set(id, u === undefined ? undefined : { username: u.username, displayName: u.displayName });
+          } catch {
+            names.set(id, undefined);
+          }
+        }
+        return names.get(id);
+      };
+      const items: LedgerEntryView[] = [];
+      for (const e of listed.items) {
+        const by = await who(e.actor);
+        items.push(Object.freeze({ id: e.id, at: e.at, action: e.action, kind: e.kind, subject: e.subject, ...(e.title === undefined ? {} : { title: e.title }), ...(e.summary === undefined ? {} : { summary: e.summary }), ...(by === undefined ? {} : { by: Object.freeze(by) }) }));
+      }
+      return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor, ...(provenance === undefined ? {} : { scope: provenance }) }));
     },
 
     async approve(token, proposalId) {

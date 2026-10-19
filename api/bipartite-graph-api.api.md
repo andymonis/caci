@@ -123,6 +123,9 @@ export function createCircleRoutes(options: CircleRoutesOptions): readonly Route
 export function createInvitationRoutes(options: CircleRoutesOptions): readonly Route[];
 
 // @public
+export function createLedgerRoutes(options: LedgerRoutesOptions): readonly Route[];
+
+// @public
 export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
 
 // @public
@@ -165,6 +168,14 @@ export function errorResponse(error: UsersError, extra?: Pick<ApiResponse, 'cook
 
 // @public
 export function isJsonContentType(value: string | undefined): boolean;
+
+// @public (undocumented)
+export interface LedgerRoutesOptions {
+    // (undocumented)
+    readonly caci: CaciController;
+    readonly cookieName?: string;
+    readonly secureCookies?: boolean;
+}
 
 // Warning: (ae-forgotten-export) The symbol "CaciError" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "Mapped" needs to be exported by the entry point index.d.ts

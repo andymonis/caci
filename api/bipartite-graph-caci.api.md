@@ -52,6 +52,7 @@ export interface CaciController {
     categoryItems(token: unknown, categoryId: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryItemsPage, CaciError>>;
     get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
     item(token: unknown, itemId: unknown, scope?: unknown): Promise<Result<ItemDetail, CaciError>>;
+    ledger(token: unknown, scope?: unknown, page?: PageInput): Promise<Result<LedgerView, CaciError>>;
     mineCategories(token: unknown, page?: PageInput): Promise<Result<MineCategoryPage, CaciError>>;
     mineCategoryItems(token: unknown, ref: unknown, page?: PageInput): Promise<Result<MineCategoryItemsPage, CaciError>>;
     mineItem(token: unknown, ref: unknown): Promise<Result<MineItemDetail, CaciError>>;
@@ -79,6 +80,12 @@ export interface CaciControllerInit {
     // Warning: (ae-forgotten-export) The symbol "Controller" needs to be exported by the entry point index.d.ts
     readonly capture: Controller;
     readonly clock?: () => number;
+    readonly directory?: {
+        get(id: string): Promise<{
+            readonly username: string;
+            readonly displayName: string;
+        } | undefined>;
+    };
     // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
     readonly graphAdapter: StorageAdapter;
     // Warning: (ae-forgotten-export) The symbol "LedgerStore" needs to be exported by the entry point index.d.ts
@@ -221,6 +228,35 @@ export interface ItemView {
     readonly dataTruncated?: true;
     // (undocumented)
     readonly id: string;
+}
+
+// @public
+export interface LedgerEntryView {
+    // (undocumented)
+    readonly action: 'added' | 'updated' | 'removed';
+    // (undocumented)
+    readonly at: number;
+    readonly by?: {
+        readonly username: string;
+        readonly displayName: string;
+    };
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'item' | 'category';
+    readonly subject: string;
+    // (undocumented)
+    readonly summary?: string;
+    readonly title?: string;
+}
+
+// @public
+export interface LedgerView {
+    // (undocumented)
+    readonly items: readonly LedgerEntryView[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+    readonly scope?: Provenance;
 }
 
 // @public

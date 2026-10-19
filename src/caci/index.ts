@@ -6,7 +6,7 @@
 export { CACI_ERROR_CODES, caciError } from './errors.js';
 export type { CaciError, CaciErrorCode, CaciOwnError } from './errors.js';
 export { createCaciController, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS, viewOf } from './controller.js';
-export type { ApprovedView, CaciControllerInit, CaciController, CaciLimits, ProposalView, StatusView } from './controller.js';
+export type { ApprovedView, CaciControllerInit, CaciController, CaciLimits, LedgerEntryView, LedgerView, ProposalView, StatusView } from './controller.js';
 export type { StatusContextLimits } from './status-context.js';
 export { DEFAULT_STATUS_CONTEXT_LIMITS } from './status-context.js';
 export { capData, DEFAULT_PAGE, MAX_DATA_CHARS, MAX_PAGE } from './browse.js';

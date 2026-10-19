@@ -16,7 +16,7 @@ const asJson = (value: unknown): JsonValue => value as JsonValue;
 const ok = (response: ApiResponse): Result<ApiResponse, CaciError> => ({ ok: true, value: response });
 const invalid = (message: string, field: string): Result<never, CaciError> => ({ ok: false, error: { source: 'caci', error: { code: 'INVALID_INPUT', message, field } } });
 
-function pageOf(query: Readonly<Record<string, string>>): { limit?: number; cursor?: string } {
+export function pageOf(query: Readonly<Record<string, string>>): { limit?: number; cursor?: string } {
   return {
     ...(query.limit === undefined ? {} : { limit: query.limit.trim() === '' ? Number.NaN : Number(query.limit) }),
     ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
@@ -24,7 +24,7 @@ function pageOf(query: Readonly<Record<string, string>>): { limit?: number; curs
 }
 
 /** `personal`, `circle:<id>` or (where allowed) `mine`, as the controller wants it. Anything else is refused naming the parameter. */
-function scopeFrom(text: string | undefined, field: string, allowMine: boolean): Result<{ kind: 'personal' } | { kind: 'circle'; circleId: string } | 'mine', CaciError> {
+export function scopeFrom(text: string | undefined, field: string, allowMine: boolean): Result<{ kind: 'personal' } | { kind: 'circle'; circleId: string } | 'mine', CaciError> {
   if (text === undefined || text === 'personal') return { ok: true, value: { kind: 'personal' } };
   if (text === 'mine') return allowMine ? { ok: true, value: 'mine' } : invalid(`${field} must be personal or circle:<id>`, field);
   if (text.startsWith('circle:')) return { ok: true, value: { kind: 'circle', circleId: text.slice('circle:'.length) } };

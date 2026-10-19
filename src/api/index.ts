@@ -14,6 +14,8 @@ export { createCaptureRoutes, mapCaciError } from './capture-routes.js';
 export type { CaptureRoutesOptions } from './capture-routes.js';
 export { createStatusRoutes } from './status-routes.js';
 export type { StatusRoutesOptions } from './status-routes.js';
+export { createLedgerRoutes } from './ledger-routes.js';
+export type { LedgerRoutesOptions } from './ledger-routes.js';
 export { createBrainRoutes } from './brain-routes.js';
 export type { BrainRoutesOptions } from './brain-routes.js';
 export { createReadRoutes } from './read-routes.js';
