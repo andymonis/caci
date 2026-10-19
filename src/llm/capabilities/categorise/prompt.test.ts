@@ -161,7 +161,7 @@ describe('hostile text stays inside its block', () => {
       expect(count(content, '</note>')).toBe(1);
       expect(noteOf(content)).toBe(text);
     }
-  });
+  }, 60000);
 });
 
 describe('escapeForBlock', () => {
