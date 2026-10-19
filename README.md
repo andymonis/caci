@@ -523,9 +523,19 @@ The brain keeps **only the current view**. When a new note changes something an 
 - **The model never writes a delete.** The service finds up to 12 notes in the same brain that share words with the new one (a deterministic word-overlap search, not the model) and shows them to the categoriser numbered `[1]`, `[2]`... without their ids. The model may add `replaces: [numbers]` to its reply; a number that was not shown, a repeat, or more than 5 is refused and repaired once. The service turns the numbers into ids and builds the deletes itself.
 - **Only notes are replaced directly.** After the write, a category that was left with no notes is removed too, and one the new note links to never is. A failure to tidy never fails the approval.
 - **The preview says so before you approve**: "This note replaces: ... The old note will be removed when you approve." and the removal appears in the operations. After approval the outcome says what went ("removed 1 old note and 1 empty category"). A note that only adds a different fact replaces nothing.
-- **A note is a whole item.** A note with several facts replaces whole notes or none, and a replacing note takes with it any detail the old note held and the new one does not repeat (the ward of a moved appointment): restate what still matters. This is the cost of keeping only the current view; `npm run brain-eval` measures it (see below).
+- **A note is split into facts, and a change replaces only its own fact** (see [Facts](#facts-not-whole-notes) below). Items filed before facts existed stay whole notes, and replacing one takes with it any detail it held that the new note does not repeat.
 - **In a circle**, anyone who may capture (owner, manager, member) may replace any note in that circle's brain, including another member's; an observer cannot capture. The role is read again at approval.
 - Switch it off by setting `maxReplaces` to `0` in `controls/categorise/settings.json` (see [Controlling what the model is told](#controlling-what-the-model-is-told)): every note is then only added, as before.
+
+### Facts, not whole notes
+
+A note that states several things (a name, a date of birth, an email, a phone number) is filed as **several items, one per fact** (specified in `specs/R-015-fact-level-brain.md`). A fact is one thing that can change on its own, written so that it makes sense alone ("Mum's phone number is 07700 900456"), with a short **key** naming what it is about ("mum / phone number"). So when the phone number changes, only the phone fact is replaced: the date of birth and the email, and their links, stay.
+
+- **How many**: at most `maxFacts` per note (default 8, 1 to 20 in `controls/categorise/settings.json`); `maxFacts` set to `1` gives one item per note, as before. The service mints the ids (`itemId`, then `itemId-2`, `itemId-3`...) and the model may use no others; every fact must be linked to at least one category. `maxOps` is 40 so eight facts with their links fit.
+- **Keys** are asked for but optional. The candidate search ranks first the existing facts whose whole key is in the note, then by shared words, and shows up to 12 candidates **with their keys** so the model can reuse a key when it updates a fact. Old items without a key are matched by words as before.
+- **The preview** says "This note adds N facts:" with each fact, then what it replaces. The stamp, the tidy and the change log work on every fact.
+- **The note's own text is not kept**: only its facts are. A fact the model fails to extract is lost, and the brain-eval reports that as lost at filing.
+- To see whether it helps, run `npm run brain-eval` once as it is and once with a copy of `controls/` whose `categorise/settings.json` has `"maxFacts": 1` (`--controls DIR`), then `--compare`: the two scenarios where one note states several facts and a later note changes one (`profile-one-value-changes`, `appointment-details-one-changes`) are there to show the difference.
 
 ### The change log
 
@@ -546,7 +556,7 @@ The capture preview and outcome say what is removed. The **Change log** screen (
 ### What is not protected
 
 - **A model can choose wrongly.** The limits (at most 5 notes, only ones it was shown, the same brain) bound a wrong deletion, the preview lets you see it, and the log keeps the removed text. They do not prevent it. Whether replacing helps is measured, not assumed: run `npm run brain-eval -- --demo` for the plumbing or a real run with and without `--no-replace` and compare the saved results (`--compare`); the report counts the answers that lost their fact to a deletion.
-- The word-overlap search misses a paraphrase that shares no word, so a stale note can stay.
+- The word-overlap search misses a paraphrase that shares no word, so a stale note can stay. Keys can drift too ("phone" and "mobile" as two facts), leaving a stale fact beside the new one.
 - The log and the removed text are plain text in `users.db`, readable by whoever can read the file and by every member who may read a circle's log. Restoring from the log and questions about history are not built.
 
 ## Circles

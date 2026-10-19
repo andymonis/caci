@@ -2,7 +2,7 @@
 
 Oct 19, 2026 · @Andy
 
-**Status: being built as F1 (T-232 to T-241); decisions D1 to D14 taken as confirmed by the owner's instruction to build (2026-10-19).** It follows R-014 (the current-view brain) and its first measured cost: replacing deletes the **whole** old note, so any detail the new note does not repeat is lost (the ward of a moved appointment, a phone number, a birthday). The owner's expectation, recorded 2026-10-19: where one note states several facts (name, date of birth, email, phone number) the brain should hold them as **separate entries**, so updating the phone number cannot erase the date of birth.
+**Status: built as F1 (T-232 to T-241); decisions D1 to D14 were taken as confirmed by the owner's instruction to build (2026-10-19). Amendments made while building: the `key` is asked for but optional in the reply (D4); the default `maxCandidates` is 12 (D5); with `maxFacts` 1 the behaviour is today's but the instruction text speaks of facts. The owner's real before and after run (`maxFacts` 8 against 1, `--repeat 3`) decides whether it helps.** It follows R-014 (the current-view brain) and its first measured cost: replacing deletes the **whole** old note, so any detail the new note does not repeat is lost (the ward of a moved appointment, a phone number, a birthday). The owner's expectation, recorded 2026-10-19: where one note states several facts (name, date of birth, email, phone number) the brain should hold them as **separate entries**, so updating the phone number cannot erase the date of birth.
 
 ## Overview
 
@@ -73,14 +73,14 @@ It applies to personal and circle brains, and it can be switched off by one sett
 
 ## Threats and controls
 
-| Threat | Control |
-|--------|---------|
-| The model invents ids, or one id for two facts | D3: ids are minted, the guard accepts exactly those, once each. |
-| The model splits a note into many tiny facts to flood the brain | `maxFacts` and `maxOps` caps; every fact needs a link; the preview shows them all. |
-| Inconsistent keys leave a stale fact beside the new one | Candidates shown with keys and the instruction to reuse them; the evaluation measures the stale rate. A residual risk. |
-| Extraction drops a fact | Measured as lost at filing; D9 says plainly the note is not kept. |
-| A hostile note forges facts or keys that match another person's | Candidates are read from the target scope's graph only (R-014); keys are data, never ids. |
-| A fact is stamped or logged wrongly in a circle | D8, tested per fact. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| The model invents ids, or one id for two facts | D3: ids are minted, the guard accepts exactly those, once each. | `src/llm/capabilities/categorise/guard.test.ts` — "refuses an id that was not minted, a gap, a repeat and a wrong order, naming the fact"; `src/llm/capabilities/categorise/guard.test.ts` — "every fact needs a link, and a link must come from one of the facts" |
+| The model splits a note into many tiny facts to flood the brain | `maxFacts` and `maxOps` caps; every fact needs a link; the preview shows them all. | `src/llm/capabilities/categorise/guard.test.ts` — "accepts exactly maxFacts facts and refuses one more"; `src/llm/controls/settings.test.ts` — "each fact needs an item and a link, so maxOps must be at least twice maxFacts"; `web/capture-page.test.mjs` — "lists the facts that will be added, as text, above the removals and the notes" |
+| Inconsistent keys leave a stale fact beside the new one | Candidates shown with keys and the instruction to reuse them; the evaluation measures the stale rate. A residual risk. | `src/app/candidates.test.ts` — "a fact whose whole key is in the note comes first, even when another shares more words"; `src/llm/capabilities/categorise/prompt.test.ts` — "existing facts are shown with their key first, and without one as before"; `src/llm/demo-facts.test.ts` — "an existing fact whose whole key is in the fact beats one that only shares more words" |
+| Extraction drops a fact | Measured as lost at filing; D9 says plainly the note is not kept. | `dev/brain-eval/brain-arm.test.mjs` — "records how many facts each note became"; `dev/brain-eval/library.test.mjs` — "with facts the unchanged details survive: every question of the two scenarios passes and the replacement removes one fact" |
+| A hostile note forges facts or keys that match another person's | Candidates are read from the target scope's graph only (R-014); keys are data, never ids. | `src/app/candidates.test.ts` — "reads only the graph it is given, and calls no write primitive"; `src/llm/demo-facts.test.ts` — "1,500 random notes with random existing lists all pass the real guard first time" |
+| A fact is stamped or logged wrongly in a circle | D8, tested per fact. | `src/app/facts.test.ts` — "every new fact is stamped with who and when, and a forged stamp is removed"; `web/replace-journey.test.mjs` — "a profile note becomes separate facts, and changing the phone number replaces only the phone fact" |
 
 ## What the person is told
 
@@ -103,11 +103,31 @@ The preview says "This note adds N facts" (each as its title and summary) and, w
 | FL-AC-11 | Given the evaluation library with its multi-fact scenarios, when the brain-eval runs with the demo model and `maxFacts` 8 and then 1, then it reports collateral loss for each and the facts version loses fewer facts. |
 | FL-AC-12 | Given the capture page, when a multi-fact note is previewed, then the facts and the removals are listed as text. |
 
-## Residual risks
+### Where each criterion is checked (T-241)
 
-1. **Key drift**: "phone" and "mobile" can still become two facts, leaving a stale one.
+| ID | Tests |
+|----|-------|
+| FL-AC-01 | `src/app/facts.test.ts` — "previews each fact, writes them all in one step, with their links"; `src/llm/demo-facts.test.ts` — "a profile note becomes three facts with minted ids, a key each, and a link each, accepted by the real guard" |
+| FL-AC-02 | `src/app/facts.test.ts` — "removes only the phone fact; the date of birth, the email and their links stay, and the new number is there"; `src/llm/demo-facts.test.ts` — "a changed phone number replaces only the phone fact and reuses its key" |
+| FL-AC-03 | `src/app/facts.test.ts` — "removes only the phone fact; the date of birth, the email and their links stay, and the new number is there"; `web/replace-journey.test.mjs` — "a profile note becomes separate facts, and changing the phone number replaces only the phone fact" |
+| FL-AC-04 | `src/llm/capabilities/categorise/guard.test.ts` — "refuses an id that was not minted, a gap, a repeat and a wrong order, naming the fact"; `src/llm/capabilities/categorise/guard.test.ts` — "every fact needs a link, and a link must come from one of the facts"; `src/llm/capabilities/categorise/guard.test.ts` — "accepts exactly maxFacts facts and refuses one more"; `src/llm/capabilities/categorise/guard.test.ts` — "the key must be plain text of 1 to keyMaxChars characters" |
+| FL-AC-05 | `src/llm/capabilities/categorise/guard.test.ts` — "with one fact allowed a second item is refused as before"; `src/llm/demo-facts.test.ts` — "with only one fact allowed (the meta says so) the reply is today" |
+| FL-AC-06 | `src/app/facts.test.ts` — "items stored before facts existed (no key) are still candidates by words and replaced whole"; `src/app/candidates.test.ts` — "an item without a stored key is still matched by words, as before" |
+| FL-AC-07 | `src/app/facts.test.ts` — "every new fact is stamped with who and when, and a forged stamp is removed" |
+| FL-AC-08 | `web/replace-journey.test.mjs` — "a profile note becomes separate facts, and changing the phone number replaces only the phone fact" |
+| FL-AC-09 | `src/app/replace.test.ts` — "a category left with no notes is removed, one that still has notes stays, and the result names what was removed" |
+| FL-AC-10 | `src/llm/demo-facts.test.ts` — "1,500 random notes with random existing lists all pass the real guard first time" |
+| FL-AC-11 | `dev/brain-eval/library.test.mjs` — "with one fact allowed the whole note is replaced and the details are lost; the diagnostic says replace"; `dev/brain-eval/library.test.mjs` — "so the facts version loses fewer facts than maxFacts 1 on these scenarios (the A/B through the controls)" |
+| FL-AC-12 | `web/capture-page.test.mjs` — "lists the facts that will be added, as text, above the removals and the notes"; `web/replace-journey.test.mjs` — "a profile note becomes separate facts, and changing the phone number replaces only the phone fact" |
+
+### Residual risks (not covered, with the reason)
+
+1. **Key drift**: "phone" and "mobile" can still become two facts, leaving a stale one. The key is only a hint and is optional in the reply; the model is shown existing keys and told to reuse them, and the evaluation can measure the stale rate on a real run.
 2. **Extraction can drop or garble a fact**, and the source note is not kept (D9).
-3. **More items**: the status context has more, shorter lines, and the budget cuts the oldest sooner.
-4. **A real model's granularity is a matter of taste**: too coarse recreates the problem, too fine floods the brain. Tuned in the controls, judged by the real run.
-5. **Old whole-note items stay whole** until replaced (D10).
-6. **The demo model is a splitter, not a reader**: it proves the plumbing, not the quality.
+3. **More items**: the status context has more, shorter lines, and its budget cuts the oldest sooner. A note of eight facts is up to eight entries.
+4. **A real model's granularity is a matter of taste**: too coarse recreates the problem, too fine floods the brain. It is tuned in `controls/categorise/system.txt` (rule 6) and judged by the real run, which has not yet been made.
+5. **Old whole-note items stay whole** until they are replaced (D10).
+6. **The demo model is a splitter, not a reader**: it proves the plumbing and the A/B, not the quality; its keys are the first words of a fact.
+7. **Replacing is still all or nothing per fact**: a fact that mixes two values (a time and a place in one sentence) is replaced as one.
+8. **The capture page lists facts but one by one approval is not offered** (D2 of R-014): approving covers all of them.
+9. **Looked at in a browser by hand: not done for F1**; the page logic is tested through the real mount and the real service with the demo model.

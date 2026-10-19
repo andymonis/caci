@@ -521,6 +521,19 @@ describe('the current-view brain section of the README', () => {
     expect(viewSection).toContain(tail.trim());
   });
 
+  it('the facts subsection states the limits that are in the controls and the code (R-015)', () => {
+    const shipped = JSON.parse(readFileSync(new URL('../../controls/categorise/settings.json', import.meta.url), 'utf8')) as { maxFacts: number; maxOps: number; keyMaxChars: number };
+    expect(viewSection).toContain('### Facts, not whole notes');
+    expect(viewSection).toContain(`at most \`maxFacts\` per note (default ${shipped.maxFacts}, ${SETTING_RANGES.categorise.maxFacts[0]} to ${SETTING_RANGES.categorise.maxFacts[1]}`);
+    expect(viewSection).toContain(`\`maxOps\` is ${shipped.maxOps}`);
+    expect(viewSection).toContain(`shows up to ${DEFAULT_CANDIDATE_OPTIONS.maxCandidates} candidates **with their keys**`);
+    expect(shipped.keyMaxChars).toBe(80);
+    expect(existsSync(new URL('../../specs/R-015-fact-level-brain.md', import.meta.url))).toBe(true);
+    for (const phrase of ['specs/R-015-fact-level-brain.md', '`maxFacts` set to `1` gives one item per note, as before', 'the model may use no others', 'every fact must be linked to at least one category', 'Keys** are asked for but optional', 'This note adds N facts', 'The note\'s own text is not kept', '"maxFacts": 1', 'profile-one-value-changes', 'appointment-details-one-changes', 'Keys can drift too']) {
+      expect((viewSection + readme).toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+
   it('names its specification, which exists, the screen address and the commands', () => {
     expect(viewSection).toContain('specs/R-014-current-view-brain.md');
     expect(existsSync(new URL('../../specs/R-014-current-view-brain.md', import.meta.url))).toBe(true);
@@ -531,7 +544,7 @@ describe('the current-view brain section of the README', () => {
   });
 
   it('says the things a reader must not miss', () => {
-    for (const phrase of ['only the current view', 'The model never writes a delete', 'without their ids', 'a number that was not shown, a repeat, or more than 5 is refused and repaired once', 'The service turns the numbers into ids', 'Only notes are replaced directly', 'The preview says so before you approve', 'A note that only adds a different fact replaces nothing', 'A note is a whole item', 'takes with it any detail the old note held', 'anyone who may capture', 'an observer cannot capture', 'the removed title and summary', 'a review log, not a history', 'is not used to answer questions', 'A stranger, the administrator who is not a member, and a made-up circle all get the same 404', 'not one transaction', 'never undoes the change', 'nothing is requested until you open it', 'A model can choose wrongly', 'They do not prevent it', 'misses a paraphrase', 'plain text in `users.db`', 'Restoring from the log and questions about history are not built']) {
+    for (const phrase of ['only the current view', 'The model never writes a delete', 'without their ids', 'a number that was not shown, a repeat, or more than 5 is refused and repaired once', 'The service turns the numbers into ids', 'Only notes are replaced directly', 'The preview says so before you approve', 'A note that only adds a different fact replaces nothing', 'A note is split into facts, and a change replaces only its own fact', 'takes with it any detail it held', 'anyone who may capture', 'an observer cannot capture', 'the removed title and summary', 'a review log, not a history', 'is not used to answer questions', 'A stranger, the administrator who is not a member, and a made-up circle all get the same 404', 'not one transaction', 'never undoes the change', 'nothing is requested until you open it', 'A model can choose wrongly', 'They do not prevent it', 'misses a paraphrase', 'plain text in `users.db`', 'Restoring from the log and questions about history are not built']) {
       expect(viewSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
     }
   });
