@@ -27,6 +27,8 @@ export interface PromptInput {
 export interface ExistingNote {
   readonly title: string;
   readonly summary: string;
+  /** The fact's key (R-015), when it has one; shown to the model so it can reuse it. */
+  readonly key?: string;
 }
 
 export interface PromptOptions {
@@ -68,7 +70,9 @@ function dataShapes(settings: CategoriseSettings): Record<'item' | 'category', {
       properties: {
         title: { type: 'string', minLength: 1, maxLength: settings.titleMaxChars, description: settings.descriptions.title },
         summary: { type: 'string', minLength: 1, maxLength: settings.summaryMaxChars, description: settings.descriptions.summary },
+        ...(settings.maxFacts > 1 ? { key: { type: 'string', minLength: 1, maxLength: settings.keyMaxChars, description: settings.descriptions.key } } : {}),
       },
+      // the key is asked for in the instructions but optional in the reply: an item without one still works (it is matched by words)
       required: ['title', 'summary'],
     },
     category: {
@@ -97,7 +101,9 @@ export function existingLines(existing: readonly ExistingNote[]): string {
     .map((note, i) => {
       const title = oneLine(note.title);
       const summary = oneLine(note.summary);
-      return `[${i + 1}] ${title !== '' && summary !== '' ? `${title}: ${summary}` : title || summary || '(no text)'}`;
+      const key = note.key === undefined ? '' : oneLine(note.key);
+      const text = title !== '' && summary !== '' ? `${title}: ${summary}` : title || summary || '(no text)';
+      return `[${i + 1}] ${key === '' ? text : `${key} — ${text}`}`;
     })
     .join('\n');
 }
@@ -178,7 +184,7 @@ function check(input: unknown, options: unknown): LlmError | undefined {
   if (existing !== undefined) {
     if (!Array.isArray(existing)) return llmError('CONFIG', 'prompt input.existing: must be a list of { title, summary }');
     for (const [i, note] of existing.entries()) {
-      if (!isObject(note) || typeof note.title !== 'string' || typeof note.summary !== 'string' || Object.keys(note).length !== 2) return llmError('CONFIG', `prompt input.existing[${i}]: must be exactly { title, summary }, both text`);
+      if (!isObject(note) || typeof note.title !== 'string' || typeof note.summary !== 'string' || Object.keys(note).some((k) => k !== 'title' && k !== 'summary' && k !== 'key') || (note.key !== undefined && typeof note.key !== 'string')) return llmError('CONFIG', `prompt input.existing[${i}]: must be { title, summary } (both text) and optionally a text key`);
     }
   }
   if (options !== undefined) {

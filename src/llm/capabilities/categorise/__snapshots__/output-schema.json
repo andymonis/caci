@@ -35,6 +35,12 @@
                     "minLength": 1,
                     "maxLength": 300,
                     "description": "One line stating the fact, with its subject and its value."
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "description": "A short lower-case label of what the fact is about; reuse the key of an existing fact that this one updates."
                   }
                 },
                 "required": [

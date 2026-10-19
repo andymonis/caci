@@ -171,6 +171,7 @@ export const DEFAULT_TIERS: Readonly<Record<ModelTier, string>>;
 
 // @public
 export interface ExistingNote {
+    readonly key?: string;
     // (undocumented)
     readonly summary: string;
     // (undocumented)

@@ -450,3 +450,35 @@ describe('existing notes (R-014)', () => {
     expect(validate({ ...base, replaces: ['1'] })).toBe(false);
   });
 });
+
+describe('facts in the prompt and the schema (R-015)', () => {
+  const itemData = (schema: unknown): { properties: Record<string, unknown>; required: string[] } => {
+    const r = schema as { ok: boolean; value: { properties: { ops: { items: { oneOf: Array<{ properties: { partition?: { const?: string }; data?: unknown } }> } } } } };
+    expect(r.ok).toBe(true);
+    return r.value.properties.ops.items.oneOf.find((v) => v.properties.partition?.const === 'item')?.properties.data as never;
+  };
+  it('with more than one fact allowed, an item may carry a key (asked for, optional); with one, it does not', () => {
+    const many = itemData(buildOutputSchema({ ...SETTINGS, maxFacts: 8 }, CATEGORISE_OPS, 40));
+    expect(Object.keys(many.properties)).toEqual(['title', 'summary', 'key']);
+    expect(many.required).toEqual(['title', 'summary']);
+    expect(many.properties.key).toMatchObject({ type: 'string', minLength: 1, maxLength: SETTINGS.keyMaxChars, description: SETTINGS.descriptions.key });
+    const one = itemData(buildOutputSchema({ ...SETTINGS, maxFacts: 1 }, CATEGORISE_OPS, 40));
+    expect(Object.keys(one.properties)).toEqual(['title', 'summary']);
+  });
+  it('the key length in the schema follows the setting', () => {
+    expect(itemData(buildOutputSchema({ ...SETTINGS, maxFacts: 2, keyMaxChars: 33 }, CATEGORISE_OPS, 40)).properties.key).toMatchObject({ maxLength: 33 });
+  });
+  it('existing facts are shown with their key first, and without one as before', () => {
+    const lines = buildUserMessageWith(CONTROLS, 'ctx', 'a note', [{ title: 'Mum: phone', summary: '0770', key: 'mum / phone' }, { title: 'Old', summary: 'note' }, { title: 'T', summary: 'S', key: '  line\nbreak ' }]);
+    expect(lines).toContain('[1] mum / phone — Mum: phone: 0770');
+    expect(lines).toContain('[2] Old: note');
+    expect(lines).toContain('[3] line break — T: S');
+  });
+  it('an existing note may have a text key and nothing else extra', () => {
+    const ok = buildPromptWith(CONTROLS, { text: 't', context: 'c', itemId: 'n1', existing: [{ title: 'a', summary: 'b', key: 'k' }] });
+    expect(ok.ok).toBe(true);
+    for (const bad of [{ title: 'a', summary: 'b', key: 5 }, { title: 'a', summary: 'b', other: 'x' }]) {
+      expect(buildPromptWith(CONTROLS, { text: 't', context: 'c', itemId: 'n1', existing: [bad as never] })).toMatchObject({ ok: false, error: { code: 'CONFIG' } });
+    }
+  });
+});
