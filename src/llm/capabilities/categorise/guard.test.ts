@@ -195,7 +195,7 @@ describe('size limits', () => {
 
   it('allows exactly the operation limit and rejects one more', () => {
     expect(guard(json({ ops: [ITEM, ...manyLinks(24)] })).ok).toBe(true);
-    expect(message(json({ ops: [ITEM, ...manyLinks(25)] }))).toContain('26 operations, over the limit of 25');
+    expect(message(json({ ops: [ITEM, ...manyLinks(40)] }))).toContain('41 operations, over the limit of 40');
   });
 
   it('uses the limit it is given', () => {
@@ -205,9 +205,9 @@ describe('size limits', () => {
 
   it('caps data tighter than the library does', () => {
     const big = (n: number) => ({ ops: [{ ...ITEM, data: { title: 'x'.repeat(n) } }, LINK] });
-    expect(guard(json(big(2000))).ok).toBe(true);
-    expect(guard(json(big(2100))).ok).toBe(false);
-    expect(guard(json(big(2100)), { maxDataBytes: 4096 }).ok).toBe(true);
+    expect(guard(json(big(4000))).ok).toBe(true);
+    expect(guard(json(big(4200))).ok).toBe(false);
+    expect(guard(json(big(4200)), { maxDataBytes: 8192 }).ok).toBe(true);
   });
 
   it('measures data in bytes, not characters', () => {
@@ -238,7 +238,7 @@ describe('size limits', () => {
   });
 
   it('takes its limits from the controls and from nowhere else', () => {
-    expect(SETTINGS).toEqual({ maxOps: 25, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32_000, maxRationaleChars: 500, maxReplaces: 5 });
+    expect(SETTINGS).toEqual({ maxOps: 40, maxDataBytes: 4096, maxIdLength: 128, maxOutputChars: 32_000, maxRationaleChars: 500, maxReplaces: 5 });
     const tight = guardSettingsOf({ ...SHIPPED_CONTROLS.categorise.settings, maxOps: 2, maxOutputChars: 1500, maxRationaleChars: 5, maxIdLength: 10, maxDataBytes: 500, maxReplaces: 1 });
     expect(tight).toEqual({ maxOps: 2, maxDataBytes: 500, maxIdLength: 10, maxOutputChars: 1500, maxRationaleChars: 5, maxReplaces: 1 });
   });

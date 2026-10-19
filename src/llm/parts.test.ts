@@ -48,7 +48,7 @@ async function statusing(controls: Controls, text = 'a request', entries = [{ wh
 describe('the categoriser sends exactly three parts', () => {
   it('the system message is the controls and code\'s slot values, nothing else', async () => {
     const { sent } = await filing(sentinel());
-    expect(sent.system).toBe('CSYS item=note-1 max=25 ops=upsertNode, link');
+    expect(sent.system).toBe('CSYS item=note-1 max=40 ops=upsertNode, link');
   });
 
   it('the user message is the controls\' frame around the two blocks, nothing else', async () => {

@@ -147,10 +147,11 @@ describe('a good candidate is used, and recorded', () => {
   });
 
   it('the same for categorise: a lower operation cap refuses the ideal model\'s replies that need more', async () => {
-    const dir = folder(SETTINGS_PATCH('categorise/settings.json', (s) => (s.maxOps = 1)));
+    const dir = folder(SETTINGS_PATCH('categorise/settings.json', (s) => { s.maxFacts = 1; s.maxOps = 2; }));
     const r = await run(['--scripted', '--models', 'fast', '--controls', dir]);
     expect(r.out).not.toContain(`100% (${GOLDEN.length}/${GOLDEN.length})`);
-    expect(r.saved[0].json.results.every((x) => !x.pass)).toBe(true);
-    expect(r.saved[0].json.results[0].error.message).toContain('over the limit of 1');
+    const failed = r.saved[0].json.results.filter((x) => !x.pass);
+    expect(failed.length).toBeGreaterThan(0); // an item and a link fit in 2, but a new category does not
+    expect(failed.every((x) => x.error.message.includes('over the limit of 2'))).toBe(true);
   });
 });

@@ -284,8 +284,8 @@ describe('the real model', () => {
       return testing.createScriptedModelClient((request) => ({
         reply: JSON.stringify({
           ops: [
-            { op: 'upsertNode', partition: 'item', id: /The note's own id is "([^"]+)"/.exec(request.system)[1], data: { title: 'Real', summary: 'From the real model' } },
-            { op: 'link', item: /The note's own id is "([^"]+)"/.exec(request.system)[1], category: 'health' },
+            { op: 'upsertNode', partition: 'item', id: /the first fact is "([^"]+)"/.exec(request.system)[1], data: { title: 'Real', summary: 'From the real model' } },
+            { op: 'link', item: /the first fact is "([^"]+)"/.exec(request.system)[1], category: 'health' },
           ],
           rationale: `answered by ${request.model}`,
         }),

@@ -28,13 +28,13 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 120,
-                    "description": "A short title for the note."
+                    "description": "A short label for the fact, with its subject."
                   },
                   "summary": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 300,
-                    "description": "One line saying what the note is about."
+                    "description": "One line stating the fact, with its subject and its value."
                   }
                 },
                 "required": [
@@ -120,7 +120,7 @@
         ]
       },
       "minItems": 1,
-      "maxItems": 25
+      "maxItems": 40
     },
     "rationale": {
       "type": "string",

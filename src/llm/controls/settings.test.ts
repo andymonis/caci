@@ -14,12 +14,49 @@ const sta = (change: (o: Record<string, any>) => void = () => {}): string => { /
 };
 const problems = (r: { ok: boolean; problems?: readonly string[] }): readonly string[] => (r.ok ? [] : (r.problems as readonly string[]));
 
+describe('categorise settings: facts (R-015)', () => {
+  it('maxFacts and keyMaxChars are whole numbers in range', () => {
+    for (const [name, lo, hi] of [['maxFacts', 1, 20], ['keyMaxChars', 1, 200]] as const) {
+      expect(parseCategoriseSettings('c.json', cat((o) => { o.maxOps = 100; o.maxDataBytes = 8000; o[name] = lo; })).ok, `${name} ${lo}`).toBe(true);
+      expect(parseCategoriseSettings('c.json', cat((o) => { o.maxOps = 100; o.maxDataBytes = 8000; o.maxOutputChars = 100_000; o[name] = hi; })).ok, `${name} ${hi}`).toBe(true);
+      expect(problems(parseCategoriseSettings('c.json', cat((o) => (o[name] = lo - 1))))[0], name).toContain('outside');
+      expect(problems(parseCategoriseSettings('c.json', cat((o) => (o[name] = hi + 1))))[0], name).toContain('outside');
+      expect(problems(parseCategoriseSettings('c.json', cat((o) => { Reflect.deleteProperty(o, name); })))[0]).toContain(`"${name}" is missing`);
+    }
+  });
+  it('the key needs a description, and an unknown description is still refused', () => {
+    expect(problems(parseCategoriseSettings('c.json', cat((o) => delete o.descriptions.key)))[0]).toContain('descriptions."key" must be text');
+  });
+  it('each fact needs an item and a link, so maxOps must be at least twice maxFacts', () => {
+    expect(parseCategoriseSettings('c.json', cat((o) => { o.maxFacts = 4; o.maxOps = 8; })).ok).toBe(true);
+    const bad = problems(parseCategoriseSettings('c.json', cat((o) => { o.maxFacts = 4; o.maxOps = 7; })));
+    expect(bad).toHaveLength(1);
+    expect(bad[0]).toContain('at least 8');
+  });
+  it('maxDataBytes must hold a title, summary and key of the allowed lengths, exactly', () => {
+    const need = 4 * (120 + 300 + 80) + 96;
+    expect(parseCategoriseSettings('c.json', cat((o) => (o.maxDataBytes = need))).ok).toBe(true);
+    const bad = problems(parseCategoriseSettings('c.json', cat((o) => (o.maxDataBytes = need - 1))));
+    expect(bad).toHaveLength(1);
+    expect(bad[0]).toContain('title, summary and key');
+    expect(bad[0]).toContain(`at least ${need}`);
+  });
+  it('maxOutputChars must hold maxFacts facts, exactly', () => {
+    const need = 3 * (120 + 300 + 80 + 400);
+    expect(parseCategoriseSettings('c.json', cat((o) => { o.maxFacts = 3; o.maxOutputChars = need; })).ok).toBe(true);
+    const bad = problems(parseCategoriseSettings('c.json', cat((o) => { o.maxFacts = 3; o.maxOutputChars = need - 1; })));
+    expect(bad).toHaveLength(1);
+    expect(bad[0]).toContain(`at least ${need}`);
+  });
+});
+
 describe('categorise settings', () => {
   it('accept the shipped numbers and freeze them', () => {
     const r = parseCategoriseSettings('c.json', cat());
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.value.maxOps).toBe(25);
+      expect(r.value.maxFacts).toBe(1);
       expect(Object.isFrozen(r.value) && Object.isFrozen(r.value.descriptions)).toBe(true);
     }
   });
@@ -65,8 +102,8 @@ describe('categorise settings', () => {
 
   it('checks the data size can hold the allowed title, summary and name', () => {
     expect(problems(parseCategoriseSettings('c.json', cat((o) => (o.maxDataBytes = 1000))))[0]).toContain('title and summary');
-    expect(parseCategoriseSettings('c.json', cat((o) => (o.maxDataBytes = 4 * 420 + 64))).ok).toBe(true);
-    expect(problems(parseCategoriseSettings('c.json', cat((o) => { o.maxDataBytes = 4 * 420 + 63; }))).length).toBe(1);
+    expect(parseCategoriseSettings('c.json', cat((o) => (o.maxDataBytes = 4 * 500 + 96))).ok).toBe(true);
+    expect(problems(parseCategoriseSettings('c.json', cat((o) => { o.maxDataBytes = 4 * 500 + 95; }))).length).toBe(1);
     expect(problems(parseCategoriseSettings('c.json', cat((o) => { o.titleMaxChars = 1; o.summaryMaxChars = 1; o.categoryNameMaxChars = 200; o.maxDataBytes = 200; }))).some((p) => p.includes('category name'))).toBe(true);
   });
 

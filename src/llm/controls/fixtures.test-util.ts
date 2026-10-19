@@ -6,9 +6,9 @@ export function validFiles(): Record<string, string> {
     'categorise/system.txt': 'You file notes. The note id is "{{itemId}}". At most {{maxOps}} operations: {{allowedOps}}.\n',
     'categorise/frame.txt': 'Data below.\n\n{{contextBlock}}\n\n{{requestBlock}}\n\nReply with JSON.',
     'categorise/settings.json': JSON.stringify({
-      maxOps: 25, maxTextChars: 8000, maxContextChars: 12000, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32000, maxRationaleChars: 500, maxReplaces: 5,
+      maxOps: 25, maxTextChars: 8000, maxContextChars: 12000, maxDataBytes: 2304, maxIdLength: 128, maxOutputChars: 32000, maxRationaleChars: 500, maxReplaces: 5, maxFacts: 1, keyMaxChars: 80,
       titleMaxChars: 120, summaryMaxChars: 300, categoryNameMaxChars: 60,
-      descriptions: { title: 'A short title.', summary: 'One line.', name: 'A short name.' },
+      descriptions: { title: 'A short title.', summary: 'One line.', key: 'A short key.', name: 'A short name.' },
     }),
     'status/system.txt': 'Status. Entries 1 to {{entryCount}}. Now {{now}}. Headline {{maxHeadline}}, {{maxPoints}} points of {{maxPointChars}}, {{maxRefs}} refs.',
     'status/frame.txt': 'Data below.\n\n{{entriesBlock}}\n\n{{requestBlock}}\n\nReply with JSON.',

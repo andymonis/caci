@@ -85,8 +85,8 @@ const bad = (where: string, message: string) => err(llmError('CONFIG', `${where}
 export { escapeForBlock };
 
 /** The trusted instructions: the controls' `system.txt` with the item id, the operation limit, the allowed operations and the replace limit filled in. */
-export function buildSystemPrompt(controls: CategoriseControls, itemId: string, allowedOps: readonly AllowedOp[], maxOps: number, maxReplaces: number = controls.settings.maxReplaces): string {
-  return renderTemplate(controls.system, { itemId, maxOps: String(maxOps), allowedOps: allowedOps.join(', '), maxReplaces: String(maxReplaces) });
+export function buildSystemPrompt(controls: CategoriseControls, itemId: string, allowedOps: readonly AllowedOp[], maxOps: number, maxReplaces: number = controls.settings.maxReplaces, maxFacts: number = controls.settings.maxFacts): string {
+  return renderTemplate(controls.system, { itemId, maxOps: String(maxOps), allowedOps: allowedOps.join(', '), maxReplaces: String(maxReplaces), maxFacts: String(maxFacts), keyMaxChars: String(controls.settings.keyMaxChars) });
 }
 
 const oneLine = (text: string): string => text.replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();

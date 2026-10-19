@@ -76,12 +76,16 @@ export interface CategoriseSettings {
     readonly descriptions: {
         readonly title: string;
         readonly summary: string;
+        readonly key: string;
         readonly name: string;
     };
+    // (undocumented)
+    readonly keyMaxChars: number;
     // (undocumented)
     readonly maxContextChars: number;
     // (undocumented)
     readonly maxDataBytes: number;
+    readonly maxFacts: number;
     // (undocumented)
     readonly maxIdLength: number;
     // (undocumented)
@@ -341,7 +345,7 @@ export function runWithDeadline<T>(work: (signal: AbortSignal) => Promise<Result
 
 // @public
 export const SETTING_RANGES: Readonly<{
-    categorise: Readonly<Record<"maxOps" | "maxDataBytes" | "maxIdLength" | "maxTextChars" | "maxContextChars" | "maxOutputChars" | "maxRationaleChars" | "maxReplaces" | "titleMaxChars" | "summaryMaxChars" | "categoryNameMaxChars", Range>>;
+    categorise: Readonly<Record<"maxOps" | "maxDataBytes" | "maxIdLength" | "maxTextChars" | "maxContextChars" | "maxOutputChars" | "maxRationaleChars" | "maxReplaces" | "maxFacts" | "keyMaxChars" | "titleMaxChars" | "summaryMaxChars" | "categoryNameMaxChars", Range>>;
     status: Readonly<Record<"maxOutputChars" | "maxHeadline" | "maxPoints" | "maxPointChars" | "maxRefs" | "maxRequestChars" | "maxEntries" | "maxEntryChars" | "maxTotalChars", Range>>;
 }>;
 
@@ -531,7 +535,7 @@ export type TraceEvent =
 
 // Warnings were encountered during analysis:
 //
-// dist/llm/controls/settings.d.ts:39:5 - (ae-forgotten-export) The symbol "Range" needs to be exported by the entry point index.d.ts
+// dist/llm/controls/settings.d.ts:43:5 - (ae-forgotten-export) The symbol "Range" needs to be exported by the entry point index.d.ts
 // dist/llm/model-client.d.ts:45:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
 // dist/llm/trace.d.ts:26:5 - (ae-forgotten-export) The symbol "PromptParts" needs to be exported by the entry point index.d.ts
 

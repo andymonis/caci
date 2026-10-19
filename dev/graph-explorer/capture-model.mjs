@@ -17,7 +17,7 @@ const capitalise = (word) => word.charAt(0).toUpperCase() + word.slice(1);
 
 /** What the controller put in the prompt: the note's id, the note, and the existing categories. */
 export function readRequest(request) {
-  const itemId = /The note's own id is "([^"]+)"/.exec(request.system ?? '')?.[1];
+  const itemId = request.meta?.capability === 'categorise' ? request.meta.itemId : /(?:The note's own id is|the first fact is) "([^"]+)"/.exec(request.system ?? '')?.[1];
   const content = request.messages?.[0]?.content ?? '';
   const note = /<note>\n([\s\S]*?)\n<\/note>/.exec(content)?.[1];
   const block = /<categories>\n([\s\S]*?)\n<\/categories>/.exec(content)?.[1] ?? '';

@@ -1,18 +1,21 @@
 {
-  "maxOps": 25,
+  "maxOps": 40,
   "maxTextChars": 8000,
   "maxContextChars": 12000,
-  "maxDataBytes": 2048,
+  "maxDataBytes": 4096,
   "maxIdLength": 128,
   "maxOutputChars": 32000,
   "maxRationaleChars": 500,
   "maxReplaces": 5,
+  "maxFacts": 8,
+  "keyMaxChars": 80,
   "titleMaxChars": 120,
   "summaryMaxChars": 300,
   "categoryNameMaxChars": 60,
   "descriptions": {
-    "title": "A short title for the note.",
-    "summary": "One line saying what the note is about.",
+    "title": "A short label for the fact, with its subject.",
+    "summary": "One line stating the fact, with its subject and its value.",
+    "key": "A short lower-case label of what the fact is about; reuse the key of an existing fact that this one updates.",
     "name": "A short readable name for the category."
   }
 }

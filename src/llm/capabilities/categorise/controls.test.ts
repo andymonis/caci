@@ -79,13 +79,26 @@ describe('wording is part 3, and only part 3', () => {
   });
 
   it('the shipped controls give today\'s limits', () => {
-    expect(SHIPPED_CONTROLS.categorise.settings).toMatchObject({ maxOps: 25, maxTextChars: 8000, maxContextChars: 12000, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32000, maxRationaleChars: 500 });
+    expect(SHIPPED_CONTROLS.categorise.settings).toMatchObject({ maxOps: 40, maxTextChars: 8000, maxContextChars: 12000, maxDataBytes: 4096, maxIdLength: 128, maxOutputChars: 32000, maxRationaleChars: 500, maxFacts: 8, keyMaxChars: 80 });
+  });
+});
+
+describe('the fact limits reach the instructions (R-015)', () => {
+  it('maxFacts and keyMaxChars are told to the model from the settings', () => {
+    const two = build(settingsWith((x) => { x.maxFacts = 2; x.keyMaxChars = 33; }));
+    expect(two.system).toContain('at most 2.');
+    expect(two.system).toContain('at most 33 characters');
+    const base = build(SHIPPED_CONTROLS);
+    expect(base.system).toContain('at most 8.');
+    expect(base.system).toContain('at most 80 characters');
+    expect(base.system).toContain('"note-1-2"');
   });
 });
 
 describe('a changed limit moves the prompt, the schema and the guard together', () => {
   const tight = settingsWith((s) => {
     s.maxOps = 3;
+    s.maxFacts = 1;
     s.titleMaxChars = 50;
     s.summaryMaxChars = 80;
     s.categoryNameMaxChars = 20;
@@ -123,6 +136,7 @@ describe('a changed limit moves the prompt, the schema and the guard together', 
 
   it('the guard enforces the same reply size, data size and id length', async () => {
     const small = settingsWith((s) => {
+      s.maxFacts = 1;
       s.maxOutputChars = 1000;
     });
     const verdict = inspectReply({ kind: 'text', text: 'x'.repeat(1001) }, { graphId: 'my-notes', itemId: 'note-1' }, guardSettingsOf(small.categorise.settings));
@@ -131,9 +145,10 @@ describe('a changed limit moves the prompt, the schema and the guard together', 
       s.titleMaxChars = 1;
       s.summaryMaxChars = 1;
       s.categoryNameMaxChars = 1;
-      s.maxDataBytes = 4 * 2 + 64;
+      s.keyMaxChars = 1;
+      s.maxDataBytes = 4 * 3 + 96;
     });
-    const bulky = { ...GOOD, ops: [{ ...ITEM, data: { title: 'x'.repeat(80), summary: 'y' } }, CATEGORY, LINK] };
+    const bulky = { ...GOOD, ops: [{ ...ITEM, data: { title: 'x'.repeat(120), summary: 'y' } }, CATEGORY, LINK] };
     expect((await ask(bytes, bulky)).result.ok).toBe(false);
     expect((await ask(SHIPPED_CONTROLS, bulky)).result.ok).toBe(true);
     const ids = settingsWith((s) => {

@@ -10,10 +10,13 @@ export interface CategoriseSettings {
   readonly maxOutputChars: number;
   readonly maxRationaleChars: number;
   readonly maxReplaces: number;
+  /** Most facts (items) one note may be split into (R-015). 1 is one item per note, as before. */
+  readonly maxFacts: number;
+  readonly keyMaxChars: number;
   readonly titleMaxChars: number;
   readonly summaryMaxChars: number;
   readonly categoryNameMaxChars: number;
-  readonly descriptions: { readonly title: string; readonly summary: string; readonly name: string };
+  readonly descriptions: { readonly title: string; readonly summary: string; readonly key: string; readonly name: string };
 }
 
 export interface StatusSettings {
@@ -40,6 +43,8 @@ const CATEGORISE_RANGES: Readonly<Record<Exclude<keyof CategoriseSettings, 'desc
   maxOutputChars: [1000, 200_000],
   maxRationaleChars: [1, 2000],
   maxReplaces: [0, 20],
+  maxFacts: [1, 20],
+  keyMaxChars: [1, 200],
   titleMaxChars: [1, 500],
   summaryMaxChars: [1, 1000],
   categoryNameMaxChars: [1, 200],
@@ -60,7 +65,7 @@ const STATUS_RANGES: Readonly<Record<Exclude<keyof StatusSettings, 'descriptions
 /** The allowed range of every numeric setting, for the documentation and its tests (the parsers use the same table). */
 export const SETTING_RANGES = Object.freeze({ categorise: CATEGORISE_RANGES, status: STATUS_RANGES });
 
-const CATEGORISE_DESCRIPTIONS = ['title', 'summary', 'name'] as const;
+const CATEGORISE_DESCRIPTIONS = ['title', 'summary', 'key', 'name'] as const;
 const STATUS_DESCRIPTIONS = ['headline', 'pointText', 'refs', 'nothing'] as const;
 export const MAX_DESCRIPTION_CHARS = 300;
 
@@ -116,6 +121,10 @@ export function parseCategoriseSettings(file: string, source: unknown): Parsed<C
   if (problems.length > 0) return { ok: false, problems };
   const s = data as unknown as CategoriseSettings;
   if (4 * (s.titleMaxChars + s.summaryMaxChars) + 64 > s.maxDataBytes) problems.push(`${file}: "maxDataBytes" (${s.maxDataBytes}) is too small for a title and summary of the allowed lengths (it needs at least ${4 * (s.titleMaxChars + s.summaryMaxChars) + 64})`);
+  if (4 * (s.titleMaxChars + s.summaryMaxChars + s.keyMaxChars) + 96 > s.maxDataBytes) problems.push(`${file}: "maxDataBytes" (${s.maxDataBytes}) is too small for a fact (title, summary and key) of the allowed lengths (it needs at least ${4 * (s.titleMaxChars + s.summaryMaxChars + s.keyMaxChars) + 96})`);
+  if (2 * s.maxFacts > s.maxOps) problems.push(`${file}: "maxOps" (${s.maxOps}) is too small for "maxFacts" (${s.maxFacts}): each fact needs an item and a link, so at least ${2 * s.maxFacts}`);
+  const needOut = s.maxFacts * (s.titleMaxChars + s.summaryMaxChars + s.keyMaxChars + 400);
+  if (needOut > s.maxOutputChars) problems.push(`${file}: "maxOutputChars" (${s.maxOutputChars}) is too small for the longest reply the other limits allow (it needs at least ${needOut})`);
   if (s.categoryNameMaxChars * 4 + 32 > s.maxDataBytes) problems.push(`${file}: "maxDataBytes" (${s.maxDataBytes}) is too small for a category name of the allowed length (it needs at least ${s.categoryNameMaxChars * 4 + 32})`);
   if (problems.length > 0) return { ok: false, problems };
   return { ok: true, value: Object.freeze({ ...s, descriptions: Object.freeze({ ...s.descriptions }) }) };

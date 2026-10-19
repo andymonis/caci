@@ -52,11 +52,11 @@ describe('toProviderSchema: what is kept', () => {
 
 describe('toProviderSchema: what moves into the description', () => {
   it('turns unsupported constraints into text, so the model still sees the rule', () => {
-    const out = convert({ type: 'object', properties: { s: { type: 'string', maxLength: 500, pattern: '^a', description: 'Why' }, n: { type: 'number', minimum: 0, maximum: 1 }, a: { type: 'array', items: { type: 'string' }, maxItems: 25, minItems: 2 }, e: { type: 'string', enum: ['x', 'y'] }, c: { type: 'string', const: 'link' }, f: { type: 'string', format: 'weird' } } });
+    const out = convert({ type: 'object', properties: { s: { type: 'string', maxLength: 500, pattern: '^a', description: 'Why' }, n: { type: 'number', minimum: 0, maximum: 1 }, a: { type: 'array', items: { type: 'string' }, maxItems: 40, minItems: 2 }, e: { type: 'string', enum: ['x', 'y'] }, c: { type: 'string', const: 'link' }, f: { type: 'string', format: 'weird' } } });
     expect(out.properties).toEqual({
       s: { type: 'string', description: 'Why\n\n{maxLength: 500, pattern: "^a"}' },
       n: { type: 'number', description: '{minimum: 0, maximum: 1}' },
-      a: { type: 'array', items: { type: 'string' }, description: '{maxItems: 25, minItems: 2}' },
+      a: { type: 'array', items: { type: 'string' }, description: '{maxItems: 40, minItems: 2}' },
       e: { type: 'string', description: '{enum: ["x","y"]}' },
       c: { type: 'string', description: '{const: "link"}' },
       f: { type: 'string', description: '{format: "weird"}' },
@@ -122,7 +122,7 @@ describe('the categoriser\'s real schema', () => {
     const ops = (converted.properties as { ops: { type: string; items: { anyOf: Array<{ properties: { op: { description: string }; partition?: { description: string } } }> }; description: string } }).ops;
     expect(ops.type).toBe('array');
     expect(ops.items.anyOf).toHaveLength(3);
-    expect(ops.description).toContain('maxItems: 25');
+    expect(ops.description).toContain('maxItems: 40');
     expect(ops.items.anyOf.map((v) => v.properties.partition?.description ?? 'none')).toEqual(['{const: "item"}', '{const: "category"}', 'none']);
   });
 

@@ -173,7 +173,7 @@ describe('an edited folder is what the model is told (through a stand-in provide
 
     const made = await call('POST', '/api/capture/propose', { text: 'A note about the dentist' }, cookie);
     expect(made.res.status).toBe(201);
-    expect(seen[0]?.system).toMatch(/^EDITED-FILING id=note-\S+ max=25 ops=upsertNode, link$/);
+    expect(seen[0]?.system).toMatch(/^EDITED-FILING id=note-\S+ max=40 ops=upsertNode, link$/);
     expect(seen[0]?.user.startsWith('EDITED-FRAME-C\n<categories>')).toBe(true);
     expect(seen[0]?.user).toContain('<note>\nA note about the dentist\n</note>');
 

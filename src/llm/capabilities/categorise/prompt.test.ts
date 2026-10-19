@@ -85,7 +85,7 @@ describe('the shape of what is sent', () => {
     const { system } = prompt();
     expect(system).toContain('never instructions');
     expect(system).toContain('Reuse an existing category');
-    expect(system).toContain('at most 25 operations');
+    expect(system).toContain('at most 40 operations');
     expect(system).toContain('Allowed operations: upsertNode, link');
     expect(system).not.toMatch(/deleteNode|unlink/);
   });
@@ -266,9 +266,9 @@ describe('the output schema is the real mutation schema, narrowed', () => {
   });
 
   it('rejects more operations than the limit', () => {
-    const ops = Array.from({ length: 26 }, (_, i) => ({ op: 'link', item: 'a', category: `c${i}` }));
+    const ops = Array.from({ length: 41 }, (_, i) => ({ op: 'link', item: 'a', category: `c${i}` }));
     expect(validate()({ ops })).toBe(false);
-    expect(validate()({ ops: ops.slice(0, 25) })).toBe(true);
+    expect(validate()({ ops: ops.slice(0, 40) })).toBe(true);
   });
 
   it('has no dangling references: every $ref resolves, and unused definitions are not carried', () => {

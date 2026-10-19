@@ -216,7 +216,7 @@ describe('status updates with the real model, through a stand-in provider (no ne
       const reply = system.startsWith('You are the status assistant')
         ? { headline: 'A quiet morning.', points: [{ text: 'Mum has new tablets.', refs: [1] }], nothing: false }
         : (() => {
-            const itemId = /The note's own id is "([^"]+)"/.exec(system)?.[1] as string;
+            const itemId = /the first fact is "([^"]+)"/.exec(system)?.[1] as string;
             const content = body.messages?.[0]?.content;
             const note = /<note>\n([\s\S]*?)\n<\/note>/.exec(typeof content === 'string' ? content : '')?.[1] ?? 'note';
             return { ops: [{ op: 'upsertNode', partition: 'item', id: itemId, data: { title: note.slice(0, 100), summary: 'by the stand-in' } }, { op: 'upsertNode', partition: 'category', id: 'provider-made', data: { name: 'Provider made' } }, { op: 'link', item: itemId, category: 'provider-made', weight: 0.7 }], rationale: 'stand-in' };

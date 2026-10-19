@@ -33,7 +33,7 @@ type Request = Parameters<ReturnType<typeof createScriptedModelClient>['complete
 function parse(request: Request): { itemId: string; note: string; existing: string[] } {
   const content = request.messages[0]?.content ?? '';
   return {
-    itemId: /The note's own id is "([^"]+)"/.exec(request.system ?? '')?.[1] ?? 'missing',
+    itemId: /the first fact is "([^"]+)"/.exec(request.system ?? '')?.[1] ?? 'missing',
     note: /<note>\n([\s\S]*?)\n<\/note>/.exec(content)?.[1] ?? '',
     existing: [...content.matchAll(/^\{"id":"([^"]+)"/gm)].map((m) => m[1] as string),
   };

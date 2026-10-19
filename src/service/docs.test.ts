@@ -454,7 +454,7 @@ describe('the controls section of the README', () => {
         expect(row, `${capability} ${setting}`).toBeDefined();
       }
     }
-    expect(Object.keys(SETTING_RANGES.categorise)).toHaveLength(11);
+    expect(Object.keys(SETTING_RANGES.categorise)).toHaveLength(13);
     expect(Object.keys(SETTING_RANGES.status)).toHaveLength(9);
   });
 

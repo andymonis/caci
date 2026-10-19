@@ -67,7 +67,7 @@ function fakeAnthropic(handler?: (call: number) => Response | undefined) {
     seen.push({ url: String(input), headers, body });
     const forced = handler?.(seen.length);
     if (forced !== undefined) return forced;
-    const itemId = /The note's own id is "([^"]+)"/.exec(body.system ?? '')?.[1] as string;
+    const itemId = /the first fact is "([^"]+)"/.exec(body.system ?? '')?.[1] as string;
     const reply = { ops: [{ op: 'upsertNode', partition: 'item', id: itemId, data: { title: 'From the provider', summary: 'filed by the stand-in' } }, { op: 'upsertNode', partition: 'category', id: 'provider-made', data: { name: 'Provider made' } }, { op: 'link', item: itemId, category: 'provider-made', weight: 0.7 }], rationale: 'because the stand-in said so' };
     const message = { id: 'msg_x', type: 'message', role: 'assistant', model: String(body.model), content: [{ type: 'text', text: JSON.stringify(reply), citations: null }], stop_reason: 'end_turn', stop_sequence: null, stop_details: null, usage: { input_tokens: 123, output_tokens: 45, cache_creation_input_tokens: null, cache_read_input_tokens: null } };
     return new Response(JSON.stringify(message), { status: 200, headers: { 'content-type': 'application/json' } });

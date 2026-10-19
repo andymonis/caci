@@ -340,7 +340,7 @@ describe('failures are mapped, and tell nothing from the inside', () => {
 
     const dangling: ModelClient = {
       complete: async (request) => {
-        const itemId = /The note's own id is "([^"]+)"/.exec(request.system ?? '')?.[1] as string;
+        const itemId = /the first fact is "([^"]+)"/.exec(request.system ?? '')?.[1] as string;
         const value = { ops: [{ op: 'upsertNode', partition: 'item', id: itemId, data: { title: 't', summary: 's' } }, { op: 'link', item: itemId, category: 'ghost' }], rationale: 'x' };
         return { ok: true, value: { model: 'm', output: { kind: 'json', value }, usage: { inputTokens: 1, outputTokens: 1 } } };
       },
