@@ -46,6 +46,22 @@ describe('the helpers', () => {
     expect(() => decodeCursor(scope, 'g' + Buffer.from(JSON.stringify(['personal:u1', '5', 'l1'])).toString('base64url'))).toThrow(RangeError);
     expect(() => decodeCursor(scope, 'g' + Buffer.from(JSON.stringify(['personal:u1', 5])).toString('base64url'))).toThrow(RangeError);
   });
+  it('a second spelling of a real cursor is refused (the unused bits of the last character changed)', () => {
+    const scope = { kind: 'personal', userId: 'u1' } as const;
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let tested = 0;
+    for (let at = 1; at < 60 && tested < 6; at++) {
+      const cursor = encodeCursor(scope, at, 'l1');
+      const body = cursor.slice(1);
+      if (body.length % 4 === 0) continue;
+      const last = alphabet.indexOf(body.at(-1) as string);
+      const twin = cursor.slice(0, -1) + alphabet[last ^ 1];
+      expect(decodeCursor(scope, cursor)).toEqual({ at, id: 'l1' });
+      expect(() => decodeCursor(scope, twin), twin).toThrow(RangeError);
+      tested++;
+    }
+    expect(tested).toBeGreaterThan(0);
+  });
   it('errors are frozen', () => {
     expect(Object.isFrozen(ledgerError('STORAGE_ERROR', 'x'))).toBe(true);
   });

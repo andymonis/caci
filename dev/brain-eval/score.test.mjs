@@ -150,6 +150,18 @@ describe('the phrasings real models used to explain a change (first real run, 20
   ])('is still a failure when the old date is given as a plain fact: %s', (text) => {
     expect(scoreAnswer(appt, answer(text)).pass).toBe(false);
   });
+  it.each([
+    ['mov', 'The 10 March slot moves.'],
+    ['correct', 'The 10 March date was corrected.'],
+    ['cancel', 'Dad cancels 10 March.'],
+    ['updat', 'The 10 March date was updated.'],
+    ['older', 'The older 10 March slot.'],
+    ['former', 'The former 10 March slot.'],
+    ['reschedul', 'The 10 March slot is rescheduled.'],
+  ])('the stem %s alone excuses a stale mention: %s', (_stem, text) => {
+    expect(scoreAnswer(appt, answer('Thursday 12 March.', text)).stale[0].status).toBe('superseded');
+    expect(scoreAnswer(appt, answer('Thursday 12 March. The 10 March slot.')).stale[0].status).toBe('surfaced');
+  });
   it('the stems and phrases are lists the README can name', () => {
     expect(CUE_STEMS).toContain('replac');
     expect(CUE_STEMS).toContain('origin');

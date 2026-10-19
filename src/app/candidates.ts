@@ -27,11 +27,11 @@ const SUMMARY_CLIP = 300;
 const PAGE = 500;
 
 // Words too common to say two notes are about the same thing.
-const STOP = new Set(
-  ('a an the and or but if of on in at to from by for with about as is are was were be been am do does did have has had i me my we our you your he she it its his her they them their this that these those there here ' +
-    'not no so than then too very can could will would should may might just also now again still more most some any all each into out up down over under after before')
-    .split(' '),
-);
+const STOP_TEXT = ` ${
+  'a an the and or but if of on in at to from by for with about as is are was were be been am do does did have has had i me my we our you your he she it its his her they them their this that these those there here ' +
+  'not no so than then too very can could will would should may might just also now again still more most some any all each into out up down over under after before'
+} `;
+const isStopWord = (word: string): boolean => STOP_TEXT.includes(` ${word} `);
 
 const NUMBER_WORDS: Readonly<Record<string, string>> = Object.freeze({ one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10', eleven: '11', twelve: '12' });
 
@@ -40,14 +40,13 @@ export function wordsOf(text: string): Set<string> {
   const normal = text
     .normalize('NFKC')
     .toLowerCase()
-    .replace(/×/g, ' x ')
     .replace(/[^\p{L}\p{N}]+/gu, ' ');
   const out = new Set<string>();
   for (const raw of normal.split(' ')) {
     if (raw === '') continue;
     let word = NUMBER_WORDS[raw] ?? raw;
     if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) word = word.slice(0, -1);
-    if (STOP.has(word) || (word.length === 1 && !/\d/.test(word))) continue;
+    if (isStopWord(word) || (word.length === 1 && !/\d/.test(word))) continue;
     out.add(word);
   }
   return out;
@@ -98,7 +97,7 @@ export function rankCandidates(note: string, items: Iterable<ItemRow>, options: 
   const maxCandidates = options.maxCandidates ?? DEFAULT_CANDIDATE_OPTIONS.maxCandidates;
   const maxChars = options.maxChars ?? DEFAULT_CANDIDATE_OPTIONS.maxChars;
   const wanted = wordsOf(note);
-  if (wanted.size === 0 || maxCandidates < 1) return [];
+  if (maxCandidates < 1) return [];
   const scored: Scored[] = [];
   for (const item of items) {
     let shared = 0;
@@ -135,7 +134,7 @@ export async function readCandidates(adapter: StorageAdapter, graphId: string, n
     if (!r.ok) return r;
     if (!('nodes' in r.value)) return err({ code: 'STORAGE_ERROR', message: 'an items listing did not return nodes' });
     for (const node of r.value.nodes) {
-      if (node.partition !== 'item' || rows.length >= maxRead) continue;
+      if (rows.length >= maxRead) continue;
       rows.push(node.data === undefined ? { id: node.id } : { id: node.id, data: node.data });
     }
     cursor = rows.length >= maxRead ? null : r.value.nextCursor;

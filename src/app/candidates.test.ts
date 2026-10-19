@@ -79,7 +79,8 @@ describe('rankCandidates', () => {
     expect(ids(rankCandidates('garden', big, { maxChars: 412 }))).toEqual(['a', 'b']);
     expect(ids(rankCandidates('garden', big, { maxChars: 411 }))).toEqual(['a']);
     expect(ids(rankCandidates('garden', big, { maxChars: 205 }))).toEqual([]);
-    expect(rankCandidates('garden', [item('e', '😀'.repeat(60), '😀 garden')], { maxChars: 61 })).toHaveLength(1);
+    expect(rankCandidates('garden', [item('e', '😀'.repeat(60), '😀 garden')], { maxChars: 68 })).toHaveLength(1);
+    expect(rankCandidates('garden', [item('e', '😀'.repeat(60), '😀 garden')], { maxChars: 67 })).toHaveLength(0);
   });
   it('cuts title to 100 and summary to 300 characters by character and joins white space', () => {
     const [c] = rankCandidates('garden', [item('a', `garden ${'😀'.repeat(150)}`, `line\n\nbreak ${'😀'.repeat(400)}`)]);
@@ -91,6 +92,15 @@ describe('rankCandidates', () => {
     const found = rankCandidates('garden', [{ id: 'a' }, { id: 'b', data: { count: 5 } as JsonObject }, { id: 'c', data: { contributedBy: 'garden' } as JsonObject }, { id: 'd', data: { note: 'garden' } as JsonObject }]);
     expect(ids(found)).toEqual(['d']);
     expect(found[0]).toEqual({ id: 'd', title: '', summary: '' });
+  });
+  it('a number stored as a number is not text and is not matched', () => {
+    expect(rankCandidates('5', [{ id: 'a', data: { count: 5 } as JsonObject }])).toEqual([]);
+    expect(ids(rankCandidates('5', [{ id: 'a', data: { count: 5, note: 'room 5' } as JsonObject }]))).toEqual(['a']);
+  });
+  it('a time of 0 in contributedAt is not a time; the minted id is used', () => {
+    const minted = `note-${Date.UTC(2026, 3, 1).toString(36).padStart(9, '0')}-00-aaaaaa`;
+    expect(madeAt(minted, { contributedAt: 0 })).toBe(Date.UTC(2026, 3, 1));
+    expect(madeAt(minted, { contributedAt: 1 })).toBe(1);
   });
   it('awkward ids and text come back exactly', () => {
     const weird = 'a/b?c=d&e#f %é😀<b>..';

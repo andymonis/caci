@@ -165,7 +165,7 @@ export function ledgerStoreCases(): LedgerStoreCase[] {
       run: async (store) => {
         const bad: Array<Partial<LedgerEntry> & Record<string, unknown>> = [
           { id: '' }, { id: 'a b' }, { id: 'x'.repeat(129) }, { at: -1 }, { at: 1.5 }, { at: Number.NaN }, { at: '5' as never },
-          { scope: { kind: 'other' } as never }, { scope: { kind: 'personal' } as never }, { scope: { kind: 'circle', circleId: '' } as never }, { scope: { kind: 'personal', userId: 'u1', extra: 1 } as never },
+          { scope: { kind: 'other' } as never }, { scope: { kind: 'personal' } as never }, { scope: { kind: 'circle', circleId: '' } as never }, { scope: { kind: 'personal', userId: 'u1', extra: 1 } as never }, { scope: { kind: 'circle', circleId: 'c1', extra: 1 } as never },
           { actor: '' }, { actor: 'a b' }, { action: 'deleted' as never }, { kind: 'edge' as never }, { subject: '' }, { subject: 'x'.repeat(257) },
           { title: 'x'.repeat(201) }, { summary: 'x'.repeat(401) }, { title: 5 as never }, { summary: null as never }, { proposalId: '' }, { proposalId: 'a b' }, { surprise: 1 },
         ];

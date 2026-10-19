@@ -136,7 +136,7 @@ describe('a demo run', () => {
     expect(h.text()).toContain('Saved: brain-eval-results/2026-10-14T12-00-00-000Z-demo.json');
     const { json } = h.saved[0];
     expect(h.saved[0].dir).toBe('brain-eval-results');
-    expect(json).toMatchObject({ kind: 'brain-eval', mode: 'demo', controls: null, repeat: 1, arms: ['brain', 'replay'], order: 'oldest-first', windowTokens: 150000, fileWith: 'fast', answerWith: ['fast', 'deep'], aborted: false, startedAt: '2026-10-14T12:00:00.000Z' });
+    expect(json).toMatchObject({ kind: 'brain-eval', rulesVersion: 2, mode: 'demo', controls: null, repeat: 1, arms: ['brain', 'replay'], order: 'oldest-first', windowTokens: 150000, fileWith: 'fast', answerWith: ['fast', 'deep'], aborted: false, startedAt: '2026-10-14T12:00:00.000Z' });
     expect(json.models).toEqual({ fast: DEFAULT_TIERS.fast, deep: DEFAULT_TIERS.deep });
     expect(json.scenarios).toEqual([{ id: 'a', hash: hashOf(sc('a')), notes: 2, questions: [{ id: 'q1', kind: 'recall' }] }, { id: 'b', hash: hashOf(sc('b')), notes: 2, questions: [{ id: 'q1', kind: 'recall' }] }]);
     expect(json.results).toHaveLength(8);
@@ -270,6 +270,10 @@ describe('--rescore', () => {
     expect(h.saved[0].dir).toBe('brain-eval-results');
     expect(h.saved[0].json.rescored.changedVerdicts).toBe(1);
     expect(h.clients()).toBe(0);
+  });
+  it('says which rules version the file was scored with before', async () => {
+    const { h } = await rescore([], { ...savedRun(hashOf(scenario)), rulesVersion: 2 });
+    expect(h.text()).toContain('(was 2)');
   });
   it('needs no key and runs no model even though the run was real', async () => {
     const { code, h } = await rescore([], savedRun(hashOf(scenario)), { env: {} });

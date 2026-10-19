@@ -18,7 +18,7 @@ export function decodeCursor(scope: LedgerScope, cursor: string): { at: number; 
   } catch {
     return bad();
   }
-  if (!Array.isArray(parsed) || parsed.length !== 3 || parsed[0] !== scopeKey(scope) || typeof parsed[1] !== 'number' || typeof parsed[2] !== 'string') return bad();
+  if (!Array.isArray(parsed) || typeof parsed[1] !== 'number' || typeof parsed[2] !== 'string') return bad();
   if (encodeCursor(scope, parsed[1], parsed[2]) !== cursor) return bad();
   return { at: parsed[1], id: parsed[2] };
 }

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { parseArgs, resolveModels, USAGE } from './args.mjs';
 import { compareRuns } from './compare.mjs';
 import { rescoreRun } from './rescore.mjs';
+import { RULES_VERSION } from './score.mjs';
 import { padScenario } from './pad.mjs';
 import { formatReport, summarise } from './report.mjs';
 import { plannedCalls, runEval } from './runner.mjs';
@@ -164,7 +165,7 @@ export async function main(io) {
 
   const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
   const json = {
-    kind: 'brain-eval', startedAt: new Date(startedAt).toISOString(), mode, controls: args.controls ?? null, repeat: args.repeat, arms: args.arms, order: args.order, windowTokens: args.window, pads: args.pad, seed: args.seed,
+    kind: 'brain-eval', rulesVersion: RULES_VERSION, startedAt: new Date(startedAt).toISOString(), mode, controls: args.controls ?? null, repeat: args.repeat, arms: args.arms, order: args.order, windowTokens: args.window, pads: args.pad, seed: args.seed,
     fileWith: fileWith.label, answerWith: answerWith.map((m) => m.label), models: resolved, aborted,
     scenarios: scenarios.map((s) => ({ id: s.id, hash: hashOf(s), notes: s.notes.length, questions: s.questions.map((q) => ({ id: q.id, kind: q.kind })) })),
     summary: summarise(results), filing, results,

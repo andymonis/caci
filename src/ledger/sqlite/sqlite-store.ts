@@ -69,14 +69,10 @@ export function createSqliteLedgerStore(options: SqliteLedgerStoreOptions = {}):
 
   return {
     append: async (entries): Promise<Result<void, LedgerError>> => {
-      const seen = new Set<string>();
       for (const entry of entries) {
         const problem = entryProblem(entry);
         if (problem !== undefined) return err(ledgerError('INVALID_INPUT', problem));
-        if (seen.has(entry.id)) return err(ledgerError('INVALID_INPUT', 'an entry id is already used'));
-        seen.add(entry.id);
       }
-      if (entries.length === 0) return ok(undefined);
       try {
         db.begin();
         try {
