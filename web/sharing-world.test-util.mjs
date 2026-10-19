@@ -7,6 +7,7 @@ import { write } from '../src/graph_store/index.ts';
 import { startService } from '../src/service/service.ts';
 import { createApiClient } from './api-client.js';
 import { createCirclesClient } from './circles-client.js';
+import { createLedgerClient } from './ledger-client.js';
 import { createNotesClient } from './notes-client.js';
 import { createSharingClient } from './sharing-client.js';
 
@@ -52,7 +53,7 @@ export async function world() {
     const api = createApiClient({ fetchFn: f });
     const registered = await api.register({ username: name, displayName: `Display ${name}`, password: PW });
     await api.login({ username: name, password: PW });
-    people[name] = { fetch: f, id: registered.value.id, circles: createCirclesClient({ fetchFn: f }), sharing: createSharingClient({ fetchFn: f }), notes: createNotesClient({ fetchFn: f }) };
+    people[name] = { fetch: f, id: registered.value.id, circles: createCirclesClient({ fetchFn: f }), sharing: createSharingClient({ fetchFn: f }), notes: createNotesClient({ fetchFn: f }), ledger: createLedgerClient({ fetchFn: f }) };
   }
   const circle = (await people.ann.circles.createCircle({ name: 'Club' })).value.id;
   for (const name of ['bob', 'cat']) {
