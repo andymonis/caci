@@ -14,6 +14,10 @@ export interface ApprovedView {
     //
     // (undocumented)
     readonly summary: ProposalSummary;
+    readonly tidied?: readonly {
+        readonly id: string;
+        readonly name?: string;
+    }[];
 }
 
 // @public (undocumented)

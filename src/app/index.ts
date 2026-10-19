@@ -12,7 +12,7 @@ export type { InputNormaliser, Normalisers } from './normalise.js';
 export { describeSummary, summarise } from './summary.js';
 export type { ExistingNodes, Link, ProposalSummary, RemovedItem } from './summary.js';
 export { createController, DEFAULT_CONTROLLER_OPTIONS } from './controller.js';
-export type { Approved, Controller, ControllerError, ControllerInit, ProposeOptions } from './controller.js';
+export type { Approved, Controller, ControllerError, ControllerInit, ProposeOptions, TidiedCategory } from './controller.js';
 export type { PendingProposal } from './pending.js';
 export { DEFAULT_CANDIDATE_OPTIONS, madeAt, rankCandidates, readCandidates, wordsOf } from './candidates.js';
 export type { Candidate, CandidateOptions, ItemRow } from './candidates.js';

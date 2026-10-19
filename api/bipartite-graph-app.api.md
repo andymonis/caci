@@ -24,6 +24,7 @@ export type AppErrorCode = (typeof APP_ERROR_CODES)[number];
 // @public
 export interface Approved {
     readonly proposal: PendingProposal;
+    readonly tidied: readonly TidiedCategory[];
     // Warning: (ae-forgotten-export) The symbol "WriteOutput" needs to be exported by the entry point index.d.ts
     readonly written: WriteOutput;
 }
@@ -96,6 +97,7 @@ export interface ControllerInit {
     readonly maxPending?: number;
     readonly normalisers?: Normalisers;
     readonly now?: () => number;
+    readonly onWarning?: (message: string) => void;
     readonly proposalIds?: ItemIdGenerator;
     readonly ttlMs?: number;
 }
@@ -285,6 +287,14 @@ export interface TextInput {
     readonly kind: 'text';
     // (undocumented)
     readonly text: string;
+}
+
+// @public
+export interface TidiedCategory {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name?: string;
 }
 
 // @public

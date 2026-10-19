@@ -222,3 +222,107 @@ describe('failures', () => {
     expect(s.client.callCount).toBe(0);
   });
 });
+
+describe('tidying the categories a replacement leaves empty (R-014 D9)', () => {
+  const GRAPH: Op[] = [
+    { op: 'upsertNode', partition: 'category', id: 'pressure', mode: 'merge', data: { name: 'Blood pressure' } },
+    { op: 'upsertNode', partition: 'category', id: 'shared', mode: 'merge', data: { name: 'Shared' } },
+    { op: 'upsertNode', partition: 'category', id: 'untouched', mode: 'merge', data: { name: 'Untouched' } },
+    { op: 'upsertNode', partition: 'item', id: 'old-dose', mode: 'merge', data: { title: 'Mum: 2 x Tablet A', summary: 'Mum takes 2 x Tablet A a day for her blood pressure.' } },
+    { op: 'upsertNode', partition: 'item', id: 'other', mode: 'merge', data: { title: 'Other', summary: 'Something else entirely' } },
+    { op: 'link', item: 'old-dose', category: 'pressure', ensureNodes: false },
+    { op: 'link', item: 'old-dose', category: 'shared', ensureNodes: false },
+    { op: 'link', item: 'other', category: 'shared', ensureNodes: false },
+  ];
+  const NEW = (category: string) => reply({
+    ops: [{ op: 'upsertNode', partition: 'item', id: 'note-1', data: { title: 'Mum: 1 x Tablet B', summary: 'Mum now takes 1 x Tablet B.' } }, { op: 'link', item: 'note-1', category }],
+    replaces: [1],
+  });
+  const categories = async (adapter: ReturnType<typeof createMemoryAdapter>): Promise<string[]> => {
+    const r = await query(adapter, { version: 1, graphId: 'notes', from: { all: true }, filter: { partition: 'category' }, return: { shape: 'ids' } });
+    if (!r.ok || !('ids' in r.value)) throw new Error('could not list');
+    return r.value.ids.map((x) => x.id).sort();
+  };
+
+  it('a category left with no notes is removed, one that still has notes stays, and the result names what was removed', async () => {
+    const s = await setup({ existing: GRAPH, script: [NEW('untouched')] });
+    const p = await proposed(s);
+    const done = await s.controller.approve(p.id);
+    expect(done.ok && done.value.tidied).toEqual([{ id: 'pressure', name: 'Blood pressure' }]);
+    expect(done.ok && Object.isFrozen(done.value.tidied)).toBe(true);
+    expect(await categories(s.inner)).toEqual(['shared', 'untouched']);
+  });
+  it('a category the new note links to stays even if the replaced note was its only other one', async () => {
+    const s = await setup({ existing: GRAPH, script: [NEW('pressure')] });
+    const p = await proposed(s);
+    const done = await s.controller.approve(p.id);
+    expect(done.ok && done.value.tidied).toEqual([]);
+    expect(await categories(s.inner)).toEqual(['pressure', 'shared', 'untouched']);
+  });
+  it('categories the replaced note was never in, and empty categories that were already there, are left alone', async () => {
+    const s = await setup({ existing: [...GRAPH, { op: 'upsertNode', partition: 'category', id: 'empty-already', mode: 'merge', data: { name: 'Empty' } }], script: [NEW('untouched')] });
+    const p = await proposed(s);
+    await s.controller.approve(p.id);
+    expect(await categories(s.inner)).toContain('empty-already');
+  });
+  it('a category with no name is reported by id alone', async () => {
+    const s = await setup({ existing: GRAPH.map((o) => (o.op === 'upsertNode' && o.id === 'pressure' ? { ...o, data: { other: 1 } } : o)) as Op[], script: [NEW('untouched')] });
+    const p = await proposed(s);
+    const done = await s.controller.approve(p.id);
+    expect(done.ok && done.value.tidied).toEqual([{ id: 'pressure' }]);
+  });
+  it('an approval that replaces nothing does no tidy work at all: one transaction, the write', async () => {
+    const s = await setup({ existing: GRAPH, script: [reply({ ops: [{ op: 'upsertNode', partition: 'item', id: 'note-1', data: { title: 'x', summary: 'y' } }, { op: 'link', item: 'note-1', category: 'untouched' }] })] });
+    const p = await proposed(s);
+    const before = s.recording.calls.length;
+    const done = await s.controller.approve(p.id);
+    expect(done.ok && done.value.tidied).toEqual([]);
+    expect(s.recording.calls.slice(before).filter((c) => c === 'transaction')).toHaveLength(1);
+  });
+  it('a tidy that fails does not fail the approval; the operator is told, once', async () => {
+    const warnings: string[] = [];
+    let fail = false;
+    let seen = 0;
+    const s = await setup({
+      existing: GRAPH,
+      script: [NEW('untouched')],
+      init: { onWarning: (m) => void warnings.push(m) },
+      wrap: (adapter) => ({ ...adapter, transaction: (graphId, fn) => (fail && ++seen === 3 ? Promise.reject(new Error('disk')) : adapter.transaction(graphId, fn)) }),
+    });
+    const p = await proposed(s);
+    fail = true;
+    const done = await s.controller.approve(p.id);
+    expect(done.ok && done.value.tidied).toEqual([]);
+    expect(await itemIds(s.inner)).toEqual(['note-1', 'other']);
+    expect(warnings).toEqual(['could not tidy the categories left empty by a replacement; they will stay until the next replacement or by hand']);
+  });
+  it('a failure to read the categories first does not stop the approval either', async () => {
+    const warnings: string[] = [];
+    let fail = false;
+    let seen = 0;
+    const s = await setup({
+      existing: GRAPH,
+      script: [NEW('untouched')],
+      init: { onWarning: (m) => void warnings.push(m) },
+      wrap: (adapter) => ({ ...adapter, transaction: (graphId, fn) => (fail && ++seen === 1 ? Promise.reject(new Error('disk')) : adapter.transaction(graphId, fn)) }),
+    });
+    const p = await proposed(s);
+    fail = true;
+    const done = await s.controller.approve(p.id);
+    expect(done.ok).toBe(true);
+    expect(warnings).toEqual(['could not read which categories the replaced notes were in, so empty categories will not be tidied']);
+    expect(await itemIds(s.inner)).toEqual(['note-1', 'other']);
+  });
+  it('a warning hook that throws changes nothing', async () => {
+    const s = await setup({ existing: GRAPH, script: [NEW('untouched')], init: { onWarning: () => { throw new Error('boom'); } } });
+    const p = await proposed(s);
+    expect((await s.controller.approve(p.id)).ok).toBe(true);
+  });
+  it('a failed write tidies nothing and keeps the categories', async () => {
+    const bad = reply({ ops: [{ op: 'upsertNode', partition: 'item', id: 'note-1', data: { title: 'x', summary: 'y' } }, { op: 'link', item: 'note-1', category: 'no-such' }], replaces: [1] });
+    const s = await setup({ existing: GRAPH, script: [bad] });
+    const p = await proposed(s);
+    expect((await s.controller.approve(p.id)).ok).toBe(false);
+    expect(await categories(s.inner)).toEqual(['pressure', 'shared', 'untouched']);
+  });
+});

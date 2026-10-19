@@ -80,6 +80,8 @@ export interface ApprovedView {
   readonly id: string;
   readonly applied: number;
   readonly summary: ProposalSummary;
+  /** Categories removed afterwards because the notes this one replaced were the only ones in them (R-014). Absent when there were none. */
+  readonly tidied?: readonly { readonly id: string; readonly name?: string }[];
 }
 
 export interface CaciController {
@@ -444,7 +446,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       const done = await capture.approve(mine.value.id);
       if (done.ok) {
         held.delete(mine.value.id);
-        return ok(Object.freeze({ id: mine.value.id, applied: done.value.written.applied, summary: done.value.proposal.summary }));
+        return ok(Object.freeze({ id: mine.value.id, applied: done.value.written.applied, summary: done.value.proposal.summary, ...(done.value.tidied.length === 0 ? {} : { tidied: done.value.tidied }) }));
       }
       const reason = gone(done.error);
       if (reason !== undefined) {

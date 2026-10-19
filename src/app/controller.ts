@@ -1,4 +1,4 @@
-import { err, ok, parseMutation, write, type GraphError, type GraphOptions, type JsonValue, type Mutation, type Result, type StorageAdapter, type WriteOutput } from '../graph_store/index.js';
+import { err, ok, parseMutation, query, write, type GraphError, type GraphOptions, type JsonValue, type Mutation, type Result, type StorageAdapter, type WriteOutput } from '../graph_store/index.js';
 import type { CategoriseOptions, Llm, LlmError } from '../llm/index.js';
 import { readCandidates, type Candidate, type CandidateOptions } from './candidates.js';
 import { appError, type AppError } from './errors.js';
@@ -37,6 +37,8 @@ export interface ControllerInit {
    * (the service does this when the controls' `maxReplaces` is 0), an object tunes the search. Default: on, with the defaults.
    */
   readonly candidates?: CandidateOptions | false;
+  /** Told, with a fixed sentence and no note text or ids, when something that must not fail an approval did (for example the tidy). Never throws into the caller. */
+  readonly onWarning?: (message: string) => void;
 }
 
 export interface ProposeOptions {
@@ -56,6 +58,14 @@ export interface Approved {
   readonly proposal: PendingProposal;
   /** What `write` reported. */
   readonly written: WriteOutput;
+  /** Categories removed afterwards because the notes this one replaced were the only ones in them (R-014 D9). Empty for none. */
+  readonly tidied: readonly TidiedCategory[];
+}
+
+/** A category that was removed because it was left with no notes. */
+export interface TidiedCategory {
+  readonly id: string;
+  readonly name?: string;
 }
 
 export interface Controller {
@@ -198,17 +208,68 @@ export function createController(init: ControllerInit): Controller {
       ? app(appError('PROPOSAL_EXPIRED', `proposal ${id} ran out of time before it was approved; ask for a new one`))
       : app(appError('PROPOSAL_NOT_FOUND', `no pending proposal ${id}: it is unknown, or it was already approved or rejected`));
 
+  const warn = (message: string): void => {
+    try {
+      init.onWarning?.(message);
+    } catch {
+      // a warning hook must never change what happens
+    }
+  };
+
+  /** The categories the given items are filed under, with their names (read before the items are deleted, while their links exist). */
+  async function categoriesOf(graphId: string, itemIds: readonly string[]): Promise<Result<TidiedCategory[], GraphError>> {
+    const out: TidiedCategory[] = [];
+    let cursor: string | null = null;
+    do {
+      const r = await query(adapter, { version: 1, graphId, from: { partition: 'item', ids: [...itemIds] }, traverse: { depth: 1 }, filter: { partition: 'category' }, return: { shape: 'nodes', includeData: true }, page: { limit: 200, cursor } }, graphOptions);
+      if (!r.ok) return r;
+      if (!('nodes' in r.value)) return err({ code: 'STORAGE_ERROR', message: 'a categories listing did not return nodes' });
+      for (const n of r.value.nodes) if (n.partition === 'category') out.push(typeof n.data?.name === 'string' ? { id: n.id, name: n.data.name } : { id: n.id });
+      cursor = r.value.nextCursor;
+    } while (cursor !== null && out.length < 1000);
+    return ok(out);
+  }
+
+  /** Removes those categories that now hold no items. Idempotent; a category the new note links to has an item and stays. */
+  async function tidy(graphId: string, candidates: readonly TidiedCategory[]): Promise<TidiedCategory[]> {
+    const done: TidiedCategory[] = [];
+    for (const category of candidates) {
+      const counted = await query(adapter, { version: 1, graphId, from: { partition: 'category', ids: [category.id] }, traverse: { depth: 1 }, filter: { partition: 'item' }, return: { shape: 'count' } }, graphOptions);
+      if (!counted.ok || !('count' in counted.value)) throw new Error('could not count');
+      if (counted.value.count > 0) continue;
+      const removed = await write(adapter, { version: 1, kind: 'mutation', graphId, createIfMissing: false, ops: [{ op: 'deleteNode', partition: 'category', id: category.id }] }, graphOptions);
+      if (!removed.ok) throw new Error('could not remove');
+      done.push(category);
+    }
+    return done;
+  }
+
   async function approve(proposalId: string): Promise<Result<Approved, ControllerError>> {
     const taken = store.take(proposalId);
     if (taken.state !== 'found') return unavailable(taken.state, String(proposalId));
     const { proposal } = taken;
     try {
+      // What the removed notes were filed under, while their links still exist (for the tidy after the write).
+      let affected: TidiedCategory[] = [];
+      if (proposal.summary.removed.length > 0) {
+        const before = await categoriesOf(proposal.graphId, proposal.summary.removed.map((r) => r.id)).catch(() => undefined);
+        if (before?.ok === true) affected = before.value;
+        else warn('could not read which categories the replaced notes were in, so empty categories will not be tidied');
+      }
       const written = await write(adapter, proposal.mutation, graphOptions);
       if (!written.ok) {
         store.restore(proposal);
         return graph(written.error);
       }
-      return ok(Object.freeze({ proposal, written: written.value }));
+      let tidied: TidiedCategory[] = [];
+      if (affected.length > 0) {
+        try {
+          tidied = await tidy(proposal.graphId, affected);
+        } catch {
+          warn('could not tidy the categories left empty by a replacement; they will stay until the next replacement or by hand');
+        }
+      }
+      return ok(Object.freeze({ proposal, written: written.value, tidied: Object.freeze(tidied) }));
     } catch {
       store.restore(proposal);
       return app(appError('UNEXPECTED', 'approve failed unexpectedly; the proposal was kept'));
