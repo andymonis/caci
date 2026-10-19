@@ -14,7 +14,8 @@ function metaProblemOf(meta: unknown): string | undefined {
   if (meta === undefined) return undefined;
   if (!isObject(meta)) return 'must be an object when given';
   if (meta.capability === 'categorise') {
-    if (Object.keys(meta).some((k) => k !== 'capability' && k !== 'itemId')) return 'a categorise meta may hold only capability and itemId';
+    if (Object.keys(meta).some((k) => k !== 'capability' && k !== 'itemId' && k !== 'maxFacts')) return 'a categorise meta may hold only capability, itemId and maxFacts';
+    if (meta.maxFacts !== undefined && (typeof meta.maxFacts !== 'number' || !Number.isSafeInteger(meta.maxFacts) || meta.maxFacts < 1)) return 'maxFacts must be a whole number from 1';
     return typeof meta.itemId === 'string' && meta.itemId !== '' ? undefined : 'itemId must be non-empty text';
   }
   if (meta.capability === 'status') {

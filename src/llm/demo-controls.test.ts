@@ -55,7 +55,7 @@ describe('the demo model with completely different controls wording', () => {
   it('the categoriser\'s meta carries the minted item id', async () => {
     const client = createScriptedModelClient([{ reply: JSON.stringify({ ops: [] }) }]);
     await createLlm({ client, controls: rewritten() }).categorise({ text: 'x', graphId: 'g', itemId: 'note-77', categories: [] });
-    expect(client.requests[0]?.meta).toEqual({ capability: 'categorise', itemId: 'note-77' });
+    expect(client.requests[0]?.meta).toEqual({ capability: 'categorise', itemId: 'note-77', maxFacts: 8 });
     expect(client.requests[0]?.system).toBe('ZZ-A. Item note-77. Up to 40. Using upsertNode, link. ZZ-B.');
   });
 });

@@ -12,7 +12,7 @@ export interface ModelMessage {
  * free demo model and the test clients do not have to read the wording of the controls, which anyone may edit.
  */
 export type ModelMeta =
-  | { readonly capability: 'categorise'; readonly itemId: string }
+  | { readonly capability: 'categorise'; readonly itemId: string; /** Most facts a reply may hold (R-015); absent means 1. */ readonly maxFacts?: number }
   | { readonly capability: 'status'; readonly entryCount: number; readonly now: number; readonly timeZone: string };
 
 /**

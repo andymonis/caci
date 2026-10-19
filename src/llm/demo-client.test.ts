@@ -57,7 +57,8 @@ describe('the demo model through the real categoriser', () => {
     const ops = await opsOf('Renew the car insurance; the car insurance quote expires soon', [{ id: 'health' }]);
     const made = ops.find((o) => o.op === 'upsertNode' && o.partition === 'category');
     expect(made).toMatchObject({ id: 'insurance', data: { name: 'Insurance' } }); // "car" and "insurance" both twice: the longer word wins
-    expect(ops.filter((o) => o.op === 'link')).toMatchObject([{ op: 'link', item: 'note-1', category: 'insurance', weight: 0.8 }]);
+    // the `;` makes two facts, and each is linked to the one new category
+    expect(ops.filter((o) => o.op === 'link')).toMatchObject([{ op: 'link', item: 'note-1', category: 'insurance', weight: 0.8 }, { op: 'link', item: 'note-1-2', category: 'insurance', weight: 0.8 }]);
   });
 
   it('never picks a stop word or a word under three letters: with nothing left it falls back to "inbox"', async () => {

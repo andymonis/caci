@@ -49,8 +49,9 @@ interface CategoryLine {
 }
 
 /** What the categoriser put in the prompt. */
-function readRequest(request: ModelRequest): { itemId: string | undefined; note: string | undefined; categories: CategoryLine[] } {
+function readRequest(request: ModelRequest): { itemId: string | undefined; maxFacts: number; note: string | undefined; categories: CategoryLine[] } {
   const itemId = request.meta?.capability === 'categorise' ? request.meta.itemId : undefined;
+  const maxFacts = request.meta?.capability === 'categorise' ? (request.meta.maxFacts ?? 1) : 1;
   const content = request.messages[0]?.content ?? '';
   const note = /<note>\n([\s\S]*?)\n<\/note>/.exec(content)?.[1];
   const block = /<categories>\n([\s\S]*?)\n<\/categories>/.exec(content)?.[1] ?? '';
@@ -64,17 +65,17 @@ function readRequest(request: ModelRequest): { itemId: string | undefined; note:
       // not an entry: a header, or a note about categories left out
     }
   }
-  return { itemId, note: note === undefined ? undefined : unescapeBlock(note), categories };
+  return { itemId, maxFacts, note: note === undefined ? undefined : unescapeBlock(note), categories };
 }
 
 /** The existing notes the categoriser showed, as `[number, text]` (the text is `title: summary`). */
-function readExisting(request: ModelRequest): Array<readonly [number, string]> {
+function readExisting(request: ModelRequest): Array<readonly [number, string, string]> {
   const block = /<existing>\n([\s\S]*?)\n<\/existing>/.exec(request.messages[0]?.content ?? '')?.[1];
   if (block === undefined) return [];
-  const out: Array<readonly [number, string]> = [];
+  const out: Array<readonly [number, string, string]> = [];
   for (const line of unescapeBlock(block).split('\n')) {
-    const m = /^\[(\d+)\] (.*)$/.exec(line);
-    if (m !== null) out.push([Number(m[1]), m[2] as string]);
+    const m = /^\[(\d+)\] (?:(.*?) — )?(.*)$/.exec(line);
+    if (m !== null) out.push([Number(m[1]), m[3] as string, m[2] ?? '']);
   }
   return out;
 }
@@ -129,7 +130,7 @@ function demoStatusReply(request: ModelRequest): JsonObject | undefined {
 /** The reply the demo model gives for a prompt, as the JSON object the capability expects; `undefined` if the prompt is not one it understands. */
 export function demoReply(request: ModelRequest): JsonObject | undefined {
   if (request.meta?.capability === 'status') return demoStatusReply(request);
-  const { itemId, note, categories } = readRequest(request);
+  const { itemId, maxFacts, note, categories } = readRequest(request);
   if (itemId === undefined || note === undefined) return undefined;
   const noteWords = wordsOf(note);
   const scored = categories
@@ -141,18 +142,29 @@ export function demoReply(request: ModelRequest): JsonObject | undefined {
     .sort((a, b) => b.score - a.score || b.links - a.links || byId(a.id, b.id))
     .slice(0, 2);
 
-  const words = note.trim().split(/\s+/).filter(Boolean);
-  const ops: JsonObject[] = [
-    {
+  // The facts of the note (R-015): one when only one is allowed, else the note split at sentences and `label: value` pairs.
+  const facts = maxFacts > 1 ? splitFacts(note, maxFacts) : [{ text: note, key: undefined as string | undefined }];
+  const existing = readExisting(request);
+  const withKeys = maxFacts > 1;
+  const ops: JsonObject[] = facts.map((fact, i) => {
+    const words = fact.text.trim().split(/\s+/).filter(Boolean);
+    const key = withKeys ? reuseKey(fact, existing) : undefined;
+    return {
       op: 'upsertNode',
       partition: 'item',
-      id: itemId,
-      data: { title: clip(words.slice(0, 8).join(' '), MAX_TITLE) || 'Untitled', summary: clip(note.replace(/\s+/g, ' ').trim(), MAX_SUMMARY) || 'Empty note' },
-    },
-  ];
+      id: i === 0 ? itemId : `${itemId}-${i + 1}`,
+      data: {
+        title: clip(words.slice(0, 8).join(' '), MAX_TITLE) || 'Untitled',
+        summary: clip(fact.text.replace(/\s+/g, ' ').trim(), MAX_SUMMARY) || 'Empty note',
+        ...(key === undefined || key === '' ? {} : { key }),
+      },
+    };
+  });
+  const factIds = ops.map((o) => o.id as string);
   let rationale: string;
+  let categoryIds: Array<{ id: string; weight: number }>;
   if (scored.length > 0) {
-    scored.forEach((c, i) => ops.push({ op: 'link', item: itemId, category: c.id, weight: i === 0 ? 0.9 : 0.6 }));
+    categoryIds = scored.map((c, i) => ({ id: c.id, weight: i === 0 ? 0.9 : 0.6 }));
     rationale = `The note shares words with ${scored.map((c) => `"${clip(c.id, MAX_ID)}"`).join(' and ')}.`;
   } else {
     const counts = new Map<string, number>();
@@ -160,23 +172,90 @@ export function demoReply(request: ModelRequest): JsonObject | undefined {
     const best = [...counts.entries()].sort((a, b) => b[1] - a[1] || [...b[0]].length - [...a[0]].length || byId(a[0], b[0]))[0]?.[0];
     const word = best === undefined ? undefined : clip(best, MAX_WORD);
     const id = clip((word ?? 'inbox').replace(/[^\p{L}\p{N}]+/gu, '-'), MAX_ID);
-    ops.push({ op: 'upsertNode', partition: 'category', id, data: { name: capitalise(word ?? 'inbox') } }, { op: 'link', item: itemId, category: id, weight: 0.8 });
+    ops.push({ op: 'upsertNode', partition: 'category', id, data: { name: capitalise(word ?? 'inbox') } });
+    categoryIds = [{ id, weight: 0.8 }];
     rationale = word === undefined ? 'The note has no distinctive words, so it goes to a new "inbox" category.' : `No existing category shares a word with the note, so a new one was made from "${word}".`;
   }
-  const replaces = replacedBy(note, readExisting(request), noteWords);
-  if (replaces !== undefined) rationale = `${rationale} It changes note ${replaces}, which it replaces.`;
-  return { ops, rationale, ...(replaces === undefined ? {} : { replaces: [replaces] }) };
+  for (const fact of factIds) for (const c of categoryIds) ops.push({ op: 'link', item: fact, category: c.id, weight: c.weight });
+  const replaces = replacedBy(note, facts.map((f) => f.text), existing);
+  if (replaces.length > 0) rationale = `${rationale} It changes ${replaces.length === 1 ? `note ${replaces[0]}` : `notes ${replaces.join(', ')}`}, which it replaces.`;
+  return { ops, rationale, ...(replaces.length === 0 ? {} : { replaces }) };
 }
 
-/** The number of the one existing note this note replaces, if it reads like a change and shares enough words with that note. */
-function replacedBy(note: string, existing: ReadonlyArray<readonly [number, string]>, noteWords: readonly string[]): number | undefined {
-  if (existing.length === 0 || !CHANGE_CUE.test(note)) return undefined;
-  let best: { n: number; shared: number } | undefined;
-  for (const [n, text] of existing) {
-    const shared = [...new Set(wordsOf(text))].filter((w) => noteWords.some((x) => same(x, w))).length;
-    if (shared >= REPLACE_SHARED_WORDS && (best === undefined || shared > best.shared)) best = { n, shared };
+const MAX_KEY = 80;
+const FACT_CLIP = 400;
+
+interface DemoFact {
+  readonly text: string;
+  /** A key from the label of a `label: value` fact, when it had one. */
+  readonly key: string | undefined;
+}
+
+/** A key for a fact: its label or subject, then its first two meaningful words, lower case. */
+function keyOf(subject: string | undefined, text: string): string {
+  const own = wordsOf(text).slice(0, 2).join(' ');
+  const head = subject === undefined ? '' : wordsOf(subject).slice(0, 2).join(' ');
+  return clip([head, own].filter(Boolean).join(' / '), MAX_KEY);
+}
+
+/**
+ * The note as facts, for the demo: sentences and `;` clauses are separate facts; `Subject: part, part, part` becomes one fact per part
+ * (each keeping the subject); `Label: value, Label: value` becomes one fact per pair. More than `max` are merged into the last.
+ * Deterministic and simple: a stand-in for a model that reads, not a reader.
+ */
+export function splitFacts(note: string, max: number): DemoFact[] {
+  const segments = note.split(/\n+|(?<=[.!?])\s+(?=[\p{Lu}\p{N}])|;\s*/u).map((s) => s.trim()).filter((s) => [...s].length >= 3);
+  const out: DemoFact[] = [];
+  for (const raw of segments) {
+    const segment = clip(raw, FACT_CLIP);
+    const pairs = segment.split(/,\s*(?=[^,:]{1,25}:\s)/u);
+    const subject = /^([^:,]{1,40}):\s*(.+)$/u.exec(segment);
+    if (pairs.length > 1 && pairs.every((p) => /^[^:]{1,25}:\s*\S/u.test(p))) {
+      for (const p of pairs) out.push({ text: p, key: keyOf(p.slice(0, p.indexOf(':')), p.slice(p.indexOf(':') + 1)) });
+    } else if (subject !== null) {
+      const parts = (subject[2] as string).split(/,\s*(?:and\s+)?/u).map((p) => p.trim().replace(/[.]$/u, '')).filter((p) => [...p].length >= 2);
+      if (parts.length > 1 && !/:/u.test(subject[2] as string)) for (const p of parts) out.push({ text: `${subject[1]}: ${p}`, key: keyOf(subject[1], p) });
+      else out.push({ text: segment, key: keyOf(subject[1], subject[2] as string) });
+    } else out.push({ text: segment, key: keyOf(undefined, segment) });
   }
-  return best?.n;
+  if (out.length === 0) return [{ text: note, key: keyOf(undefined, note) }];
+  if (out.length <= max) return out;
+  const head = out.slice(0, max - 1);
+  const tail = out.slice(max - 1);
+  return [...head, { text: clip(tail.map((f) => f.text).join(' '), FACT_CLIP), key: tail[0]?.key }];
+}
+
+/** The key of an existing fact whose key words all appear in this fact (so an update reuses it), else the fact's own key. */
+function reuseKey(fact: DemoFact, existing: ReadonlyArray<readonly [number, string, string]>): string | undefined {
+  const mine = wordsOf(fact.text);
+  for (const [, , key] of existing) {
+    const keyWords = wordsOf(key);
+    if (keyWords.length > 0 && keyWords.every((w) => mine.some((x) => same(x, w)))) return clip(key, MAX_KEY);
+  }
+  return fact.key;
+}
+
+/**
+ * The numbers of the existing notes this note replaces: only if it reads like a change, then for each fact the best existing note
+ * whose key words are all in the fact, or that shares at least three words with it (one number at most per fact, none twice).
+ */
+function replacedBy(note: string, facts: readonly string[], existing: ReadonlyArray<readonly [number, string, string]>): number[] {
+  if (existing.length === 0 || !CHANGE_CUE.test(note)) return [];
+  const chosen = new Set<number>();
+  for (const text of facts) {
+    const mine = wordsOf(text);
+    let best: { n: number; rank: number } | undefined;
+    for (const [n, existingText, key] of existing) {
+      const shared = [...new Set(wordsOf(existingText))].filter((w) => mine.some((x) => same(x, w))).length;
+      const keyWords = wordsOf(key);
+      const keyHit = keyWords.length > 0 && keyWords.every((w) => mine.some((x) => same(x, w)));
+      if (!keyHit && shared < REPLACE_SHARED_WORDS) continue;
+      const rank = (keyHit ? 1000 : 0) + shared;
+      if (best === undefined || rank > best.rank) best = { n, rank };
+    }
+    if (best !== undefined) chosen.add(best.n);
+  }
+  return [...chosen].sort((a, b) => a - b).slice(0, 5);
 }
 
 /** Rough, but plausible and never zero: about four characters to a token. */

@@ -25,7 +25,10 @@ describe('plannedCalls', () => {
 describe('runEval with filler', () => {
   it('runs every scenario once for each pad size, tags the results and pads with the seed', async () => {
     const r = await runEval({ ...base, scenarios: [sc('a')], arms: ['brain', 'replay'], pads: [0, 6], seed: 3 });
-    expect(r.results.map((x) => [x.pad, x.arm, x.entriesUsed])).toEqual([[0, 'brain', 2], [0, 'replay', 2], [6, 'brain', 8], [6, 'replay', 8]]);
+    // the brain holds facts, so a two-sentence filler note is two entries: at least one per note
+    expect(r.results.map((x) => [x.pad, x.arm])).toEqual([[0, 'brain'], [0, 'replay'], [6, 'brain'], [6, 'replay']]);
+    expect(r.results.map((x) => x.entriesUsed)).toEqual([2, 2, r.results[2].entriesUsed, 8]);
+    expect(r.results[2].entriesUsed).toBeGreaterThanOrEqual(8);
     expect(r.filing.map((f) => f.pad)).toEqual([0, 0, ...Array(8).fill(6)]);
     const again = await runEval({ ...base, scenarios: [sc('a')], arms: ['replay'], pads: [6], seed: 3 });
     expect(again.results[0].entriesUsed).toBe(8);

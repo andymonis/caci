@@ -22,6 +22,8 @@ describe('checkRequest accepts', () => {
 
   it('either kind of meta, which is for the demo and test clients', () => {
     expect(checkRequest(good({ meta: { capability: 'categorise', itemId: 'note-1' } }))).toBeUndefined();
+    expect(checkRequest(good({ meta: { capability: 'categorise', itemId: 'note-1', maxFacts: 1 } }))).toBeUndefined();
+    expect(checkRequest(good({ meta: { capability: 'categorise', itemId: 'note-1', maxFacts: 20 } }))).toBeUndefined();
     expect(checkRequest(good({ meta: { capability: 'status', entryCount: 0, now: 0, timeZone: 'UTC' } }))).toBeUndefined();
   });
 
@@ -47,6 +49,9 @@ describe('checkRequest refuses, as CONFIG, saying which part is wrong', () => {
     ['a meta with another capability', good({ meta: { capability: 'answer' } }), /request\.meta.*capability/],
     ['a categorise meta without an item id', good({ meta: { capability: 'categorise' } }), /request\.meta.*itemId/],
     ['a categorise meta with an empty item id', good({ meta: { capability: 'categorise', itemId: '' } }), /request\.meta.*itemId/],
+    ['a categorise meta with maxFacts 0', good({ meta: { capability: 'categorise', itemId: 'a', maxFacts: 0 } }), /request\.meta.*maxFacts/],
+    ['a categorise meta with a fractional maxFacts', good({ meta: { capability: 'categorise', itemId: 'a', maxFacts: 1.5 } }), /request\.meta.*maxFacts/],
+    ['a categorise meta with text for maxFacts', good({ meta: { capability: 'categorise', itemId: 'a', maxFacts: '2' } }), /request\.meta.*maxFacts/],
     ['a categorise meta with a stray field', good({ meta: { capability: 'categorise', itemId: 'a', extra: 1 } }), /request\.meta.*only/],
     ['a status meta with a fractional count', good({ meta: { capability: 'status', entryCount: 1.5, now: 0, timeZone: 'UTC' } }), /request\.meta.*entryCount/],
     ['a status meta with a negative count', good({ meta: { capability: 'status', entryCount: -1, now: 0, timeZone: 'UTC' } }), /request\.meta.*entryCount/],
