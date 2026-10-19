@@ -5,6 +5,8 @@
 
 import { createApiClient } from './api-client.js';
 import { mountBrainPage } from './brain-page.js';
+import { createLedgerClient } from './ledger-client.js';
+import { mountLedgerPage } from './ledger-page.js';
 import { mountCapturePage } from './capture-page.js';
 import { mountStatusPage } from './status-page.js';
 import { createNotesClient } from './notes-client.js';
@@ -20,8 +22,8 @@ import { createSession } from './session.js';
 import { FORMS, formFeedback, viewOf } from './view.js';
 
 const SCREENS = ['loading', 'unreachable', 'signed-out', 'signed-in'];
-const VIEWS = ['home', 'circles', 'circle', 'invitations', 'status', 'capture', 'brain'];
-const NAV = ['home', 'status', 'capture', 'brain', 'circles', 'invitations'];
+const VIEWS = ['home', 'circles', 'circle', 'invitations', 'status', 'capture', 'brain', 'ledger'];
+const NAV = ['home', 'status', 'capture', 'brain', 'ledger', 'circles', 'invitations'];
 const NO_ENV = Object.freeze({ getHash: () => '', setHash: () => {}, onHashChange: () => {} });
 
 /**
@@ -43,6 +45,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
   const circlePage = mountCirclePage(document, { client: circlesClient, go, onSignedOut: recheck });
   const notesClient = createNotesClient({ fetchFn });
   const brainPage = mountBrainPage(document, { client: notesClient, onSignedOut: recheck });
+  const ledgerPage = mountLedgerPage(document, { ledger: createLedgerClient({ fetchFn }), notes: notesClient, onSignedOut: recheck });
   const capturePage = mountCapturePage(document, { client: notesClient, onWritten: () => brainPage.markStale(), onSignedOut: recheck });
   const statusPage = mountStatusPage(document, { client: notesClient, onSignedOut: recheck });
   const sharingClient = createSharingClient({ fetchFn });
@@ -122,6 +125,7 @@ export function mount(document, fetchFn, env = NO_ENV) {
         sharedPage.reset();
         capturePage.reset();
         brainPage.reset();
+        ledgerPage.reset();
         statusPage.reset();
       }
       shown = null;
@@ -151,6 +155,8 @@ export function mount(document, fetchFn, env = NO_ENV) {
     if (route.name === 'capture') capturePage.show();
     else capturePage.reset();
     if (route.name === 'brain') brainPage.show();
+    if (route.name === 'ledger') ledgerPage.show();
+    else ledgerPage.reset();
     $(headingIdFor(route)).focus();
   }
 

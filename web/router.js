@@ -11,6 +11,7 @@
 //   #/status            ask CaCi for a status update
 //   #/capture           file a note
 //   #/brain             browse your own categories and items
+//   #/ledger            the change log of a brain (what was added, updated or removed)
 
 import { isCircleId } from './circles-client.js';
 
@@ -20,6 +21,7 @@ const INVITATIONS = Object.freeze({ name: 'invitations' });
 const STATUS = Object.freeze({ name: 'status' });
 const CAPTURE = Object.freeze({ name: 'capture' });
 const BRAIN = Object.freeze({ name: 'brain' });
+const LEDGER = Object.freeze({ name: 'ledger' });
 const CIRCLE_PREFIX = '#/circles/';
 
 /** The route an address hash names; anything that is not exactly one of ours is home. */
@@ -30,6 +32,7 @@ export function parseHash(hash) {
   if (hash === '#/status') return STATUS;
   if (hash === '#/capture') return CAPTURE;
   if (hash === '#/brain') return BRAIN;
+  if (hash === '#/ledger') return LEDGER;
   if (hash.startsWith(CIRCLE_PREFIX)) {
     const id = hash.slice(CIRCLE_PREFIX.length);
     return isCircleId(id) ? Object.freeze({ name: 'circle', id }) : HOME;
@@ -45,6 +48,7 @@ export function hashFor(route) {
   if (route.name === 'status') return '#/status';
   if (route.name === 'capture') return '#/capture';
   if (route.name === 'brain') return '#/brain';
+  if (route.name === 'ledger') return '#/ledger';
   if (route.name === 'circle' && isCircleId(route.id)) return `${CIRCLE_PREFIX}${route.id}`;
   return '#/';
 }

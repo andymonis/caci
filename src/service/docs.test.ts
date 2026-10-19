@@ -221,7 +221,7 @@ describe('the web app section of the README', () => {
     const documented = [...webSection.matchAll(/^\| `([a-z-]+\.(?:html|js|css))` \|/gm)].map((m) => m[1] as string);
     expect(documented.sort()).toEqual(WEB_FILE_SPECS.map((s) => s.file).sort());
     expect(documented).toHaveLength(WEB_FILE_SPECS.length);
-    expect(webSection).toContain(`only these ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five', 'twenty-six', 'twenty-seven', 'twenty-eight', 'twenty-nine', 'thirty', 'thirty-one', 'thirty-two', 'thirty-three', 'thirty-four'][WEB_FILE_SPECS.length]}`);
+    expect(webSection).toContain(`only these ${['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five', 'twenty-six', 'twenty-seven', 'twenty-eight', 'twenty-nine', 'thirty', 'thirty-one', 'thirty-two', 'thirty-three', 'thirty-four', 'thirty-five', 'thirty-six'][WEB_FILE_SPECS.length]}`);
   });
 
   it('prints exactly the policy the service sends, and its other headers', () => {
@@ -245,10 +245,11 @@ describe('the web app section of the README', () => {
   it('lists exactly the seven addresses the router knows, and each one is a screen the router returns', async () => {
     const { parseHash } = await loadWeb<{ parseHash: (hash: string) => Route }>('router.js');
     const documented = [...webSection.matchAll(/^\| `(#\/[^`]*)` \|/gm)].map((m) => m[1] as string);
-    expect(documented).toEqual(['#/', '#/circles', '#/circles/<id>', '#/invitations', '#/status', '#/capture', '#/brain']);
+    expect(documented).toEqual(['#/', '#/circles', '#/circles/<id>', '#/invitations', '#/status', '#/capture', '#/brain', '#/ledger']);
     expect(parseHash('#/status')).toEqual({ name: 'status' });
     expect(parseHash('#/capture')).toEqual({ name: 'capture' });
     expect(parseHash('#/brain')).toEqual({ name: 'brain' });
+    expect(parseHash('#/ledger')).toEqual({ name: 'ledger' });
     expect(parseHash('#/')).toEqual({ name: 'home' });
     expect(parseHash('#/circles')).toEqual({ name: 'circles' });
     expect(parseHash('#/circles/c0123456789abcdef')).toMatchObject({ name: 'circle' });

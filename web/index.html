@@ -84,6 +84,7 @@
         <a id="nav-status" href="#/status">Status</a>
         <a id="nav-capture" href="#/capture">Capture</a>
         <a id="nav-brain" href="#/brain">Brain</a>
+        <a id="nav-ledger" href="#/ledger">Change log</a>
         <a id="nav-circles" href="#/circles">Circles</a>
         <a id="nav-invitations" href="#/invitations">Invitations</a>
       </nav>
@@ -413,6 +414,23 @@
           <ul id="brain-item-categories" class="rows"></ul>
           <p id="brain-item-more" class="hint" hidden></p>
         </section>
+      </section>
+
+      <section id="view-ledger" hidden>
+        <h2 id="ledger-heading" tabindex="-1">Change log</h2>
+        <p id="ledger-notice" class="notice"></p>
+        <div class="field">
+          <label for="ledger-scope">Which notes?</label>
+          <select id="ledger-scope" name="scope" aria-describedby="ledger-scope-hint"></select>
+          <p id="ledger-scope-hint" class="hint"></p>
+        </div>
+        <p id="ledger-status" role="status" hidden></p>
+        <p id="ledger-error" class="error" role="alert" tabindex="-1" hidden></p>
+        <p id="ledger-gone" hidden><span id="ledger-gone-hint"></span> <button type="button" id="ledger-gone-back" class="link">Go to your own notes</button></p>
+        <p><button type="button" id="ledger-refresh" class="link">Refresh</button></p>
+        <p id="ledger-empty" hidden></p>
+        <ul id="ledger-list" class="plain" hidden></ul>
+        <button type="button" id="ledger-more" hidden>Show more</button>
       </section>
 
       <section id="view-invitations" hidden>

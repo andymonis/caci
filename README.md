@@ -348,7 +348,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these thirty-four, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these thirty-six, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -365,6 +365,8 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `brain-page.js` | puts the Brain screen on the page: the categories, the items in one, one item (read-only) |
 | `brain-view.js` | the words on the Brain screen: row text, the empty brain, the shortened mark |
 | `ledger-client.js` | reads the change log of a brain, read-only |
+| `ledger-page.js` | puts the change-log screen on the page |
+| `ledger-view.js` | the words on the change-log screen |
 | `ledger-session.js` | what the change-log screen shows: one brain's entries, newest first, a page at a time; held in memory only |
 | `scope-session.js` | which brains the person can capture into and read: their own, each circle (observers read only), and the combined view |
 | `brain-session.js` | what the Brain screen shows: the categories, the items in one, one item (read-only, the selection is page state) |
@@ -432,6 +434,7 @@ Three more screens (the first is described under **Asking for a status update**)
 | `#/status` | ask CaCi for a status update: which model answers and what is sent, the request box, the answer |
 | `#/capture` | file a note: which model files it, the note box, the preview, approve or reject |
 | `#/brain` | browse your own notes: the categories, the items in one, one item (read-only) |
+| `#/ledger` | the change log of a brain: what was added, updated or removed, when and by whom, newest first (a review log, not a record of every version) |
 
 **The page says which model files the note, before it is sent.** It asks the service (`GET /api/capture/mode`) when the capture screen opens, shows the answer, and keeps the Propose button disabled until it knows. In the default mode nothing leaves the machine; with the real model the note and the names of your categories are sent to Anthropic and are not anonymised (the operator chooses this for every account at once; see **Capturing notes through the API**). The words are these, and the preview repeats the mode its own proposal carries:
 

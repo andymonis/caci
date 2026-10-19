@@ -57,4 +57,31 @@ describe('a new fact replaces the old one, through the capture page', () => {
     expect(after.itemCount).toBe(afterFirst.itemCount);
     expect(afterFirst.itemCount).toBe(start.itemCount + 1);
   });
+
+  it('the change-log screen shows the replacement: what was removed, said in full, and who made the change', async () => {
+    const w = await world();
+    const ann = browser(w.ann, '#/capture');
+    await waitFor(() => !el(ann, 'view-capture').hidden && !el(ann, 'capture-submit').disabled);
+    await propose(ann, 'Mum takes Tablet A twice a day with food');
+    el(ann, 'capture-approve').fire('click');
+    await waitFor(() => !el(ann, 'capture-outcome').hidden);
+    el(ann, 'capture-again').fire('click');
+    await propose(ann, 'Change: Mum takes Tablet A once a day with food now');
+    el(ann, 'capture-approve').fire('click');
+    await waitFor(() => !el(ann, 'capture-outcome').hidden);
+
+    const bob = browser(w.bob, '#/ledger');
+    await waitFor(() => !el(bob, 'ledger-empty').hidden);
+    expect(lineTexts(bob, 'ledger-list')).toEqual([]); // bob's own log is empty: nothing of ann's is shown to him
+    expect(el(bob, 'ledger-empty').hidden).toBe(false);
+
+    ann.go('#/ledger');
+    await waitFor(() => !el(ann, 'view-ledger').hidden && el(ann, 'ledger-list').children.length > 0);
+    const lines = lineTexts(ann, 'ledger-list');
+    expect(lines.some((l) => l.includes('· Display ann · removed note ·') && l.includes('twice a day'))).toBe(true);
+    expect(lines.filter((l) => l.includes('added note'))).toHaveLength(2);
+    expect(lines.every((l) => l.includes('· Display ann ·'))).toBe(true);
+    expect(el(ann, 'ledger-notice').textContent).toContain('review log');
+    expect(ann.page.focused().id).toBe('ledger-heading');
+  });
 });
