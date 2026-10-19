@@ -25,6 +25,10 @@ export interface GuardOptions {
   readonly maxRationaleChars?: number;
   /** Most existing notes the reply may name in `replaces`. 0 switches replacing off. */
   readonly maxReplaces?: number;
+  /** Most fact items one reply may hold (R-015). 1 is exactly one item per note. */
+  readonly maxFacts?: number;
+  /** Longest fact key, in characters. */
+  readonly keyMaxChars?: number;
 }
 
 /** What the guard enforces, all of it: it comes from the controls' settings (and per call, from the options), never from constants here. */
@@ -32,7 +36,7 @@ export type GuardSettings = Required<GuardOptions>;
 
 /** The guard's settings from the controls, so the guard, the prompt and the schema all follow the same numbers. */
 export function guardSettingsOf(settings: CategoriseSettings): GuardSettings {
-  return { maxOps: settings.maxOps, maxDataBytes: settings.maxDataBytes, maxIdLength: settings.maxIdLength, maxOutputChars: settings.maxOutputChars, maxRationaleChars: settings.maxRationaleChars, maxReplaces: settings.maxReplaces };
+  return { maxOps: settings.maxOps, maxDataBytes: settings.maxDataBytes, maxIdLength: settings.maxIdLength, maxOutputChars: settings.maxOutputChars, maxRationaleChars: settings.maxRationaleChars, maxReplaces: settings.maxReplaces, maxFacts: settings.maxFacts, keyMaxChars: settings.keyMaxChars };
 }
 
 /** A reply that passed every check: a mutation the controller can preview, and the model's reason. */
@@ -105,8 +109,15 @@ function checkShape(value: unknown, context: GuardContext, options: Required<Gua
   if (ops.length === 0) return { ...none, problems: [...problems, 'ops: must contain at least one operation'] };
   if (ops.length > options.maxOps) return { ...none, problems: [...problems, `ops: ${ops.length} operations, over the limit of ${options.maxOps}`] };
 
-  let itemUpserts = 0;
+  // The facts (R-015): item upserts in order, using the controller's ids: itemId, itemId-2, itemId-3 ...
+  const factId = (k: number): string => (k === 1 ? context.itemId : `${context.itemId}-${k}`);
+  const facts: string[] = [];
+  ops.forEach((op: unknown) => {
+    if (isObject(op) && op.op === 'upsertNode' && op.partition === 'item') facts.push(typeof op.id === 'string' ? op.id : '');
+  });
   let links = 0;
+  const linked = new Set<string>();
+  let nextFact = 0;
   ops.forEach((op: unknown, i) => {
     const where = `ops[${i}]`;
     if (!isObject(op)) return void problems.push(`${where}: must be an object`);
@@ -118,16 +129,30 @@ function checkShape(value: unknown, context: GuardContext, options: Required<Gua
     for (const key of Object.keys(op)) if (!allowed.includes(key)) problems.push(unknownKey(where, key));
     if (name === 'upsertNode') {
       if (op.partition === 'item') {
-        itemUpserts++;
-        if (op.id !== context.itemId) problems.push(`${where}: the note's item id must be exactly ${JSON.stringify(context.itemId)}`);
+        nextFact++;
+        const expected = factId(nextFact);
+        if (nextFact <= options.maxFacts && op.id !== expected) problems.push(`${where}: the ${nextFact === 1 ? "note's" : `fact ${nextFact}'s`} item id must be exactly ${JSON.stringify(expected)}`);
+        const data = op.data;
+        if (isObject(data) && data.key !== undefined) {
+          if (typeof data.key !== 'string' || data.key.trim() === '' || [...data.key].length > options.keyMaxChars || /\p{Cc}/u.test(data.key)) problems.push(`${where}: data.key must be 1 to ${options.keyMaxChars} characters of plain text`);
+        }
       } else if (op.partition !== 'category') problems.push(`${where}: partition must be "item" or "category"`);
     } else {
       links++;
-      if (op.item !== context.itemId) problems.push(`${where}: a link's item must be exactly ${JSON.stringify(context.itemId)}`);
+      if (typeof op.item === 'string') linked.add(op.item);
+      if (!facts.includes(op.item as string)) {
+        problems.push(options.maxFacts === 1 || facts.length <= 1 ? `${where}: a link's item must be exactly ${JSON.stringify(context.itemId)}` : `${where}: a link's item must be the id of one of this reply's facts`);
+      }
       if (op.weight !== undefined && !(typeof op.weight === 'number' && op.weight >= 0 && op.weight <= 1)) problems.push(`${where}: weight must be a number from 0 to 1`);
     }
   });
-  if (itemUpserts !== 1) problems.push(`there must be exactly one upsertNode for the note's item, found ${itemUpserts}`);
+  if (options.maxFacts === 1) {
+    if (facts.length !== 1) problems.push(`there must be exactly one upsertNode for the note's item, found ${facts.length}`);
+  } else {
+    if (facts.length < 1 || facts.length > options.maxFacts) problems.push(`there must be 1 to ${options.maxFacts} upsertNode operations for items (one per fact), found ${facts.length}`);
+    else if (new Set(facts).size !== facts.length) problems.push('two facts use the same item id');
+    for (const fact of facts) if (!linked.has(fact)) problems.push(`the fact ${JSON.stringify(fact)} has no link to a category`);
+  }
   if (links === 0) problems.push('there must be at least one link from the note to a category');
   return { problems, ops: ops as Array<Record<string, unknown>>, replaces, ...(rationale === undefined ? {} : { rationale }) };
 }

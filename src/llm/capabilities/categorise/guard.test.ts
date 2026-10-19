@@ -125,9 +125,10 @@ describe('the note\'s item id belongs to the controller', () => {
     for (const id of ['Note-1', 'note-1 ', ' note-1', 'note-1\n']) expect(guard(json({ ops: [{ ...ITEM, id }, LINK] })).ok).toBe(false);
   });
 
-  it('needs exactly one item and at least one link', () => {
-    expect(message(json({ ops: [LINK] }))).toContain('exactly one upsertNode for the note\'s item, found 0');
-    expect(message(json({ ops: [ITEM, ITEM, LINK] }))).toContain('found 2');
+  it('needs exactly one item (when one fact is allowed) and at least one link', () => {
+    expect(message(json({ ops: [LINK] }), { maxFacts: 1 })).toContain('exactly one upsertNode for the note\'s item, found 0');
+    expect(message(json({ ops: [ITEM, ITEM, LINK] }), { maxFacts: 1 })).toContain('found 2');
+    expect(message(json({ ops: [LINK] }))).toContain('1 to 8 upsertNode operations for items (one per fact), found 0');
     expect(message(json({ ops: [ITEM, CATEGORY] }))).toContain('at least one link');
   });
 
@@ -238,9 +239,9 @@ describe('size limits', () => {
   });
 
   it('takes its limits from the controls and from nowhere else', () => {
-    expect(SETTINGS).toEqual({ maxOps: 40, maxDataBytes: 4096, maxIdLength: 128, maxOutputChars: 32_000, maxRationaleChars: 500, maxReplaces: 5 });
+    expect(SETTINGS).toEqual({ maxFacts: 8, keyMaxChars: 80, maxOps: 40, maxDataBytes: 4096, maxIdLength: 128, maxOutputChars: 32_000, maxRationaleChars: 500, maxReplaces: 5 });
     const tight = guardSettingsOf({ ...SHIPPED_CONTROLS.categorise.settings, maxOps: 2, maxOutputChars: 1500, maxRationaleChars: 5, maxIdLength: 10, maxDataBytes: 500, maxReplaces: 1 });
-    expect(tight).toEqual({ maxOps: 2, maxDataBytes: 500, maxIdLength: 10, maxOutputChars: 1500, maxRationaleChars: 5, maxReplaces: 1 });
+    expect(tight).toEqual({ maxOps: 2, maxDataBytes: 500, maxIdLength: 10, maxOutputChars: 1500, maxRationaleChars: 5, maxReplaces: 1, maxFacts: 8, keyMaxChars: 80 });
   });
 });
 
@@ -359,5 +360,57 @@ describe('replaces (R-014)', () => {
   });
   it('it is the only addition: other unknown top-level fields are still refused', () => {
     expect(guard(json({ ...GOOD, replace: [1] }), undefined, shown(2)).ok).toBe(false);
+  });
+});
+
+describe('facts (R-015)', () => {
+  const fact = (k: number, extra: Record<string, unknown> = {}) => ({ op: 'upsertNode', partition: 'item', id: k === 1 ? 'note-1' : `note-1-${k}`, data: { title: `Fact ${k}`, summary: `Statement ${k}.`, ...extra } });
+  const link = (k: number, category = 'doctor-x') => ({ op: 'link', item: k === 1 ? 'note-1' : `note-1-${k}`, category, weight: 0.8 });
+  const two = { ops: [fact(1, { key: 'mum / dob' }), fact(2, { key: 'mum / phone' }), CATEGORY, link(1), link(2)] };
+
+  it('accepts several facts with the minted ids in order, each linked, with keys', () => {
+    const r = guard(json(two));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.mutation.ops.filter((o) => o.op === 'upsertNode' && o.partition === 'item')).toHaveLength(2);
+  });
+  it('a key is optional', () => {
+    expect(guard(json({ ops: [fact(1), fact(2), CATEGORY, link(1), link(2)] })).ok).toBe(true);
+  });
+  it('accepts exactly maxFacts facts and refuses one more', () => {
+    const n = (count: number) => ({ ops: [...Array.from({ length: count }, (_, i) => fact(i + 1)), CATEGORY, ...Array.from({ length: count }, (_, i) => link(i + 1))] });
+    expect(guard(json(n(8))).ok).toBe(true);
+    expect(message(json(n(9)))).toContain('1 to 8 upsertNode operations for items (one per fact), found 9');
+    expect(guard(json(n(3)), { maxFacts: 3 }).ok).toBe(true);
+    expect(message(json(n(3)), { maxFacts: 2 })).toContain('1 to 2');
+  });
+  it('refuses an id that was not minted, a gap, a repeat and a wrong order, naming the fact', () => {
+    expect(message(json({ ops: [fact(1), { ...fact(2), id: 'note-1-3' }, CATEGORY, link(1), link(2)] }))).toContain('fact 2\'s item id must be exactly "note-1-2"');
+    expect(message(json({ ops: [fact(1), fact(3), CATEGORY, link(1), link(3)] }))).toContain('fact 2\'s item id must be exactly "note-1-2"');
+    expect(message(json({ ops: [fact(1), fact(1), CATEGORY, link(1)] }))).toContain('two facts use the same item id');
+    expect(message(json({ ops: [fact(2), fact(1), CATEGORY, link(1), link(2)] }))).toContain('the note\'s item id must be exactly "note-1"');
+    expect(message(json({ ops: [{ ...fact(1), id: 'someone-elses' }, CATEGORY, { ...link(1), item: 'someone-elses' }] }))).toContain('the note\'s item id must be exactly "note-1"');
+  });
+  it('every fact needs a link, and a link must come from one of the facts', () => {
+    expect(message(json({ ops: [fact(1), fact(2), CATEGORY, link(1)] }))).toContain('the fact "note-1-2" has no link to a category');
+    expect(message(json({ ops: [fact(1), CATEGORY, link(1), link(2)] }))).toContain('a link\'s item must be exactly "note-1"');
+    expect(message(json({ ops: [fact(1), fact(2), CATEGORY, link(1), link(2), { ...link(1), item: 'note-9' }] }))).toContain('a link\'s item must be the id of one of this reply\'s facts');
+  });
+  it('the key must be plain text of 1 to keyMaxChars characters', () => {
+    for (const key of ['', '   ', 5, 'a\nb', 'x'.repeat(81), null]) expect(message(json({ ops: [fact(1, { key }), CATEGORY, link(1)] })), String(key)).toContain('data.key must be 1 to 80 characters of plain text');
+    expect(guard(json({ ops: [fact(1, { key: 'x'.repeat(80) }), CATEGORY, link(1)] })).ok).toBe(true);
+    expect(guard(json({ ops: [fact(1, { key: '😀'.repeat(80) }), CATEGORY, link(1)] })).ok).toBe(true);
+    expect(message(json({ ops: [fact(1, { key: 'ab' }), CATEGORY, link(1)] }), { keyMaxChars: 1 })).toContain('1 to 1 characters');
+  });
+  it('with one fact allowed a second item is refused as before', () => {
+    expect(message(json(two), { maxFacts: 1 })).toContain('exactly one upsertNode for the note\'s item, found 2');
+    expect(guard(json(GOOD), { maxFacts: 1 }).ok).toBe(true);
+  });
+  it('with one fact allowed, a link from any other id says exactly which id', () => {
+    expect(message(json({ ops: [fact(1), fact(2), CATEGORY, link(1), link(2), { ...link(1), item: 'note-9' }] }), { maxFacts: 1 })).toContain('a link\'s item must be exactly "note-1"');
+  });
+  it('lists every problem at once', () => {
+    const r = inspectReply(json({ ops: [fact(1, { key: '' }), { ...fact(2), id: 'bad' }, CATEGORY, link(1)] }), CONTEXT, SETTINGS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.length).toBeGreaterThanOrEqual(3);
   });
 });
