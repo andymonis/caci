@@ -21,6 +21,7 @@ const SPECS = [
   { name: 'R-011', file: 'specs/R-011-status-updates.md', minReferences: 45, minThreats: 8, criteria: 12, prefix: 'ST-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
   { name: 'R-012', file: 'specs/R-012-controllable-llm.md', minReferences: 40, minThreats: 7, criteria: 12, prefix: 'CL-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 7 },
   { name: 'R-013', file: 'specs/R-013-brain-evaluation.md', minReferences: 40, minThreats: 6, criteria: 10, prefix: 'BE-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
+  { name: 'R-014', file: 'specs/R-014-current-view-brain.md', minReferences: 40, minThreats: 7, criteria: 12, prefix: 'CV-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
 ] as const;
 
 for (const info of SPECS) {

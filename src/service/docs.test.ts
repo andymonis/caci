@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { CIRCLE_STATUS_OF, createAccountRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
 import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
 import { CACI_ERROR_CODES, caciError, DEFAULT_STATUS_CONTEXT_LIMITS, MAX_STATUS_REQUEST_CHARS, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
-import { DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
+import { DEFAULT_CANDIDATE_OPTIONS, DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
+import { createLedgerRoutes } from '../api/index.js';
 import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
 import { DEFAULT_GRANT_LIMITS } from '../sharing/index.js';
 import { CONTROL_FILES, SETTING_RANGES, SLOT_RULES } from '../llm/index.js';
@@ -26,7 +27,7 @@ function section(title: string): string {
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
 /** Settings the service reads that the README does not describe yet (emptied by the README task, T-194). */
-const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_LEDGER_DAYS'];
+const NOT_DOCUMENTED_YET: readonly string[] = [];
 const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
 
 describe('the user accounts section of the README', () => {
@@ -480,5 +481,58 @@ describe('the controls section of the README', () => {
 
   it('the Pi runbook points at it', () => {
     expect(section('Running on a Raspberry Pi')).toContain('Controlling what the model is told');
+  });
+});
+
+const viewSection = section('The current-view brain and its change log');
+
+describe('the current-view brain section of the README', () => {
+  it('lists exactly the change-log route the server has, and the setting with its default and range', () => {
+    const real = createLedgerRoutes({ caci: {} as never }).map((r) => `${r.method} ${r.path}`);
+    const documented = [...viewSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented).toEqual(real);
+    expect(real).toEqual(['GET /api/ledger']);
+    expect(defaults.ok ? defaults.value.ledgerDays : 0).toBe(90);
+    expect(viewSection).toContain(`\`CACI_LEDGER_DAYS\` days (default ${defaults.ok ? defaults.value.ledgerDays : 0}, 1 to 3650`);
+    expect(readme).toMatch(/\| `CACI_LEDGER_DAYS` \|[^|]*\| `90` \|/);
+    expect(parseServiceConfig({ CACI_LEDGER_DAYS: '3650' }).ok).toBe(true);
+    expect(parseServiceConfig({ CACI_LEDGER_DAYS: '3651' }).ok).toBe(false);
+    expect(parseServiceConfig({ CACI_LEDGER_DAYS: '0' }).ok).toBe(false);
+  });
+
+  it('states the limits that are in the code and the controls: 8 candidates, 5 replaces, 200 and 400 characters', () => {
+    expect(DEFAULT_CANDIDATE_OPTIONS.maxCandidates).toBe(8);
+    expect(viewSection).toContain(`up to ${DEFAULT_CANDIDATE_OPTIONS.maxCandidates} notes`);
+    const shipped = JSON.parse(readFileSync(new URL('../../controls/categorise/settings.json', import.meta.url), 'utf8')) as { maxReplaces: number };
+    expect(shipped.maxReplaces).toBe(5);
+    expect(viewSection).toContain(`more than ${shipped.maxReplaces} is refused`);
+    expect(SETTING_RANGES.categorise.maxReplaces).toEqual([0, 20]);
+    expect(viewSection).toContain('`maxReplaces` to `0`');
+    expect(viewSection).toContain('cut to 200 and 400 characters');
+  });
+
+  it('prints the warning in the exact words the service prints, and the preview words the page uses', async () => {
+    expect(readFileSync(new URL('../caci/controller.ts', import.meta.url), 'utf8')).toContain('the change was made but could not be recorded in the change log');
+    expect(viewSection).toContain('the change was made but could not be recorded in the change log');
+    const view = await loadWeb<{ replaceLines: (s: unknown) => string[] }>('capture-view.js');
+    const line = view.replaceLines({ removed: [{ id: 'x', title: 'TITLE', summary: '' }] })[0] as string;
+    const [head, tail] = line.split('TITLE.') as [string, string];
+    expect(viewSection).toContain(`"${head}`);
+    expect(viewSection).toContain(tail.trim());
+  });
+
+  it('names its specification, which exists, the screen address and the commands', () => {
+    expect(viewSection).toContain('specs/R-014-current-view-brain.md');
+    expect(existsSync(new URL('../../specs/R-014-current-view-brain.md', import.meta.url))).toBe(true);
+    expect(viewSection).toContain('`#/ledger`');
+    for (const v of viewSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+    for (const m of viewSection.matchAll(/npm run ([\w:-]+)/g)) expect(pkg.scripts, m[1]).toHaveProperty(m[1] as string);
+    expect(viewSection).toContain('--no-replace');
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['only the current view', 'The model never writes a delete', 'without their ids', 'a number that was not shown, a repeat, or more than 5 is refused and repaired once', 'The service turns the numbers into ids', 'Only notes are replaced directly', 'The preview says so before you approve', 'A note that only adds a different fact replaces nothing', 'A note is a whole item', 'takes with it any detail the old note held', 'anyone who may capture', 'an observer cannot capture', 'the removed title and summary', 'a review log, not a history', 'is not used to answer questions', 'A stranger, the administrator who is not a member, and a made-up circle all get the same 404', 'not one transaction', 'never undoes the change', 'nothing is requested until you open it', 'A model can choose wrongly', 'They do not prevent it', 'misses a paraphrase', 'plain text in `users.db`', 'Restoring from the log and questions about history are not built']) {
+      expect(viewSection.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
   });
 });

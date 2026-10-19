@@ -293,6 +293,7 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_MAX_MEMBERS_PER_CIRCLE` | People one circle may hold (1 to 1,000) | `50` |
 | `CACI_INVITATION_DAYS` | How long an invitation to a circle stays open (1 to 365) | `7` |
 | `CACI_MAX_BRAIN_SCOPES` | Most brains My Brain may combine: your own plus circles (2 to 100) | `25` |
+| `CACI_LEDGER_DAYS` | How long the change log keeps its entries (1 to 3650), see [The current-view brain and its change log](#the-current-view-brain-and-its-change-log) | `90` |
 | `CACI_STATUS_PER_HOUR` | Status updates one account may ask for in an hour (1 to 1,000), see [Asking for a status update](#asking-for-a-status-update) | `20` |
 
 Listening on anything but this machine (`CACI_BIND=0.0.0.0`, say) is refused unless `CACI_COOKIE_SECURE=true`, or you also set `CACI_ALLOW_INSECURE=true` to say you accept that session cookies cross the network in the clear.
@@ -512,6 +513,41 @@ Failures are `{ error: { code, message } }` with these statuses: 401 not signed 
 - Notes and categories are stored in `graphs.db` as plain text, readable only by the file's owner; see the warning about encryption above.
 - With `anthropic`, see the paragraph above: nothing is anonymised. The proof of concept was built for its owner's own data; do not put other people's on a service with the real model switched on until pseudonymisation exists (it is in the plan's Backlog).
 - A note is data, never instructions: the model can only propose `upsertNode` and `link` on your own graph, and you see them before they are written.
+
+## The current-view brain and its change log
+
+The brain keeps **only the current view**. When a new note changes something an older note said (a dose that was `2 x Tablet A` and is now `1 x Tablet B`), the old note is **deleted** in the same all-or-nothing write that adds the new one, so the graph, the status answers and what is shared all show the current fact and the graph does not fill with stale ones. It is specified in `specs/R-014-current-view-brain.md`, with its threats, the tests that cover each and its residual risks. It applies to your own brain and to circle brains.
+
+### What is replaced, and when
+
+- **The model never writes a delete.** The service finds up to 8 notes in the same brain that share words with the new one (a deterministic word-overlap search, not the model) and shows them to the categoriser numbered `[1]`, `[2]`... without their ids. The model may add `replaces: [numbers]` to its reply; a number that was not shown, a repeat, or more than 5 is refused and repaired once. The service turns the numbers into ids and builds the deletes itself.
+- **Only notes are replaced directly.** After the write, a category that was left with no notes is removed too, and one the new note links to never is. A failure to tidy never fails the approval.
+- **The preview says so before you approve**: "This note replaces: ... The old note will be removed when you approve." and the removal appears in the operations. After approval the outcome says what went ("removed 1 old note and 1 empty category"). A note that only adds a different fact replaces nothing.
+- **A note is a whole item.** A note with several facts replaces whole notes or none, and a replacing note takes with it any detail the old note held and the new one does not repeat (the ward of a moved appointment): restate what still matters. This is the cost of keeping only the current view; `npm run brain-eval` measures it (see below).
+- **In a circle**, anyone who may capture (owner, manager, member) may replace any note in that circle's brain, including another member's; an observer cannot capture. The role is read again at approval.
+- Switch it off by setting `maxReplaces` to `0` in `controls/categorise/settings.json` (see [Controlling what the model is told](#controlling-what-the-model-is-told)): every note is then only added, as before.
+
+### The change log
+
+After a successful approval the service records one line per change: when, who, added, updated or removed, the note or category, and for a removal **the removed title and summary** (cut to 200 and 400 characters), so a wrong deletion can be recognised and the note typed in again. **It is a review log, not a history**: it is kept for `CACI_LEDGER_DAYS` days (default 90, 1 to 3650; older entries are removed at start-up and once a day), and it is not used to answer questions. A circle's log is deleted with the circle and your personal log with your account.
+
+| Route | What it does |
+|-------|--------------|
+| `GET /api/ledger` | The log of one brain, newest first: `scope` is `personal` (the default) or `circle:<id>`, with `limit` and `cursor`. Needs the session cookie. |
+
+You can read your own log, and a circle's log if you may read the circle (any role). A stranger, the administrator who is not a member, and a made-up circle all get the same 404. Unknown parameters are refused by name.
+
+The write and the log are in two databases, so they are not one transaction: the write comes first, and **a failed log line never undoes the change**. The service prints a warning ("the change was made but could not be recorded in the change log"); the same goes for a failed tidy. Neither shows notes or ids.
+
+### In the web app
+
+The capture preview and outcome say what is removed. The **Change log** screen (`#/ledger`) shows the log of your own notes or of a circle, one line per change ("2026-10-14 09:30 UTC · Ann A · removed note · "Mum: 2 x Tablet A a day""), with Show more and Refresh; nothing is requested until you open it, and it is forgotten when you leave. It says it is a review log kept for a limited time (90 days unless the operator chose otherwise) and not a full record of every version.
+
+### What is not protected
+
+- **A model can choose wrongly.** The limits (at most 5 notes, only ones it was shown, the same brain) bound a wrong deletion, the preview lets you see it, and the log keeps the removed text. They do not prevent it. Whether replacing helps is measured, not assumed: run `npm run brain-eval -- --demo` for the plumbing or a real run with and without `--no-replace` and compare the saved results (`--compare`); the report counts the answers that lost their fact to a deletion.
+- The word-overlap search misses a paraphrase that shares no word, so a stale note can stay.
+- The log and the removed text are plain text in `users.db`, readable by whoever can read the file and by every member who may read a circle's log. Restoring from the log and questions about history are not built.
 
 ## Circles
 
