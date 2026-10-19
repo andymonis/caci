@@ -19,6 +19,7 @@ describe('summarise: ordinary proposals', () => {
     const s = sum(mutation(upsertItem('n1'), upsertCategory('doctor'), link('n1', 'doctor')));
     expect(s).toEqual({
       newItems: ['n1'],
+      facts: [{ id: 'n1', title: 'n1', summary: '' }],
       updatedItems: [],
       newCategories: ['doctor'],
       updatedCategories: [],
@@ -303,5 +304,23 @@ describe('summarise: notes that a new note replaces (R-014)', () => {
     expect(describeSummary(s)).toContain('  - line break: x y');
     const untitled = withOffered(mutation(del('a b"c')), [{ id: 'a b"c', title: '', summary: '' }]);
     expect(describeSummary(untitled)).toContain('  - "a b\\"c"');
+  });
+});
+
+describe('summarise: facts (R-015)', () => {
+  const fact = (id: string, title: string, summary: string): Op => ({ op: 'upsertNode', partition: 'item', id, mode: 'merge', data: { title, summary } });
+  it('lists each new item with its title and summary, once, in order', () => {
+    const s = sum(mutation(fact('a', 'Mum: phone', '0770'), fact('b', 'Mum: DoB', '4 June'), fact('a', 'again', 'x'), upsertCategory('mum'), link('a', 'mum'), link('b', 'mum')));
+    expect(s.facts).toEqual([{ id: 'a', title: 'Mum: phone', summary: '0770' }, { id: 'b', title: 'Mum: DoB', summary: '4 June' }]);
+  });
+  it('an item that already exists is updated, not a new fact; data that is not text reads as empty', () => {
+    const s = sum(mutation(fact('old', 't', 's'), { op: 'upsertNode', partition: 'item', id: 'n', mode: 'merge', data: { title: 5 } } as unknown as Op), { items: ['old'], categories: [] });
+    expect(s.facts).toEqual([{ id: 'n', title: '', summary: '' }]);
+    expect(s.updatedItems).toEqual(['old']);
+  });
+  it('the text says "adds N facts" only for more than one, and shows line breaks as spaces', () => {
+    const many = describeSummary(sum(mutation(fact('a', 'Line\none', 'Two\nlines'), fact('b', '', ''), upsertCategory('c'), link('a', 'c'), link('b', 'c'))));
+    expect(many).toContain('This note adds 2 facts:\n  - Line one: Two lines\n  - b');
+    expect(describeSummary(sum(mutation(fact('a', 't', 's'), upsertCategory('c'), link('a', 'c'))))).not.toContain('This note adds');
   });
 });

@@ -5,6 +5,16 @@
 ```ts
 
 // @public
+export interface AddedFact {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly summary: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
 export const APP_ERROR_CODES: readonly ["INVALID_INPUT", "UNSUPPORTED_INPUT", "NORMALISER_FAILED", "TOO_MANY_PENDING", "PROPOSAL_NOT_FOUND", "PROPOSAL_EXPIRED", "UNEXPECTED"];
 
 // @public (undocumented)
@@ -242,6 +252,7 @@ export interface PendingProposal {
 
 // @public
 export interface ProposalSummary {
+    readonly facts: readonly AddedFact[];
     // (undocumented)
     readonly newCategories: readonly string[];
     readonly newItems: readonly string[];

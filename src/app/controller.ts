@@ -128,7 +128,7 @@ export function createController(init: ControllerInit): Controller {
   const { adapter, llm, graphOptions } = init;
   const candidateOptions = init.candidates === false ? undefined : (init.candidates ?? {});
 
-  /** The mutation with the two contribution fields removed from every upsert and then set on the item this proposal creates (the guard allows exactly one item upsert). */
+  /** The mutation with the two contribution fields removed from every upsert and then set on every item (fact) this proposal creates. */
   function stamped(mutation: Mutation, contributedBy: string, at: number): Mutation {
     const ops = mutation.ops.map((op) => {
       if (op.op !== 'upsertNode') return op;
@@ -162,7 +162,7 @@ export function createController(init: ControllerInit): Controller {
       const id = proposalIds();
       const itemId = itemIds();
       const proposed = await llm.categorise(
-        { text: note.value, graphId, itemId, requestId: id, categories: read.value.categories, existing: candidates.map((c) => ({ title: c.title, summary: c.summary })) },
+        { text: note.value, graphId, itemId, requestId: id, categories: read.value.categories, existing: candidates.map((c) => ({ title: c.title, summary: c.summary, ...(c.key === undefined ? {} : { key: c.key }) })) },
         options?.categorise,
       );
       if (!proposed.ok) return err({ source: 'llm', error: proposed.error });

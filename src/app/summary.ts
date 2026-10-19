@@ -14,6 +14,13 @@ export interface RemovedItem {
   readonly summary: string;
 }
 
+/** A fact (item) this proposal creates, as the person will read it (R-015). */
+export interface AddedFact {
+  readonly id: string;
+  readonly title: string;
+  readonly summary: string;
+}
+
 export interface Link {
   readonly item: string;
   readonly category: string;
@@ -23,6 +30,8 @@ export interface Link {
 export interface ProposalSummary {
   /** Items the proposal creates. */
   readonly newItems: readonly string[];
+  /** The new items with the title and summary they would be given, in order. */
+  readonly facts: readonly AddedFact[];
   /** Items that already exist and would have their data changed. */
   readonly updatedItems: readonly string[];
   readonly newCategories: readonly string[];
@@ -62,6 +71,7 @@ export function summarise(mutation: Mutation, existing: ExistingNodes, offered?:
     const categories = new Set(existing.categories);
 
     const newItems: string[] = [];
+    const facts: AddedFact[] = [];
     const updatedItems: string[] = [];
     const newCategories: string[] = [];
     const updatedCategories: string[] = [];
@@ -82,6 +92,10 @@ export function summarise(mutation: Mutation, existing: ExistingNodes, offered?:
         const [known, now, created, updated] =
           op.partition === 'item' ? [items, itemsNow, newItems, updatedItems] : [categories, categoriesNow, newCategories, updatedCategories];
         add(known.has(op.id) ? updated : created, op.id);
+        if (op.partition === 'item' && !known.has(op.id) && !facts.some((f) => f.id === op.id)) {
+          const data = isObject(op.data) ? op.data : {};
+          facts.push({ id: op.id, title: typeof data.title === 'string' ? data.title : '', summary: typeof data.summary === 'string' ? data.summary : '' });
+        }
         now.add(op.id);
       } else if (op.op === 'link') {
         if (typeof op.item !== 'string' || typeof op.category !== 'string') return invalid(`ops[${index}] is not a valid link`);
@@ -110,7 +124,7 @@ export function summarise(mutation: Mutation, existing: ExistingNodes, offered?:
         return invalid(`ops[${index}]: the operation ${quote(op.op)} cannot be summarised (only upsertNode and link can)`);
       }
     }
-    return ok(Object.freeze({ newItems, updatedItems, newCategories, updatedCategories, reusedCategories, newLinks, removed, problems, notes }));
+    return ok(Object.freeze({ newItems, facts, updatedItems, newCategories, updatedCategories, reusedCategories, newLinks, removed, problems, notes }));
   } catch {
     return invalid('could not be read');
   }
@@ -132,6 +146,7 @@ export function describeSummary(summary: ProposalSummary): string {
     `Existing categories used: ${list(summary.reusedCategories)}`,
     `Links: ${summary.newLinks.length === 0 ? 'none' : summary.newLinks.map((l) => `${quote(l.item)} → ${quote(l.category)}`).join(', ')}`,
   ];
+  if (summary.facts.length > 1) lines.push(`This note adds ${summary.facts.length} facts:`, ...summary.facts.map((f) => `  - ${oneLine(f.title) || quote(f.id)}${f.summary === '' ? '' : `: ${oneLine(f.summary)}`}`));
   if (summary.updatedItems.length > 0) lines.push(`Existing items that would change: ${list(summary.updatedItems)}`);
   if (summary.updatedCategories.length > 0) lines.push(`Existing categories that would change: ${list(summary.updatedCategories)}`);
   if (summary.removed.length > 0) {
