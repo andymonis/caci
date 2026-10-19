@@ -82,6 +82,10 @@ function operationOf(json) {
     if ((json.partition !== 'item' && json.partition !== 'category') || typeof json.id !== 'string' || !(json.data === undefined || isObject(json.data))) return undefined;
     return Object.freeze({ op: 'upsertNode', partition: json.partition, id: json.id, ...(json.data === undefined ? {} : { data: Object.freeze({ ...json.data }) }) });
   }
+  if (json.op === 'deleteNode') {
+    if ((json.partition !== 'item' && json.partition !== 'category') || typeof json.id !== 'string') return undefined;
+    return Object.freeze({ op: 'deleteNode', partition: json.partition, id: json.id });
+  }
   if (json.op === 'link') {
     if (typeof json.item !== 'string' || typeof json.category !== 'string' || !(json.weight === undefined || typeof json.weight === 'number')) return undefined;
     return Object.freeze({ op: 'link', item: json.item, category: json.category, ...(json.weight === undefined ? {} : { weight: json.weight }) });
@@ -94,8 +98,11 @@ function summaryOf(json) {
   const lists = ['newItems', 'updatedItems', 'newCategories', 'updatedCategories', 'reusedCategories', 'problems', 'notes'];
   if (!lists.every((k) => strings(json[k]))) return undefined;
   if (!Array.isArray(json.newLinks) || !json.newLinks.every((l) => isObject(l) && typeof l.item === 'string' && typeof l.category === 'string')) return undefined;
+  // `removed` (R-014): the notes this one replaces; an answer without it means none.
+  if (json.removed !== undefined && !(Array.isArray(json.removed) && json.removed.every((r) => isObject(r) && typeof r.id === 'string' && typeof r.title === 'string' && typeof r.summary === 'string'))) return undefined;
   return Object.freeze({
     ...Object.fromEntries(lists.map((k) => [k, Object.freeze([...json[k]])])),
+    removed: Object.freeze((json.removed ?? []).map((r) => Object.freeze({ id: r.id, title: r.title, summary: r.summary }))),
     newLinks: Object.freeze(json.newLinks.map((l) => Object.freeze({ item: l.item, category: l.category }))),
   });
 }
@@ -121,7 +128,10 @@ function writtenOf(json) {
   const w = isObject(json) ? json.written : undefined;
   if (!isObject(w) || !isProposalId(w.id) || !whole(w.applied)) return undefined;
   const summary = summaryOf(w.summary);
-  return summary === undefined ? undefined : Object.freeze({ id: w.id, applied: w.applied, summary });
+  if (summary === undefined) return undefined;
+  if (w.tidied !== undefined && !(Array.isArray(w.tidied) && w.tidied.every((c) => isObject(c) && typeof c.id === 'string' && (c.name === undefined || typeof c.name === 'string')))) return undefined;
+  const tidied = Object.freeze((w.tidied ?? []).map((c) => Object.freeze({ id: c.id, ...(c.name === undefined ? {} : { name: c.name }) })));
+  return Object.freeze({ id: w.id, applied: w.applied, summary, tidied });
 }
 
 const modeOf = (json) => (isObject(json) && MODES.includes(json.mode) ? Object.freeze({ mode: json.mode }) : undefined);

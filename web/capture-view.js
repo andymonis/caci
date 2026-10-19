@@ -63,8 +63,18 @@ const titleOf = (data) => {
 
 /** One operation in words, as the person would be approving it. */
 export function opText(op) {
+  if (op.op === 'deleteNode') return `Remove ${op.partition === 'item' ? 'note' : 'category'} ${op.id}`;
   if (op.op === 'link') return `Link item ${op.item} to category ${op.category}${typeof op.weight === 'number' ? ` (weight ${op.weight})` : ''}`;
   return `${op.partition === 'item' ? 'Add or update item' : 'Add or update category'} ${op.id}${titleOf(op.data)}`;
+}
+
+/** The notes a proposal would remove, one line each, in the person's words (R-014). Empty when it replaces nothing. */
+export function replaceLines(summary) {
+  const removed = Array.isArray(summary.removed) ? summary.removed : [];
+  return removed.map((r) => {
+    const name = r.title !== '' ? r.title : r.id;
+    return `This note replaces: ${name}${r.summary === '' ? '' : ` (${r.summary})`}. The old note will be removed when you approve.`;
+  });
 }
 
 /** The lines under "Be careful": problems first (approving may be refused), then notes. */
@@ -83,6 +93,14 @@ export function writtenText(outcome) {
   if (s.updatedCategories.length > 0) parts.push(plural(s.updatedCategories.length, 'updated category', 'updated categories'));
   if (s.reusedCategories.length > 0) parts.push(plural(s.reusedCategories.length, 'category reused', 'categories reused'));
   if (s.newLinks.length > 0) parts.push(plural(s.newLinks.length, 'link', 'links'));
+  const gone = Array.isArray(s.removed) ? s.removed.length : 0;
+  const tidied = Array.isArray(outcome.tidied) ? outcome.tidied.length : 0;
+  if (gone > 0 || tidied > 0) {
+    const bits = [];
+    if (gone > 0) bits.push(plural(gone, 'old note', 'old notes'));
+    if (tidied > 0) bits.push(plural(tidied, 'empty category', 'empty categories'));
+    parts.push(`removed ${bits.join(' and ')}`);
+  }
   const where = outcome.scope && outcome.scope.kind === 'circle' ? ` Added to the circle "${typeof outcome.scope.circleName === 'string' && outcome.scope.circleName !== '' ? outcome.scope.circleName : 'this circle'}".` : '';
   return `Written: ${plural(outcome.applied, 'operation', 'operations')}${parts.length === 0 ? '' : ` (${parts.join(', ')})`}.${where}`;
 }

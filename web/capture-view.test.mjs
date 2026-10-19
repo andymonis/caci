@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { circleNotice, countText, expiresText, formatTime, MODE_LOADING, MODE_UNKNOWN, MODE_WORDS, modeNotice, noteLines, opText, outcomeText, PERSONAL_NOTICE, previewNotice, problemLines, readOnlyLine, REJECTED_WORDS, scopeLine, scopeNotice, withWait, writtenText } from './capture-view.js';
+import { circleNotice, countText, expiresText, formatTime, MODE_LOADING, MODE_UNKNOWN, MODE_WORDS, modeNotice, noteLines, opText, outcomeText, PERSONAL_NOTICE, previewNotice, problemLines, readOnlyLine, REJECTED_WORDS, replaceLines, scopeLine, scopeNotice, withWait, writtenText } from './capture-view.js';
 
 const SUMMARY = (extra = {}) => ({ newItems: [], updatedItems: [], newCategories: [], updatedCategories: [], reusedCategories: [], newLinks: [], problems: [], notes: [], ...extra });
 
@@ -122,5 +122,28 @@ describe('where a note goes (R-009)', () => {
     expect(outcomeText({ kind: 'written', applied: 1, summary, scope: { kind: 'personal' } })).toBe('Written: 1 operation (1 new item).');
     expect(outcomeText({ kind: 'written', applied: 1, summary })).toBe('Written: 1 operation (1 new item).');
     expect(outcomeText({ kind: 'written', applied: 1, summary, scope: { kind: 'circle', circleId: circle.circleId } })).toContain('"this circle"');
+  });
+});
+
+describe('replacing and removing (R-014)', () => {
+  it('opText names a removal', () => {
+    expect(opText({ op: 'deleteNode', partition: 'item', id: 'note-0' })).toBe('Remove note note-0');
+    expect(opText({ op: 'deleteNode', partition: 'category', id: 'old' })).toBe('Remove category old');
+  });
+  it('replaceLines says what is replaced, with the title, else the id, and nothing when nothing is', () => {
+    expect(replaceLines(SUMMARY())).toEqual([]);
+    expect(replaceLines(SUMMARY({ removed: [] }))).toEqual([]);
+    expect(replaceLines(SUMMARY({ removed: [{ id: 'n0', title: 'Tablet A', summary: '2 x daily' }, { id: 'n1', title: '', summary: '' }] }))).toEqual([
+      'This note replaces: Tablet A (2 x daily). The old note will be removed when you approve.',
+      'This note replaces: n1. The old note will be removed when you approve.',
+    ]);
+  });
+  it('writtenText adds what was removed', () => {
+    const removed = [{ id: 'a', title: 'A', summary: '' }];
+    expect(writtenText({ applied: 4, summary: SUMMARY({ newItems: ['n'], removed }), tidied: [{ id: 'c' }] })).toBe('Written: 4 operations (1 new item, removed 1 old note and 1 empty category).');
+    expect(writtenText({ applied: 2, summary: SUMMARY({ removed }) })).toBe('Written: 2 operations (removed 1 old note).');
+    expect(writtenText({ applied: 3, summary: SUMMARY({ removed: [...removed, ...removed] }), tidied: [{ id: 'c' }, { id: 'd' }] })).toBe('Written: 3 operations (removed 2 old notes and 2 empty categories).');
+    expect(writtenText({ applied: 1, summary: SUMMARY(), tidied: [{ id: 'c' }] })).toBe('Written: 1 operation (removed 1 empty category).');
+    expect(writtenText({ applied: 1, summary: SUMMARY() })).toBe('Written: 1 operation.');
   });
 });

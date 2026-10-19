@@ -531,3 +531,34 @@ describe('choosing where a note goes', () => {
     expect(page.el('capture-scope-notice').textContent).toContain('your own notes');
   });
 });
+
+describe('a note that replaces an older one (R-014)', () => {
+  const REMOVED = [{ id: 'note-0', title: '<b>Tablet A</b>', summary: '2 x daily' }];
+  const REPLACING = { summary: { ...SUMMARY, removed: REMOVED }, operations: [{ op: 'deleteNode', partition: 'item', id: 'note-0' }, ...OPS] };
+
+  it('lists what will be removed before approval, as text, and the removal in the operations', async () => {
+    const { page } = await start({ 'POST /api/capture/propose': proposed(REPLACING) });
+    await propose(page);
+    const lines = rows(page, 'capture-lines').map(text);
+    expect(lines).toEqual(['This note replaces: <b>Tablet A</b> (2 x daily). The old note will be removed when you approve.']);
+    expect(rows(page, 'capture-ops').map(text)[0]).toBe('Remove note note-0');
+    expect(rows(page, 'capture-lines')[0].querySelector('[data-slot="text"]').children.length).toBe(0);
+  });
+
+  it('shows no replace line when nothing is replaced', async () => {
+    const { page } = await start({ 'POST /api/capture/propose': proposed() });
+    await propose(page);
+    expect(rows(page, 'capture-lines')).toEqual([]);
+  });
+
+  it('the outcome says what was removed', async () => {
+    const { page } = await start({
+      'POST /api/capture/propose': proposed(REPLACING),
+      [`POST /api/capture/proposals/${P}/approve`]: { status: 200, body: { written: { id: P, applied: 4, summary: REPLACING.summary, tidied: [{ id: 'old', name: 'Old' }] } } },
+    });
+    await propose(page);
+    page.el('capture-approve').fire('click');
+    await settle();
+    expect(page.el('capture-outcome-text').textContent).toBe('Written: 4 operations (1 new item, 1 new category, 1 link, removed 1 old note and 1 empty category).');
+  });
+});
