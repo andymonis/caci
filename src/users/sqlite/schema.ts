@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 5;
+export const USERS_SCHEMA_VERSION = 6;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -159,7 +159,44 @@ const V5: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5]);
+/**
+ * Version 6: the change log (R-014). One row per change to a brain: when, which scope (a person's own brain or one circle's),
+ * who, what happened, and for a removal what the thing was called. The text columns hold JSON text, so any id or title is kept
+ * exactly (a lone surrogate included, which a plain text column would not). Entries go with their circle (a trigger on the
+ * circle row) and a person's own entries go with their account (a trigger on the user row), so deleting either, by any route,
+ * leaves no entries behind. Like memberships, entries have no foreign key to `users`.
+ */
+const V6: Migration = Object.freeze({
+  to: 6,
+  creates: Object.freeze(['ledger']),
+  sql: Object.freeze([
+    `CREATE TABLE ledger (
+       id TEXT NOT NULL PRIMARY KEY,
+       at INTEGER NOT NULL CHECK (at >= 0),
+       scope_kind TEXT NOT NULL CHECK (scope_kind IN ('personal', 'circle')),
+       scope_id TEXT NOT NULL,
+       actor TEXT NOT NULL,
+       action TEXT NOT NULL CHECK (action IN ('added', 'updated', 'removed')),
+       kind TEXT NOT NULL CHECK (kind IN ('item', 'category')),
+       subject TEXT NOT NULL CHECK (json_valid(subject)),
+       title TEXT CHECK (title IS NULL OR json_valid(title)),
+       summary TEXT CHECK (summary IS NULL OR json_valid(summary)),
+       proposal_id TEXT NOT NULL
+     ) WITHOUT ROWID`,
+    'CREATE INDEX ledger_by_scope ON ledger (scope_kind, scope_id, at DESC, id DESC)',
+    'CREATE INDEX ledger_by_time ON ledger (at)',
+    `CREATE TRIGGER ledger_ends_with_circle AFTER DELETE ON circles
+     BEGIN
+       DELETE FROM ledger WHERE scope_kind = 'circle' AND scope_id = old.id;
+     END`,
+    `CREATE TRIGGER ledger_ends_with_user AFTER DELETE ON users
+     BEGIN
+       DELETE FROM ledger WHERE scope_kind = 'personal' AND scope_id = old.id;
+     END`,
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });

@@ -156,10 +156,10 @@ export function violations(files: Record<string, string>): string[] {
         problems.push(`${file} imports ${specifier}: the CaCi controller and the service may use the scopes component only through scopes/index`);
       }
       const ledgerTest = /\.test(?:-util)?\.ts$/.test(file);
-      if (file.startsWith('ledger/') && /^(?:graph_store|llm|app|api|service|caci|circles|sharing|scopes)(?:\/|$)/.test(target)) {
+      if (file.startsWith('ledger/') && /^(?:graph_store|llm|app|api|service|caci|circles|sharing|scopes)(?:\/|$)/.test(target) && !(ledgerTest && /^(?:graph_store\/adapters\/sqlite|circles\/sqlite)\/index$/.test(target))) {
         problems.push(`${file} imports ${specifier}: the ledger component must not depend on any other component but the users component`);
       }
-      if (file.startsWith('ledger/') && target.startsWith('users/') && target !== 'users/index' && !((file.startsWith('ledger/sqlite/') || ledgerTest) && target === 'users/sqlite/index')) {
+      if (file.startsWith('ledger/') && target.startsWith('users/') && target !== 'users/index' && !((file.startsWith('ledger/sqlite/') || ledgerTest) && target === 'users/sqlite/index') && !(ledgerTest && target === 'users/sqlite/schema')) {
         problems.push(`${file} imports ${specifier}: the ledger component may use the users component only through users/index (its SQLite store and its tests may also use users/sqlite/index, which owns the user database's schema)`);
       }
       if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes|api)\//.test(file) && /^ledger(?:\/|$)/.test(target)) {
@@ -240,6 +240,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'api/scopes.test.ts': `import { createScopeResolver } from '../scopes/index.js';`,
         'ledger/x.ts': `import { newUserId } from '../users/index.js'; import { openDb } from '../sqlite/db.js'; import { y } from './y.js';`,
         'ledger/sqlite/store.ts': `import { prepareUsersDatabase } from '../../users/sqlite/index.js'; import { openDb } from '../../sqlite/db.js';`,
+        'ledger/sqlite/x.test.ts': `import { createSqliteAdapter } from '../../graph_store/adapters/sqlite/index.js'; import { createSqliteCircleStore } from '../../circles/sqlite/index.js'; import { USERS_MIGRATIONS } from '../../users/sqlite/schema.js';`,
         'caci/ledger.ts': `import { createMemoryLedgerStore } from '../ledger/index.js';`,
         'service/ledger.ts': `import { createSqliteLedgerStore } from '../ledger/sqlite/index.js'; import { createMemoryLedgerStore } from '../ledger/index.js';`,
         'api/share.ts': `import { createSharing } from '../sharing/index.js';`,
@@ -320,6 +321,8 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the circles component using the service', { 'circles/x.ts': `import { serve } from '../service/index.js';` }],
     ['the users component using the circles component', { 'users/x.ts': `import { createCircleController } from '../circles/index.js';` }],
     ['the ledger component using the graph store', { 'ledger/x.ts': `import { query } from '../graph_store/index.js';` }],
+    ['production ledger code using the circles SQLite store', { 'ledger/x.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';` }],
+    ['production ledger code reaching into the users schema', { 'ledger/sqlite/x.ts': `import { USERS_MIGRATIONS } from '../../users/sqlite/schema.js';` }],
     ['the ledger component using the LLM component', { 'ledger/x.ts': `import { createLlm } from '../llm/index.js';` }],
     ['the ledger component using the CaCi controller', { 'ledger/x.ts': `import { createCaciController } from '../caci/index.js';` }],
     ['the ledger component using the circles component', { 'ledger/x.ts': `import { createCircleController } from '../circles/index.js';` }],

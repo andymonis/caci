@@ -48,10 +48,10 @@ async function trio(store: CircleStore, n = 1): Promise<void> {
 const grantRows = (db: ReturnType<typeof openDb>): number => Number(db.get<{ n: number }>('SELECT count(*) AS n FROM circle_grants')?.n ?? 0);
 
 describe('the schema', () => {
-  it('is version 5, with the table, its index and the trigger', () => {
+  it('is at least version 5, with the table, its index and the trigger', () => {
     const { db } = open();
-    expect(USERS_SCHEMA_VERSION).toBe(5);
-    expect(db.pragma('user_version')).toBe(5);
+    expect(USERS_SCHEMA_VERSION).toBe(6);
+    expect(db.pragma('user_version')).toBe(6);
     expect(db.get<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'circle_grants'")?.name).toBe('circle_grants');
     expect(db.get<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'circle_grants_by_grantee'")?.name).toBe('circle_grants_by_grantee');
     expect(db.get<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'circle_grants_end_with_member'")?.name).toBe('circle_grants_end_with_member');
@@ -68,7 +68,7 @@ describe('the schema', () => {
     expect(old.pragma('user_version')).toBe(4);
     old.close();
     const { store, db } = open(path);
-    expect(db.pragma('user_version')).toBe(5);
+    expect(db.pragma('user_version')).toBe(6);
     expect((await store.getCircle(cid(1)))?.name).toBe('Old');
     expect((await store.membershipOf(cid(1), uid(1)))?.role).toBe('owner');
     expect((await store.getInvitation(iid(1)))?.username).toBe('carol');

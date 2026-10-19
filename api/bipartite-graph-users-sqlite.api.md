@@ -77,7 +77,7 @@ export interface SqliteUserStoreOptions {
 export const USERS_APPLICATION_ID = 1130452339;
 
 // @public
-export const USERS_SCHEMA_VERSION = 5;
+export const USERS_SCHEMA_VERSION = 6;
 
 // (No @packageDocumentation comment for this package)
 
