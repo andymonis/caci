@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatReport, replacementCounts, summarise } from './report.mjs';
+import { factCounts, formatReport, replacementCounts, summarise } from './report.mjs';
 
 const score = (pass, stale = []) => ({ pass, groups: [], stale: stale.map((status) => ({ phrase: 'p', status })), nothing: false, reasons: pass ? [] : ['a required fact is missing'] });
 const rec = (arm, model, question, kind, pass, extra = {}) => ({
@@ -161,5 +161,22 @@ describe('replacing in the report (R-014)', () => {
     expect(formatReport({ results, filing: [{ ok: true }], meta: META })).not.toContain('Replacing:');
     expect(formatReport({ results, filing: [{ ok: true }], meta: META })).not.toContain('replacing o');
     expect(replacementCounts(filing, [rec('brain', 'fast', 'q', 'recall', true, { diagnostic: { lostAt: 'replace' } })]).wrong).toBe(0);
+  });
+});
+
+describe('facts in the report (R-015)', () => {
+  const filing = [{ ok: true, facts: 3 }, { ok: true, facts: 1 }, { ok: false, facts: 0, error: { code: 'X' } }, { ok: true }];
+  it('counts the facts of the notes that were filed, and says how many a note', () => {
+    expect(factCounts(filing)).toEqual({ notes: 2, facts: 4, perNote: 2 });
+    expect(factCounts([{ ok: true, facts: 5 }, { ok: true, facts: 2 }, { ok: true, facts: 2 }])).toEqual({ notes: 3, facts: 9, perNote: 3 });
+    expect(factCounts([{ ok: true, facts: 1 }, { ok: true, facts: 2 }, { ok: true, facts: 2 }])).toEqual({ notes: 3, facts: 5, perNote: 1.7 });
+    expect(factCounts([{ ok: true }, { ok: false, facts: 2 }])).toBeNull();
+    expect(factCounts([])).toBeNull();
+  });
+  it('the report has the line, with singulars, and none for a run that did not record it', () => {
+    const text = (f) => formatReport({ results: [rec('brain', 'fast', 'q', 'recall', true)], filing: f, meta: META });
+    expect(text(filing)).toContain('Facts: 4 facts stored from 2 notes (2 a note).');
+    expect(text([{ ok: true, facts: 1 }])).toContain('Facts: 1 fact stored from 1 note (1 a note).');
+    expect(text([{ ok: true }])).not.toContain('Facts:');
   });
 });

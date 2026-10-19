@@ -56,6 +56,14 @@ export function replacementCounts(filing, results) {
   };
 }
 
+/** How many facts the filings stored (R-015), or null when no filing recorded it. */
+export function factCounts(filing) {
+  const filed = filing.filter((f) => f.ok && Number.isSafeInteger(f.facts));
+  if (filed.length === 0) return null;
+  const facts = filed.reduce((n, f) => n + f.facts, 0);
+  return { notes: filed.length, facts, perNote: Math.round((facts / filed.length) * 10) / 10 };
+}
+
 export function formatReport({ results, filing = [], meta }) {
   const pads = unique(results.map((r) => r.pad ?? 0)).sort((a, b) => a - b);
   if (pads.length <= 1) return section({ results, filing, meta: { ...meta, pad: meta.pad ?? pads[0] } });
@@ -116,6 +124,8 @@ function section({ results, filing, meta }) {
   if (filing.length > 0) {
     const failed = filing.filter((f) => !f.ok);
     out.push('', `Filing: ${filing.length - failed.length} of ${filing.length} notes filed${failed.length ? `; ${failed.length} not (${unique(failed.map((f) => f.error.code ?? f.error.message ?? 'error')).join(', ')})` : ''}.`);
+    const stored = factCounts(filing);
+    if (stored !== null) out.push(`Facts: ${stored.facts} fact${stored.facts === 1 ? '' : 's'} stored from ${stored.notes} note${stored.notes === 1 ? '' : 's'} (${stored.perNote} a note).`);
     const counts = replacementCounts(filing, results);
     if (counts !== null) out.push(`Replacing: ${counts.notes} notes replaced ${counts.removed} older notes and left ${counts.tidied} empty categories to be tidied; ${counts.wrong} failed answers lost their fact to a deletion (see "replace" above).`);
   }

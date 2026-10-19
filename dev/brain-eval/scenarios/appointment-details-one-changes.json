@@ -1,0 +1,116 @@
+{
+  "id": "appointment-details-one-changes",
+  "title": "An appointment with several details, then its time changes",
+  "description": "One note gives Dad's clinic appointment with its place, ward and time. Later only the time changes. The new time must win, and the place and ward, which did not change, must still be found.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-05",
+      "text": "Dad: clinic Riverside Hospital, ward C, Tuesday 10 March at 2pm."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-12",
+      "text": "Dad needs to fast from midnight before the appointment."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-19",
+      "text": "Booked a taxi firm for hospital trips: Blue Line, 01632 960111."
+    },
+    {
+      "id": "n04",
+      "at": "2026-01-26",
+      "text": "Dad's friend Ken is lending him a walking stick."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-02",
+      "text": "Washed Dad's dressing gown for the hospital bag."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-09",
+      "text": "Dad's clinic time is now Tuesday 10 March at 9am."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-16",
+      "text": "Told Blue Line about the new time."
+    },
+    {
+      "id": "n08",
+      "at": "2026-02-23",
+      "text": "Dad's friend Ken rang to wish him luck."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-02",
+      "text": "The car is booked in for its MOT on 25 March."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-09",
+      "text": "Bought bread and milk on the way home."
+    }
+  ],
+  "questions": [
+    {
+      "id": "time-now",
+      "kind": "override",
+      "after": "n07",
+      "ask": "What time is Dad's clinic appointment?",
+      "must": [
+        [
+          "9am"
+        ]
+      ],
+      "stale": [
+        "2pm"
+      ],
+      "why": "The time changed in note 6."
+    },
+    {
+      "id": "ward",
+      "kind": "recall",
+      "after": "n08",
+      "ask": "Which ward is Dad's clinic appointment in?",
+      "must": [
+        [
+          "ward C"
+        ]
+      ],
+      "why": "The ward did not change but shared a note with the old time."
+    },
+    {
+      "id": "hospital",
+      "kind": "recall",
+      "after": "n08",
+      "ask": "Which hospital is Dad's clinic appointment at?",
+      "must": [
+        [
+          "Riverside Hospital"
+        ]
+      ],
+      "why": "The place did not change but shared a note with the old time."
+    },
+    {
+      "id": "all-details",
+      "kind": "multi",
+      "after": "n08",
+      "ask": "What are the details of Dad's clinic appointment?",
+      "must": [
+        [
+          "9am"
+        ],
+        [
+          "ward C"
+        ],
+        [
+          "Riverside Hospital"
+        ]
+      ],
+      "why": "The new time and the two unchanged details are all needed."
+    }
+  ]
+}

@@ -159,6 +159,21 @@ describe('what a filing replaced is recorded, and a deleted fact is told from on
   });
 });
 
+describe('facts per filing (R-015)', () => {
+  it('records how many facts each note became', async () => {
+    const two = { id: 'p', title: 't', description: 'd', notes: [{ id: 'n1', at: '2026-01-05', text: 'Mum: born 4 June 1950, phone 07700 900123, email mum@example.test.' }, { id: 'n2', at: '2026-01-06', text: 'Bought bread.' }], questions: [{ id: 'q', kind: 'recall', after: 'n2', ask: 'zzz', must: [['bread']] }] };
+    const r = await run({ scenario: two });
+    expect(r.filing.map((f) => f.facts)).toEqual([3, 1]);
+    const one = await run({ scenario: two, controls: { ...controls, categorise: { ...controls.categorise, settings: { ...controls.categorise.settings, maxFacts: 1 } } } });
+    expect(one.filing.map((f) => f.facts)).toEqual([1, 1]);
+  });
+  it('a failed filing records no facts', async () => {
+    const bad = { complete: async () => ({ ok: false, error: { code: 'REFUSED', message: 'no', retryable: false } }) };
+    const r = await run({ makeClient: (who) => (who.role === 'file' ? bad : demoClient()) });
+    expect(r.filing.every((f) => f.facts === 0)).toBe(true);
+  });
+});
+
 describe('failures and stopping', () => {
   it('a refused filing is recorded and the run goes on', async () => {
     const bad = { complete: async () => ({ ok: false, error: { code: 'REFUSED', message: 'no', retryable: false } }) };

@@ -18,8 +18,8 @@ describe('the library', () => {
     expect(loaded.ok, JSON.stringify(loaded.problems)).toBe(true);
     for (const s of scenarios) expect(validateScenario(s), s.id).toEqual([]);
   });
-  it('has ten scenarios with 10 to 40 notes each and about 30 to 60 questions', () => {
-    expect(scenarios.map((s) => s.id)).toEqual(['activity-cancelled', 'appointment-moved-twice', 'changed-routine', 'contact-details-change', 'fact-corrected', 'medication-change', 'old-detail-still-relevant', 'second-medication-added', 'two-appointments-similar-words', 'two-people-not-mixed']);
+  it('has twelve scenarios with 10 to 40 notes each and about 30 to 60 questions', () => {
+    expect(scenarios.map((s) => s.id)).toEqual(['activity-cancelled', 'appointment-details-one-changes', 'appointment-moved-twice', 'changed-routine', 'contact-details-change', 'fact-corrected', 'medication-change', 'old-detail-still-relevant', 'profile-one-value-changes', 'second-medication-added', 'two-appointments-similar-words', 'two-people-not-mixed']);
     for (const s of scenarios) {
       expect(s.notes.length, s.id).toBeGreaterThanOrEqual(10);
       expect(s.notes.length, s.id).toBeLessThanOrEqual(40);
@@ -44,7 +44,7 @@ describe('the library', () => {
     for (const word of ['medication', 'moved twice', 'phone number', 'corrected', 'cancelled', 'early safety detail', 'two people', 'routine']) expect(text, word).toContain(word);
   });
   it('invents everything: no real-looking email, url or long number is in any note', () => {
-    for (const s of scenarios) for (const n of s.notes) expect(n.text, n.id).not.toMatch(/@|https?:|www\./);
+    for (const s of scenarios) for (const n of s.notes) expect(n.text, n.id).not.toMatch(/@(?!example\.test)|https?:|www\./);
   });
   it('the review listing is current, and lists every note and question', () => {
     const listing = formatListing(scenarios);
@@ -183,6 +183,49 @@ describe('replacing (R-014): the library separates a brain that replaces well fr
     const wrong = answers.filter((a) => a.diagnostic?.lostAt === 'replace');
     expect(wrong.length).toBeGreaterThanOrEqual(1);
   }, 120000);
+});
+
+describe('facts (R-015): a note of several facts, then one of them changes', () => {
+  const MULTI = ['profile-one-value-changes', 'appointment-details-one-changes'];
+  const withFacts = (n) => ({ ...controls, categorise: { ...controls.categorise, settings: { ...controls.categorise.settings, maxFacts: n } } });
+  const runWith = async (maxFacts) => {
+    const out = [];
+    let filings = [];
+    for (const scenario of scenarios.filter((s) => MULTI.includes(s.id))) {
+      const r = await runBrainArm({ lib, controls: withFacts(maxFacts), scenario, fileWith: FAST, answerWith: [FAST], makeClient: (who) => (who.role === 'file' ? demoClient() : grounded(scenarios)), replace: true });
+      out.push(...r.answers);
+      filings = filings.concat(r.filing);
+    }
+    return { answers: out, filings };
+  };
+
+  it('with facts the unchanged details survive: every question of the two scenarios passes and the replacement removes one fact', async () => {
+    const { answers, filings } = await runWith(8);
+    expect(answers.filter((a) => !a.pass).map((a) => `${a.scenario}/${a.question}: ${a.score.reasons.join('; ')}`)).toEqual([]);
+    expect(filings.filter((f) => f.replaced.length > 0).map((f) => f.replaced.length)).toEqual([1, 1]);
+    expect(filings[0].facts).toBeGreaterThanOrEqual(3);
+  }, 60000);
+
+  it('with one fact allowed the whole note is replaced and the details are lost; the diagnostic says replace', async () => {
+    const { answers } = await runWith(1);
+    const failed = answers.filter((a) => !a.pass);
+    expect(failed.map((a) => a.question).sort()).toEqual(['all-details', 'birthday', 'contact-details', 'email', 'hospital', 'ward']);
+    for (const a of failed) expect(a.diagnostic.lostAt, `${a.scenario}/${a.question}`).toBe('replace');
+  }, 60000);
+
+  it('so the facts version loses fewer facts than maxFacts 1 on these scenarios (the A/B through the controls)', async () => {
+    const lost = (r) => r.answers.filter((a) => a.diagnostic?.lostAt === 'replace').length;
+    expect(lost(await runWith(8))).toBeLessThan(lost(await runWith(1)));
+  }, 60000);
+
+  it('the new scenarios are about one value changing: the changed fact has a stale value, the others have none', () => {
+    for (const id of MULTI) {
+      const s = scenarios.find((x) => x.id === id);
+      expect(s.questions.filter((q) => q.kind === 'override')).toHaveLength(1);
+      expect(s.questions.filter((q) => q.kind === 'recall').length).toBeGreaterThanOrEqual(2);
+      expect(s.questions.some((q) => q.kind === 'multi')).toBe(true);
+    }
+  });
 });
 
 describe('formatListing on small inputs', () => {

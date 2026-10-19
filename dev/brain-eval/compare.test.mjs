@@ -190,3 +190,17 @@ describe('comparing what replacing did', () => {
     expect(text(old, old)).not.toContain('Replacing');
   });
 });
+
+describe('comparing the facts stored', () => {
+  const withFacts = (n, notes) => run([rec('brain', 'fast', 'q1', true), rec('brain', 'fast', 'q2', true)], { filing: Array.from({ length: notes }, () => ({ ok: true, facts: n, replaced: [], tidied: 0 })) });
+  it('shows the facts and notes of each run', () => {
+    const t = text(withFacts(1, 4), withFacts(3, 4));
+    expect(t).toContain('Facts stored');
+    expect(t).toContain('first:  4 facts from 4 notes (1 a note)');
+    expect(t).toContain('second: 12 facts from 4 notes (3 a note)');
+  });
+  it('says not recorded for an older run', () => {
+    const old = run([rec('brain', 'fast', 'q1', true), rec('brain', 'fast', 'q2', true)], { filing: [{ ok: true, replaced: [], tidied: 0 }] });
+    expect(text(old, withFacts(2, 2))).toContain('first:  not recorded');
+  });
+});

@@ -1,0 +1,113 @@
+{
+  "id": "profile-one-value-changes",
+  "title": "A profile of several facts, then one of them changes",
+  "description": "One note gives Mum's date of birth, phone number and email together. Later her phone number changes. The new number must win, and the date of birth and email, which did not change, must still be found: a brain that keeps whole notes and replaces the whole note loses them.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-05",
+      "text": "Mum: born 4 June 1950, phone 07700 900123, email mum@example.test."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-12",
+      "text": "Collected Mum's prescription from the pharmacy on Station Road."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-19",
+      "text": "Joan next door collects Mum's shopping on Thursdays."
+    },
+    {
+      "id": "n04",
+      "at": "2026-01-26",
+      "text": "Boiler service done. The engineer says it is fine for another year."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-02",
+      "text": "Took Mum to the garden centre. She chose two pots of lavender."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-09",
+      "text": "Mum's new phone number: 07700 900456."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-16",
+      "text": "Mum's reading glasses are in the blue case on the hall table."
+    },
+    {
+      "id": "n08",
+      "at": "2026-02-23",
+      "text": "Rita rang. She and Mum are going for lunch on Sunday."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-02",
+      "text": "The car is booked in for its MOT on 25 March."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-09",
+      "text": "Bought bread and milk on the way home."
+    }
+  ],
+  "questions": [
+    {
+      "id": "phone-now",
+      "kind": "override",
+      "after": "n06",
+      "ask": "What is Mum's phone number?",
+      "must": [
+        [
+          "07700 900456"
+        ]
+      ],
+      "stale": [
+        "07700 900123"
+      ],
+      "why": "The number changed in note 6; the old one must not be given as current."
+    },
+    {
+      "id": "birthday",
+      "kind": "recall",
+      "after": "n08",
+      "ask": "When was Mum born?",
+      "must": [
+        [
+          "4 June 1950"
+        ]
+      ],
+      "why": "The date of birth did not change. It was in the same note as the old phone number, and must survive the phone number being replaced."
+    },
+    {
+      "id": "email",
+      "kind": "recall",
+      "after": "n08",
+      "ask": "What is Mum's email address?",
+      "must": [
+        [
+          "mum@example.test"
+        ]
+      ],
+      "why": "The email did not change and shared a note with the old phone number."
+    },
+    {
+      "id": "contact-details",
+      "kind": "multi",
+      "after": "n08",
+      "ask": "What are Mum's contact details?",
+      "must": [
+        [
+          "07700 900456"
+        ],
+        [
+          "mum@example.test"
+        ]
+      ],
+      "why": "Both the new number and the unchanged email are needed."
+    }
+  ]
+}

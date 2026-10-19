@@ -172,7 +172,7 @@ export async function runBrainArm({ lib, controls, scenario, fileWith, answerWit
       }
     }
     const requests = filer.log.slice(before).filter((e) => e.capability === 'categorise');
-    filing.push({ note: note.id, at: note.at, ok: error === null, error, attempts: requests.length, tokens: sum(requests.map((e) => e.usage).filter((u) => u !== null)), replaced: error === null ? replaced : [], tidied });
+    filing.push({ note: note.id, at: note.at, ok: error === null, error, attempts: requests.length, tokens: sum(requests.map((e) => e.usage).filter((u) => u !== null)), replaced: error === null ? replaced : [], tidied, facts: error === null && proposed.ok ? (proposed.value.summary.newItems?.length ?? 0) : 0 });
     for (const q of scenario.questions.filter((x) => x.after === note.id)) {
       if (!(await ask(q))) return { filing, answers, aborted: true };
       clock.value = Math.max(clock.value, timeOf(note.at));
