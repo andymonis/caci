@@ -121,6 +121,7 @@ export interface ServiceConfig {
     readonly cookieSecure: boolean;
     readonly dataDir: string;
     readonly invitationDays: number;
+    readonly ledgerDays: number;
     readonly llm: 'demo' | 'anthropic';
     readonly maxBrainScopes: number;
     readonly maxCirclesPerUser: number;
@@ -138,6 +139,7 @@ export interface ServiceOptions {
         readonly fetch?: typeof fetch;
     };
     readonly apiKey?: string;
+    readonly clock?: () => number;
     readonly controlsDir?: string;
     // Warning: (ae-forgotten-export) The symbol "ModelClient" needs to be exported by the entry point index.d.ts
     readonly llmClient?: ModelClient;
@@ -150,6 +152,7 @@ export interface ServiceOptions {
     // Warning: (ae-forgotten-export) The symbol "ScopesResult" needs to be exported by the entry point index.d.ts
     // Warning: (ae-forgotten-export) The symbol "ReconcileReport" needs to be exported by the entry point index.d.ts
     readonly onReconcile?: (result: ScopesResult<ReconcileReport>) => void;
+    readonly onWarning?: (message: string) => void;
     readonly webDir?: string;
 }
 

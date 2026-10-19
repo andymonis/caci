@@ -39,6 +39,7 @@ export async function serve(env: Readonly<Record<string, string | undefined>>, i
     if (key !== undefined && !key.ok) throw new Error(key.error.message);
     const service = await startService(config.value, {
       ...(key?.ok === true ? { apiKey: key.value } : {}),
+      onWarning: (message) => io.stderr(`Warning: ${message}.\n`),
       onReconcile: (result) => {
         const said = describeReconcile(result);
         if (said.out !== undefined) io.stdout(said.out);

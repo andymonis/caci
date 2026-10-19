@@ -38,6 +38,8 @@ export interface ServiceConfig {
   readonly maxBrainScopes: number;
   /** `CACI_STATUS_PER_HOUR`: how many status updates one account may ask for in an hour, 1 to 1000. Default 20. */
   readonly statusPerHour: number;
+  /** `CACI_LEDGER_DAYS`: how long the change log keeps an entry (R-014), 1 to 3650. Default 90. */
+  readonly ledgerDays: number;
 }
 
 /** One thing wrong with the settings: which variable, and what to do. Never the value given. */
@@ -63,6 +65,7 @@ export const VARIABLES: readonly string[] = Object.freeze([
   'CACI_INVITATION_DAYS',
   'CACI_MAX_BRAIN_SCOPES',
   'CACI_STATUS_PER_HOUR',
+  'CACI_LEDGER_DAYS',
 ]);
 
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -131,6 +134,7 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
   const invitationDays = whole('CACI_INVITATION_DAYS', 7, 1, 365);
   const maxBrainScopes = whole('CACI_MAX_BRAIN_SCOPES', 25, 2, 100);
   const statusPerHour = whole('CACI_STATUS_PER_HOUR', 20, 1, 1000);
+  const ledgerDays = whole('CACI_LEDGER_DAYS', 90, 1, 3650);
 
   let llm: 'demo' | 'anthropic' = 'demo';
   const llmGiven = text('CACI_LLM');
@@ -156,5 +160,5 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
     bad('CACI_COOKIE_SECURE', 'must be true when CACI_BIND is not a loopback address (put HTTPS in front), or set CACI_ALLOW_INSECURE=true to accept sending session cookies in the clear');
   }
   if (errors.length > 0) return err(errors);
-  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser, maxCirclesPerUser, maxMembersPerCircle, invitationDays, maxBrainScopes, statusPerHour });
+  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser, maxCirclesPerUser, maxMembersPerCircle, invitationDays, maxBrainScopes, statusPerHour, ledgerDays });
 }

@@ -1,9 +1,10 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createAccountRoutes, createApiServer, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
+import { createAccountRoutes, createApiServer, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
 import { createCaciController, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
+import { createSqliteLedgerStore } from '../ledger/sqlite/index.js';
 import { afterAccountDeletion, createScopeResolver, reconcileCircleGraphs, withCircleGraphs, type ReconcileReport, type ScopesResult } from '../scopes/index.js';
 import { createSharing } from '../sharing/index.js';
 import { createSqliteCircleStore } from '../circles/sqlite/index.js';
@@ -41,6 +42,13 @@ export interface ServiceOptions {
   readonly controlsDir?: string;
   /** For tests: the folder to read the web app's files from, instead of `web/` beside the code. */
   readonly webDir?: string;
+  /**
+   * Told, with a fixed sentence and no notes or ids, when something that must not fail a request did: recording a change in the
+   * change log, or tidying a category. `serve` prints these as warnings.
+   */
+  readonly onWarning?: (message: string) => void;
+  /** For tests: the clock, in milliseconds, used for the change log's time and its retention. */
+  readonly clock?: () => number;
   /** Told the outcome of every reconcile of circle records and circle graphs: at start-up and after each account deletion. */
   readonly onReconcile?: (result: ScopesResult<ReconcileReport>) => void;
 }
@@ -94,6 +102,23 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     const circleStore = createSqliteCircleStore({ path: join(dataDir, 'users.db') }); // circles live beside the accounts, so deleting an account can remove its places in the same transaction
     closers.push(() => circleStore.close());
 
+    const ledger = createSqliteLedgerStore({ path: join(dataDir, 'users.db') }); // the change log (R-014) lives beside the accounts and circles
+    closers.push(() => ledger.close());
+    const clock = options.clock ?? Date.now;
+    const warn = (message: string): void => {
+      try {
+        options.onWarning?.(message);
+      } catch {
+        // an observer must not stop the service
+      }
+    };
+    const DAY = 86_400_000;
+    const purge = (): void => void ledger.purgeBefore(clock() - config.ledgerDays * DAY).catch(() => warn('could not remove old entries from the change log'));
+    purge(); // at start-up, and once a day
+    const purging = setInterval(purge, DAY);
+    purging.unref();
+    closers.push(() => clearInterval(purging));
+
     const reconcile = async (): Promise<void> => {
       const result = await reconcileCircleGraphs({ circles: circleStore, graphAdapter: graphs });
       try {
@@ -105,7 +130,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     const baseUsers = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration } });
     const controller = afterAccountDeletion(baseUsers, reconcile); // deleting an account can dissolve a circle, which leaves its graph behind
     const llm = createLlm({ client, controls: controls.value }); // one model component for filing notes and for status updates
-    const capture = createController({ adapter: graphs, llm });
+    const capture = createController({ adapter: graphs, llm, now: clock, onWarning: warn, candidates: controls.value.categorise.settings.maxReplaces > 0 ? {} : false });
     const caci = createCaciController({
       users: controller,
       capture,
@@ -114,6 +139,10 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       mode: config.llm,
       llm,
       limits: { maxPendingPerUser: config.maxPendingPerUser, proposalsPerHour: config.proposalsPerHour, statusPerHour: config.statusPerHour },
+      ledger,
+      directory: users,
+      clock,
+      onLedgerFailure: warn,
     });
     const circles = withCircleGraphs(createCircleController({
       users: controller,
@@ -128,6 +157,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       ...createCaptureRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createReadRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createBrainRoutes({ caci, secureCookies: config.cookieSecure }),
+      ...createLedgerRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createStatusRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createCircleRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createInvitationRoutes({ circles, secureCookies: config.cookieSecure }),

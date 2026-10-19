@@ -26,7 +26,7 @@ afterAll(() => {
   for (const leak of [PW, KEY, 'scrypt$', 'passwordHash', 'user-u', 'circle-c', 'inputTokens', '<entries>']) expect(all.includes(leak), `a response held "${leak}"`).toBe(false);
 });
 
-const config = (dataDir: string, extra: Partial<ServiceConfig> = {}): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 100, maxPendingPerUser: 20, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, statusPerHour: 20, ...extra });
+const config = (dataDir: string, extra: Partial<ServiceConfig> = {}): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 100, maxPendingPerUser: 20, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, statusPerHour: 20, ledgerDays: 90, ...extra });
 
 interface Reply { status: number; json: any; text: string; headers: Headers } // eslint-disable-line @typescript-eslint/no-explicit-any
 type Person = ReturnType<typeof person>;
