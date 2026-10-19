@@ -14,3 +14,5 @@ export type { ExistingNodes, Link, ProposalSummary } from './summary.js';
 export { createController, DEFAULT_CONTROLLER_OPTIONS } from './controller.js';
 export type { Approved, Controller, ControllerError, ControllerInit, ProposeOptions } from './controller.js';
 export type { PendingProposal } from './pending.js';
+export { DEFAULT_CANDIDATE_OPTIONS, madeAt, rankCandidates, readCandidates, wordsOf } from './candidates.js';
+export type { Candidate, CandidateOptions, ItemRow } from './candidates.js';

@@ -38,6 +38,23 @@ export interface AudioInput {
     readonly mediaType: string;
 }
 
+// @public
+export interface Candidate {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly summary: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export interface CandidateOptions {
+    readonly maxCandidates?: number;
+    readonly maxChars?: number;
+    readonly maxRead?: number;
+}
+
 // @public (undocumented)
 export interface Controller {
     approve(proposalId: string): Promise<Result<Approved, ControllerError>>;
@@ -87,6 +104,13 @@ export function createController(init: ControllerInit): Controller;
 
 // @public
 export function createItemIdGenerator(options?: ItemIdOptions): ItemIdGenerator;
+
+// @public (undocumented)
+export const DEFAULT_CANDIDATE_OPTIONS: Readonly<{
+    maxCandidates: 8;
+    maxChars: 3000;
+    maxRead: 2000;
+}>;
 
 // @public (undocumented)
 export const DEFAULT_CONTROLLER_OPTIONS: Readonly<{
@@ -139,12 +163,25 @@ export interface ItemIdOptions {
 }
 
 // @public (undocumented)
+export interface ItemRow {
+    // Warning: (ae-forgotten-export) The symbol "JsonObject" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly data?: JsonObject;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public (undocumented)
 export interface Link {
     // (undocumented)
     readonly category: string;
     // (undocumented)
     readonly item: string;
 }
+
+// @public
+export function madeAt(id: string, data: JsonObject | undefined): number;
 
 // @public
 export function normaliseInput(input: unknown, normalisers?: Normalisers): Promise<Result<string, AppError>>;
@@ -222,6 +259,12 @@ export interface ProposeOptions {
 }
 
 // @public
+export function rankCandidates(note: string, items: Iterable<ItemRow>, options?: CandidateOptions): Candidate[];
+
+// @public
+export function readCandidates(adapter: StorageAdapter, graphId: string, note: string, options?: CandidateOptions, graphOptions?: GraphOptions): Promise<Result<Candidate[], GraphError>>;
+
+// @public
 export function summarise(mutation: Mutation, existing: ExistingNodes): Result<ProposalSummary, AppError>;
 
 // @public
@@ -231,6 +274,9 @@ export interface TextInput {
     // (undocumented)
     readonly text: string;
 }
+
+// @public
+export function wordsOf(text: string): Set<string>;
 
 // Warnings were encountered during analysis:
 //
