@@ -44,7 +44,7 @@ describe('the dev tools are never part of a release', () => {
   it('the library build only compiles src/, so dev code cannot end up in dist/', () => {
     expect(read('tsconfig.json').include).toEqual(['src']);
     const dist = join(root, 'dist');
-    if (existsSync(dist)) expect(readdirSync(dist).sort()).toEqual(['api', 'app', 'caci', 'circles', 'graph_store', 'llm', 'scopes', 'service', 'sharing', 'sqlite', 'users']);
+    if (existsSync(dist)) expect(readdirSync(dist).sort()).toEqual(['api', 'app', 'caci', 'circles', 'graph_store', 'ledger', 'llm', 'scopes', 'service', 'sharing', 'sqlite', 'users']);
   });
 
   it('nothing in the library imports from the dev tools', () => {
