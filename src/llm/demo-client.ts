@@ -37,6 +37,11 @@ const capitalise = (word: string): string => {
 /** Plain code-unit order, so the answer never depends on the machine's locale. */
 const byId = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
+/** Words that say a note changes something that was already noted ("now takes", "moved to", "corrected", "instead"). */
+const CHANGE_CUE = /\b(?:now|changed|change|instead|moved|move|rescheduled|corrected|correction|actually|new|replaced|cancelled|canceled|switched)\b/i;
+/** A note replaces an existing one only if they share at least this many words. */
+const REPLACE_SHARED_WORDS = 3;
+
 interface CategoryLine {
   readonly id: string;
   readonly links?: number;
@@ -60,6 +65,18 @@ function readRequest(request: ModelRequest): { itemId: string | undefined; note:
     }
   }
   return { itemId, note: note === undefined ? undefined : unescapeBlock(note), categories };
+}
+
+/** The existing notes the categoriser showed, as `[number, text]` (the text is `title: summary`). */
+function readExisting(request: ModelRequest): Array<readonly [number, string]> {
+  const block = /<existing>\n([\s\S]*?)\n<\/existing>/.exec(request.messages[0]?.content ?? '')?.[1];
+  if (block === undefined) return [];
+  const out: Array<readonly [number, string]> = [];
+  for (const line of unescapeBlock(block).split('\n')) {
+    const m = /^\[(\d+)\] (.*)$/.exec(line);
+    if (m !== null) out.push([Number(m[1]), m[2] as string]);
+  }
+  return out;
 }
 
 /** `Thursday 15 October 2026` in the zone, from the request's own facts (not from the wording of any prompt). */
@@ -146,7 +163,20 @@ export function demoReply(request: ModelRequest): JsonObject | undefined {
     ops.push({ op: 'upsertNode', partition: 'category', id, data: { name: capitalise(word ?? 'inbox') } }, { op: 'link', item: itemId, category: id, weight: 0.8 });
     rationale = word === undefined ? 'The note has no distinctive words, so it goes to a new "inbox" category.' : `No existing category shares a word with the note, so a new one was made from "${word}".`;
   }
-  return { ops, rationale };
+  const replaces = replacedBy(note, readExisting(request), noteWords);
+  if (replaces !== undefined) rationale = `${rationale} It changes note ${replaces}, which it replaces.`;
+  return { ops, rationale, ...(replaces === undefined ? {} : { replaces: [replaces] }) };
+}
+
+/** The number of the one existing note this note replaces, if it reads like a change and shares enough words with that note. */
+function replacedBy(note: string, existing: ReadonlyArray<readonly [number, string]>, noteWords: readonly string[]): number | undefined {
+  if (existing.length === 0 || !CHANGE_CUE.test(note)) return undefined;
+  let best: { n: number; shared: number } | undefined;
+  for (const [n, text] of existing) {
+    const shared = [...new Set(wordsOf(text))].filter((w) => noteWords.some((x) => same(x, w))).length;
+    if (shared >= REPLACE_SHARED_WORDS && (best === undefined || shared > best.shared)) best = { n, shared };
+  }
+  return best?.n;
 }
 
 /** Rough, but plausible and never zero: about four characters to a token. */
