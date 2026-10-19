@@ -9,10 +9,12 @@ export interface Candidate {
   readonly id: string;
   readonly title: string;
   readonly summary: string;
+  /** The fact's key (R-015), when it has one. */
+  readonly key?: string;
 }
 
 export interface CandidateOptions {
-  /** Most candidates returned. Default 8. */
+  /** Most candidates returned. Default 12. */
   readonly maxCandidates?: number;
   /** Characters over all candidates' titles and summaries. Default 3,000. */
   readonly maxChars?: number;
@@ -20,10 +22,11 @@ export interface CandidateOptions {
   readonly maxRead?: number;
 }
 
-export const DEFAULT_CANDIDATE_OPTIONS = Object.freeze({ maxCandidates: 8, maxChars: 3000, maxRead: 2000 });
+export const DEFAULT_CANDIDATE_OPTIONS = Object.freeze({ maxCandidates: 12, maxChars: 3000, maxRead: 2000 });
 
 const TITLE_CLIP = 100;
 const SUMMARY_CLIP = 300;
+const KEY_CLIP = 80;
 const PAGE = 500;
 
 // Words too common to say two notes are about the same thing.
@@ -71,6 +74,8 @@ export function madeAt(id: string, data: JsonObject | undefined): number {
 
 interface Scored extends Candidate {
   readonly shared: number;
+  /** 1 when every word of the item's stored key is in the note (R-015 D5), else 0. */
+  readonly keyHit: number;
   readonly at: number;
 }
 
@@ -103,22 +108,27 @@ export function rankCandidates(note: string, items: Iterable<ItemRow>, options: 
     let shared = 0;
     for (const word of wordsOf(matchText(item.data))) if (wanted.has(word)) shared++;
     if (shared === 0) continue;
+    const key = typeof item.data?.key === 'string' ? clip(item.data.key, KEY_CLIP) : '';
+    const keyWords = wordsOf(key);
+    const keyHit = keyWords.size > 0 && [...keyWords].every((w) => wanted.has(w)) ? 1 : 0;
     scored.push({
       id: item.id,
+      ...(key === '' ? {} : { key }),
+      keyHit,
       title: clip(typeof item.data?.title === 'string' ? item.data.title : '', TITLE_CLIP),
       summary: clip(typeof item.data?.summary === 'string' ? item.data.summary : '', SUMMARY_CLIP),
       shared,
       at: madeAt(item.id, item.data),
     });
   }
-  scored.sort((a, b) => b.shared - a.shared || b.at - a.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  scored.sort((a, b) => b.keyHit - a.keyHit || b.shared - a.shared || b.at - a.at || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const out: Candidate[] = [];
   let used = 0;
   for (const s of scored.slice(0, maxCandidates)) {
-    const size = [...s.title].length + [...s.summary].length;
+    const size = [...s.title].length + [...s.summary].length + [...(s.key ?? '')].length;
     if (used + size > maxChars) break;
     used += size;
-    out.push({ id: s.id, title: s.title, summary: s.summary });
+    out.push(s.key === undefined ? { id: s.id, title: s.title, summary: s.summary } : { id: s.id, title: s.title, summary: s.summary, key: s.key });
   }
   return out;
 }

@@ -500,8 +500,8 @@ describe('the current-view brain section of the README', () => {
     expect(parseServiceConfig({ CACI_LEDGER_DAYS: '0' }).ok).toBe(false);
   });
 
-  it('states the limits that are in the code and the controls: 8 candidates, 5 replaces, 200 and 400 characters', () => {
-    expect(DEFAULT_CANDIDATE_OPTIONS.maxCandidates).toBe(8);
+  it('states the limits that are in the code and the controls: 12 candidates, 5 replaces, 200 and 400 characters', () => {
+    expect(DEFAULT_CANDIDATE_OPTIONS.maxCandidates).toBe(12);
     expect(viewSection).toContain(`up to ${DEFAULT_CANDIDATE_OPTIONS.maxCandidates} notes`);
     const shipped = JSON.parse(readFileSync(new URL('../../controls/categorise/settings.json', import.meta.url), 'utf8')) as { maxReplaces: number };
     expect(shipped.maxReplaces).toBe(5);

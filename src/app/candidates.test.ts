@@ -65,9 +65,9 @@ describe('rankCandidates', () => {
     const found = rankCandidates('garden shed roof', [{ id: 'new', data: { title: 'garden', contributedAt: 9000 } }, { id: 'old', data: { title: 'garden shed roof', contributedAt: 1000 } }]);
     expect(ids(found)).toEqual(['old', 'new']);
   });
-  it('returns at most maxCandidates (8 by default)', () => {
+  it('returns at most maxCandidates (12 by default)', () => {
     const many = Array.from({ length: 20 }, (_, i) => item(`n${String(i).padStart(2, '0')}`, 'garden'));
-    expect(rankCandidates('garden', many)).toHaveLength(8);
+    expect(rankCandidates('garden', many)).toHaveLength(12);
     expect(rankCandidates('garden', many, { maxCandidates: 3 })).toHaveLength(3);
     expect(rankCandidates('garden', many, { maxCandidates: 0 })).toEqual([]);
   });
@@ -116,7 +116,7 @@ describe('rankCandidates', () => {
     const started = Date.now();
     const found = rankCandidates('topic7 note', many);
     expect(Date.now() - started).toBeLessThan(1500);
-    expect(found).toHaveLength(8);
+    expect(found).toHaveLength(12);
   });
 });
 
@@ -167,5 +167,36 @@ describe('readCandidates', () => {
     const adapter = await graphWith('user-u1', []);
     const r = await readCandidates(adapter, 'user-u1', 'anything here');
     expect(r.ok && r.value).toEqual([]);
+  });
+});
+
+describe('keys (R-015)', () => {
+  const fact = (id: string, key: string | undefined, title: string, summary: string) => ({ id, data: { title, summary, ...(key === undefined ? {} : { key }) } });
+  it('a fact whose whole key is in the note comes first, even when another shares more words', () => {
+    const items = [
+      fact('wordy', undefined, 'Mum phone call routine', 'Mum likes a phone call on Sunday about the number of visitors'),
+      fact('phone', 'mum / phone number', 'Mum: phone', '07700 900123'),
+    ];
+    expect(rankCandidates('Mum has a new phone number 07700 900456, call on Sunday about the number of visitors', items).map((c) => c.id)).toEqual(['phone', 'wordy']);
+  });
+  it('a key with a word that is not in the note is not a hit (it only ranks by shared words)', () => {
+    const items = [fact('dob', 'mum / date of birth', 'Mum: born', '4 June'), fact('other', undefined, 'Mum note', 'phone number mum')];
+    expect(rankCandidates('Mum phone number', items).map((c) => c.id)).toEqual(['other', 'dob']);
+  });
+  it('the candidate carries its key, cut to 80 characters, and an item without one has no key field', () => {
+    const [a, b] = rankCandidates('mum phone', [fact('a', 'mum phone', 'T', 'S'), fact('b', undefined, 'mum phone', 'S')]);
+    expect(a).toEqual({ id: 'a', title: 'T', summary: 'S', key: 'mum phone' });
+    expect(b).toEqual({ id: 'b', title: 'mum phone', summary: 'S' });
+    expect('key' in (b ?? {})).toBe(false);
+    const long = rankCandidates('kkkk', [fact('c', `kkkk ${'k'.repeat(100)}`, 't', 's')])[0];
+    expect([...(long?.key ?? '')]).toHaveLength(80);
+  });
+  it('the key counts toward the character budget', () => {
+    const items = [fact('a', 'aa bb', 'xx', 'yy'), fact('b', 'aa bb', 'xx', 'yy')];
+    expect(rankCandidates('aa bb', items, { maxChars: 9 })).toHaveLength(1); // 2 + 2 + 5 each
+    expect(rankCandidates('aa bb', items, { maxChars: 18 })).toHaveLength(2);
+  });
+  it('an item without a stored key is still matched by words, as before', () => {
+    expect(rankCandidates('garden party', [fact('old', undefined, 'Garden party', 'on Friday')]).map((c) => c.id)).toEqual(['old']);
   });
 });

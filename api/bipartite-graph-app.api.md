@@ -43,6 +43,7 @@ export interface AudioInput {
 export interface Candidate {
     // (undocumented)
     readonly id: string;
+    readonly key?: string;
     // (undocumented)
     readonly summary: string;
     // (undocumented)
@@ -110,7 +111,7 @@ export function createItemIdGenerator(options?: ItemIdOptions): ItemIdGenerator;
 
 // @public (undocumented)
 export const DEFAULT_CANDIDATE_OPTIONS: Readonly<{
-    maxCandidates: 8;
+    maxCandidates: 12;
     maxChars: 3000;
     maxRead: 2000;
 }>;
