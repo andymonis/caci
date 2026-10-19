@@ -562,3 +562,19 @@ describe('a note that replaces an older one (R-014)', () => {
     expect(page.el('capture-outcome-text').textContent).toBe('Written: 4 operations (1 new item, 1 new category, 1 link, removed 1 old note and 1 empty category).');
   });
 });
+
+describe('a note of several facts (R-015)', () => {
+  const FACTS = [{ id: 'note-1', title: '<b>Mum: born</b>', summary: '4 June 1950' }, { id: 'note-1-2', title: 'Mum: phone', summary: '07700 900123' }];
+  it('lists the facts that will be added, as text, above the removals and the notes', async () => {
+    const { page } = await start({ 'POST /api/capture/propose': proposed({ summary: { ...SUMMARY, facts: FACTS, removed: [{ id: 'o', title: 'Old', summary: 'x' }], notes: ['a note'] } }) });
+    await propose(page);
+    const lines = rows(page, 'capture-lines').map(text);
+    expect(lines).toEqual(['This note adds 2 facts:', '<b>Mum: born</b>: 4 June 1950', 'Mum: phone: 07700 900123', 'This note replaces: Old (x). The old note will be removed when you approve.', 'Note: a note']);
+    expect(rows(page, 'capture-lines')[1].querySelector('[data-slot="text"]').children.length).toBe(0);
+  });
+  it('shows nothing about facts for a note of one', async () => {
+    const { page } = await start({ 'POST /api/capture/propose': proposed({ summary: { ...SUMMARY, facts: [FACTS[0]] } }) });
+    await propose(page);
+    expect(rows(page, 'capture-lines')).toEqual([]);
+  });
+});

@@ -68,6 +68,13 @@ export function opText(op) {
   return `${op.partition === 'item' ? 'Add or update item' : 'Add or update category'} ${op.id}${titleOf(op.data)}`;
 }
 
+/** The facts a note would add, one line each, when it adds more than one (R-015). Empty for a note of one fact. */
+export function factLines(summary) {
+  const facts = Array.isArray(summary.facts) ? summary.facts : [];
+  if (facts.length < 2) return [];
+  return [`This note adds ${facts.length} facts:`, ...facts.map((f) => `${f.title !== '' ? f.title : f.id}${f.summary === '' ? '' : `: ${f.summary}`}`)];
+}
+
 /** The notes a proposal would remove, one line each, in the person's words (R-014). Empty when it replaces nothing. */
 export function replaceLines(summary) {
   const removed = Array.isArray(summary.removed) ? summary.removed : [];

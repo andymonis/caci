@@ -84,4 +84,47 @@ describe('a new fact replaces the old one, through the capture page', () => {
     expect(el(ann, 'ledger-notice').textContent).toContain('review log');
     expect(ann.page.focused().id).toBe('ledger-heading');
   });
+
+  it('a profile note becomes separate facts, and changing the phone number replaces only the phone fact', async () => {
+    const w = await world();
+    const ann = browser(w.ann, '#/capture');
+    await waitFor(() => !el(ann, 'view-capture').hidden && !el(ann, 'capture-submit').disabled);
+    await propose(ann, 'Mum: born 4 June 1950, phone 07700 900123, email mum@example.test.');
+    const first = lineTexts(ann, 'capture-lines');
+    expect(first[0]).toBe('This note adds 3 facts:');
+    expect(first.slice(1, 4).join(' | ')).toContain('4 June 1950');
+    expect(first.slice(1, 4).join(' | ')).toContain('07700 900123');
+    expect(first.slice(1, 4).join(' | ')).toContain('mum@example.test');
+    el(ann, 'capture-approve').fire('click');
+    await waitFor(() => !el(ann, 'capture-outcome').hidden);
+
+    const titles = async () => {
+      const out = [];
+      for (const c of (await w.ann.notes.categories()).value.items) for (const i of (await w.ann.notes.categoryItems(c.id)).value.items) out.push(`${i.data.title}|${i.data.summary}`);
+      return [...new Set(out)].sort();
+    };
+    const before = await titles();
+    expect(before.filter((t) => t.includes('Mum:'))).toHaveLength(3);
+
+    el(ann, 'capture-again').fire('click');
+    await propose(ann, "Mum's new phone number: 07700 900456.");
+    const replaces = lineTexts(ann, 'capture-lines').filter((l) => l.startsWith('This note replaces'));
+    expect(replaces).toHaveLength(1);
+    expect(replaces[0]).toContain('07700 900123');
+    expect(lineTexts(ann, 'capture-lines').some((l) => l.startsWith('This note adds'))).toBe(false);
+    el(ann, 'capture-approve').fire('click');
+    await waitFor(() => !el(ann, 'capture-outcome').hidden);
+    expect(el(ann, 'capture-outcome-text').textContent).toMatch(/removed 1 old note/);
+
+    const after = (await titles()).join('\n');
+    expect(after).toContain('4 June 1950');
+    expect(after).toContain('mum@example.test');
+    expect(after).toContain('07700 900456');
+    expect(after).not.toContain('07700 900123');
+
+    const log = (await w.ann.ledger.list(undefined)).value.items.map((e) => `${e.action} ${e.kind} ${e.title ?? ''}`);
+    expect(log.filter((l) => l.startsWith('added item')).length).toBe(4);
+    expect(log.filter((l) => l.startsWith('removed item'))).toHaveLength(1);
+    expect(log.find((l) => l.startsWith('removed item'))).toContain('07700 900123');
+  });
 });

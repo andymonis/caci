@@ -157,7 +157,7 @@ describe('what comes back', () => {
   it('approve gives which proposal, how many operations were written and what they were', async () => {
     const { client } = fake({ status: 200, body: { written: { id: P, applied: 3, summary: SUMMARY, graphId: 'user-u1' } } });
     const r = await client.approve(P);
-    expect(r.value).toEqual({ id: P, applied: 3, summary: { ...SUMMARY, removed: [] }, tidied: [] });
+    expect(r.value).toEqual({ id: P, applied: 3, summary: { ...SUMMARY, facts: [], removed: [] }, tidied: [] });
     for (const body of [{}, { written: { id: P, applied: -1, summary: SUMMARY } }, { written: { id: 'x', applied: 1, summary: SUMMARY } }, { written: { id: P, applied: 1, summary: {} } }]) expect((await fake({ status: 200, body }).client.approve(P)).error.kind).toBe('server');
   });
 
@@ -176,6 +176,17 @@ describe('what comes back', () => {
     for (const tidied of ['x', [{ name: 'n' }], [{ id: 'a', name: 5 }]]) expect((await fake({ status: 200, body: { written: { id: P, applied: 1, summary: SUMMARY, tidied } } }).client.approve(P)).error.kind).toBe('server');
     expect((await fake({ status: 200, body: { written: { id: P, applied: 1, summary: SUMMARY } } }).client.approve(P)).value.tidied).toEqual([]);
     expect((await fake({ status: 201, body: { proposal: { ...PROPOSAL, operations: [{ op: 'deleteNode', partition: 'other', id: 'x' }] } } }).client.propose('x')).error.kind).toBe('server');
+  });
+
+  it('facts (R-015): the new items with title and summary are kept, cut down and frozen; absent means none; a bad one is a server problem', async () => {
+    const facts = [{ id: 'note-1', title: 'Mum: phone', summary: '0770', key: 'x', junk: 1 }, { id: 'note-1-2', title: 'Mum: email', summary: 'a@b.c' }];
+    const r = await fake({ status: 201, body: { proposal: { ...PROPOSAL, summary: { ...SUMMARY, facts } } } }).client.propose('x');
+    expect(r.value.summary.facts).toEqual([{ id: 'note-1', title: 'Mum: phone', summary: '0770' }, { id: 'note-1-2', title: 'Mum: email', summary: 'a@b.c' }]);
+    expect(Object.isFrozen(r.value.summary.facts) && Object.isFrozen(r.value.summary.facts[0])).toBe(true);
+    expect((await fake({ status: 201, body: { proposal: PROPOSAL } }).client.propose('x')).value.summary.facts).toEqual([]);
+    for (const bad of ['x', [null], [{ id: 'a', title: 'T' }], [{ id: 5, title: 'T', summary: 'S' }], [{ id: 'a', title: 5, summary: 'S' }]]) {
+      expect((await fake({ status: 201, body: { proposal: { ...PROPOSAL, summary: { ...SUMMARY, facts: bad } } } }).client.propose('x')).error.kind, JSON.stringify(bad)).toBe('server');
+    }
   });
 
   it('reject is true on 204', async () => {

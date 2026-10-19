@@ -98,10 +98,13 @@ function summaryOf(json) {
   const lists = ['newItems', 'updatedItems', 'newCategories', 'updatedCategories', 'reusedCategories', 'problems', 'notes'];
   if (!lists.every((k) => strings(json[k]))) return undefined;
   if (!Array.isArray(json.newLinks) || !json.newLinks.every((l) => isObject(l) && typeof l.item === 'string' && typeof l.category === 'string')) return undefined;
+  // `facts` (R-015): the new items with their title and summary; an answer without it means none.
+  if (json.facts !== undefined && !(Array.isArray(json.facts) && json.facts.every((f) => isObject(f) && typeof f.id === 'string' && typeof f.title === 'string' && typeof f.summary === 'string'))) return undefined;
   // `removed` (R-014): the notes this one replaces; an answer without it means none.
   if (json.removed !== undefined && !(Array.isArray(json.removed) && json.removed.every((r) => isObject(r) && typeof r.id === 'string' && typeof r.title === 'string' && typeof r.summary === 'string'))) return undefined;
   return Object.freeze({
     ...Object.fromEntries(lists.map((k) => [k, Object.freeze([...json[k]])])),
+    facts: Object.freeze((json.facts ?? []).map((f) => Object.freeze({ id: f.id, title: f.title, summary: f.summary }))),
     removed: Object.freeze((json.removed ?? []).map((r) => Object.freeze({ id: r.id, title: r.title, summary: r.summary }))),
     newLinks: Object.freeze(json.newLinks.map((l) => Object.freeze({ item: l.item, category: l.category }))),
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { circleNotice, countText, expiresText, formatTime, MODE_LOADING, MODE_UNKNOWN, MODE_WORDS, modeNotice, noteLines, opText, outcomeText, PERSONAL_NOTICE, previewNotice, problemLines, readOnlyLine, REJECTED_WORDS, replaceLines, scopeLine, scopeNotice, withWait, writtenText } from './capture-view.js';
+import { circleNotice, countText, expiresText, formatTime, MODE_LOADING, MODE_UNKNOWN, MODE_WORDS, modeNotice, noteLines, opText, outcomeText, PERSONAL_NOTICE, previewNotice, problemLines, readOnlyLine, REJECTED_WORDS, replaceLines, factLines, scopeLine, scopeNotice, withWait, writtenText } from './capture-view.js';
 
 const SUMMARY = (extra = {}) => ({ newItems: [], updatedItems: [], newCategories: [], updatedCategories: [], reusedCategories: [], newLinks: [], problems: [], notes: [], ...extra });
 
@@ -145,5 +145,16 @@ describe('replacing and removing (R-014)', () => {
     expect(writtenText({ applied: 3, summary: SUMMARY({ removed: [...removed, ...removed] }), tidied: [{ id: 'c' }, { id: 'd' }] })).toBe('Written: 3 operations (removed 2 old notes and 2 empty categories).');
     expect(writtenText({ applied: 1, summary: SUMMARY(), tidied: [{ id: 'c' }] })).toBe('Written: 1 operation (removed 1 empty category).');
     expect(writtenText({ applied: 1, summary: SUMMARY() })).toBe('Written: 1 operation.');
+  });
+});
+
+describe('facts (R-015)', () => {
+  it('factLines lists each fact when a note adds more than one, and nothing for one or none', () => {
+    expect(factLines(SUMMARY())).toEqual([]);
+    expect(factLines(SUMMARY({ facts: [] }))).toEqual([]);
+    expect(factLines(SUMMARY({ facts: [{ id: 'a', title: 'T', summary: 'S' }] }))).toEqual([]);
+    expect(factLines(SUMMARY({ facts: [{ id: 'a', title: 'Mum: phone', summary: '0770' }, { id: 'b', title: '', summary: '' }, { id: 'c', title: 'Born', summary: '' }] }))).toEqual([
+      'This note adds 3 facts:', 'Mum: phone: 0770', 'b', 'Born',
+    ]);
   });
 });

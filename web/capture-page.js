@@ -4,7 +4,7 @@
 // person's note are only ever text.
 
 import { createCaptureSession } from './capture-session.js';
-import { countText, expiresText, modeNotice, noteLines, opText, outcomeText, previewNotice, problemLines, readOnlyLine, replaceLines, scopeLine, scopeNotice, withWait } from './capture-view.js';
+import { countText, expiresText, modeNotice, noteLines, opText, outcomeText, previewNotice, problemLines, readOnlyLine, replaceLines, factLines, scopeLine, scopeNotice, withWait } from './capture-view.js';
 import { createScopeSession, PERSONAL_LABEL } from './scope-session.js';
 
 export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
@@ -111,7 +111,7 @@ export function mountCapturePage(document, { client, onWritten, onSignedOut }) {
       ops.replaceChildren(...proposal.operations.map((op) => rowOf(opTemplate, opText(op))));
       rationale.textContent = typeof proposal.rationale === 'string' ? `Why: ${proposal.rationale}` : '';
       rationale.hidden = typeof proposal.rationale !== 'string';
-      lines.replaceChildren(...[...replaceLines(proposal.summary), ...problemLines(proposal.summary), ...noteLines(proposal.summary)].map((line) => rowOf(lineTemplate, line)));
+      lines.replaceChildren(...[...factLines(proposal.summary), ...replaceLines(proposal.summary), ...problemLines(proposal.summary), ...noteLines(proposal.summary)].map((line) => rowOf(lineTemplate, line)));
       expires.textContent = expiresText(proposal.expiresAt);
       approve.disabled = state.busy;
       reject.disabled = state.busy;
