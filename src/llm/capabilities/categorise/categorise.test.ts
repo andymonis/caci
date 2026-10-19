@@ -390,3 +390,73 @@ describe('createLlm', () => {
     expect(b.client.callCount).toBe(0);
   });
 });
+
+describe('categorise: replacing existing notes (R-014)', () => {
+  const EXISTING = [
+    { title: 'Mum: 2 x Tablet A', summary: 'Mum takes 2 x Tablet A a day.' },
+    { title: 'Bread', summary: 'Bread and milk' },
+  ];
+  const withExisting: CategoriseInput = { ...INPUT, existing: EXISTING };
+
+  it('shows the model the notes, numbered, and returns the numbers it names, ascending, frozen', async () => {
+    const { client, llm } = setup([reply({ ...GOOD, replaces: [2, 1] })]);
+    const r = await llm.categorise(withExisting);
+    expect(r.ok && r.value.replaces).toEqual([1, 2]);
+    expect(r.ok && Object.isFrozen(r.value.replaces)).toBe(true);
+    const sent = client.requests[0]?.messages[0]?.content ?? '';
+    expect(sent).toContain('<existing>\n[1] Mum: 2 x Tablet A: Mum takes 2 x Tablet A a day.\n[2] Bread: Bread and milk\n</existing>');
+    expect(JSON.stringify(client.requests[0]?.outputSchema)).toContain('"replaces"');
+  });
+  it('a proposal without replaces replaces nothing', async () => {
+    const { llm } = setup([reply(GOOD)]);
+    const r = await llm.categorise(withExisting);
+    expect(r.ok && r.value.replaces).toEqual([]);
+  });
+  it('a number that was not shown is refused and repaired once, with the problem told to the model', async () => {
+    const { client, llm } = setup([reply({ ...GOOD, replaces: [3] }), reply({ ...GOOD, replaces: [1] })]);
+    const r = await llm.categorise(withExisting);
+    expect(r.ok && r.value).toMatchObject({ replaces: [1], attempts: 2 });
+    expect(client.requests[1]?.messages.at(-1)?.content).toContain('replaces[0]: must be a whole number from 1 to 2');
+  });
+  it('without existing notes the model is not offered replaces, and naming it is refused', async () => {
+    const { client, llm } = setup([reply({ ...GOOD, replaces: [1] }), reply(GOOD)]);
+    const r = await llm.categorise(INPUT);
+    expect(r.ok && r.value.attempts).toBe(2);
+    expect(client.requests[0]?.messages[0]?.content).not.toContain('<existing>');
+    expect(JSON.stringify(client.requests[0]?.outputSchema)).not.toContain('replaces');
+  });
+  it('with replacing switched off in the controls, existing notes are not sent and replaces is refused', async () => {
+    const client = createScriptedModelClient([reply({ ...GOOD, replaces: [1] }), reply(GOOD)]);
+    const off = { ...SHIPPED_CONTROLS, categorise: { ...SHIPPED_CONTROLS.categorise, settings: { ...SHIPPED_CONTROLS.categorise.settings, maxReplaces: 0 } } };
+    const r = await createLlm({ controls: off, client }).categorise(withExisting);
+    expect(r.ok && r.value.attempts).toBe(2);
+    expect(client.requests[0]?.messages[0]?.content).not.toContain('<existing>');
+  });
+  it('the limit comes from the controls', async () => {
+    const client = createScriptedModelClient([reply({ ...GOOD, replaces: [1, 2] }), reply({ ...GOOD, replaces: [1] })]);
+    const one = { ...SHIPPED_CONTROLS, categorise: { ...SHIPPED_CONTROLS.categorise, settings: { ...SHIPPED_CONTROLS.categorise.settings, maxReplaces: 1 } } };
+    const r = await createLlm({ controls: one, client }).categorise(withExisting);
+    expect(r.ok && r.value).toMatchObject({ replaces: [1], attempts: 2 });
+  });
+  it('a bad existing list is a CONFIG error before the model is asked', async () => {
+    const { client, llm } = setup([reply(GOOD)]);
+    for (const existing of ['x', [null], [{ title: 'a' }]]) {
+      const r = await llm.categorise({ ...INPUT, existing: existing as never });
+      expect(r).toMatchObject({ ok: false, error: { code: 'CONFIG' } });
+    }
+    expect(client.callCount).toBe(0);
+  });
+  it('a bad existing list is refused even when replacing is switched off', async () => {
+    const client = createScriptedModelClient([reply(GOOD)]);
+    const off = { ...SHIPPED_CONTROLS, categorise: { ...SHIPPED_CONTROLS.categorise, settings: { ...SHIPPED_CONTROLS.categorise.settings, maxReplaces: 0 } } };
+    const r = await createLlm({ controls: off, client }).categorise({ ...INPUT, existing: 'x' as never });
+    expect(r).toMatchObject({ ok: false, error: { code: 'CONFIG' } });
+    expect(client.callCount).toBe(0);
+  });
+  it('the trace prompt event carries the existing block inside the context part', async () => {
+    const events: Array<{ type: string; parts?: { context: string } }> = [];
+    const { llm } = setup([reply(GOOD)]);
+    await llm.categorise(withExisting, { trace: (e) => void events.push(e as never) });
+    expect(events.find((e) => e.type === 'prompt')?.parts?.context).toContain('<existing>');
+  });
+});

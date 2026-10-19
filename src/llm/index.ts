@@ -1,7 +1,7 @@
 // The LLM component's public entry point. It talks to models only through the `ModelClient` port.
 // Capabilities (categorise, and later others) live in `capabilities/`, one folder each.
 
-export type { CategoriseEvent, CategoriseInput, CategoriseOptions, CategoryEntry, ContextOptions, Proposal } from './capabilities/categorise/index.js';
+export type { CategoriseEvent, CategoriseInput, CategoriseOptions, CategoryEntry, ContextOptions, ExistingNote, Proposal } from './capabilities/categorise/index.js';
 export { isTimeZone } from './capabilities/status/index.js';
 export type { StatusAnswer, StatusEntry, StatusInput, StatusOptions } from './capabilities/status/index.js';
 export { createLlm } from './create-llm.js';

@@ -7,7 +7,7 @@ import { makeEmitter, type Emit, type TraceEvent } from '../../trace.js';
 import { addUsage, isValidUsage, NO_USAGE, type TokenUsage } from '../../usage.js';
 import { buildContext, CATEGORISE_OPS, type CategoryEntry, type ContextOptions } from './context.js';
 import { guardReply, guardSettingsOf, inspectReply, rejectionError, type GuardedReply, type GuardSettings } from './guard.js';
-import { buildPrompt } from './prompt.js';
+import { buildPrompt, type ExistingNote } from './prompt.js';
 
 /** What the controller hands over for one note. */
 export interface CategoriseInput {
@@ -20,6 +20,11 @@ export interface CategoriseInput {
   readonly requestId?: string;
   /** The categories that exist now (the controller reads them from the graph). */
   readonly categories: readonly CategoryEntry[];
+  /**
+   * Notes already filed that this note might replace (R-014), found by the controller. The model is shown them numbered and may
+   * name some in the proposal's `replaces`. Leave out or empty to offer none (and so allow none).
+   */
+  readonly existing?: readonly ExistingNote[];
 }
 
 export interface CategoriseOptions {
@@ -53,6 +58,8 @@ export interface Proposal {
   /** A mutation the controller can preview and, once approved, pass to `write`. */
   readonly mutation: GuardedReply['mutation'];
   readonly rationale?: string;
+  /** The numbers (1 to the count of `existing` shown) of the existing notes this note replaces, ascending. Empty for none. */
+  readonly replaces: readonly number[];
   /** Tokens used across all attempts. */
   readonly usage: TokenUsage;
   /** The model that answered. */
@@ -72,7 +79,7 @@ export interface CategoriseDeps {
 
 export const DEFAULT_CATEGORISE_OPTIONS = Object.freeze({ timeoutMs: 30_000, maxOutputTokens: 4000 });
 
-const INPUT_FIELDS: readonly string[] = Object.freeze(['text', 'graphId', 'itemId', 'requestId', 'categories']);
+const INPUT_FIELDS: readonly string[] = Object.freeze(['text', 'graphId', 'itemId', 'requestId', 'categories', 'existing']);
 const OPTION_FIELDS: readonly string[] = Object.freeze(['model', 'tier', 'signal', 'timeoutMs', 'maxOutputTokens', 'maxOps', 'maxTextChars', 'maxContextChars', 'context', 'trace']);
 const NUMBER_OPTIONS: readonly string[] = Object.freeze(['timeoutMs', 'maxOutputTokens', 'maxOps', 'maxTextChars', 'maxContextChars']);
 /** The most of a rejected reply, or of the reasons, that is sent back for the repair attempt. */
@@ -103,6 +110,8 @@ function checkInput(input: unknown, guard: GuardSettings): LlmError | undefined 
   if (typeof graphId !== 'string' || typeof itemId !== 'string') return config('categorise input: graphId and itemId must be text');
   if (requestId !== undefined && typeof requestId !== 'string') return config('categorise input.requestId: must be text');
   if (!Array.isArray(categories)) return config('categorise input.categories: must be a list (it may be empty)');
+  const { existing } = input;
+  if (existing !== undefined && !Array.isArray(existing)) return config('categorise input.existing: must be a list of { title, summary } (it may be empty)');
   // A made-up good reply for these ids: if the guard would refuse the ids, say so now rather than after the model has answered.
   const probe = guardReply(
     { kind: 'json', value: { ops: [{ op: 'upsertNode', partition: 'item', id: itemId }, { op: 'link', item: itemId, category: 'probe' }] } },
@@ -170,7 +179,7 @@ async function run(
   if (!context.ok) return context;
   const prompt = buildPrompt(
     deps.controls.categorise,
-    { text: input.text, context: context.value.text, itemId: input.itemId },
+    { text: input.text, context: context.value.text, itemId: input.itemId, ...(limits.maxReplaces > 0 && input.existing !== undefined ? { existing: input.existing } : {}) },
     {
       maxOps: settings.maxOps,
       ...(options?.maxTextChars === undefined ? {} : { maxTextChars: options.maxTextChars }),
@@ -180,7 +189,8 @@ async function run(
   if (!prompt.ok) return prompt;
   emit({ type: 'prompt', system: prompt.value.system, messages: prompt.value.messages, schema: prompt.value.outputSchema, parts: prompt.value.parts });
 
-  const guardContext = { graphId: input.graphId, itemId: input.itemId, ...(input.requestId === undefined ? {} : { requestId: input.requestId }) };
+  const existingCount = input.existing?.length ?? 0;
+  const guardContext = { graphId: input.graphId, itemId: input.itemId, existingCount, ...(input.requestId === undefined ? {} : { requestId: input.requestId }) };
 
   const attempt = async (messages: readonly ModelMessage[]): Promise<Result<Attempt, LlmError>> => {
     if (options?.signal?.aborted === true) return err(llmError('CANCELLED', 'the call was cancelled'));
@@ -241,6 +251,7 @@ async function run(
 function propose(reply: GuardedReply, model: string, usage: TokenUsage, attempts: 1 | 2): Proposal {
   return Object.freeze({
     mutation: reply.mutation,
+    replaces: Object.freeze([...reply.replaces]),
     ...(reply.rationale === undefined ? {} : { rationale: reply.rationale }),
     usage: Object.freeze({ ...NO_USAGE, ...usage }),
     model,

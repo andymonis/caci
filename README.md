@@ -707,7 +707,7 @@ Exactly these six files are read, and nothing else in the folder:
 
 | File | What it holds | Slots it may use |
 |---|---|---|
-| `controls/categorise/system.txt` | The filing assistant's instructions | `{{itemId}}` (required), `{{maxOps}}`, `{{allowedOps}}` |
+| `controls/categorise/system.txt` | The filing assistant's instructions | `{{itemId}}` (required), `{{maxOps}}`, `{{allowedOps}}`, `{{maxReplaces}}` |
 | `controls/categorise/frame.txt` | The words around the two blocks in the user message | `{{contextBlock}}` and `{{requestBlock}}`, each exactly once |
 | `controls/categorise/settings.json` | The limits and the descriptions in the reply schema | none |
 | `controls/status/system.txt` | The status assistant's instructions | `{{entryCount}}`, `{{now}}`, `{{maxHeadline}}`, `{{maxPoints}}`, `{{maxPointChars}}`, `{{maxRefs}}` |
@@ -731,6 +731,7 @@ All numbers must be whole and inside their range; unknown settings are refused. 
 | `maxIdLength` | Longest id the guard accepts | `128` | 8 to 256 |
 | `maxOutputChars` | Longest reply accepted before it is read | `32000` | 1,000 to 200,000 |
 | `maxRationaleChars` | Longest reason | `500` | 1 to 2,000 |
+| `maxReplaces` | Most existing notes one new note may replace (0 switches replacing off); told to the model and enforced on the reply | `5` | 0 to 20 |
 | `titleMaxChars` | Longest item title, in the reply schema | `120` | 1 to 500 |
 | `summaryMaxChars` | Longest item summary, in the reply schema | `300` | 1 to 1,000 |
 | `categoryNameMaxChars` | Longest category name, in the reply schema | `60` | 1 to 200 |

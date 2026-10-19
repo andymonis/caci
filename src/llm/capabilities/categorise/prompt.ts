@@ -16,6 +16,17 @@ export interface PromptInput {
   readonly context: string;
   /** The id the note's item must use. */
   readonly itemId: string;
+  /**
+   * Notes already filed that this note might replace (R-014), as the controller found them. The model sees them numbered from 1 in an
+   * `<existing>` block and may name some of those numbers in `replaces`; it never sees their ids. Leave out or empty for none.
+   */
+  readonly existing?: readonly ExistingNote[];
+}
+
+/** One already-filed note, as the categoriser is shown it. */
+export interface ExistingNote {
+  readonly title: string;
+  readonly summary: string;
 }
 
 export interface PromptOptions {
@@ -73,19 +84,37 @@ const bad = (where: string, message: string) => err(llmError('CONFIG', `${where}
 
 export { escapeForBlock };
 
-/** The trusted instructions: the controls' `system.txt` with the item id, the operation limit and the allowed operations filled in. */
-export function buildSystemPrompt(controls: CategoriseControls, itemId: string, allowedOps: readonly AllowedOp[], maxOps: number): string {
-  return renderTemplate(controls.system, { itemId, maxOps: String(maxOps), allowedOps: allowedOps.join(', ') });
+/** The trusted instructions: the controls' `system.txt` with the item id, the operation limit, the allowed operations and the replace limit filled in. */
+export function buildSystemPrompt(controls: CategoriseControls, itemId: string, allowedOps: readonly AllowedOp[], maxOps: number, maxReplaces: number = controls.settings.maxReplaces): string {
+  return renderTemplate(controls.system, { itemId, maxOps: String(maxOps), allowedOps: allowedOps.join(', '), maxReplaces: String(maxReplaces) });
 }
 
-/** The two blocks of the user message: the category context (part 2) and the note (part 1), each escaped, in its own block. */
-export function userBlocks(context: string, text: string): { readonly contextBlock: string; readonly requestBlock: string } {
-  return { contextBlock: `<categories>\n${escapeForBlock(context)}\n</categories>`, requestBlock: `<note>\n${escapeForBlock(text)}\n</note>` };
+const oneLine = (text: string): string => text.replace(/\p{Cc}/gu, ' ').replace(/\s+/g, ' ').trim();
+
+/** The existing notes as numbered lines, one line each: `[1] title: summary`. Line breaks and control characters in them become spaces. */
+export function existingLines(existing: readonly ExistingNote[]): string {
+  return existing
+    .map((note, i) => {
+      const title = oneLine(note.title);
+      const summary = oneLine(note.summary);
+      return `[${i + 1}] ${title !== '' && summary !== '' ? `${title}: ${summary}` : title || summary || '(no text)'}`;
+    })
+    .join('\n');
 }
 
-/** The single user message: the controls' `frame.txt` with the category context and the note, each in an escaped block of its own. */
-export function buildUserMessage(controls: CategoriseControls, context: string, text: string): string {
-  return renderTemplate(controls.frame, userBlocks(context, text));
+/**
+ * The two blocks of the user message: the category context (part 2) and the note (part 1), each escaped, in its own block. When there
+ * are existing notes, their block follows the categories inside the same part, so the template and the three parts do not change.
+ */
+export function userBlocks(context: string, text: string, existing: readonly ExistingNote[] = []): { readonly contextBlock: string; readonly requestBlock: string } {
+  const categories = `<categories>\n${escapeForBlock(context)}\n</categories>`;
+  const contextBlock = existing.length === 0 ? categories : `${categories}\n<existing>\n${escapeForBlock(existingLines(existing))}\n</existing>`;
+  return { contextBlock, requestBlock: `<note>\n${escapeForBlock(text)}\n</note>` };
+}
+
+/** The single user message: the controls' `frame.txt` with the category context (and any existing notes) and the note, each in an escaped block of its own. */
+export function buildUserMessage(controls: CategoriseControls, context: string, text: string, existing: readonly ExistingNote[] = []): string {
+  return renderTemplate(controls.frame, userBlocks(context, text, existing));
 }
 
 type Json = Record<string, unknown>;
@@ -95,7 +124,7 @@ type Json = Record<string, unknown>;
  * cannot drift from it: the same operation definitions, narrowed to the allowed operations and
  * with the fields the model may not choose removed.
  */
-export function buildOutputSchema(settings: CategoriseSettings, allowedOps: readonly AllowedOp[], maxOps: number): Result<JsonObject, LlmError> {
+export function buildOutputSchema(settings: CategoriseSettings, allowedOps: readonly AllowedOp[], maxOps: number, existingCount = 0): Result<JsonObject, LlmError> {
   const full = structuredClone(mutationJsonSchema()) as Json;
   const variants = ((full.properties as Json | undefined)?.ops as Json | undefined)?.items as Json | undefined;
   const all = variants?.oneOf;
@@ -126,6 +155,9 @@ export function buildOutputSchema(settings: CategoriseSettings, allowedOps: read
     properties: {
       ops: { type: 'array', items: { oneOf: kept as never }, minItems: 1, maxItems: maxOps },
       rationale: { type: 'string', maxLength: settings.maxRationaleChars },
+      ...(existingCount > 0 && settings.maxReplaces > 0
+        ? { replaces: { type: 'array', items: { type: 'integer', minimum: 1, maximum: existingCount }, maxItems: Math.min(settings.maxReplaces, existingCount), uniqueItems: true } }
+        : {}),
     },
     required: ['ops'],
     additionalProperties: false,
@@ -135,7 +167,7 @@ export function buildOutputSchema(settings: CategoriseSettings, allowedOps: read
 
 function check(input: unknown, options: unknown): LlmError | undefined {
   if (!isObject(input)) return llmError('CONFIG', 'prompt input: must be an object like { text, context, itemId }');
-  const { text, context, itemId, ...extra } = input;
+  const { text, context, itemId, existing, ...extra } = input;
   const unknownField = Object.keys(extra)[0];
   if (unknownField !== undefined) return llmError('CONFIG', `prompt input: unknown field "${unknownField}"`);
   if (typeof itemId !== 'string' || !SAFE_ID.test(itemId)) {
@@ -143,6 +175,12 @@ function check(input: unknown, options: unknown): LlmError | undefined {
   }
   if (typeof context !== 'string' || context.length === 0) return llmError('CONFIG', 'prompt input.context: must be the non-empty block from buildContext');
   if (typeof text !== 'string') return llmError('CONFIG', 'prompt input.text: must be text');
+  if (existing !== undefined) {
+    if (!Array.isArray(existing)) return llmError('CONFIG', 'prompt input.existing: must be a list of { title, summary }');
+    for (const [i, note] of existing.entries()) {
+      if (!isObject(note) || typeof note.title !== 'string' || typeof note.summary !== 'string' || Object.keys(note).length !== 2) return llmError('CONFIG', `prompt input.existing[${i}]: must be exactly { title, summary }, both text`);
+    }
+  }
   if (options !== undefined) {
     if (!isObject(options)) return llmError('CONFIG', 'prompt options: must be an object');
     for (const [name, value] of Object.entries(options)) {
@@ -169,10 +207,13 @@ export function buildPrompt(controls: CategoriseControls, input: PromptInput, op
     if (input.text.length > settings.maxTextChars) return bad('prompt input.text', `the note is ${input.text.length} characters, over the limit of ${settings.maxTextChars}`);
     if (input.context.length > settings.maxContextChars) return bad('prompt input.context', `the context is ${input.context.length} characters, over the limit of ${settings.maxContextChars}`);
 
-    const schema = buildOutputSchema(controls.settings, CATEGORISE_OPS, settings.maxOps);
+    const existing = input.existing ?? [];
+    const existingChars = existing.reduce((n, note) => n + note.title.length + note.summary.length, 0);
+    if (existingChars > settings.maxContextChars) return bad('prompt input.existing', `the existing notes are ${existingChars} characters, over the limit of ${settings.maxContextChars}`);
+    const schema = buildOutputSchema(controls.settings, CATEGORISE_OPS, settings.maxOps, existing.length);
     if (!schema.ok) return schema;
     const system = buildSystemPrompt(controls, input.itemId, CATEGORISE_OPS, settings.maxOps);
-    const blocks = userBlocks(input.context, input.text);
+    const blocks = userBlocks(input.context, input.text, existing);
     return ok({
       system,
       messages: [{ role: 'user', content: renderTemplate(controls.frame, blocks) }],

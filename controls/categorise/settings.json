@@ -6,6 +6,7 @@
   "maxIdLength": 128,
   "maxOutputChars": 32000,
   "maxRationaleChars": 500,
+  "maxReplaces": 5,
   "titleMaxChars": 120,
   "summaryMaxChars": 300,
   "categoryNameMaxChars": 60,

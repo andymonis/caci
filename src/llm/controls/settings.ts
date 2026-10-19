@@ -9,6 +9,7 @@ export interface CategoriseSettings {
   readonly maxIdLength: number;
   readonly maxOutputChars: number;
   readonly maxRationaleChars: number;
+  readonly maxReplaces: number;
   readonly titleMaxChars: number;
   readonly summaryMaxChars: number;
   readonly categoryNameMaxChars: number;
@@ -38,6 +39,7 @@ const CATEGORISE_RANGES: Readonly<Record<Exclude<keyof CategoriseSettings, 'desc
   maxIdLength: [8, 256],
   maxOutputChars: [1000, 200_000],
   maxRationaleChars: [1, 2000],
+  maxReplaces: [0, 20],
   titleMaxChars: [1, 500],
   summaryMaxChars: [1, 1000],
   categoryNameMaxChars: [1, 200],

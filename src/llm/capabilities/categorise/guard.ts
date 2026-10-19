@@ -11,6 +11,8 @@ export interface GuardContext {
   /** The id the controller minted for the note's item. */
   readonly itemId: string;
   readonly requestId?: string;
+  /** How many existing notes the model was shown (R-014); the numbers it may name in `replaces` are 1 to this. 0 or absent means none. */
+  readonly existingCount?: number;
 }
 
 export interface GuardOptions {
@@ -21,6 +23,8 @@ export interface GuardOptions {
   /** Longest reply accepted, in characters, checked before any parsing. */
   readonly maxOutputChars?: number;
   readonly maxRationaleChars?: number;
+  /** Most existing notes the reply may name in `replaces`. 0 switches replacing off. */
+  readonly maxReplaces?: number;
 }
 
 /** What the guard enforces, all of it: it comes from the controls' settings (and per call, from the options), never from constants here. */
@@ -28,13 +32,15 @@ export type GuardSettings = Required<GuardOptions>;
 
 /** The guard's settings from the controls, so the guard, the prompt and the schema all follow the same numbers. */
 export function guardSettingsOf(settings: CategoriseSettings): GuardSettings {
-  return { maxOps: settings.maxOps, maxDataBytes: settings.maxDataBytes, maxIdLength: settings.maxIdLength, maxOutputChars: settings.maxOutputChars, maxRationaleChars: settings.maxRationaleChars };
+  return { maxOps: settings.maxOps, maxDataBytes: settings.maxDataBytes, maxIdLength: settings.maxIdLength, maxOutputChars: settings.maxOutputChars, maxRationaleChars: settings.maxRationaleChars, maxReplaces: settings.maxReplaces };
 }
 
 /** A reply that passed every check: a mutation the controller can preview, and the model's reason. */
 export interface GuardedReply {
   readonly mutation: Mutation;
   readonly rationale?: string;
+  /** The numbers (1 to the count shown) of the existing notes the reply says the new note replaces, ascending, each once. Empty for none. */
+  readonly replaces: readonly number[];
 }
 
 /** The fields the model may set on each operation. Everything else is the controller's. */
@@ -60,11 +66,11 @@ function readValue(output: ModelOutput, maxChars: number): Result<unknown, strin
 }
 
 /** Checks everything about the shape of the reply that depends on the controller, collecting every problem. */
-function checkShape(value: unknown, context: GuardContext, options: Required<GuardOptions>): { problems: string[]; ops: Array<Record<string, unknown>>; rationale?: string } {
+function checkShape(value: unknown, context: GuardContext, options: Required<GuardOptions>): { problems: string[]; ops: Array<Record<string, unknown>>; rationale?: string; replaces: number[] } {
   const problems: string[] = [];
-  const none = { problems, ops: [] as Array<Record<string, unknown>> };
+  const none = { problems, ops: [] as Array<Record<string, unknown>>, replaces: [] as number[] };
   if (!isObject(value)) return { ...none, problems: ['the reply must be a JSON object like {"ops": [...], "rationale": "..."}'] };
-  for (const key of Object.keys(value)) if (key !== 'ops' && key !== 'rationale') problems.push(unknownKey('reply', key));
+  for (const key of Object.keys(value)) if (key !== 'ops' && key !== 'rationale' && key !== 'replaces') problems.push(unknownKey('reply', key));
 
   let rationale: string | undefined;
   if ('rationale' in value) {
@@ -72,6 +78,27 @@ function checkShape(value: unknown, context: GuardContext, options: Required<Gua
     else if (value.rationale.length > options.maxRationaleChars) problems.push(`rationale: ${value.rationale.length} characters, over the limit of ${options.maxRationaleChars}`);
     else if (value.rationale.trim().length > 0) rationale = value.rationale.trim();
   }
+
+  const replaces: number[] = [];
+  if ('replaces' in value) {
+    const shown = options.maxReplaces > 0 ? (context.existingCount ?? 0) : 0;
+    const list = value.replaces;
+    if (shown === 0) problems.push('replaces: there are no existing notes to replace here; leave it out');
+    else if (!Array.isArray(list)) problems.push('replaces: must be a list of numbers');
+    else {
+      if (list.length > options.maxReplaces) problems.push(`replaces: ${list.length} numbers, over the limit of ${options.maxReplaces}`);
+      const seen = new Set<number>();
+      list.forEach((n: unknown, i) => {
+        if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > shown) problems.push(`replaces[${i}]: must be a whole number from 1 to ${shown}`);
+        else if (seen.has(n)) problems.push(`replaces[${i}]: ${n} is repeated`);
+        else {
+          seen.add(n);
+          replaces.push(n);
+        }
+      });
+    }
+  }
+  replaces.sort((a, b) => a - b);
 
   const { ops } = value;
   if (!Array.isArray(ops)) return { ...none, problems: [...problems, 'ops: must be a list of operations'] };
@@ -102,7 +129,7 @@ function checkShape(value: unknown, context: GuardContext, options: Required<Gua
   });
   if (itemUpserts !== 1) problems.push(`there must be exactly one upsertNode for the note's item, found ${itemUpserts}`);
   if (links === 0) problems.push('there must be at least one link from the note to a category');
-  return { problems, ops: ops as Array<Record<string, unknown>>, ...(rationale === undefined ? {} : { rationale }) };
+  return { problems, ops: ops as Array<Record<string, unknown>>, replaces, ...(rationale === undefined ? {} : { rationale }) };
 }
 
 /**
@@ -119,7 +146,7 @@ export function inspectReply(output: ModelOutput, context: GuardContext, options
     const settings = options;
     const raw = readValue(output, settings.maxOutputChars);
     if (!raw.ok) return raw;
-    const { problems, ops, rationale } = checkShape(raw.value, context, settings);
+    const { problems, ops, rationale, replaces } = checkShape(raw.value, context, settings);
     if (problems.length > 0) return err(problems);
 
     const parsed = parseMutation(
@@ -137,7 +164,7 @@ export function inspectReply(output: ModelOutput, context: GuardContext, options
       const path = parsed.error.path?.length ? `${parsed.error.path.join('.')}: ` : '';
       return err([`${path}${parsed.error.message}`]);
     }
-    return ok({ mutation: parsed.value, ...(rationale === undefined ? {} : { rationale }) });
+    return ok({ mutation: parsed.value, replaces, ...(rationale === undefined ? {} : { rationale }) });
   } catch {
     return err(['the reply could not be read']);
   }

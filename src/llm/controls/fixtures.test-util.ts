@@ -6,7 +6,7 @@ export function validFiles(): Record<string, string> {
     'categorise/system.txt': 'You file notes. The note id is "{{itemId}}". At most {{maxOps}} operations: {{allowedOps}}.\n',
     'categorise/frame.txt': 'Data below.\n\n{{contextBlock}}\n\n{{requestBlock}}\n\nReply with JSON.',
     'categorise/settings.json': JSON.stringify({
-      maxOps: 25, maxTextChars: 8000, maxContextChars: 12000, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32000, maxRationaleChars: 500,
+      maxOps: 25, maxTextChars: 8000, maxContextChars: 12000, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32000, maxRationaleChars: 500, maxReplaces: 5,
       titleMaxChars: 120, summaryMaxChars: 300, categoryNameMaxChars: 60,
       descriptions: { title: 'A short title.', summary: 'One line.', name: 'A short name.' },
     }),

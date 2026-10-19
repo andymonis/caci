@@ -42,6 +42,7 @@ export type CategoriseEvent = TraceEvent;
 // @public
 export interface CategoriseInput {
     readonly categories: readonly CategoryEntry[];
+    readonly existing?: readonly ExistingNote[];
     readonly graphId: string;
     readonly itemId: string;
     // (undocumented)
@@ -89,6 +90,8 @@ export interface CategoriseSettings {
     readonly maxOutputChars: number;
     // (undocumented)
     readonly maxRationaleChars: number;
+    // (undocumented)
+    readonly maxReplaces: number;
     // (undocumented)
     readonly maxTextChars: number;
     // (undocumented)
@@ -161,6 +164,14 @@ export const DEFAULT_ROUTES: Readonly<Record<Capability, CapabilityRoute>>;
 
 // @public
 export const DEFAULT_TIERS: Readonly<Record<ModelTier, string>>;
+
+// @public
+export interface ExistingNote {
+    // (undocumented)
+    readonly summary: string;
+    // (undocumented)
+    readonly title: string;
+}
 
 // @public
 export function isTimeZone(name: unknown): name is string;
@@ -312,6 +323,7 @@ export interface Proposal {
     readonly mutation: GuardedReply['mutation'];
     // (undocumented)
     readonly rationale?: string;
+    readonly replaces: readonly number[];
     readonly usage: TokenUsage;
 }
 
@@ -329,7 +341,7 @@ export function runWithDeadline<T>(work: (signal: AbortSignal) => Promise<Result
 
 // @public
 export const SETTING_RANGES: Readonly<{
-    categorise: Readonly<Record<"maxOps" | "maxDataBytes" | "maxIdLength" | "maxTextChars" | "maxContextChars" | "maxOutputChars" | "maxRationaleChars" | "titleMaxChars" | "summaryMaxChars" | "categoryNameMaxChars", Range>>;
+    categorise: Readonly<Record<"maxOps" | "maxDataBytes" | "maxIdLength" | "maxTextChars" | "maxContextChars" | "maxOutputChars" | "maxRationaleChars" | "maxReplaces" | "titleMaxChars" | "summaryMaxChars" | "categoryNameMaxChars", Range>>;
     status: Readonly<Record<"maxOutputChars" | "maxHeadline" | "maxPoints" | "maxPointChars" | "maxRefs" | "maxRequestChars" | "maxEntries" | "maxEntryChars" | "maxTotalChars", Range>>;
 }>;
 
@@ -519,7 +531,7 @@ export type TraceEvent =
 
 // Warnings were encountered during analysis:
 //
-// dist/llm/controls/settings.d.ts:38:5 - (ae-forgotten-export) The symbol "Range" needs to be exported by the entry point index.d.ts
+// dist/llm/controls/settings.d.ts:39:5 - (ae-forgotten-export) The symbol "Range" needs to be exported by the entry point index.d.ts
 // dist/llm/model-client.d.ts:45:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
 // dist/llm/trace.d.ts:26:5 - (ae-forgotten-export) The symbol "PromptParts" needs to be exported by the entry point index.d.ts
 

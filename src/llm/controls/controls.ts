@@ -20,7 +20,7 @@ export type ControlFile = (typeof CONTROL_FILES)[number];
 
 /** The slots each template may use, and which are required (R-012 D9). */
 export const SLOT_RULES = Object.freeze({
-  'categorise/system.txt': Object.freeze({ allowed: ['itemId', 'maxOps', 'allowedOps'], required: ['itemId'] }),
+  'categorise/system.txt': Object.freeze({ allowed: ['itemId', 'maxOps', 'allowedOps', 'maxReplaces'], required: ['itemId'] }),
   'categorise/frame.txt': Object.freeze({ allowed: ['contextBlock', 'requestBlock'], once: ['contextBlock', 'requestBlock'] }),
   'status/system.txt': Object.freeze({ allowed: ['entryCount', 'now', 'maxHeadline', 'maxPoints', 'maxPointChars', 'maxRefs'] }),
   'status/frame.txt': Object.freeze({ allowed: ['entriesBlock', 'requestBlock'], once: ['entriesBlock', 'requestBlock'] }),

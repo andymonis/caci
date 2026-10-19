@@ -26,7 +26,7 @@ describe('categorise settings', () => {
 
   it.each([
     ['maxOps', 0], ['maxOps', 101], ['maxTextChars', 0], ['maxTextChars', 100_001], ['maxContextChars', 0], ['maxDataBytes', 63], ['maxDataBytes', 65_537],
-    ['maxIdLength', 7], ['maxIdLength', 257], ['maxOutputChars', 999], ['maxOutputChars', 200_001], ['maxRationaleChars', 0], ['maxRationaleChars', 2001],
+    ['maxIdLength', 7], ['maxIdLength', 257], ['maxOutputChars', 999], ['maxOutputChars', 200_001], ['maxRationaleChars', 0], ['maxRationaleChars', 2001], ['maxReplaces', -1], ['maxReplaces', 21],
     ['titleMaxChars', 0], ['titleMaxChars', 501], ['summaryMaxChars', 1001], ['categoryNameMaxChars', 201],
   ] as const)('%s = %s is outside its range', (name, value) => {
     const r = parseCategoriseSettings('c.json', cat((o) => { o[name] = value; if (name === 'maxDataBytes') o.maxDataBytes = value; }));
@@ -34,7 +34,7 @@ describe('categorise settings', () => {
   });
 
   it('the range edges themselves are accepted', () => {
-    expect(parseCategoriseSettings('c.json', cat((o) => { o.maxOps = 100; o.maxIdLength = 8; o.maxRationaleChars = 2000; o.titleMaxChars = 1; o.summaryMaxChars = 1; o.categoryNameMaxChars = 1; o.maxDataBytes = 65_536; })).ok).toBe(true);
+    expect(parseCategoriseSettings('c.json', cat((o) => { o.maxOps = 100; o.maxIdLength = 8; o.maxRationaleChars = 2000; o.maxReplaces = 20; o.titleMaxChars = 1; o.summaryMaxChars = 1; o.categoryNameMaxChars = 1; o.maxDataBytes = 65_536; })).ok).toBe(true);
   });
 
   it('refuses a missing, fractional or non-number value, naming it', () => {

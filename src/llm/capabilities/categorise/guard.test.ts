@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelOutput } from '../../model-client.js';
 import { SHIPPED_CONTROLS } from '../../testing/shipped-controls.test-util.js';
-import { guardReply, guardSettingsOf, type GuardContext, type GuardOptions } from './guard.js';
+import { guardReply, guardSettingsOf, inspectReply, type GuardContext, type GuardOptions } from './guard.js';
 
 const SETTINGS = guardSettingsOf(SHIPPED_CONTROLS.categorise.settings);
 
@@ -37,6 +37,7 @@ describe('a good reply', () => {
         ],
       },
       rationale: 'It is about a doctor.',
+      replaces: [],
     });
   });
 
@@ -237,9 +238,9 @@ describe('size limits', () => {
   });
 
   it('takes its limits from the controls and from nowhere else', () => {
-    expect(SETTINGS).toEqual({ maxOps: 25, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32_000, maxRationaleChars: 500 });
-    const tight = guardSettingsOf({ ...SHIPPED_CONTROLS.categorise.settings, maxOps: 2, maxOutputChars: 1500, maxRationaleChars: 5, maxIdLength: 10, maxDataBytes: 500 });
-    expect(tight).toEqual({ maxOps: 2, maxDataBytes: 500, maxIdLength: 10, maxOutputChars: 1500, maxRationaleChars: 5 });
+    expect(SETTINGS).toEqual({ maxOps: 25, maxDataBytes: 2048, maxIdLength: 128, maxOutputChars: 32_000, maxRationaleChars: 500, maxReplaces: 5 });
+    const tight = guardSettingsOf({ ...SHIPPED_CONTROLS.categorise.settings, maxOps: 2, maxOutputChars: 1500, maxRationaleChars: 5, maxIdLength: 10, maxDataBytes: 500, maxReplaces: 1 });
+    expect(tight).toEqual({ maxOps: 2, maxDataBytes: 500, maxIdLength: 10, maxOutputChars: 1500, maxRationaleChars: 5, maxReplaces: 1 });
   });
 });
 
@@ -309,3 +310,54 @@ describe('inspectReply: the complete list of problems', () => {
 });
 
 const BAD_CASE = { ops: [{ op: 'deleteNode', partition: 'item', id: 'note-9' }] };
+
+describe('replaces (R-014)', () => {
+  const shown = (n: number): GuardContext => ({ ...CONTEXT, existingCount: n });
+  const withReplaces = (replaces: unknown) => ({ ...GOOD, replaces });
+
+  it('accepts numbers from 1 to the count shown, returns them ascending, each once', () => {
+    const r = guard(json(withReplaces([3, 1])), undefined, shown(3));
+    expect(r.ok && r.value.replaces).toEqual([1, 3]);
+    expect(guard(json(withReplaces([])), undefined, shown(3)).ok).toBe(true);
+    expect(guard(json(withReplaces([5])), undefined, shown(5)).ok).toBe(true);
+  });
+  it('a reply without it replaces nothing, with or without notes shown', () => {
+    const a = guard(json(GOOD), undefined, shown(3));
+    const b = guard(json(GOOD));
+    expect(a.ok && a.value.replaces).toEqual([]);
+    expect(b.ok && b.value.replaces).toEqual([]);
+  });
+  it('refuses a number outside the range, a repeat, a fraction, text and a list that is not a list, listing every problem', () => {
+    const m = message(json(withReplaces([0])), undefined);
+    const r = inspectReply(json(withReplaces([0, 4, 2, 2, 1.5, '1'])), shown(3), SETTINGS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toEqual([
+        'replaces: 6 numbers, over the limit of 5',
+        'replaces[0]: must be a whole number from 1 to 3',
+        'replaces[1]: must be a whole number from 1 to 3',
+        'replaces[3]: 2 is repeated',
+        'replaces[4]: must be a whole number from 1 to 3',
+        'replaces[5]: must be a whole number from 1 to 3',
+      ]);
+    }
+    expect(m).toContain('there are no existing notes');
+    for (const bad of ['1', 1, { 0: 1 }, null]) expect(guard(json(withReplaces(bad)), undefined, shown(3)).ok, JSON.stringify(bad)).toBe(false);
+  });
+  it('refuses more than maxReplaces', () => {
+    const r = guard(json(withReplaces([1, 2, 3])), { maxReplaces: 2 }, shown(5));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.message).toContain('3 numbers, over the limit of 2');
+    expect(guard(json(withReplaces([1, 2])), { maxReplaces: 2 }, shown(5)).ok).toBe(true);
+  });
+  it('refuses it when no notes were shown or replacing is switched off, even an empty list', () => {
+    for (const [options, context] of [[undefined, CONTEXT], [undefined, shown(0)], [{ maxReplaces: 0 }, shown(4)]] as const) {
+      const r = guard(json(withReplaces([])), options, context);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.message).toContain('there are no existing notes to replace here');
+    }
+  });
+  it('it is the only addition: other unknown top-level fields are still refused', () => {
+    expect(guard(json({ ...GOOD, replace: [1] }), undefined, shown(2)).ok).toBe(false);
+  });
+});
