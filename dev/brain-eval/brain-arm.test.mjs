@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { entriesOf, lostAt, recordingClient, runBrainArm } from './brain-arm.mjs';
 import { controls, demoClient, lib } from './lib.test-util.mjs';
+import { grounded, replaceEverything } from './answerers.test-util.mjs';
 
 const FAST = { label: 'fast', choice: { tier: 'fast' } };
 const DEEP = { label: 'deep', choice: { tier: 'deep' } };
@@ -102,6 +103,59 @@ describe('with replacing on (the product\'s behaviour, R-014)', () => {
     const off = { ...controls, categorise: { ...controls.categorise, settings: { ...controls.categorise.settings, maxReplaces: 0 } } };
     const r = await run({ replace: true, controls: off });
     expect(r.answers.find((a) => a.question === 'q-now').entriesUsed).toBe(3);
+  });
+});
+
+describe('what a filing replaced is recorded, and a deleted fact is told from one never stored (R-014)', () => {
+  it('the filing record of a replacing note names the removed note; the others replace nothing', async () => {
+    const r = await run({ replace: true });
+    expect(r.filing.map((f) => f.replaced.length)).toEqual([0, 0, 1]);
+    expect(r.filing[2].replaced[0]).toMatchObject({ title: expect.stringContaining('Tablet A') });
+    expect(r.filing.map((f) => f.tidied)).toEqual([0, 0, expect.any(Number)]);
+    expect((await run()).filing.every((f) => f.replaced.length === 0)).toBe(true);
+  });
+
+  it('a replaced note whose category nothing else uses leaves it empty, and that is counted as tidied', async () => {
+    const s = {
+      id: 'x', title: 't', description: 'd',
+      notes: [{ id: 'n1', at: '2026-01-05', text: 'Hypertension clinic: Mum takes Tablet A every morning.' }, { id: 'n2', at: '2026-01-06', text: 'Mum takes gardening gloves every morning.' }],
+      questions: [{ id: 'q', kind: 'recall', after: 'n2', ask: 'zzz', must: [['Tablet A']] }],
+    };
+    const r = await run({ scenario: s, replace: true, makeClient: (who) => (who.role === 'file' ? replaceEverything(demoClient()) : demoClient()) });
+    expect(r.filing.map((f) => [f.replaced.length, f.tidied])).toEqual([[0, 0], [1, 1]]);
+  });
+
+  it('lostAt says "replace" only when the missing fact was held by a removed note', () => {
+    expect(lostAt([false], [false], [false], [true])).toBe('replace');
+    expect(lostAt([false], [false], [false], [false])).toBe('filing');
+    expect(lostAt([false], [false], [false])).toBe('filing');
+    expect(lostAt([true, false], [true, false], [true, false], [false, true])).toBe('replace');
+    expect(lostAt([true, false], [true, false], [true, false], [true, false])).toBe('filing');
+    expect(lostAt([true], [false], [false], [true])).toBe('context');
+    expect(lostAt([true], [true], [false])).toBe('answer');
+    expect(lostAt([true], [true], [true])).toBeNull();
+  });
+
+  it('a model that replaces everything it is shown is caught: the fact is gone from the brain, the question fails and the diagnostic says replace', async () => {
+    const two = {
+      id: 'two', title: 't', description: 'd',
+      notes: [
+        { id: 'n1', at: '2026-01-05', text: 'GP prescribed Mum 1 x Tablet A a day for her blood pressure.' },
+        { id: 'n2', at: '2026-02-05', text: 'GP also prescribed Mum 1 x Tablet D a day for her thyroid.' },
+      ],
+      questions: [{ id: 'a', kind: 'recall', after: 'n2', ask: 'What does Mum take for her blood pressure?', must: [['Tablet A']] }],
+    };
+    const mk = (wrap) => (who) => (who.role === 'file' ? wrap(demoClient()) : grounded([two]));
+    const fine = await run({ scenario: two, replace: true, makeClient: mk((c) => c) });
+    expect(fine.filing.every((f) => f.replaced.length === 0)).toBe(true);
+    expect(fine.answers[0]).toMatchObject({ pass: true });
+    const bad = await run({ scenario: two, replace: true, makeClient: mk(replaceEverything) });
+    expect(bad.filing[1].replaced).toHaveLength(1);
+    expect(bad.answers[0].pass).toBe(false);
+    expect(bad.answers[0].diagnostic).toMatchObject({ inBrain: [false], inRemoved: [true], lostAt: 'replace' });
+    const off = await run({ scenario: two, replace: false, makeClient: mk(replaceEverything) });
+    expect(off.answers[0].pass).toBe(true);
+    expect(off.filing.every((f) => f.replaced.length === 0)).toBe(true);
   });
 });
 

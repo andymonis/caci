@@ -143,6 +143,35 @@ describe('a demo run', () => {
     expect(json.filing).toHaveLength(4);
     expect(json.summary.arms).toEqual(['brain', 'replay']);
   });
+  describe('replacing (R-014)', () => {
+    const change = {
+      id: 'c', title: 't', description: 'd',
+      notes: [{ id: 'n1', at: '2026-01-05', text: 'GP prescribed Mum 2 x Tablet A a day.' }, { id: 'n2', at: '2026-01-06', text: 'Check-up: GP prescribed Mum now 1 x Tablet B a day.' }],
+      questions: [{ id: 'q1', kind: 'recall', after: 'n2', ask: 'What did the GP prescribe?', must: [['Tablet B']] }],
+    };
+    const loadChange = async () => ({ ok: true, scenarios: [change] });
+    it('files as the product does by default, records what was replaced and says so in the report', async () => {
+      const { h } = await run(['--repeat', '1', '--arms', 'brain'], { loadScenarios: loadChange });
+      const { json } = h.saved[0];
+      expect(json.replace).toBe(true);
+      expect(json.filing.map((f) => f.replaced.length)).toEqual([0, 1]);
+      expect(h.text()).toContain('replacing on');
+      expect(h.text()).toContain('Replacing: 1 notes replaced 1 older notes');
+    });
+    it('--no-replace files every note as an addition and the saved result says so', async () => {
+      const { h } = await run(['--repeat', '1', '--arms', 'brain', '--no-replace'], { loadScenarios: loadChange });
+      const { json } = h.saved[0];
+      expect(json.replace).toBe(false);
+      expect(json.filing.every((f) => f.replaced.length === 0)).toBe(true);
+      expect(h.text()).toContain('replacing off');
+    });
+    it('a real run\'s plan says whether notes may replace older ones', async () => {
+      const real = async (argv) => { const h = harness({ argv, env: { ANTHROPIC_API_KEY: KEY }, loadScenarios: loadChange }); await main(h.io); return h.text(); };
+      expect(await real([])).toContain('a note that changes an older one may replace it');
+      expect(await real(['--no-replace'])).toContain('every note is added, none replaces an older one (--no-replace)');
+      expect(await real(['--arms', 'replay'])).not.toContain('Filing:');
+    });
+  });
   it('the hash changes when the scenario does', () => {
     const other = sc('a');
     other.notes[0].text += '!';

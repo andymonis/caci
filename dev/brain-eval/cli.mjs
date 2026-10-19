@@ -74,7 +74,7 @@ export async function main(io) {
       return 2;
     }
     const run = rescored.value;
-    stdout(`Re-scored with rules version ${run.rescored.rulesVersion} (was ${run.rescored.previousRulesVersion}); ${run.rescored.changedVerdicts} verdicts changed.\n\n${formatReport({ results: run.results, filing: run.filing ?? [], meta: { mode: run.mode, repeat: run.repeat, aborted: run.aborted === true, controls: run.controls ?? 'the shipped controls/ folder', fileWith: run.fileWith, seed: run.seed } })}\n`);
+    stdout(`Re-scored with rules version ${run.rescored.rulesVersion} (was ${run.rescored.previousRulesVersion}); ${run.rescored.changedVerdicts} verdicts changed.\n\n${formatReport({ results: run.results, filing: run.filing ?? [], meta: { mode: run.mode, repeat: run.repeat, aborted: run.aborted === true, controls: run.controls ?? 'the shipped controls/ folder', fileWith: run.fileWith, seed: run.seed, replace: run.replace } })}\n`);
     const base = args.rescore.split(/[\\/]/).pop().replace(/\.json$/, '');
     try {
       const path = await io.save(args.out, `${base}-rescored.json`, run);
@@ -138,6 +138,7 @@ export async function main(io) {
           `Controls: ${controlsLabel}`,
           `Scenarios: ${scenarios.length} (${scenarios.reduce((n, s) => n + s.notes.length, 0)} notes, ${scenarios.reduce((n, s) => n + s.questions.length, 0)} questions)`,
           ...(args.pad.some((n) => n > 0) ? [`Filler: ${args.pad.join(', ')} notes per scenario (seed ${args.seed}); the scenarios run once for each.`] : []),
+          ...(args.arms.includes('brain') ? [args.noReplace ? 'Filing: every note is added, none replaces an older one (--no-replace).' : 'Filing: a note that changes an older one may replace it, as the product does.'] : []),
           `Arms: ${args.arms.join(', ')}; each question asked ${args.repeat} time${args.repeat === 1 ? '' : 's'} of each answering model.`,
           `Planned: about ${plan.total} real calls (${plan.filing} filing, ${plan.brain} brain answers, ${plan.replay} replay answers).`,
           ...(args.arms.includes('brain') ? [`  files with ${fileWith.label} = ${resolved[fileWith.label]}`] : []),
@@ -156,16 +157,16 @@ export async function main(io) {
   stderr(`Running about ${plan.total} ${mode} call${plan.total === 1 ? '' : 's'}…\n`);
   const startedAt = now();
   const { results, filing, aborted } = await runEval({
-    lib, controls, scenarios, arms: args.arms, fileWith, answerWith, repeat: args.repeat, order: args.order, windowTokens: args.window, pads: args.pad, seed: args.seed, makeClient, signal: io.signal,
+    lib, controls, scenarios, arms: args.arms, fileWith, answerWith, repeat: args.repeat, order: args.order, windowTokens: args.window, pads: args.pad, seed: args.seed, replace: !args.noReplace, makeClient, signal: io.signal,
     onResult: (r, n) => stderr(`[${n}] ${r.arm} ${r.model} · ${r.scenario}/${r.question}${r.run > 1 ? ` #${r.run}` : ''}: ${r.pass ? 'pass' : 'FAIL'}\n`),
   });
 
-  const meta = { mode, repeat: args.repeat, aborted, controls: controlsLabel, fileWith: fileWith.label, seed: args.seed };
+  const meta = { mode, repeat: args.repeat, aborted, controls: controlsLabel, fileWith: fileWith.label, seed: args.seed, replace: !args.noReplace };
   stdout(`\n${formatReport({ results, filing, meta })}\n`);
 
   const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
   const json = {
-    kind: 'brain-eval', rulesVersion: RULES_VERSION, startedAt: new Date(startedAt).toISOString(), mode, controls: args.controls ?? null, repeat: args.repeat, arms: args.arms, order: args.order, windowTokens: args.window, pads: args.pad, seed: args.seed,
+    kind: 'brain-eval', rulesVersion: RULES_VERSION, startedAt: new Date(startedAt).toISOString(), mode, controls: args.controls ?? null, repeat: args.repeat, arms: args.arms, order: args.order, windowTokens: args.window, pads: args.pad, seed: args.seed, replace: !args.noReplace,
     fileWith: fileWith.label, answerWith: answerWith.map((m) => m.label), models: resolved, aborted,
     scenarios: scenarios.map((s) => ({ id: s.id, hash: hashOf(s), notes: s.notes.length, questions: s.questions.map((q) => ({ id: q.id, kind: q.kind })) })),
     summary: summarise(results), filing, results,

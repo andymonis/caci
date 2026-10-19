@@ -171,3 +171,22 @@ describe('files that are not results', () => {
     expect(text(A, run(A.results, { aborted: true }))).toContain('STOPPED EARLY');
   });
 });
+
+describe('comparing what replacing did', () => {
+  const filed = (replaced, tidied = 0) => ({ ok: true, replaced: Array.from({ length: replaced }, (_, i) => ({ id: `n${i}`, title: 't', summary: '' })), tidied });
+  const lostRec = (q) => rec('brain', 'fast', q, false, { diagnostic: { lostAt: 'replace' } });
+  const without = run([rec('brain', 'fast', 'q1', true), rec('brain', 'fast', 'q2', true)], { replace: false, filing: [filed(0), filed(0)] });
+  const withIt = run([rec('brain', 'fast', 'q1', true), lostRec('q2')], { filing: [filed(1, 1), filed(0)] });
+  it('shows replacements, tidied categories and answers lost to a deletion for each run, and whether replacing was off', () => {
+    const t = text(without, withIt);
+    expect(t).toContain('Replacing');
+    expect(t).toContain('first:  0 notes replaced 0 older notes, 0 empty categories left to tidy, 0 failed answers lost a fact to a deletion (replacing was off)');
+    expect(t).toContain('second: 1 notes replaced 1 older notes, 1 empty categories left to tidy, 1 failed answers lost a fact to a deletion');
+    expect(t).not.toContain('second: 1 notes replaced 1 older notes, 1 empty categories left to tidy, 1 failed answers lost a fact to a deletion (replacing was off)');
+  });
+  it('says "not recorded" for a run from before replacing, and shows nothing when neither recorded it', () => {
+    const old = run([rec('brain', 'fast', 'q1', true), rec('brain', 'fast', 'q2', true)]);
+    expect(text(old, withIt)).toContain('first:  not recorded');
+    expect(text(old, old)).not.toContain('Replacing');
+  });
+});

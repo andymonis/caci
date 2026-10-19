@@ -33,7 +33,7 @@ export function summarise(results) {
 }
 
 const lostCounts = (records) => {
-  const c = { filing: 0, context: 0, answer: 0, stale: 0, other: 0 };
+  const c = { filing: 0, replace: 0, context: 0, answer: 0, stale: 0, other: 0 };
   for (const r of records) {
     if (r.pass) continue;
     const lost = r.diagnostic?.lostAt ?? null;
@@ -43,6 +43,18 @@ const lostCounts = (records) => {
   }
   return c;
 };
+
+/** What replacing did in a run, or null when no filing recorded it (a run from before R-014, or with replacing off and nothing replaced). */
+export function replacementCounts(filing, results) {
+  if (!filing.some((f) => Array.isArray(f.replaced))) return null;
+  const replacing = filing.filter((f) => Array.isArray(f.replaced) && f.replaced.length > 0);
+  return {
+    notes: replacing.length,
+    removed: replacing.reduce((n, f) => n + f.replaced.length, 0),
+    tidied: filing.reduce((n, f) => n + (f.tidied ?? 0), 0),
+    wrong: results.filter((r) => !r.pass && r.diagnostic?.lostAt === 'replace').length,
+  };
+}
 
 export function formatReport({ results, filing = [], meta }) {
   const pads = unique(results.map((r) => r.pad ?? 0)).sort((a, b) => a - b);
@@ -64,7 +76,7 @@ function section({ results, filing, meta }) {
   const out = [];
   const s = summarise(results);
   out.push('Brain against replay');
-  out.push(`  mode ${meta.mode} · arms ${s.arms.join(', ')} · filed with ${meta.fileWith ?? 'n/a'} · repeats ${meta.repeat} · controls ${meta.controls}${meta.aborted ? ' · STOPPED EARLY' : ''}`);
+  out.push(`  mode ${meta.mode} · arms ${s.arms.join(', ')} · filed with ${meta.fileWith ?? 'n/a'} · repeats ${meta.repeat} · controls ${meta.controls}${meta.replace === undefined ? '' : ` · replacing ${meta.replace ? 'on' : 'off'}`}${meta.aborted ? ' · STOPPED EARLY' : ''}`);
   if (meta.pad !== undefined && meta.pad > 0) out.push(`  padded with ${meta.pad} filler notes (seed ${meta.seed ?? 1})`);
   out.push(`  ${results.length} answers over ${unique(results.map((r) => r.scenario)).length} scenarios`);
   if (results.length === 0) return out.join('\n');
@@ -90,11 +102,11 @@ function section({ results, filing, meta }) {
     })]));
   }
 
-  out.push('', 'Where failed answers lost the fact (a fact lost at filing never reached the brain; at context, never reached the model; at answer, the model had it and did not say it; stale, the old fact was given as current)');
-  out.push(table([['arm', 'model', 'filing', 'context', 'answer', 'stale', 'other'], ...Object.keys(s.cells).map((key) => {
+  out.push('', 'Where failed answers lost the fact (a fact lost at filing never reached the brain; at replace, it was stored and then deleted because a later note replaced it; at context, never reached the model; at answer, the model had it and did not say it; stale, the old fact was given as current)');
+  out.push(table([['arm', 'model', 'filing', 'replace', 'context', 'answer', 'stale', 'other'], ...Object.keys(s.cells).map((key) => {
     const [arm, model] = key.split('|');
     const c = lostCounts(results.filter((r) => r.arm === arm && r.model === model));
-    return [arm, model, c.filing, c.context, c.answer, c.stale, c.other];
+    return [arm, model, c.filing, c.replace, c.context, c.answer, c.stale, c.other];
   })]));
 
   const brain = results.filter((r) => r.arm === 'brain');
@@ -104,6 +116,8 @@ function section({ results, filing, meta }) {
   if (filing.length > 0) {
     const failed = filing.filter((f) => !f.ok);
     out.push('', `Filing: ${filing.length - failed.length} of ${filing.length} notes filed${failed.length ? `; ${failed.length} not (${unique(failed.map((f) => f.error.code ?? f.error.message ?? 'error')).join(', ')})` : ''}.`);
+    const counts = replacementCounts(filing, results);
+    if (counts !== null) out.push(`Replacing: ${counts.notes} notes replaced ${counts.removed} older notes and left ${counts.tidied} empty categories to be tidied; ${counts.wrong} failed answers lost their fact to a deletion (see "replace" above).`);
   }
 
   out.push('', 'By question (passes of answers)');

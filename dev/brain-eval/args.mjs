@@ -25,6 +25,7 @@ request) and replay (every raw note shown to the model in time order). Scores ea
   --order o          replay order: ${ORDERS.join(' or ')}. Default: ${ORDERS[0]}
   --window n         replay: a transcript above about n tokens is not sent. Default: ${DEFAULT_WINDOW_TOKENS}
   --controls DIR     try a candidate folder of LLM controls instead of controls/ (it is checked first)
+  --no-replace       file every note as an addition, never replacing an older note (the way the brain worked before R-014), to measure what replacing costs or gains
   --demo             use the free demo model: checks the plumbing, says nothing about quality
   --yes              actually call the real models. Without it a real run only prints its plan
   --compare A B      compare two saved results (the JSON files from --out) and exit: no model is called
@@ -36,20 +37,21 @@ request) and replay (every raw note shown to the model in time order). Scores ea
 A real run needs ANTHROPIC_API_KEY, costs money, and sends the scenarios' notes to Anthropic. Use invented text only.`;
 
 const FLAGS_WITH_VALUE = ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--rescore', '--out'];
-const FLAGS = ['--demo', '--yes', '--help', '--force'];
+const FLAGS = ['--demo', '--yes', '--help', '--force', '--no-replace'];
 const list = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 
 /** `{ ok: true, value }` or `{ ok: false, message }`. */
 export function parseArgs(argv) {
   const value = {
     scenarios: undefined, only: undefined, fileWith: DEFAULT_FILE_WITH, answerWith: [...DEFAULT_ANSWER_WITH], arms: [...ARMS], repeat: DEFAULT_REPEAT,
-    order: ORDERS[0], pad: [0], seed: 1, window: DEFAULT_WINDOW_TOKENS, controls: undefined, compare: undefined, rescore: undefined, force: false, demo: false, yes: false, out: 'brain-eval-results', help: false,
+    order: ORDERS[0], pad: [0], seed: 1, window: DEFAULT_WINDOW_TOKENS, controls: undefined, compare: undefined, rescore: undefined, force: false, demo: false, yes: false, noReplace: false, out: 'brain-eval-results', help: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (FLAGS.includes(arg)) {
       if (arg === '--force') value.force = true;
       else if (arg === '--demo') value.demo = true;
+      else if (arg === '--no-replace') value.noReplace = true;
       else if (arg === '--yes') value.yes = true;
       else value.help = true;
       continue;

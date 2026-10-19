@@ -27,6 +27,7 @@ A real run needs `ANTHROPIC_API_KEY` in the environment (`source ./set-key.sh` i
 | `--controls DIR` | try a candidate folder of LLM controls instead of `controls/`; it is checked first |
 | `--compare A B` | compare two saved results and exit; no model is called |
 | `--rescore FILE` | re-score a saved result with the current rules, offline (no model, no key), and save it beside the original as `NAME-rescored.json` |
+| `--no-replace` | file every note as an addition, never replacing an older note (the brain as it worked before R-014), to measure what replacing costs or gains |
 | `--force` | with `--compare` or `--rescore`: go on even if the scenarios or questions have changed |
 | `--demo` | use the free demo model; refuses `--yes` |
 | `--yes` | actually call the real models |

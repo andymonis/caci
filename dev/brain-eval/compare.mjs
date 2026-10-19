@@ -1,4 +1,5 @@
 // Comparing two saved runs (R-013 D15): pure. `a` is the earlier run, `b` the later; every change is "from a to b".
+import { replacementCounts } from './report.mjs';
 import { aggregate } from './score.mjs';
 
 const pct = (x) => `${Math.round(x * 100)}%`;
@@ -111,6 +112,12 @@ export function compareRuns(a, b, { force = false } = {}) {
       out.push(`  ${multiPad ? `filler ${pad} · ` : ''}${arm} ${model} · ${it.q}: ${it.from} → ${it.to}`, `      first:  ${answerText(it.before)}`, `      second: ${answerText(it.after)}`);
     }
   };
+  const ra = replacementCounts(a.filing ?? [], a.results);
+  const rb = replacementCounts(b.filing ?? [], b.results);
+  if (ra !== null || rb !== null) {
+    const line = (c) => (c === null ? 'not recorded' : `${c.notes} notes replaced ${c.removed} older notes, ${c.tidied} empty categories left to tidy, ${c.wrong} failed answers lost a fact to a deletion`);
+    out.push('', 'Replacing', `  first:  ${line(ra)}${a.replace === false ? ' (replacing was off)' : ''}`, `  second: ${line(rb)}${b.replace === false ? ' (replacing was off)' : ''}`);
+  }
   show('Questions that went from passing to failing', regressed);
   show('Questions that went from failing to passing', improved);
   out.push('', `${changed} question${changed === 1 ? '' : 's'} changed their pass rate in all (${regressed.length + improved.length} crossed from pass to fail or back; a question counts as passing when at least half of its answers do).`);

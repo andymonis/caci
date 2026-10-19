@@ -37,9 +37,13 @@ export function entriesOf(content) {
 
 const groupsIn = (groups, texts) => groups.map((group) => group.some((alt) => texts.some((t) => containsPhrase(t, tokens(alt)))));
 
-/** Where the first missing fact was lost, or null when every must group got through. */
-export function lostAt(inBrain, inContext, inAnswer) {
-  if (inBrain.some((x) => !x)) return 'filing';
+/**
+ * Where the first missing fact was lost, or null when every must group got through. A fact that is not in the brain was either
+ * never stored ('filing') or stored and then deleted because a later note replaced it ('replace', R-014): `inRemoved` says, per
+ * group, whether an item a filing removed held it.
+ */
+export function lostAt(inBrain, inContext, inAnswer, inRemoved = []) {
+  if (inBrain.some((x) => !x)) return inBrain.some((held, i) => !held && inRemoved[i] === true) ? 'replace' : 'filing';
   if (inContext.some((x) => !x)) return 'context';
   if (inAnswer.some((x) => !x)) return 'answer';
   return null;
@@ -112,6 +116,8 @@ export async function runBrainArm({ lib, controls, scenario, fileWith, answerWit
     return out;
   }
 
+  /** The text of every item a filing replaced (R-014), so a fact that was deleted can be told from one never stored. */
+  const removedTexts = [];
   const stopped = () => signal?.aborted === true;
 
   async function ask(question) {
@@ -132,7 +138,8 @@ export async function runBrainArm({ lib, controls, scenario, fileWith, answerWit
           const inBrain = groupsIn(question.must, items);
           const inContext = groupsIn(question.must, sent);
           const inAnswer = score.groups.map((g) => g.met);
-          diagnostic = { inBrain, inContext, inAnswer, lostAt: lostAt(inBrain, inContext, inAnswer) };
+          const inRemoved = groupsIn(question.must, removedTexts);
+          diagnostic = { inBrain, inContext, inAnswer, inRemoved, lostAt: lostAt(inBrain, inContext, inAnswer, inRemoved) };
         }
         const record = {
           arm: 'brain', scenario: scenario.id, question: question.id, kind: question.kind, model: a.model.label, run,
@@ -153,13 +160,19 @@ export async function runBrainArm({ lib, controls, scenario, fileWith, answerWit
     const before = filer.log.length;
     const proposed = await filerCaci.propose(token, { text: note.text });
     let error = null;
+    const replaced = proposed.ok && Array.isArray(proposed.value.summary?.removed) ? proposed.value.summary.removed.map((r) => ({ id: r.id, title: r.title, summary: r.summary })) : [];
+    let tidied = 0;
     if (!proposed.ok) error = { stage: 'propose', source: proposed.error.source, code: proposed.error.error?.code ?? null, message: proposed.error.error?.message ?? null };
     else {
       const approved = await filerCaci.approve(token, proposed.value.id);
       if (!approved.ok) error = { stage: 'approve', source: approved.error.source, code: approved.error.error?.code ?? null, message: approved.error.error?.message ?? null };
+      else {
+        tidied = approved.value.tidied?.length ?? 0;
+        for (const r of replaced) removedTexts.push(tokens(`${r.title} ${r.summary}`));
+      }
     }
     const requests = filer.log.slice(before).filter((e) => e.capability === 'categorise');
-    filing.push({ note: note.id, at: note.at, ok: error === null, error, attempts: requests.length, tokens: sum(requests.map((e) => e.usage).filter((u) => u !== null)) });
+    filing.push({ note: note.id, at: note.at, ok: error === null, error, attempts: requests.length, tokens: sum(requests.map((e) => e.usage).filter((u) => u !== null)), replaced: error === null ? replaced : [], tidied });
     for (const q of scenario.questions.filter((x) => x.after === note.id)) {
       if (!(await ask(q))) return { filing, answers, aborted: true };
       clock.value = Math.max(clock.value, timeOf(note.at));

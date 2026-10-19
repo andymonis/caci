@@ -63,8 +63,8 @@ describe('the README section', () => {
     for (const phrase of [
       'invented notes', 'Only invented text belongs in a scenario', 'costs money and sends every note and question in the scenarios to Anthropic',
       'prints its plan', 'stops unless you add `--yes`', 'never printed or saved', 'Ctrl+C stops between calls and still reports and saves',
-      '`--demo` and `--yes` together are refused', 'scored **by rules, not by another model**', 'Nothing is replaced when a fact changes',
-      'brain minus replay', 'where the fact was lost', 'The brain does not yet resolve changed facts when it stores them', 'nothing in this tool changes the brain',
+      '`--demo` and `--yes` together are refused', 'scored **by rules, not by another model**', 'a note that changes an older one replaces it',
+      'brain minus replay', 'where the fact was lost', 'The brain now replaces an older note when a newer one changes it', 'a fact lost at *replace*', 'Nothing in this tool changes the brain',
     ]) expect(section, phrase).toContain(phrase);
   });
 });

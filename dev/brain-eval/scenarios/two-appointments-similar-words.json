@@ -1,0 +1,110 @@
+{
+  "id": "two-appointments-similar-words",
+  "title": "Two people's appointments in very similar words",
+  "description": "Dad and Mum each have a dentist appointment at the same practice, written in almost the same words. Neither changes. A brain that treats the second note as an update to the first loses Dad's appointment.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-05",
+      "text": "Dad's dentist appointment is Tuesday 10 March at 10:00 at Park Dental."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-12",
+      "text": "Bought bread and milk on the way home."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-19",
+      "text": "Mum's dentist appointment is Thursday 12 March at 14:00 at Park Dental."
+    },
+    {
+      "id": "n04",
+      "at": "2026-01-26",
+      "text": "Joan next door will water the plants while we are away."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-02",
+      "text": "Dad's hearing test is Friday 20 March at 11:30 at the clinic."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-09",
+      "text": "Took Mum to the garden centre. She chose two pots of lavender."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-16",
+      "text": "Boiler service done. The engineer says it is fine for another year."
+    },
+    {
+      "id": "n08",
+      "at": "2026-02-23",
+      "text": "Mum's friend Rita rang. They are going for lunch on Sunday."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-02",
+      "text": "The car is booked in for its MOT on 25 March."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-09",
+      "text": "Parking at Park Dental is free for an hour."
+    }
+  ],
+  "questions": [
+    {
+      "id": "both-dentists",
+      "kind": "multi",
+      "after": "n03",
+      "ask": "When are the dentist appointments?",
+      "must": [
+        [
+          "Tuesday 10 March"
+        ],
+        [
+          "Thursday 12 March"
+        ]
+      ],
+      "why": "They are two people's separate appointments. Replacing the first with the second would lose Dad's."
+    },
+    {
+      "id": "dad-dentist",
+      "kind": "recall",
+      "after": "n08",
+      "ask": "When is Dad's dentist appointment?",
+      "must": [
+        [
+          "Tuesday 10 March"
+        ]
+      ],
+      "why": "Mum's similar note must not have deleted it."
+    },
+    {
+      "id": "mum-dentist",
+      "kind": "recall",
+      "after": "n08",
+      "ask": "When is Mum's dentist appointment?",
+      "must": [
+        [
+          "Thursday 12 March"
+        ]
+      ],
+      "why": "The later note must itself be found."
+    },
+    {
+      "id": "hearing",
+      "kind": "recall",
+      "after": "n09",
+      "ask": "When is Dad's hearing test?",
+      "must": [
+        [
+          "Friday 20 March"
+        ]
+      ],
+      "why": "A third note about Dad shares his name and words but is a different appointment."
+    }
+  ]
+}

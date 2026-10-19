@@ -14,7 +14,7 @@ export function plannedCalls({ scenarios, arms, answerWith, repeat, pads = [0] }
   return { filing, brain, replay, total: filing + brain + replay };
 }
 
-export async function runEval({ lib, controls, scenarios, arms, fileWith, answerWith, repeat, order, windowTokens, makeClient, signal, onResult, pads = [0], seed = 1 }) {
+export async function runEval({ lib, controls, scenarios, arms, fileWith, answerWith, repeat, order, windowTokens, makeClient, signal, onResult, pads = [0], seed = 1, replace = true }) {
   const results = [];
   const filing = [];
   const stopped = () => signal?.aborted === true;
@@ -26,7 +26,7 @@ export async function runEval({ lib, controls, scenarios, arms, fileWith, answer
     for (const original of scenarios) {
       const scenario = padScenario(original, pad, seed);
       if (arms.includes('brain')) {
-        const r = await runBrainArm({ lib, controls, scenario, fileWith, answerWith, makeClient, repeat, signal, onResult: collect });
+        const r = await runBrainArm({ lib, controls, scenario, fileWith, answerWith, makeClient, repeat, replace, signal, onResult: collect });
         filing.push(...r.filing.map((f) => ({ scenario: scenario.id, pad, ...f })));
       }
       if (arms.includes('replay')) await runReplayArm({ lib, controls, scenario, answerWith, makeClient, repeat, order, windowTokens, signal, onResult: collect });

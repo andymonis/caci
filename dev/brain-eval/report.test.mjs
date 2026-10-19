@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatReport, summarise } from './report.mjs';
+import { formatReport, replacementCounts, summarise } from './report.mjs';
 
 const score = (pass, stale = []) => ({ pass, groups: [], stale: stale.map((status) => ({ phrase: 'p', status })), nothing: false, reasons: pass ? [] : ['a required fact is missing'] });
 const rec = (arm, model, question, kind, pass, extra = {}) => ({
@@ -96,11 +96,11 @@ describe('the report', () => {
     expect(formatReport({ results: RESULTS.filter((r) => r.arm === 'brain'), meta: META })).not.toContain('Brain minus replay');
   });
   it('says where failed answers lost the fact', () => {
-    expect(text).toMatch(/brain\s+fast\s+0\s+0\s+0\s+1\s+0/); // stale
-    expect(text).toMatch(/brain\s+deep\s+1\s+0\s+0\s+0\s+0/); // lost at filing
-    expect(text).toMatch(/replay\s+deep\s+0\s+1\s+0\s+0\s+0/); // lost at context
+    expect(text).toMatch(/brain\s+fast\s+0\s+0\s+0\s+0\s+1\s+0/); // stale
+    expect(text).toMatch(/brain\s+deep\s+1\s+0\s+0\s+0\s+0\s+0/); // lost at filing
+    expect(text).toMatch(/replay\s+deep\s+0\s+0\s+1\s+0\s+0\s+0/); // lost at context
     const other = formatReport({ results: [rec('brain', 'fast', 'q', 'recall', false)], meta: META });
-    expect(other).toMatch(/brain\s+fast\s+0\s+0\s+0\s+0\s+1/);
+    expect(other).toMatch(/brain\s+fast\s+0\s+0\s+0\s+0\s+0\s+1/);
   });
   it('lists filing results and notes left out of the context', () => {
     expect(text).toContain('Filing: 1 of 2 notes filed; 1 not (REFUSED).');
@@ -130,5 +130,36 @@ describe('the report', () => {
   it('mentions padding when there is some', () => {
     expect(formatReport({ results: RESULTS, meta: { ...META, pad: 50, seed: 7 } })).toContain('padded with 50 filler notes (seed 7)');
     expect(text).not.toContain('padded');
+  });
+});
+
+describe('replacing in the report (R-014)', () => {
+  const filing = [
+    { ok: true, replaced: [{ id: 'a', title: 'Tablet A', summary: '' }, { id: 'b', title: 'x', summary: '' }], tidied: 1 },
+    { ok: true, replaced: [], tidied: 0 },
+    { ok: true, replaced: [{ id: 'c', title: 'y', summary: '' }], tidied: 2 },
+  ];
+  const results = [
+    rec('brain', 'fast', 'q1', 'recall', false, { diagnostic: { inBrain: [false], inContext: [false], inAnswer: [false], inRemoved: [true], lostAt: 'replace' } }),
+    rec('brain', 'fast', 'q2', 'recall', false, { diagnostic: { inBrain: [false], inContext: [false], inAnswer: [false], inRemoved: [false], lostAt: 'filing' } }),
+    rec('brain', 'fast', 'q3', 'recall', true),
+  ];
+  const text = formatReport({ results, filing, meta: { ...META, replace: true } });
+  it('counts the failed answers that lost their fact to a deletion in their own column', () => {
+    expect(text).toContain('at replace, it was stored and then deleted');
+    expect(text).toMatch(/arm\s+model\s+filing\s+replace\s+context\s+answer\s+stale\s+other/);
+    expect(text).toMatch(/brain\s+fast\s+1\s+1\s+0\s+0\s+0\s+0/);
+  });
+  it('says what replacing did: notes that replaced, older notes removed, categories tidied, answers lost to a deletion', () => {
+    expect(replacementCounts(filing, results)).toEqual({ notes: 2, removed: 3, tidied: 3, wrong: 1 });
+    expect(text).toContain('Replacing: 2 notes replaced 3 older notes and left 3 empty categories to be tidied; 1 failed answers lost their fact to a deletion');
+    expect(text).toContain('replacing on');
+    expect(formatReport({ results, filing, meta: { ...META, replace: false } })).toContain('replacing off');
+  });
+  it('says nothing about replacing for a run that did not record it, and does not count a passed answer', () => {
+    expect(replacementCounts([{ ok: true }], results)).toBeNull();
+    expect(formatReport({ results, filing: [{ ok: true }], meta: META })).not.toContain('Replacing:');
+    expect(formatReport({ results, filing: [{ ok: true }], meta: META })).not.toContain('replacing o');
+    expect(replacementCounts(filing, [rec('brain', 'fast', 'q', 'recall', true, { diagnostic: { lostAt: 'replace' } })]).wrong).toBe(0);
   });
 });

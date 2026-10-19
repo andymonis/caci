@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { answerer } from './answerers.test-util.mjs';
+import { answerer, grounded, replaceEverything } from './answerers.test-util.mjs';
 import { runBrainArm } from './brain-arm.mjs';
 import { controls, demoClient, lib } from './lib.test-util.mjs';
 import { formatListing } from './list.mjs';
@@ -18,8 +18,8 @@ describe('the library', () => {
     expect(loaded.ok, JSON.stringify(loaded.problems)).toBe(true);
     for (const s of scenarios) expect(validateScenario(s), s.id).toEqual([]);
   });
-  it('has eight scenarios with 10 to 40 notes each and about 30 to 50 questions', () => {
-    expect(scenarios.map((s) => s.id)).toEqual(['activity-cancelled', 'appointment-moved-twice', 'changed-routine', 'contact-details-change', 'fact-corrected', 'medication-change', 'old-detail-still-relevant', 'two-people-not-mixed']);
+  it('has ten scenarios with 10 to 40 notes each and about 30 to 60 questions', () => {
+    expect(scenarios.map((s) => s.id)).toEqual(['activity-cancelled', 'appointment-moved-twice', 'changed-routine', 'contact-details-change', 'fact-corrected', 'medication-change', 'old-detail-still-relevant', 'second-medication-added', 'two-appointments-similar-words', 'two-people-not-mixed']);
     for (const s of scenarios) {
       expect(s.notes.length, s.id).toBeGreaterThanOrEqual(10);
       expect(s.notes.length, s.id).toBeLessThanOrEqual(40);
@@ -28,7 +28,7 @@ describe('the library', () => {
     }
     const questions = scenarios.flatMap((s) => s.questions);
     expect(questions.length).toBeGreaterThanOrEqual(30);
-    expect(questions.length).toBeLessThanOrEqual(50);
+    expect(questions.length).toBeLessThanOrEqual(60);
   });
   it('covers all five kinds of question, several of each, and every question says why', () => {
     const questions = scenarios.flatMap((s) => s.questions);
@@ -121,6 +121,67 @@ describe.each(['brain', 'replay'])('%s arm: scoring tells good from bad', (arm) 
     const r = await get('nothing');
     for (const { s, q } of questions) expect(r[`${s.id}/${q.id}`].pass, `${s.id}/${q.id}`).toBe(q.kind === 'distractor');
     expect(questions.filter(({ q }) => q.kind === 'distractor').length).toBeGreaterThanOrEqual(8);
+  }, 120000);
+});
+
+describe('replacing (R-014): the library separates a brain that replaces well from one that deletes what it should keep', () => {
+  const NEW = ['second-medication-added', 'two-appointments-similar-words'];
+  const filedWith = (wrap) => (who) => (who.role === 'file' ? wrap(demoClient()) : grounded(scenarios));
+  const runAll = async (wrap, only) => {
+    const out = [];
+    for (const scenario of scenarios.filter((s) => only === undefined || only.includes(s.id))) {
+      const r = await runBrainArm({ lib, controls, scenario, fileWith: FAST, answerWith: [FAST], makeClient: filedWith(wrap), replace: true });
+      out.push(...r.answers.map((a) => ({ ...a, filing: r.filing })));
+    }
+    return out;
+  };
+
+  it('the two new scenarios add a different fact and must not replace anything', () => {
+    for (const id of NEW) {
+      const s = scenarios.find((x) => x.id === id);
+      const text = s.notes.map((n) => n.text).join(' ');
+      expect(text, id).not.toMatch(/\b(?:now|changed|change|instead|moved|rescheduled|corrected|actually|new|replaced|cancelled|switched)\b/i);
+      expect(s.questions.filter((q) => q.kind !== 'distractor').every((q) => q.stale === undefined), id).toBe(true);
+      expect(s.questions.some((q) => q.kind === 'multi'), id).toBe(true);
+    }
+  });
+
+  it('a careful model over the demo filing, replacing on, passes the new scenarios and replaces nothing in them', async () => {
+    const answers = (await runAll((c) => c)).filter((a) => NEW.includes(a.scenario));
+    expect(answers.length).toBeGreaterThanOrEqual(8);
+    expect(answers.filter((a) => !a.pass).map((a) => `${a.scenario}/${a.question}: ${a.score.reasons.join('; ')}`)).toEqual([]);
+    for (const a of answers) expect(a.filing.every((f) => f.replaced.length === 0), a.scenario).toBe(true);
+  }, 120000);
+
+  it('with the demo filing and replacing on, the old scenarios lose only the details a replacing note did not repeat (a finding, not a fault in the library)', async () => {
+    // "Hospital moved Dad's appointment: Thursday 12 March at 9am" replaces the note that held "Ward C": the unchanged ward is gone.
+    const answers = (await runAll((c) => c)).filter((a) => !NEW.includes(a.scenario));
+    const failed = answers.filter((a) => !a.pass);
+    expect(failed.length).toBeGreaterThanOrEqual(1);
+    for (const a of failed) expect(a.diagnostic?.lostAt, `${a.scenario}/${a.question}`).toBe('replace');
+    const noReplace = [];
+    for (const scenario of scenarios.filter((x) => !NEW.includes(x.id))) {
+      const r = await runBrainArm({ lib, controls, scenario, fileWith: FAST, answerWith: [FAST], makeClient: filedWith((c) => c), replace: false });
+      noReplace.push(...r.answers);
+    }
+    expect(noReplace.filter((a) => !a.pass).map((a) => `${a.scenario}/${a.question}`)).toEqual([]);
+  }, 120000);
+
+  it('a filing model that replaces everything it is shown fails the new scenarios, and the diagnostic says the fact was deleted', async () => {
+    const answers = await runAll(replaceEverything, NEW);
+    for (const id of NEW) {
+      const mine = answers.filter((a) => a.scenario === id);
+      const lost = mine.filter((a) => a.diagnostic?.lostAt === 'replace');
+      expect(lost.length, id).toBeGreaterThanOrEqual(2);
+      for (const a of lost) expect(a.pass, `${id}/${a.question}`).toBe(false);
+      expect(mine.find((a) => a.kind === 'distractor')?.pass ?? true).toBe(true);
+    }
+  }, 120000);
+
+  it('replace-everything also damages the old scenarios where a note really changes something only if the wrong note was removed', async () => {
+    const answers = await runAll(replaceEverything, ['medication-change', 'two-people-not-mixed']);
+    const wrong = answers.filter((a) => a.diagnostic?.lostAt === 'replace');
+    expect(wrong.length).toBeGreaterThanOrEqual(1);
   }, 120000);
 });
 

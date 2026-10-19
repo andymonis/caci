@@ -16,13 +16,18 @@ describe('defaults', () => {
   it('are the ones the specification names', () => {
     expect(ok([])).toEqual({
       scenarios: undefined, only: undefined, fileWith: 'fast', answerWith: ['fast', 'balanced', 'deep'], arms: ['brain', 'replay'], repeat: 3,
-      order: 'oldest-first', pad: [0], seed: 1, window: 150000, controls: undefined, compare: undefined, rescore: undefined, force: false, demo: false, yes: false, out: 'brain-eval-results', help: false,
+      order: 'oldest-first', pad: [0], seed: 1, window: 150000, controls: undefined, compare: undefined, rescore: undefined, force: false, noReplace: false, demo: false, yes: false, out: 'brain-eval-results', help: false,
     });
     expect(ARMS).toEqual(['brain', 'replay']);
     expect(DEFAULT_ANSWER_WITH).toEqual(['fast', 'balanced', 'deep']);
   });
+  it('--no-replace switches replacing off and is on by default', () => {
+    expect(ok([]).noReplace).toBe(false);
+    expect(ok(['--no-replace']).noReplace).toBe(true);
+    expect(ok(['--demo', '--no-replace']).demo).toBe(true);
+  });
   it('every option is in the usage text', () => {
-    for (const flag of ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--compare', '--rescore', '--force', '--demo', '--yes', '--out', '--help']) expect(USAGE).toContain(flag);
+    for (const flag of ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--compare', '--rescore', '--force', '--no-replace', '--demo', '--yes', '--out', '--help']) expect(USAGE).toContain(flag);
   });
 });
 

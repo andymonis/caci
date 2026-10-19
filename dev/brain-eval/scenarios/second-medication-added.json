@@ -1,0 +1,106 @@
+{
+  "id": "second-medication-added",
+  "title": "A second medication added for a different condition",
+  "description": "Mum takes Tablet A for her blood pressure. Later the GP also prescribes Tablet D for her thyroid, in very similar words. Nothing is replaced: both prescriptions are current, so a brain that treats the second note as a change to the first has lost the first dose.",
+  "notes": [
+    {
+      "id": "n01",
+      "at": "2026-01-05",
+      "text": "GP prescribed Mum 1 x Tablet A a day for her blood pressure, with breakfast."
+    },
+    {
+      "id": "n02",
+      "at": "2026-01-12",
+      "text": "Collected Mum's prescription from the pharmacy on Station Road."
+    },
+    {
+      "id": "n03",
+      "at": "2026-01-19",
+      "text": "Mum's blood pressure check is booked at the surgery on 2 March at 10:30."
+    },
+    {
+      "id": "n04",
+      "at": "2026-01-26",
+      "text": "Joan next door collects Mum's shopping on Thursdays."
+    },
+    {
+      "id": "n05",
+      "at": "2026-02-02",
+      "text": "GP also prescribed Mum 1 x Tablet D a day for her thyroid, with lunch."
+    },
+    {
+      "id": "n06",
+      "at": "2026-02-09",
+      "text": "Took Mum to the garden centre. She chose two pots of lavender."
+    },
+    {
+      "id": "n07",
+      "at": "2026-02-16",
+      "text": "Mum's reading glasses are in the blue case on the hall table."
+    },
+    {
+      "id": "n08",
+      "at": "2026-02-23",
+      "text": "Boiler service done. The engineer says it is fine for another year."
+    },
+    {
+      "id": "n09",
+      "at": "2026-03-02",
+      "text": "Mum's blood pressure check went well. Nothing for the GP to follow up."
+    },
+    {
+      "id": "n10",
+      "at": "2026-03-09",
+      "text": "Rita rang. She and Mum are going for lunch on Sunday."
+    }
+  ],
+  "questions": [
+    {
+      "id": "both-tablets",
+      "kind": "multi",
+      "after": "n06",
+      "ask": "Which tablets does Mum take?",
+      "must": [
+        [
+          "Tablet A"
+        ],
+        [
+          "Tablet D"
+        ]
+      ],
+      "why": "Both prescriptions are current. A brain that replaced the first with the second would lose Tablet A."
+    },
+    {
+      "id": "blood-pressure-tablet",
+      "kind": "recall",
+      "after": "n08",
+      "ask": "What does Mum take for her blood pressure?",
+      "must": [
+        [
+          "1 x Tablet A"
+        ]
+      ],
+      "why": "The second prescription is for a different condition and must not delete the first."
+    },
+    {
+      "id": "thyroid-tablet",
+      "kind": "recall",
+      "after": "n08",
+      "ask": "What does Mum take for her thyroid?",
+      "must": [
+        [
+          "1 x Tablet D"
+        ]
+      ],
+      "why": "The new prescription itself must be found."
+    },
+    {
+      "id": "unrelated",
+      "kind": "distractor",
+      "after": "n10",
+      "ask": "What time does the swimming club start?",
+      "expectNothing": true,
+      "why": "Nothing in the notes mentions swimming."
+    }
+  ]
+}
