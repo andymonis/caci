@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aggregate, CUES, scoreAnswer } from './score.mjs';
+import { aggregate, CUES, CUE_STEMS, NOT_FOUND_PHRASES, RULES_VERSION, scoreAnswer } from './score.mjs';
 
 const answer = (headline, ...points) => ({ headline, points: points.map((text) => ({ text })), nothing: false });
 const NOTHING = { headline: 'Nothing relevant.', points: [], nothing: true };
@@ -127,4 +127,59 @@ describe('aggregate', () => {
   it('no repeats is zeros, not NaN', () => {
     expect(aggregate([])).toEqual({ n: 0, passes: 0, passRate: 0, surfaced: 0, staleSurfacedRate: 0, superseded: 0, supersededRate: 0 });
   });
+});
+
+describe('the phrasings real models used to explain a change (first real run, 2026-10-14)', () => {
+  const appt = { id: 'q', kind: 'override', ask: 'When?', must: [['12 March']], stale: ['10 March'] };
+  it.each([
+    ["Dad's appointment is now Thursday 12 March at 9am, moved from the original Tuesday 10 March slot."],
+    ['The appointment was rescheduled to Thursday 12 March at 9am, replacing the original Tuesday 10 March, 2pm slot.'],
+    ['Thursday 12 March at 9am. The earlier booking was Tuesday 10 March at 2pm.'],
+    ['Thursday 12 March. This replaces the earlier 10 March date.'],
+    ['Thursday 12 March; the older date of 10 March was corrected.'],
+    ['It was originally Tuesday 10 March but is now Thursday 12 March.'],
+    ['Thursday 12 March. The 10 March date is out of date, so ignore it.'],
+  ])('is excused: %s', (text) => {
+    const s = scoreAnswer(appt, answer(text));
+    expect(s.pass, s.reasons.join('; ')).toBe(true);
+    expect(s.stale[0].status).toBe('superseded');
+  });
+  it.each([
+    ['Dad has an appointment on Tuesday 10 March and also Thursday 12 March.'],
+    ['Appointments: 10 March at 2pm; 12 March at 9am.'],
+  ])('is still a failure when the old date is given as a plain fact: %s', (text) => {
+    expect(scoreAnswer(appt, answer(text)).pass).toBe(false);
+  });
+  it('the stems and phrases are lists the README can name', () => {
+    expect(CUE_STEMS).toContain('replac');
+    expect(CUE_STEMS).toContain('origin');
+    expect(RULES_VERSION).toBe(2);
+  });
+  it('a stem inside a longer unrelated word in another point does not excuse it', () => {
+    const s = scoreAnswer(appt, answer('Tablets', 'Appointment is 10 March.', 'The movie night is 12 March.'));
+    expect(s.pass).toBe(false);
+    expect(s.stale[0].status).toBe('surfaced');
+  });
+});
+
+describe('a question that expects nothing', () => {
+  const none = { id: 'q', kind: 'distractor', ask: 'Piano exam?', expectNothing: true };
+  it.each([
+    ["I can't find anything about a piano exam for Maya in your notes."],
+    ["Your notes don't contain a Wi-Fi password for the hospital."],
+    ["I couldn't find anything about a piano exam."],
+    ['Nothing in your notes mentions it.'],
+    ['There is no information about it.'],
+    ['That is not mentioned in your notes.'],
+  ])('passes when the headline says nothing was found, even with other points: %s', (headline) => {
+    expect(scoreAnswer(none, { headline, points: [{ text: 'The dentist is on 24 March.' }], nothing: false }).pass).toBe(true);
+  });
+  it('fails when the headline gives an answer, and when the not-found words are only in a point', () => {
+    expect(scoreAnswer(none, { headline: 'The piano exam is on Friday.', points: [{ text: 'Nothing else is planned.' }], nothing: false }).pass).toBe(false);
+    expect(scoreAnswer(none, { headline: 'Maya has a dentist visit.', points: [], nothing: false }).pass).toBe(false);
+  });
+  it('nothing:true with points still fails, as the guard would refuse it', () => {
+    expect(scoreAnswer(none, { headline: 'x', points: [{ text: 'y' }], nothing: true }).pass).toBe(false);
+  });
+  it('the phrases are listed', () => expect(NOT_FOUND_PHRASES).toContain('can t find'));
 });

@@ -251,3 +251,51 @@ describe('--compare', () => {
     expect(h.errText()).toContain('Could not read missing.json: no such file');
   });
 });
+
+describe('--rescore', () => {
+  const scenario = sc('a');
+  const answer = { headline: 'Tablet A was prescribed, replacing nothing.', points: [], nothing: false };
+  const savedRun = (hash) => ({ kind: 'brain-eval', mode: 'real', repeat: 1, fileWith: 'fast', scenarios: [{ id: 'a', hash, notes: 2, questions: [{ id: 'q1', kind: 'recall' }] }], results: [{ arm: 'brain', scenario: 'a', question: 'q1', kind: 'recall', model: 'fast', run: 1, pass: false, score: { pass: false, groups: [], stale: [], nothing: false, reasons: [] }, error: null, answer, tokens: { inputTokens: 1, outputTokens: 1 }, diagnostic: null }] });
+  const rescore = (argv, run, over = {}) => {
+    const h = harness({ argv: ['--rescore', 'old/run.json', ...argv], readJson: async () => run, loadScenarios: async () => ({ ok: true, scenarios: [scenario] }), ...over });
+    return main(h.io).then((code) => ({ code, h }));
+  };
+  it('re-scores offline, prints the report and saves a new file beside the original name', async () => {
+    const { code, h } = await rescore([], savedRun(hashOf(scenario)));
+    expect(code).toBe(0);
+    expect(h.text()).toContain('Re-scored with rules version 2 (was 1); 1 verdicts changed.');
+    expect(h.text()).toContain('Brain against replay');
+    expect(h.saved).toHaveLength(1);
+    expect(h.saved[0].name).toBe('run-rescored.json');
+    expect(h.saved[0].dir).toBe('brain-eval-results');
+    expect(h.saved[0].json.rescored.changedVerdicts).toBe(1);
+    expect(h.clients()).toBe(0);
+  });
+  it('needs no key and runs no model even though the run was real', async () => {
+    const { code, h } = await rescore([], savedRun(hashOf(scenario)), { env: {} });
+    expect(code).toBe(0);
+    expect(h.errText()).toBe('');
+  });
+  it('refuses changed scenarios with exit 2 unless --force', async () => {
+    const refused = await rescore([], savedRun('different'));
+    expect(refused.code).toBe(2);
+    expect(refused.h.errText()).toContain('cannot be re-scored fairly');
+    expect(refused.h.saved).toEqual([]);
+    const forced = await rescore(['--force'], savedRun('different'));
+    expect(forced.code).toBe(0);
+  });
+  it('a file that cannot be read exits 2, and --out chooses the folder', async () => {
+    const bad = await rescore([], null, { readJson: async () => { throw new Error('no such file'); } });
+    expect(bad.code).toBe(2);
+    expect(bad.h.errText()).toContain('Could not read old/run.json: no such file');
+    const out = await rescore(['--out', 'elsewhere'], savedRun(hashOf(scenario)));
+    expect(out.h.saved[0].dir).toBe('elsewhere');
+    const notRun = await rescore([], { kind: 'other' });
+    expect(notRun.code).toBe(2);
+  });
+  it('a failing save is reported and does not fail the command', async () => {
+    const { code, h } = await rescore([], savedRun(hashOf(scenario)), { save: async () => { throw new Error('disk full'); } });
+    expect(code).toBe(0);
+    expect(h.errText()).toContain('Could not save the results: disk full');
+  });
+});

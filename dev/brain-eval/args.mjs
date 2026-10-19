@@ -28,13 +28,14 @@ request) and replay (every raw note shown to the model in time order). Scores ea
   --demo             use the free demo model: checks the plumbing, says nothing about quality
   --yes              actually call the real models. Without it a real run only prints its plan
   --compare A B      compare two saved results (the JSON files from --out) and exit: no model is called
-  --force            with --compare: compare even if the runs used different scenarios or questions
+  --rescore FILE     re-score a saved result with the current rules (offline: no model, no key) and save it beside the original
+  --force            with --compare or --rescore: go on even if the scenarios or questions have changed
   --out DIR          where results are saved. Default: brain-eval-results (git-ignored)
   --help             this text
 
 A real run needs ANTHROPIC_API_KEY, costs money, and sends the scenarios' notes to Anthropic. Use invented text only.`;
 
-const FLAGS_WITH_VALUE = ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--out'];
+const FLAGS_WITH_VALUE = ['--scenarios', '--only', '--file-with', '--answer-with', '--arms', '--repeat', '--order', '--pad', '--seed', '--window', '--controls', '--rescore', '--out'];
 const FLAGS = ['--demo', '--yes', '--help', '--force'];
 const list = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 
@@ -42,7 +43,7 @@ const list = (text) => text.split(',').map((s) => s.trim()).filter(Boolean);
 export function parseArgs(argv) {
   const value = {
     scenarios: undefined, only: undefined, fileWith: DEFAULT_FILE_WITH, answerWith: [...DEFAULT_ANSWER_WITH], arms: [...ARMS], repeat: DEFAULT_REPEAT,
-    order: ORDERS[0], pad: [0], seed: 1, window: DEFAULT_WINDOW_TOKENS, controls: undefined, compare: undefined, force: false, demo: false, yes: false, out: 'brain-eval-results', help: false,
+    order: ORDERS[0], pad: [0], seed: 1, window: DEFAULT_WINDOW_TOKENS, controls: undefined, compare: undefined, rescore: undefined, force: false, demo: false, yes: false, out: 'brain-eval-results', help: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -102,9 +103,10 @@ export function parseArgs(argv) {
       if (!Number.isInteger(n) || n < 1000) return { ok: false, message: '--window must be a whole number of tokens, at least 1000' };
       value.window = n;
     } else if (arg === '--controls') value.controls = next;
+    else if (arg === '--rescore') value.rescore = next;
     else value.out = next;
   }
-  if (value.force && value.compare === undefined) return { ok: false, message: '--force is only for --compare' };
+  if (value.force && value.compare === undefined && value.rescore === undefined) return { ok: false, message: '--force is only for --compare or --rescore' };
   if (value.demo && value.yes) return { ok: false, message: '--demo and --yes together make no sense: --yes is for real calls' };
   return { ok: true, value };
 }

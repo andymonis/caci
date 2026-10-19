@@ -26,7 +26,8 @@ A real run needs `ANTHROPIC_API_KEY` in the environment (`source ./set-key.sh` i
 | `--seed n` | seed for the filler, so a run can be repeated (default 1) |
 | `--controls DIR` | try a candidate folder of LLM controls instead of `controls/`; it is checked first |
 | `--compare A B` | compare two saved results and exit; no model is called |
-| `--force` | with `--compare`: compare even if the runs used different scenarios or questions |
+| `--rescore FILE` | re-score a saved result with the current rules, offline (no model, no key), and save it beside the original as `NAME-rescored.json` |
+| `--force` | with `--compare` or `--rescore`: go on even if the scenarios or questions have changed |
 | `--demo` | use the free demo model; refuses `--yes` |
 | `--yes` | actually call the real models |
 | `--out DIR` | where results are saved (default `brain-eval-results`, git-ignored) |
@@ -40,7 +41,7 @@ A real run needs `ANTHROPIC_API_KEY` in the environment (`source ./set-key.sh` i
 | `brain-arm.mjs` | the brain arm: the real stack in memory, notes filed at their dates, questions as status requests, and the diagnostic |
 | `replay-arm.mjs` | the replay arm: the same capability, shown every raw note |
 | `pad.mjs` | the seeded filler |
-| `args.mjs`, `runner.mjs`, `report.mjs`, `compare.mjs`, `cli.mjs`, `run.mjs` | the options, running, the report, comparing two runs, the command |
+| `args.mjs`, `runner.mjs`, `report.mjs`, `compare.mjs`, `rescore.mjs`, `cli.mjs`, `run.mjs` | the options, running, the report, comparing two runs, re-scoring a saved run, the command |
 | `list.mjs` | prints the whole library on one page (`scenarios/REVIEW.md`) |
 | `scenarios/` | the invented scenarios, a `README.md` on writing one and `REVIEW.md` |
 

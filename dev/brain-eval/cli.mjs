@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import { parseArgs, resolveModels, USAGE } from './args.mjs';
 import { compareRuns } from './compare.mjs';
+import { rescoreRun } from './rescore.mjs';
 import { padScenario } from './pad.mjs';
 import { formatReport, summarise } from './report.mjs';
 import { plannedCalls, runEval } from './runner.mjs';
@@ -56,6 +57,31 @@ export async function main(io) {
   if (!loaded.ok) {
     stderr(`The scenarios have problems:\n${loaded.problems.map((p) => `  - ${p}`).join('\n')}\n`);
     return 2;
+  }
+  if (args.rescore !== undefined) {
+    let saved;
+    try {
+      saved = await io.readJson(args.rescore);
+    } catch (error) {
+      stderr(`Could not read ${args.rescore}: ${error.message}\n`);
+      return 2;
+    }
+    const describe = (s) => ({ id: s.id, hash: hashOf(s), notes: s.notes.length, questions: s.questions.map((q) => ({ id: q.id, kind: q.kind })) });
+    const rescored = rescoreRun(saved, loaded.scenarios, describe, { force: args.force });
+    if (!rescored.ok) {
+      stderr(`${rescored.message}\n`);
+      return 2;
+    }
+    const run = rescored.value;
+    stdout(`Re-scored with rules version ${run.rescored.rulesVersion} (was ${run.rescored.previousRulesVersion}); ${run.rescored.changedVerdicts} verdicts changed.\n\n${formatReport({ results: run.results, filing: run.filing ?? [], meta: { mode: run.mode, repeat: run.repeat, aborted: run.aborted === true, controls: run.controls ?? 'the shipped controls/ folder', fileWith: run.fileWith, seed: run.seed } })}\n`);
+    const base = args.rescore.split(/[\\/]/).pop().replace(/\.json$/, '');
+    try {
+      const path = await io.save(args.out, `${base}-rescored.json`, run);
+      stdout(`\nSaved: ${path}\n`);
+    } catch (error) {
+      stderr(`Could not save the results: ${error.message}\n`);
+    }
+    return 0;
   }
   let scenarios = loaded.scenarios;
   if (args.only !== undefined) {
