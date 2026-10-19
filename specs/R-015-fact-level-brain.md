@@ -2,7 +2,7 @@
 
 Oct 19, 2026 · @Andy
 
-**Status: planned as F1 (T-232 to T-241); not built.** It follows R-014 (the current-view brain) and its first measured cost: replacing deletes the **whole** old note, so any detail the new note does not repeat is lost (the ward of a moved appointment, a phone number, a birthday). The owner's expectation, recorded 2026-10-19: where one note states several facts (name, date of birth, email, phone number) the brain should hold them as **separate entries**, so updating the phone number cannot erase the date of birth.
+**Status: being built as F1 (T-232 to T-241); decisions D1 to D14 taken as confirmed by the owner's instruction to build (2026-10-19).** It follows R-014 (the current-view brain) and its first measured cost: replacing deletes the **whole** old note, so any detail the new note does not repeat is lost (the ward of a moved appointment, a phone number, a birthday). The owner's expectation, recorded 2026-10-19: where one note states several facts (name, date of birth, email, phone number) the brain should hold them as **separate entries**, so updating the phone number cannot erase the date of birth.
 
 ## Overview
 
