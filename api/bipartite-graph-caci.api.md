@@ -81,6 +81,8 @@ export interface CaciControllerInit {
     readonly clock?: () => number;
     // Warning: (ae-forgotten-export) The symbol "StorageAdapter" needs to be exported by the entry point index.d.ts
     readonly graphAdapter: StorageAdapter;
+    // Warning: (ae-forgotten-export) The symbol "LedgerStore" needs to be exported by the entry point index.d.ts
+    readonly ledger?: LedgerStore;
     // (undocumented)
     readonly limits?: CaciLimits & BrainLimits & {
         readonly status?: StatusContextLimits;
@@ -88,6 +90,7 @@ export interface CaciControllerInit {
     // Warning: (ae-forgotten-export) The symbol "Llm" needs to be exported by the entry point index.d.ts
     readonly llm?: Pick<Llm, 'status'>;
     readonly mode?: 'demo' | 'anthropic';
+    readonly onLedgerFailure?: (message: string) => void;
     // Warning: (ae-forgotten-export) The symbol "ScopeResolver" needs to be exported by the entry point index.d.ts
     readonly scopes?: ScopeResolver;
     // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts

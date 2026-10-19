@@ -6,6 +6,7 @@ import { createBrain, type BrainLimits, type BrainScope, type MineCategoryItemsP
 import { createBrowser, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
 import { createStatusContext, type StatusContextLimits } from './status-context.js';
+import { capText, newLedgerId, SUMMARY_MAX, TITLE_MAX, type LedgerEntry, type LedgerScope, type LedgerStore } from '../ledger/index.js';
 import type { Llm } from '../llm/index.js';
 import { isTimeZone } from '../llm/index.js';
 
@@ -40,6 +41,10 @@ export interface CaciControllerInit {
   readonly llm?: Pick<Llm, 'status'>;
   /** Resolves a circle scope to its graph for the current member (R-009). Without it only the personal scope works. */
   readonly scopes?: ScopeResolver;
+  /** The change log (R-014): after an approved write, what was added, removed and updated is recorded here. Without it nothing is recorded. */
+  readonly ledger?: LedgerStore;
+  /** Told, with one fixed sentence and no note text, when recording a change failed. The change itself stands. A throwing hook is ignored. */
+  readonly onLedgerFailure?: (message: string) => void;
 }
 
 /** A proposal as a person is allowed to see it: the preview and what they would be approving, and nothing about the plumbing. */
@@ -224,6 +229,42 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     if (h !== undefined && h.userId === userId) return ok({ userId, id: proposalId, held: h });
     if (expiredOwners.get(proposalId) === userId) return err(expired());
     return err(notFound());
+  }
+
+  /** Records what an approved write changed. Never throws and never undoes the change: a failure only calls the hook. */
+  async function recordChanges(userId: string, h: Held, done: { readonly proposal: PendingProposal; readonly tidied: ReadonlyArray<{ readonly id: string; readonly name?: string }> }): Promise<void> {
+    const ledger = init.ledger;
+    if (ledger === undefined) return;
+    try {
+      const { proposal } = done;
+      const scope: LedgerScope = h.circle === undefined || h.circle.scope.kind !== 'circle' ? { kind: 'personal', userId } : { kind: 'circle', circleId: h.circle.scope.circleId };
+      const textOf = (partition: 'item' | 'category', id: string): { title?: string; summary?: string } => {
+        const op = proposal.mutation.ops.find((o) => o.op === 'upsertNode' && o.partition === partition && o.id === id);
+        const data = (op?.op === 'upsertNode' ? op.data : undefined) as Record<string, unknown> | undefined;
+        const title = partition === 'item' ? data?.title : data?.name;
+        return { ...(typeof title === 'string' ? { title: capText(title, TITLE_MAX) } : {}), ...(typeof data?.summary === 'string' ? { summary: capText(data.summary, SUMMARY_MAX) } : {}) };
+      };
+      const at = clock();
+      // Oldest first: the tidy, then the removals, then what was created; the newest-first listing then shows the new note on top.
+      const parts: Array<Omit<LedgerEntry, 'id' | 'at' | 'scope' | 'actor' | 'proposalId'>> = [
+        ...done.tidied.map((c) => ({ action: 'removed' as const, kind: 'category' as const, subject: c.id, ...(c.name === undefined ? {} : { title: capText(c.name, TITLE_MAX) }) })),
+        ...proposal.summary.removed.map((r) => ({ action: 'removed' as const, kind: 'item' as const, subject: r.id, title: r.title, summary: r.summary })),
+        ...proposal.summary.updatedCategories.map((id) => ({ action: 'updated' as const, kind: 'category' as const, subject: id, ...textOf('category', id) })),
+        ...proposal.summary.newCategories.map((id) => ({ action: 'added' as const, kind: 'category' as const, subject: id, ...textOf('category', id) })),
+        ...proposal.summary.newItems.map((id) => ({ action: 'added' as const, kind: 'item' as const, subject: id, ...textOf('item', id) })),
+      ];
+      const result = await ledger.append(parts.map((p, i) => ({ id: newLedgerId(), at: at + i, scope, actor: userId, proposalId: proposal.id, ...p })));
+      if (!result.ok) reportLedger();
+    } catch {
+      reportLedger();
+    }
+  }
+  function reportLedger(): void {
+    try {
+      init.onLedgerFailure?.('the change was made but could not be recorded in the change log');
+    } catch {
+      // a hook must never change what happens
+    }
   }
 
   const noCircle = (): CaciError => caciError('NOT_FOUND', 'no such circle');
@@ -446,6 +487,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       const done = await capture.approve(mine.value.id);
       if (done.ok) {
         held.delete(mine.value.id);
+        await recordChanges(mine.value.userId, mine.value.held, done.value);
         return ok(Object.freeze({ id: mine.value.id, applied: done.value.written.applied, summary: done.value.proposal.summary, ...(done.value.tidied.length === 0 ? {} : { tidied: done.value.tidied }) }));
       }
       const reason = gone(done.error);
