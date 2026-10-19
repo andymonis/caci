@@ -17,7 +17,7 @@ A real run needs `ANTHROPIC_API_KEY` in the environment (`source ./set-key.sh` i
 | `--scenarios DIR` | the folder of scenario files (default `dev/brain-eval/scenarios`) |
 | `--only a,b` | run only these scenario ids |
 | `--file-with m` | the model that files the notes into the brain: a tier (`fast`, `balanced`, `deep`) or an exact model id (default `fast`) |
-| `--answer-with a,b` | the models that answer (default `fast,balanced,deep`) |
+| `--answer-with a,b` | the models that answer (default `fast`, the cheapest; add `balanced,deep` to compare models) |
 | `--arms a,b` | `brain`, `replay` or both (default both) |
 | `--repeat n` | times each question is asked of each model, 1 to 10 (default 3) |
 | `--order o` | replay order: `oldest-first` (default) or `newest-first` |

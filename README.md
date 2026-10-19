@@ -841,7 +841,7 @@ CaCi stores a short title and summary of each note in a graph and builds its ans
 - **Brain**: the real product path. Each note is filed by the real categoriser into a real graph (in memory, with the clock set to the note's date), and each question is asked as a status request. Notes are filed the way the product files them: a note that changes an older one replaces it (R-014). `--no-replace` files every note as an addition instead, so the two ways can be compared; the report then counts what was replaced and how many failed answers lost their fact to a deletion.
 - **Replay**: the same `status` capability, the same controls and the same answering model, but shown **every raw note up to the question, oldest first, with its date**, with the size limits lifted. A transcript estimated above 150,000 tokens (`--window`) is marked over-window and not sent. `--order newest-first` reverses it for comparison.
 
-The notes are filed once by a **filing model** (`--file-with`, default `fast`); the questions are answered by one or more **answering models** (`--answer-with`, default `fast,balanced,deep`), each question `--repeat` times (default 3) because models vary.
+The notes are filed once by a **filing model** (`--file-with`, default `fast`); the questions are answered by one or more **answering models** (`--answer-with`, default `fast`, the cheapest; add `balanced,deep` to compare models), each question `--repeat` times (default 3) because models vary.
 
 ### The scenarios and the scoring
 

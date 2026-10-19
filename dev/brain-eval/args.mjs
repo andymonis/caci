@@ -6,7 +6,7 @@ import { DEFAULT_WINDOW_TOKENS, ORDERS } from './replay-arm.mjs';
 export { resolveModels };
 export const ARMS = Object.freeze(['brain', 'replay']);
 export const DEFAULT_FILE_WITH = 'fast';
-export const DEFAULT_ANSWER_WITH = Object.freeze(['fast', 'balanced', 'deep']);
+export const DEFAULT_ANSWER_WITH = Object.freeze(['fast']);
 export const DEFAULT_REPEAT = 3;
 
 export const USAGE = `Usage: npm run brain-eval -- [options]

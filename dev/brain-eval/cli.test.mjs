@@ -82,7 +82,7 @@ describe('a real run', () => {
     expect(h.clients()).toBe(0);
   });
   it('without --yes prints the plan and sends nothing, with no client made', async () => {
-    const h = harness({ argv: ['--repeat', '2'], env: { ANTHROPIC_API_KEY: KEY } });
+    const h = harness({ argv: ['--repeat', '2', '--answer-with', 'fast,balanced,deep'], env: { ANTHROPIC_API_KEY: KEY } });
     expect(await main(h.io)).toBe(0);
     const t = h.text();
     expect(t).toContain('Controls: the shipped controls/ folder');
@@ -165,7 +165,14 @@ describe('a demo run', () => {
       expect(json.filing.every((f) => f.replaced.length === 0)).toBe(true);
       expect(h.text()).toContain('replacing off');
     });
-    it('a real run\'s plan says whether notes may replace older ones', async () => {
+    it('by default only the cheapest model answers, so a real run plans a third of the calls', async () => {
+    const h = harness({ argv: ['--repeat', '1'], env: { ANTHROPIC_API_KEY: KEY } });
+    await main(h.io);
+    expect(h.text()).toContain('answers with fast = ');
+    expect(h.text()).not.toContain('answers with balanced');
+    expect(h.text()).not.toContain('answers with deep');
+  });
+  it('a real run\'s plan says whether notes may replace older ones', async () => {
       const real = async (argv) => { const h = harness({ argv, env: { ANTHROPIC_API_KEY: KEY }, loadScenarios: loadChange }); await main(h.io); return h.text(); };
       expect(await real([])).toContain('a note that changes an older one may replace it');
       expect(await real(['--no-replace'])).toContain('every note is added, none replaces an older one (--no-replace)');
@@ -201,7 +208,7 @@ describe('a demo run', () => {
     expect(h.saved).toEqual([]);
   });
   it('the plan counts the filler', async () => {
-    const h = harness({ argv: ['--pad', '0,10', '--repeat', '1', '--only', 'a'], env: { ANTHROPIC_API_KEY: KEY } });
+    const h = harness({ argv: ['--pad', '0,10', '--repeat', '1', '--only', 'a', '--answer-with', 'fast,balanced,deep'], env: { ANTHROPIC_API_KEY: KEY } });
     await main(h.io);
     expect(h.text()).toContain('Filler: 0, 10 notes per scenario (seed 1)');
     expect(h.text()).toContain('Planned: about 26 real calls (14 filing, 6 brain answers, 6 replay answers).');

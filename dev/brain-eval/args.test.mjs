@@ -15,11 +15,11 @@ const bad = (argv) => {
 describe('defaults', () => {
   it('are the ones the specification names', () => {
     expect(ok([])).toEqual({
-      scenarios: undefined, only: undefined, fileWith: 'fast', answerWith: ['fast', 'balanced', 'deep'], arms: ['brain', 'replay'], repeat: 3,
+      scenarios: undefined, only: undefined, fileWith: 'fast', answerWith: ['fast'], arms: ['brain', 'replay'], repeat: 3,
       order: 'oldest-first', pad: [0], seed: 1, window: 150000, controls: undefined, compare: undefined, rescore: undefined, force: false, noReplace: false, demo: false, yes: false, out: 'brain-eval-results', help: false,
     });
     expect(ARMS).toEqual(['brain', 'replay']);
-    expect(DEFAULT_ANSWER_WITH).toEqual(['fast', 'balanced', 'deep']);
+    expect(DEFAULT_ANSWER_WITH).toEqual(['fast']); // the cheapest model only; others by asking for them
   });
   it('--no-replace switches replacing off and is on by default', () => {
     expect(ok([]).noReplace).toBe(false);
