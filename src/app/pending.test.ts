@@ -3,7 +3,7 @@ import type { Mutation } from '../graph_store/index.js';
 import { createPendingStore, type NewProposal } from './pending.js';
 import type { ProposalSummary } from './summary.js';
 
-const SUMMARY: ProposalSummary = { newItems: [], updatedItems: [], newCategories: [], updatedCategories: [], reusedCategories: [], newLinks: [], problems: [], notes: [] };
+const SUMMARY: ProposalSummary = { newItems: [], updatedItems: [], newCategories: [], updatedCategories: [], reusedCategories: [], newLinks: [], removed: [], problems: [], notes: [] };
 const MUTATION: Mutation = { version: 1, kind: 'mutation', graphId: 'g', createIfMissing: false, ops: [] };
 const proposal = (id: string): NewProposal => ({
   id, graphId: 'g', itemId: 'n', note: 'x', mutation: MUTATION, summary: SUMMARY, text: '', usage: { inputTokens: 1, outputTokens: 1 }, model: 'm', attempts: 1,

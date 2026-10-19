@@ -66,7 +66,7 @@ async function through(arm, mode) {
   for (const scenario of scenarios) {
     const makeClient = (who) => (who.role === 'file' ? demoClient() : answerer(mode, scenarios));
     const r = arm === 'brain'
-      ? await runBrainArm({ lib, controls, scenario, fileWith: FAST, answerWith: [FAST], makeClient })
+      ? await runBrainArm({ lib, controls, scenario, fileWith: FAST, answerWith: [FAST], makeClient, replace: false })
       : await runReplayArm({ lib, controls, scenario, answerWith: [FAST], makeClient });
     out.push(...r.answers);
   }

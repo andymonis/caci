@@ -24,6 +24,7 @@ describe('summarise: ordinary proposals', () => {
       updatedCategories: [],
       reusedCategories: [],
       newLinks: [{ item: 'n1', category: 'doctor' }],
+      removed: [],
       problems: [],
       notes: [],
     });
@@ -253,5 +254,54 @@ describe('summarise agrees with the real graph store', () => {
     const s = sum(mutation(...ops), { items: [], categories: ['appointments'] });
     expect(s).toMatchObject({ newItems: ['n1'], newCategories: ['doctor-x'], reusedCategories: ['appointments'], problems: [] });
     expect(await write(adapter, mutation(...ops))).toMatchObject({ ok: true, value: { applied: 4 } });
+  });
+});
+
+describe('summarise: notes that a new note replaces (R-014)', () => {
+  const del = (id: string, partition: 'item' | 'category' = 'item'): Op => ({ op: 'deleteNode', partition, id });
+  const OFFERED = [{ id: 'old-1', title: 'Mum: 2 x Tablet A', summary: 'a day' }, { id: 'old-2', title: 'Bread', summary: '' }];
+  const withOffered = (m: Mutation, offered = OFFERED) => {
+    const r = summarise(m, { items: ['old-1', 'old-2'], categories: ['health'] }, offered);
+    if (!r.ok) throw new Error(r.error.message);
+    return r.value;
+  };
+
+  it('lists the removed notes, with their titles and summaries, once each, and describes them', () => {
+    const s = withOffered(mutation(del('old-1'), upsertItem('n1'), link('n1', 'health'), del('old-1'), del('old-2')));
+    expect(s.removed).toEqual([{ id: 'old-1', title: 'Mum: 2 x Tablet A', summary: 'a day' }, { id: 'old-2', title: 'Bread', summary: '' }]);
+    expect(s.problems).toEqual([]);
+    const text = describeSummary(s);
+    expect(text).toContain('This note replaces, and these will be removed when you approve:\n  - Mum: 2 x Tablet A: a day\n  - Bread');
+  });
+  it('a summary with no removals says nothing about them', () => {
+    expect(describeSummary(withOffered(mutation(upsertItem('n1'), link('n1', 'health'))))).not.toContain('replaces');
+  });
+  it('removing anything that was not offered is a problem and is not listed: another item, a category, a node of the same id in the other partition', () => {
+    const s = withOffered(mutation(upsertItem('n1'), link('n1', 'health'), del('other'), del('health', 'category'), del('old-1', 'category')));
+    expect(s.removed).toEqual([]);
+    expect(s.problems).toEqual([
+      'ops[2]: removing other is not allowed because it is not one of the notes offered for replacement',
+      'ops[3]: removing health is not allowed because it is not one of the notes offered for replacement',
+      'ops[4]: removing old-1 is not allowed because it is not one of the notes offered for replacement',
+    ]);
+  });
+  it('without offered notes a delete is refused outright, as before', () => {
+    expect(summarise(mutation(del('old-1')), NOTHING).ok).toBe(false);
+    expect(summarise(mutation(del('old-1')), NOTHING, undefined).ok).toBe(false);
+  });
+  it('an empty offer allows no removal', () => {
+    const r = summarise(mutation(upsertItem('n1'), del('old-1')), NOTHING, []);
+    expect(r.ok && r.value.problems.length).toBe(1);
+  });
+  it('a malformed delete is refused', () => {
+    expect(summarise(mutation({ op: 'deleteNode', partition: 'item' } as never), NOTHING, OFFERED).ok).toBe(false);
+    expect(summarise(mutation({ op: 'deleteNode', partition: 'edge', id: 'x' } as never), NOTHING, OFFERED).ok).toBe(false);
+  });
+  it('odd ids and text are quoted or flattened', () => {
+    const odd = [{ id: 'a b"c', title: 'line\nbreak\u0007', summary: 'x\ny' }];
+    const s = withOffered(mutation(del('a b"c')), odd);
+    expect(describeSummary(s)).toContain('  - line break: x y');
+    const untitled = withOffered(mutation(del('a b"c')), [{ id: 'a b"c', title: '', summary: '' }]);
+    expect(describeSummary(untitled)).toContain('  - "a b\\"c"');
   });
 });

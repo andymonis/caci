@@ -18,7 +18,8 @@ const scenario = () => ({
     { id: 'q-none', kind: 'distractor', after: 'n3', ask: 'zzzz', expectNothing: true },
   ],
 });
-const run = (over = {}) => runBrainArm({ lib, controls, scenario: scenario(), fileWith: FAST, answerWith: [FAST], makeClient: () => demoClient(), ...over });
+// notes are only added here (the old behaviour); the tests of replacing say `replace: true`
+const run = (over = {}) => runBrainArm({ lib, controls, scenario: scenario(), fileWith: FAST, answerWith: [FAST], makeClient: () => demoClient(), replace: false, ...over });
 
 describe('the brain arm with the demo model', () => {
   it('files every note, and each lands with its own date', async () => {
@@ -77,6 +78,30 @@ describe('the brain arm with the demo model', () => {
     const a = await run();
     const b = await run();
     expect(b.answers.map((x) => x.entriesUsed)).toEqual(a.answers.map((x) => x.entriesUsed));
+  });
+});
+
+describe('with replacing on (the product\'s behaviour, R-014)', () => {
+  it('the new dose replaces the old note, so the question about it sees one note and the stale dose is gone', async () => {
+    const r = await run({ replace: true });
+    const now = r.answers.find((a) => a.question === 'q-now');
+    expect(now.entriesUsed).toBe(2);
+    const text = [now.answer.headline, ...now.answer.points].join(' ');
+    expect(text).toContain('1 x Tablet B');
+    expect(text).not.toContain('2 x Tablet A');
+    expect(now.pass).toBe(true);
+    expect(now.score.stale.map((x) => x.status)).toEqual(['absent']);
+  });
+  it('a question asked before the change still sees the old dose', async () => {
+    const r = await run({ replace: true });
+    const early = r.answers.find((a) => a.question === 'q-early');
+    expect(early.entriesUsed).toBe(2);
+    expect(early.pass).toBe(true);
+  });
+  it('replace: false (or controls that switch it off) keeps both', async () => {
+    const off = { ...controls, categorise: { ...controls.categorise, settings: { ...controls.categorise.settings, maxReplaces: 0 } } };
+    const r = await run({ replace: true, controls: off });
+    expect(r.answers.find((a) => a.question === 'q-now').entriesUsed).toBe(3);
   });
 });
 

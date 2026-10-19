@@ -1,5 +1,6 @@
-import { err, ok, write, type GraphError, type GraphOptions, type JsonValue, type Mutation, type Result, type StorageAdapter, type WriteOutput } from '../graph_store/index.js';
+import { err, ok, parseMutation, write, type GraphError, type GraphOptions, type JsonValue, type Mutation, type Result, type StorageAdapter, type WriteOutput } from '../graph_store/index.js';
 import type { CategoriseOptions, Llm, LlmError } from '../llm/index.js';
+import { readCandidates, type Candidate, type CandidateOptions } from './candidates.js';
 import { appError, type AppError } from './errors.js';
 import { createItemIdGenerator, type ItemIdGenerator } from './ids.js';
 import { normaliseInput, type Normalisers } from './normalise.js';
@@ -31,6 +32,11 @@ export interface ControllerInit {
   readonly maxPending?: number;
   /** Most categories shown to the model. Default 500. */
   readonly maxCategories?: number;
+  /**
+   * How existing notes that a new note might replace are found and offered to the model (R-014): `false` switches replacing off
+   * (the service does this when the controls' `maxReplaces` is 0), an object tunes the search. Default: on, with the defaults.
+   */
+  readonly candidates?: CandidateOptions | false;
 }
 
 export interface ProposeOptions {
@@ -110,6 +116,7 @@ export function createController(init: ControllerInit): Controller {
   const proposalIds = init.proposalIds ?? createItemIdGenerator({ now, prefix: 'prop' });
   const store = createPendingStore({ now, ttlMs: settings.ttlMs, maxPending: settings.maxPending });
   const { adapter, llm, graphOptions } = init;
+  const candidateOptions = init.candidates === false ? undefined : (init.candidates ?? {});
 
   /** The mutation with the two contribution fields removed from every upsert and then set on the item this proposal creates (the guard allows exactly one item upsert). */
   function stamped(mutation: Mutation, contributedBy: string, at: number): Mutation {
@@ -134,19 +141,36 @@ export function createController(init: ControllerInit): Controller {
       const note = await normaliseInput(input, init.normalisers);
       if (!note.ok) return app(note.error);
 
+      // The notes this one might replace: found here, by the controller, from this graph only (R-014).
+      let candidates: Candidate[] = [];
+      if (candidateOptions !== undefined) {
+        const found = await readCandidates(adapter, graphId, note.value, candidateOptions, graphOptions);
+        if (!found.ok) return graph(found.error);
+        candidates = found.value;
+      }
+
       const id = proposalIds();
       const itemId = itemIds();
       const proposed = await llm.categorise(
-        { text: note.value, graphId, itemId, requestId: id, categories: read.value.categories },
+        { text: note.value, graphId, itemId, requestId: id, categories: read.value.categories, existing: candidates.map((c) => ({ title: c.title, summary: c.summary })) },
         options?.categorise,
       );
       if (!proposed.ok) return err({ source: 'llm', error: proposed.error });
 
       const { rationale, usage, model, attempts } = proposed.value;
-      const mutation = options?.stamp === undefined ? proposed.value.mutation : stamped(proposed.value.mutation, options.stamp.contributedBy, now());
+      let mutation = options?.stamp === undefined ? proposed.value.mutation : stamped(proposed.value.mutation, options.stamp.contributedBy, now());
+      // The model named numbers; the ids come from what the controller found, and the deletes are built here, never by the model.
+      // (the guard has already checked that each number is one of those shown, and that none is repeated)
+      const replaced = proposed.value.replaces.map((n) => candidates[n - 1] as Candidate);
+      if (replaced.length > 0) {
+        const deletes = replaced.map((c) => ({ op: 'deleteNode' as const, partition: 'item' as const, id: c.id }));
+        const checked = parseMutation({ ...mutation, ops: [...deletes, ...mutation.ops] }, graphOptions);
+        if (!checked.ok) return graph(checked.error);
+        mutation = checked.value;
+      }
       const existing = await readExisting(adapter, graphId, touched(mutation), graphOptions);
       if (!existing.ok) return graph(existing.error);
-      const summary = summarise(mutation, existing.value);
+      const summary = summarise(mutation, existing.value, replaced);
       if (!summary.ok) return app(summary.error);
 
       const held = store.add({

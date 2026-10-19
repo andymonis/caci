@@ -55,10 +55,11 @@ export function lostAt(inBrain, inContext, inAnswer) {
  * @param {{label:string, choice:object}[]} p.answerWith the models that answer
  * @param {(who:{role:'file'|'answer', label:string, choice:object}) => object} p.makeClient
  * @param {number} [p.repeat] how many times each question is asked of each model
+ * @param {boolean} [p.replace] whether a note that changes an existing one replaces it (the product's behaviour, R-014); false files notes only, adding
  * @param {AbortSignal} [p.signal]
  * @param {(event:object)=>void} [p.onResult]
  */
-export async function runBrainArm({ lib, controls, scenario, fileWith, answerWith, makeClient, repeat = 1, signal, onResult }) {
+export async function runBrainArm({ lib, controls, scenario, fileWith, answerWith, makeClient, repeat = 1, replace = true, signal, onResult }) {
   const filing = [];
   const answers = [];
   const clock = { value: timeOf(scenario.notes[0].at) };
@@ -87,7 +88,7 @@ export async function runBrainArm({ lib, controls, scenario, fileWith, answerWit
   const filer = recordingClient(makeClient({ role: 'file', label: fileWith.label, choice: fileWith.choice }));
   const fileLlm = lib.createLlm({ client: filer.client, controls, config: config('categorise', fileWith.choice), now });
   const capture = lib.createController({
-    adapter, llm: fileLlm, now, ids: lib.createItemIdGenerator({ now, prefix: 'note' }), proposalIds: lib.createItemIdGenerator({ now, prefix: 'prop' }), maxPending: HUGE,
+    adapter, llm: fileLlm, now, ...(replace && controls.categorise.settings.maxReplaces > 0 ? {} : { candidates: false }), ids: lib.createItemIdGenerator({ now, prefix: 'note' }), proposalIds: lib.createItemIdGenerator({ now, prefix: 'prop' }), maxPending: HUGE,
   });
   const limits = { maxPendingPerUser: HUGE, proposalsPerHour: HUGE, statusPerHour: HUGE, status: { maxPerScope: HUGE, maxReadPerScope: HUGE } };
   const base = { users, capture, graphAdapter: adapter, clock: now, limits };

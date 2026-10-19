@@ -67,7 +67,7 @@ describe('the replay arm with the demo model', () => {
     };
     const [a, makeA] = take();
     const [b, makeB] = take();
-    await runBrainArm({ lib, controls, scenario: scenario(), fileWith: FAST, answerWith: [FAST], makeClient: makeA });
+    await runBrainArm({ lib, controls, scenario: scenario(), fileWith: FAST, answerWith: [FAST], makeClient: makeA, replace: false });
     await run({ makeClient: makeB });
     expect(a).toHaveLength(3);
     expect(b).toHaveLength(3);

@@ -162,7 +162,7 @@ describe('safeFiller', () => {
 
 describe('volume pushes the brain past its budget', () => {
   it('300 filler notes make the status context leave out the oldest entries', async () => {
-    const run = (pad) => runBrainArm({ lib, controls, scenario: padScenario(base(), pad, 1), fileWith: { label: 'fast', choice: { tier: 'fast' } }, answerWith: [{ label: 'fast', choice: { tier: 'fast' } }], makeClient: () => demoClient() });
+    const run = (pad) => runBrainArm({ lib, controls, scenario: padScenario(base(), pad, 1), fileWith: { label: 'fast', choice: { tier: 'fast' } }, answerWith: [{ label: 'fast', choice: { tier: 'fast' } }], makeClient: () => demoClient(), replace: false });
     const none = await run(0);
     expect(none.answers.every((a) => a.entriesLeftOut === 0)).toBe(true);
     const big = await run(300);

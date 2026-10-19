@@ -10,7 +10,7 @@ export type { AudioInput, ImageInput, Input, InputKind, TextInput } from './inpu
 export { normaliseInput, normaliseText } from './normalise.js';
 export type { InputNormaliser, Normalisers } from './normalise.js';
 export { describeSummary, summarise } from './summary.js';
-export type { ExistingNodes, Link, ProposalSummary } from './summary.js';
+export type { ExistingNodes, Link, ProposalSummary, RemovedItem } from './summary.js';
 export { createController, DEFAULT_CONTROLLER_OPTIONS } from './controller.js';
 export type { Approved, Controller, ControllerError, ControllerInit, ProposeOptions } from './controller.js';
 export type { PendingProposal } from './pending.js';

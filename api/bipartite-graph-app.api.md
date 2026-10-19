@@ -82,6 +82,7 @@ export interface ControllerInit {
     //
     // (undocumented)
     readonly adapter: StorageAdapter;
+    readonly candidates?: CandidateOptions | false;
     // Warning: (ae-forgotten-export) The symbol "GraphOptions" needs to be exported by the entry point index.d.ts
     //
     // (undocumented)
@@ -244,6 +245,7 @@ export interface ProposalSummary {
     readonly newLinks: readonly Link[];
     readonly notes: readonly string[];
     readonly problems: readonly string[];
+    readonly removed: readonly RemovedItem[];
     readonly reusedCategories: readonly string[];
     readonly updatedCategories: readonly string[];
     readonly updatedItems: readonly string[];
@@ -265,7 +267,17 @@ export function rankCandidates(note: string, items: Iterable<ItemRow>, options?:
 export function readCandidates(adapter: StorageAdapter, graphId: string, note: string, options?: CandidateOptions, graphOptions?: GraphOptions): Promise<Result<Candidate[], GraphError>>;
 
 // @public
-export function summarise(mutation: Mutation, existing: ExistingNodes): Result<ProposalSummary, AppError>;
+export interface RemovedItem {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly summary: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export function summarise(mutation: Mutation, existing: ExistingNodes, offered?: readonly RemovedItem[]): Result<ProposalSummary, AppError>;
 
 // @public
 export interface TextInput {
@@ -280,8 +292,8 @@ export function wordsOf(text: string): Set<string>;
 
 // Warnings were encountered during analysis:
 //
-// dist/app/controller.d.ts:13:5 - (ae-forgotten-export) The symbol "GraphError" needs to be exported by the entry point index.d.ts
-// dist/app/controller.d.ts:16:5 - (ae-forgotten-export) The symbol "LlmError" needs to be exported by the entry point index.d.ts
+// dist/app/controller.d.ts:14:5 - (ae-forgotten-export) The symbol "GraphError" needs to be exported by the entry point index.d.ts
+// dist/app/controller.d.ts:17:5 - (ae-forgotten-export) The symbol "LlmError" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
