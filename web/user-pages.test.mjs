@@ -102,7 +102,8 @@ describe('the page', () => {
 
 describe('the scripts', () => {
   it('are exactly the modules the entry point reaches, and import only each other by name', () => {
-    expect(modules).toEqual(['api-client.js', 'forms.js', 'session.js', 'settings-session.js', 'user-app.js', 'user-mount.js', 'view.js']);
+    // the chat reuses the notes client, which brings the back office's shared word and permission modules with it
+    expect(modules).toEqual(['api-client.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circles-client.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'settings-session.js', 'status-session.js', 'status-view.js', 'user-app.js', 'user-mount.js', 'view.js']);
     for (const m of modules) for (const x of code(read(m)).matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)) expect(x[1], `${m} imports ${x[1]}`).toMatch(/^\.\/[a-z0-9.-]+\.js$/);
   });
   it('never turn text into markup, run strings as code, or use storage, cookies or the console', () => {
@@ -120,10 +121,10 @@ describe('the scripts', () => {
     }
     expect(code(read('user-app.js'))).toMatch(/window\.location\.hash/);
   });
-  it('request only the account routes, by path', () => {
+  it('name only routes that exist, by path (the chat itself uses the account, capture, scope and status routes: see the journey)', () => {
     const paths = new Set();
     for (const m of modules) for (const x of code(read(m)).matchAll(/['"`](\/api\/[^'"`?$]*)/g)) paths.add(x[1]);
-    expect([...paths].sort()).toEqual(['/api/login', '/api/logout', '/api/me', '/api/me/password', '/api/register']);
+    expect([...paths].sort()).toEqual(['/api/brain', '/api/brain/categories', '/api/brain/category', '/api/brain/item', '/api/brain/scopes', '/api/capture/mode', '/api/capture/proposals/', '/api/capture/propose', '/api/circles', '/api/circles/', '/api/graph/categories', '/api/graph/category', '/api/graph/item', '/api/invitations', '/api/invitations/', '/api/login', '/api/logout', '/api/me', '/api/me/password', '/api/register', '/api/status']);
   });
   it('every element the script looks up exists in the page', () => {
     const wanted = new Set();
@@ -145,6 +146,7 @@ describe('the scripts', () => {
       else if (t.includes('-heading')) for (const v of ['home', 'settings']) wanted.add(`${v}-heading`);
       else throw new Error(`the guard does not know how to check ${t}`);
     }
+    for (const x of code(read('chat-page.js')).matchAll(/\$\('([a-zA-Z-]+)'\)/g)) wanted.add(x[1]);
     for (const id of wanted) expect(ids, id).toContain(id);
     expect(wanted.size).toBeGreaterThan(30);
   });

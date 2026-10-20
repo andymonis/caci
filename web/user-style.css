@@ -80,3 +80,14 @@ button.link { min-height: 2.75rem; padding: 0.25rem 0.25rem; color: var(--accent
 .actions a { color: var(--accent); }
 
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+/* The chat */
+.thread { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; max-height: 55vh; overflow-y: auto; }
+.msg { max-width: 85%; padding: 0.5rem 0.75rem; border: 1px solid var(--line); border-radius: 1rem; overflow-wrap: anywhere; }
+.msg p { margin: 0; white-space: pre-wrap; }
+.msg.me { align-self: flex-end; background: var(--me); }
+.msg.cacci { align-self: flex-start; background: var(--cacci); }
+.msg.problem { color: var(--error); background: var(--error-bg); }
+.lines { margin: 0.25rem 0 0; padding-left: 1.25rem; }
+.choices { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.choices[hidden], .lines[hidden] { display: none; }

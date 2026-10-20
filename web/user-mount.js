@@ -15,7 +15,7 @@ const SETTINGS_FORMS = Object.freeze({ profile: Object.freeze(['displayName', 'e
 /** The address names Settings only exactly; anything else is Home. Never decoded. */
 export const routeOf = (hash) => (hash === '#/settings' ? 'settings' : 'home');
 
-export function mountUser(document, fetchFn, env = NO_ENV, hooks = {}) {
+export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) {
   const $ = (id) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`the page has no element "${id}"`);
@@ -31,6 +31,7 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooks = {}) {
     },
   });
 
+  let hooks = {};
   let rechecked = false;
   /** A request says the session ended: ask the service once who is signed in, so a service that contradicts itself cannot make a loop. */
   function recheck() {
@@ -228,6 +229,8 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooks = {}) {
     for (const parts of Object.values(settingsForms)) parts.element.setAttribute('aria-busy', s.busy ? 'true' : 'false');
   });
 
+  // the hooks may be given ready, or built from what only this module can offer (the one-time re-check of a ended session)
+  hooks = typeof hooksOrFactory === 'function' ? hooksOrFactory({ recheck }) : hooksOrFactory;
   session.subscribe(render);
   env.onHashChange(() => renderRoute(session.getState().screen === 'signed-in', session.getState()));
   render(session.getState());

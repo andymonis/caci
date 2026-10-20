@@ -95,7 +95,29 @@
 
       <section id="view-home" hidden>
         <h2 id="home-heading" tabindex="-1">Chat</h2>
-        <p id="home-placeholder" class="note">The chat is being built.</p>
+        <p id="chat-notice" class="note"></p>
+        <p id="chat-mode-error" class="error" role="alert" hidden></p>
+        <button type="button" id="chat-retry" class="secondary" hidden>Try again</button>
+
+        <ol id="chat-thread" class="thread" role="log" aria-live="polite" aria-label="Conversation with CaCi"></ol>
+
+        <form id="update-form" method="post" novalidate>
+          <label for="update-text">Update</label>
+          <textarea id="update-text" name="update" rows="2" autocomplete="off" aria-describedby="update-error"></textarea>
+          <p id="update-error" class="error" role="alert" hidden></p>
+          <button type="submit" id="update-send">Send</button>
+        </form>
+
+        <form id="question-form" method="post" novalidate>
+          <label for="question-text">Question</label>
+          <input type="text" id="question-text" name="question" autocomplete="off" aria-describedby="question-error">
+          <p id="question-error" class="error" role="alert" hidden></p>
+          <button type="submit" id="question-ask">Ask</button>
+        </form>
+
+        <template id="msg-template"><li class="msg"><p data-slot="text"></p><ul data-slot="lines" class="lines"></ul><div data-slot="choices" class="choices"></div></li></template>
+        <template id="msg-line-template"><li><span data-slot="text"></span></li></template>
+        <template id="msg-choice-template"><span><button type="button" class="secondary" data-slot="button"></button></span></template>
       </section>
 
       <section id="view-settings" hidden>
