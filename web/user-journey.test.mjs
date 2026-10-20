@@ -57,6 +57,10 @@ const askQ = async (b, text) => {
   await waitFor(() => idle(b) && thread(b).at(-1)?.cls.startsWith('msg cacci') && thread(b).at(-1)?.text !== '', 'the answer');
 };
 
+const cthread = (b) => el(b, 'circle-thread').children.map((row) => ({ cls: row.getAttribute('class'), text: row.querySelector('[data-slot="text"]').textContent, lines: row.querySelector('[data-slot="lines"]').children.map((l) => l.querySelector('[data-slot="text"]').textContent) }));
+const navLinks = (b) => el(b, 'nav-circles').children.map((row) => row.querySelector('[data-slot="link"]').textContent);
+const circleReady = (b) => !el(b, 'view-circle').hidden && el(b, 'circle-heading').textContent !== '' && b.page.document.title === `${el(b, 'circle-heading').textContent} – CaCi` && !el(b, 'circle-pulse').disabled;
+
 describe('the everyday app, through the pages, against the real service', () => {
   it('register, the model notice first, record, replace, record into a circle, ask, change settings, sign out and sign in', async () => {
     await boot();
@@ -165,5 +169,75 @@ describe('the everyday app, through the pages, against the real service', () => 
     expect(await home.text()).toContain('/user-app.js');
     expect(await admin.text()).toContain('/app.js');
     for (const f of ['chat-page.js', 'chat-view.js', 'chat-session.js', 'user-mount.js', 'user-style.css']) expect((await fetch(`http://127.0.0.1:${service.port}/${f}`)).status, f).toBe(200);
+  });
+
+  it('circle screens: a link per circle at the top, Home Send is the own brain, a circle Send is the circle, the Pulse reads only that circle, an observer can only read, and a stranger or a removed member gets the one answer', async () => {
+    await boot();
+    const eve = browser();
+    await register(eve, 'eve', 'Eve');
+    const eveCircles = createCirclesClient({ fetchFn: eve.fetchFn });
+    const club = (await eveCircles.createCircle({ name: 'Club' })).value.id;
+    const fay = browser();
+    await register(fay, 'fay', 'Fay');
+    const dan = browser();
+    await register(dan, 'dan', 'Dan');
+    expect((await eveCircles.invite(club, { username: 'fay', role: 'observer' })).ok).toBe(true);
+    const fayCircles = createCirclesClient({ fetchFn: fay.fetchFn });
+    expect((await fayCircles.acceptInvitation((await fayCircles.myInvitations()).value.items[0].id)).ok).toBe(true);
+
+    // eve: Home Send goes to her own brain, with no question
+    await send(eve, 'Eve dentist appointment on Friday morning OWN-MARK', lastIs(eve, 'Recorded'));
+    expect(thread(eve).map((m) => m.text)).toEqual(['Eve dentist appointment on Friday morning OWN-MARK', 'Recorded against your brain']);
+    // the link to the circle is at the top of the navigation, and its screen records against the circle only
+    eve.go('#/settings');
+    await waitFor(() => navLinks(eve).length === 1, 'the circle link');
+    expect(navLinks(eve)).toEqual(['Club']);
+    eve.go(`#/circle/${club}`);
+    await waitFor(() => circleReady(eve), 'the circle screen');
+    expect(eve.page.document.title).toBe('Club – CaCi');
+    el(eve, 'circle-update-text').value = 'Club bins go out on Thursday CLUB-MARK';
+    el(eve, 'circle-update-form').fire('submit');
+    await waitFor(() => cthread(eve).at(-1)?.text === 'Recorded against the circle "Club"', 'the circle filing');
+    const eveNotes = createNotesClient({ fetchFn: eve.fetchFn });
+    expect((await eveNotes.summaryIn({ kind: 'personal' })).value.itemCount).toBe(1); // only her own dentist note
+    expect((await eveNotes.summaryIn({ kind: 'circle', circleId: club })).value.itemCount).toBe(1); // only the club note
+    // the Pulse reads only that circle and says where it came from
+    el(eve, 'circle-pulse').fire('click');
+    await waitFor(() => cthread(eve).at(-1)?.text.includes('read 1 note') === true && circleReady(eve), 'the pulse answer');
+    const pulseAnswer = cthread(eve).at(-1);
+    expect(pulseAnswer.lines.join('\n')).toContain('CLUB-MARK');
+    expect(pulseAnswer.lines.join('\n')).not.toContain('OWN-MARK');
+    expect(pulseAnswer.lines.join('\n')).toContain('From: "Club"');
+
+    // the observer: the link, no way to add, a working Pulse
+    fay.go(`#/circle/${club}`);
+    await waitFor(() => circleReady(fay), 'the observer\'s circle screen');
+    expect(navLinks(fay)).toEqual(['Club']);
+    expect(el(fay, 'circle-update-text').disabled).toBe(true);
+    expect(el(fay, 'circle-update-send').disabled).toBe(true);
+    expect(el(fay, 'circle-readonly').hidden).toBe(false);
+    el(fay, 'circle-pulse').fire('click');
+    await waitFor(() => cthread(fay).at(-1)?.text.includes('read 1 note') === true && circleReady(fay), 'the observer\'s pulse');
+    expect(cthread(fay).at(-1).lines.join('\n')).toContain('CLUB-MARK');
+
+    // a stranger is sent Home with the one set of words, and the service says the same
+    dan.go(`#/circle/${club}`);
+    await waitFor(() => !el(dan, 'circle-notice').hidden, 'the stranger\'s notice');
+    expect(el(dan, 'circle-notice').textContent).toBe('No such circle, or you are not in it.');
+    expect(navLinks(dan)).toEqual([]);
+    expect(dan.page.document.title).toBe('CaCi');
+    const stranger = await createNotesClient({ fetchFn: dan.fetchFn }).pulse({ kind: 'circle', circleId: club });
+    expect(stranger.error).toMatchObject({ kind: 'not-found', what: 'circle' });
+
+    // a member who is removed loses the link and the screen on the next screen change
+    const members = (await eveCircles.listMembers(club)).value.items;
+    const fayId = members.find((m) => m.username === 'fay').userId;
+    expect((await eveCircles.removeMember(club, fayId)).ok).toBe(true);
+    fay.go('#/settings');
+    await waitFor(() => navLinks(fay).length === 0, 'the link to disappear');
+    fay.go(`#/circle/${club}`);
+    await waitFor(() => !el(fay, 'circle-notice').hidden, 'the removed member\'s notice');
+    expect(el(fay, 'circle-notice').textContent).toBe('No such circle, or you are not in it.');
+    expect(fay.page.document.title).toBe('CaCi');
   });
 });
