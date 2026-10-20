@@ -26,7 +26,6 @@ export function mountChatPage(document, notes, onSignedOut) {
   const questionAsk = $('question-ask');
   const msgTemplate = $('msg-template');
   const lineTemplate = $('msg-line-template');
-  const choiceTemplate = $('msg-choice-template');
 
   const clone = (template) => template.content.firstElementChild.cloneNode(true);
   const slot = (row, name) => {
@@ -40,16 +39,12 @@ export function mountChatPage(document, notes, onSignedOut) {
   };
 
   let drawn = '';
-  let choiceButtons = [];
-  let wantChoiceFocus = false;
 
   function draw(state) {
     const last = state.messages.at(-1);
-    const key = `${state.messages.length}:${last ? last.id : 0}:${state.choosing}`;
+    const key = `${state.messages.length}:${last ? last.id : 0}`;
     if (key === drawn) return;
     drawn = key;
-    choiceButtons = [];
-    const lastChoiceId = state.choosing ? [...state.messages].reverse().find((m) => m.kind === 'choice')?.id : undefined;
     const rows = state.messages.map((message) => {
       const row = clone(msgTemplate);
       row.setAttribute('class', messageClass(message));
@@ -63,27 +58,10 @@ export function mountChatPage(document, notes, onSignedOut) {
         }),
       );
       lines.hidden = message.lines.length === 0;
-      const choices = slot(row, 'choices');
-      const offered = message.id === lastChoiceId && message.choices ? message.choices : [];
-      choices.replaceChildren(
-        ...offered.map((choice) => {
-          const wrap = clone(choiceTemplate);
-          const button = slot(wrap, 'button');
-          button.textContent = choice.label;
-          button.addEventListener('click', () => void pick(choice.key));
-          choiceButtons.push(button);
-          return wrap;
-        }),
-      );
-      choices.hidden = offered.length === 0;
       return row;
     });
     thread.replaceChildren(...rows);
     thread.scrollTop = thread.scrollHeight;
-    if (wantChoiceFocus && choiceButtons.length > 0) {
-      wantChoiceFocus = false;
-      choiceButtons[0].focus();
-    }
   }
 
   function render(state) {
@@ -92,31 +70,23 @@ export function mountChatPage(document, notes, onSignedOut) {
     retry.hidden = state.mode.status !== 'error';
     retry.disabled = state.busy;
     draw(state);
-    const idle = state.canSend;
-    updateSend.disabled = !idle;
-    questionAsk.disabled = !idle;
+    updateSend.disabled = !state.canSend;
+    questionAsk.disabled = !state.canAsk;
     updateForm.setAttribute('aria-busy', state.busy ? 'true' : 'false');
     questionForm.setAttribute('aria-busy', state.busy ? 'true' : 'false');
-  }
-
-  async function pick(key) {
-    await chat.choose(key);
-    updateText.focus();
   }
 
   updateForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     setError(updateError, '');
     setError(questionError, '');
-    wantChoiceFocus = true;
     const result = await chat.send(updateText.value);
-    wantChoiceFocus = false;
     if (result.ok) {
       updateText.value = '';
-      if (!result.asked) updateText.focus();
+      updateText.focus();
       return;
     }
-    if (result.kind === 'invalid' || result.kind === 'mode-unknown' || result.kind === 'choose') {
+    if (result.kind === 'invalid' || result.kind === 'mode-unknown') {
       setError(updateError, result.message);
       updateText.focus();
     }
@@ -131,7 +101,7 @@ export function mountChatPage(document, notes, onSignedOut) {
       questionText.focus();
       return;
     }
-    if (result.kind === 'invalid' || result.kind === 'mode-unknown' || result.kind === 'choose') {
+    if (result.kind === 'invalid' || result.kind === 'mode-unknown') {
       setError(questionError, result.message);
       questionText.focus();
     }

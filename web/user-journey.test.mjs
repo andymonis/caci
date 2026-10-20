@@ -34,7 +34,7 @@ function browser(fetchFn = browserFetch(service.port), hash = '') {
   return { page, fetchFn, go: (h) => env.setHash(h) };
 }
 const el = (b, id) => b.page.el(id);
-const thread = (b) => el(b, 'chat-thread').children.map((row) => ({ cls: row.getAttribute('class'), text: row.querySelector('[data-slot="text"]').textContent, lines: row.querySelector('[data-slot="lines"]').children.map((l) => l.querySelector('[data-slot="text"]').textContent), choices: row.querySelector('[data-slot="choices"]').children.map((c) => c.querySelector('[data-slot="button"]')) }));
+const thread = (b) => el(b, 'chat-thread').children.map((row) => ({ cls: row.getAttribute('class'), text: row.querySelector('[data-slot="text"]').textContent, lines: row.querySelector('[data-slot="lines"]').children.map((l) => l.querySelector('[data-slot="text"]').textContent) }));
 const signedIn = (b) => !el(b, 'screen-signed-in').hidden;
 const idle = (b) => signedIn(b) && !el(b, 'update-send').disabled;
 
@@ -77,23 +77,22 @@ describe('the everyday app, through the pages, against the real service', () => 
     t = thread(eve);
     expect(t.at(-1).lines.some((l) => l.startsWith('Replaced:'))).toBe(true);
 
-    // a circle she owns: the thread asks, and the answer decides where it is filed
+    // a circle she owns: Send on Home still records against her own brain (the circle has its own screen)
     const circles = createCirclesClient({ fetchFn: eve.fetchFn });
     const made = await circles.createCircle({ name: 'Club <b>one</b>' });
     expect(made.ok).toBe(true);
-    await send(eve, 'Bins go out on Thursday', (() => () => thread(eve).at(-1)?.text === 'Is this for you or a circle?')());
-    t = thread(eve);
-    expect(t.at(-1).choices.map((b) => b.textContent)).toEqual(['Me', 'Club <b>one</b>', 'Cancel']);
-    expect(el(eve, 'update-send').disabled).toBe(true);
-    t.at(-1).choices[1].fire('click');
-    await waitFor(lastIs(eve, 'Recorded against the circle'), 'the circle filing');
-    expect(thread(eve).at(-1).text).toBe('Recorded against the circle "Club <b>one</b>"');
+    await send(eve, 'Bins go out on Thursday', lastIs(eve, 'Recorded'));
+    expect(thread(eve).at(-1).text).toBe('Recorded against your brain');
+    const clubNotes = createNotesClient({ fetchFn: eve.fetchFn });
+    const proposed = await clubNotes.propose('Club AUDIT-PLAN is on Friday', { kind: 'circle', circleId: made.value.id });
+    expect((await clubNotes.approve(proposed.value.id)).ok).toBe(true);
 
     // a question reads every brain, and names where each point came from
     await askQ(eve, 'What is happening with the bins?');
     const answer = thread(eve).at(-1);
     expect(answer.lines.join('\n')).toContain('Bins go out on Thursday');
-    expect(answer.lines.join('\n')).toContain('From: "Club <b>one</b>"');
+    await askQ(eve, 'AUDIT-PLAN Friday');
+    expect(thread(eve).at(-1).lines.join('\n')).toContain('From: "Club <b>one</b>"');
 
     // settings: a new name shows at the top, a new password ends the old one
     eve.go('#/settings');
@@ -129,7 +128,7 @@ describe('the everyday app, through the pages, against the real service', () => 
     expect(thread(eve).at(-1).lines.join('\n')).not.toContain('2 tablets daily');
   });
 
-  it('an observer is not offered the circle and her update goes to her own brain; a stranger\'s question never reads the circle', async () => {
+  it('Home is the own brain for everyone: an observer\'s note goes to her own brain and she can still read the circle by asking; a stranger never sees it', async () => {
     await boot();
     const eve = browser();
     await register(eve, 'eve', 'Eve');
@@ -140,25 +139,19 @@ describe('the everyday app, through the pages, against the real service', () => 
     const dan = browser();
     await register(dan, 'dan', 'Dan');
     expect((await circles.invite(club, { username: 'fay', role: 'observer' })).ok).toBe(true);
-    const fayNotes = createNotesClient({ fetchFn: fay.fetchFn });
-    const invitation = (await createCirclesClient({ fetchFn: fay.fetchFn }).myInvitations()).value.items[0].id;
-    expect((await createCirclesClient({ fetchFn: fay.fetchFn }).acceptInvitation(invitation)).ok).toBe(true);
-    expect((await fayNotes.scopes()).value.items.find((s) => s.scope.kind === 'circle').canCapture).toBe(false);
+    const fayCircles = createCirclesClient({ fetchFn: fay.fetchFn });
+    const invitation = (await fayCircles.myInvitations()).value.items[0].id;
+    expect((await fayCircles.acceptInvitation(invitation)).ok).toBe(true);
+    const eveNotes = createNotesClient({ fetchFn: eve.fetchFn });
+    const made = await eveNotes.propose('Club AUDIT-MARK secret plan', { kind: 'circle', circleId: club });
+    expect((await eveNotes.approve(made.value.id)).ok).toBe(true);
 
-    await send(eve, 'Club AUDIT-MARK secret plan', (() => () => thread(eve).at(-1)?.text === 'Is this for you or a circle?')());
-    thread(eve).at(-1).choices[1].fire('click');
-    await waitFor(lastIs(eve, 'Recorded against the circle'), 'filing');
-
-    // the observer is not asked: it goes to her own brain
     fay.go('#/');
     await send(fay, 'Fay own note about gardening', lastIs(fay, 'Recorded'));
     expect(thread(fay).map((m) => m.text)).toEqual(['Fay own note about gardening', 'Recorded against your brain']);
-    expect(thread(fay).some((m) => m.choices.length > 0)).toBe(false);
-    // but she can read the circle by asking
     await askQ(fay, 'plan');
     expect(thread(fay).at(-1).lines.join('\n')).toContain('AUDIT-MARK');
 
-    // a person in no circle never sees it
     await askQ(dan, 'what is the club plan');
     expect(thread(dan).at(-1).text + thread(dan).at(-1).lines.join()).not.toContain('AUDIT-MARK');
   });

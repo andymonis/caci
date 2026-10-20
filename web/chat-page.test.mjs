@@ -7,9 +7,6 @@ import { mountUser } from './user-mount.js';
 
 const USER = { id: 'u0000000000000001', username: 'ann', displayName: 'Ann A' };
 const CIRCLE = 'c0000000000000001';
-const scopes = (items) => ({ status: 200, body: { items } });
-const OWN = { scope: { kind: 'personal' }, canCapture: true };
-const circle = (name, canCapture = true) => ({ role: 'member', scope: { kind: 'circle', circleId: CIRCLE, circleName: name }, canCapture });
 const proposal = (extra = {}) => ({
   id: 'prop-aaa-1', createdAt: 1, expiresAt: 2, mode: 'demo', text: 'x', operations: [{ op: 'upsertNode', partition: 'item', id: 'i1' }],
   summary: { newItems: ['i1'], updatedItems: [], newCategories: [], updatedCategories: [], reusedCategories: [], newLinks: [], problems: [], notes: [], facts: [{ id: 'i1', title: 'Dose', summary: '2 tablets' }], removed: [], ...extra },
@@ -31,7 +28,6 @@ function service(table) {
 const BASE = (extra = {}) => ({
   'GET /api/me': { status: 200, body: { user: USER, graphId: 'x' } },
   'GET /api/capture/mode': { status: 200, body: { mode: 'demo' } },
-  'GET /api/brain/scopes': scopes([OWN]),
   'POST /api/capture/propose': { status: 201, body: { proposal: proposal() } },
   'POST /api/capture/proposals/prop-aaa-1/approve': { status: 200, body: { written: { id: 'prop-aaa-1', applied: 3, summary: { newItems: [], updatedItems: [], newCategories: [], updatedCategories: [], reusedCategories: [], newLinks: [], problems: [], notes: [] } } } },
   'POST /api/capture/proposals/prop-aaa-1/reject': { status: 204 },
@@ -47,7 +43,7 @@ async function start(table = BASE()) {
   await settle();
   return { page, svc, hooks };
 }
-const thread = (page) => page.el('chat-thread').children.map((row) => ({ cls: row.getAttribute('class'), text: row.querySelector('[data-slot="text"]').textContent, lines: row.querySelector('[data-slot="lines"]').children.map((l) => l.querySelector('[data-slot="text"]').textContent), choices: row.querySelector('[data-slot="choices"]').children.map((c) => c.querySelector('[data-slot="button"]')) }));
+const thread = (page) => page.el('chat-thread').children.map((row) => ({ cls: row.getAttribute('class'), text: row.querySelector('[data-slot="text"]').textContent, lines: row.querySelector('[data-slot="lines"]').children.map((l) => l.querySelector('[data-slot="text"]').textContent) }));
 const send = async (page, text) => { page.el('update-text').value = text; page.el('update-form').fire('submit'); await settle(); };
 const ask = async (page, text) => { page.el('question-text').value = text; page.el('question-form').fire('submit'); await settle(); };
 
@@ -102,39 +98,6 @@ describe('the chat on Home', () => {
     const { page } = await start(BASE({ 'POST /api/capture/propose': { status: 201, body: { proposal: proposal({ removed: [{ id: 'i0', title: 'Dose', summary: '1 tablet' }] }) } } }));
     await send(page, 'now 2');
     expect(thread(page)[1].lines).toEqual(['Dose: 2 tablets', 'Replaced: Dose: 1 tablet']);
-  });
-  it('with a circle to write to it asks in the thread, with buttons, and the first button takes the focus', async () => {
-    const { page, svc } = await start(BASE({ 'GET /api/brain/scopes': scopes([OWN, circle('Club'), { role: 'observer', canCapture: false, scope: { kind: 'circle', circleId: 'c0000000000000002', circleName: 'Watch' } }]) }));
-    await send(page, 'Meeting at 5');
-    const t = thread(page);
-    expect(t.map((m) => m.text)).toEqual(['Meeting at 5', 'Is this for you or a circle?']);
-    expect(t[1].choices.map((b) => b.textContent)).toEqual(['Me', 'Club', 'Cancel']);
-    expect(page.focused()).toBe(t[1].choices[0]);
-    expect(page.el('update-send').disabled).toBe(true);
-    expect(page.el('question-ask').disabled).toBe(true);
-    expect(svc.keys().filter((k) => k.startsWith('POST /api/capture'))).toEqual([]);
-    t[1].choices[1].fire('click');
-    await settle();
-    expect(svc.calls.find((c) => c.key === 'POST /api/capture/propose').body).toEqual({ text: 'Meeting at 5', scope: { kind: 'circle', circleId: CIRCLE } });
-    const after = thread(page);
-    expect(after.map((m) => m.text)).toEqual(['Meeting at 5', 'Is this for you or a circle?', 'Club', 'Recorded against the circle "Club"']);
-    expect(after[1].choices).toEqual([]);
-    expect(page.el('update-send').disabled).toBe(false);
-    expect(page.focused().id).toBe('update-text');
-  });
-  it('Me files in the own brain, Cancel records nothing', async () => {
-    const table = BASE({ 'GET /api/brain/scopes': scopes([OWN, circle('Club')]) });
-    const a = await start(table);
-    await send(a.page, 'one');
-    thread(a.page)[1].choices[0].fire('click');
-    await settle();
-    expect(a.svc.calls.find((c) => c.key === 'POST /api/capture/propose').body).toEqual({ text: 'one' });
-    const b = await start(table);
-    await send(b.page, 'two');
-    thread(b.page)[1].choices[2].fire('click');
-    await settle();
-    expect(b.svc.keys().filter((k) => k.startsWith('POST /api/capture'))).toEqual([]);
-    expect(thread(b.page).at(-1).text).toBe('Not recorded.');
   });
   it('a refusal is said in the thread in the service\'s words, nothing is cleared wrongly, and the proposal is discarded', async () => {
     const { page, svc } = await start(BASE({ 'POST /api/capture/proposals/prop-aaa-1/approve': { status: 409, body: { error: { code: 'WRITE_REFUSED', message: 'could not write' } } } }));
@@ -191,21 +154,12 @@ describe('the chat on Home', () => {
     await settle();
     expect(page.el('question-ask').disabled).toBe(false);
   });
-  it('lists and choices are hidden when a message has none; choice buttons are disabled while the filing is under way', async () => {
-    const g = gate();
-    const { page } = await start(BASE({ 'GET /api/brain/scopes': scopes([OWN, circle('Club')]), 'POST /api/capture/propose': () => g.promise }));
+  it('a message with no facts hides its list, and one with facts shows it', async () => {
+    const { page } = await start();
     await send(page, 'hello');
     const rows = page.el('chat-thread').children;
     expect(rows[0].querySelector('[data-slot="lines"]').hidden).toBe(true);
-    expect(rows[0].querySelector('[data-slot="choices"]').hidden).toBe(true);
-    expect(rows[1].querySelector('[data-slot="choices"]').hidden).toBe(false);
-    const buttons = thread(page)[1].choices;
-    buttons[0].fire('click');
-    await settle();
-    expect(buttons.every((b) => b.disabled)).toBe(false); // the old buttons are gone from the thread
-    g.release({ status: 201, body: { proposal: proposal() } });
-    await settle();
-    expect(page.el('chat-thread').children.at(-1).querySelector('[data-slot="lines"]').hidden).toBe(false);
+    expect(rows[1].querySelector('[data-slot="lines"]').hidden).toBe(false);
   });
   it('errors beside the boxes are cleared by the next try', async () => {
     const { page } = await start();
@@ -237,7 +191,7 @@ describe('the chat on Home', () => {
     expect(t[0].text).toBe(evil);
     expect(t[1].text).toBe(evil);
     expect(t[1].lines[0]).toContain(evil);
-    for (const row of page.el('chat-thread').children) expect(row.children.map((c) => c.tagName)).toEqual(['p', 'ul', 'div']);
+    for (const row of page.el('chat-thread').children) expect(row.children.map((c) => c.tagName)).toEqual(['p', 'ul']);
   });
   it('the thread stays when going to Settings and back, and is gone after signing out', async () => {
     const { page } = await start();

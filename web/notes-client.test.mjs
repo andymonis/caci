@@ -527,6 +527,31 @@ describe('status updates (R-011)', () => {
     }
   });
 
+  it('a circle scope narrows a status: only its kind and id are sent, a bad scope is refused before sending, and the circle 404 is the circle words', async () => {
+    const { calls, client } = fake(answer);
+    await client.status('status', 'UTC', { kind: 'circle', circleId: CIRCLE, circleName: 'ignored' });
+    await client.status('own only', 'UTC', undefined);
+    expect(calls.map((c) => c.body)).toEqual([{ text: 'status', timeZone: 'UTC', scope: { kind: 'circle', circleId: CIRCLE } }, { text: 'own only', timeZone: 'UTC' }]);
+    for (const bad of [{ kind: 'personal' }, 'mine', 'circle', { kind: 'circle', circleId: '../x' }, { kind: 'circle', circleId: CIRCLE, graphId: 'x' }, null, 5]) expect((await client.status('x', 'UTC', bad)).error, JSON.stringify(bad)).toMatchObject({ kind: 'invalid', field: 'scope' });
+    expect(calls).toHaveLength(2);
+    const gone = await fake(err(404, { code: 'NOT_FOUND', message: 'no such circle' })).client.status('x', 'UTC', { kind: 'circle', circleId: CIRCLE });
+    expect(gone.error).toEqual({ kind: 'not-found', what: 'circle', message: 'No such circle, or you are not in it.' });
+  });
+
+  it('the pulse sends only pulse, the circle and the time zone, never words, and needs a circle', async () => {
+    const { calls, client } = fake(answer);
+    const ok = await client.pulse({ kind: 'circle', circleId: CIRCLE, circleName: 'ignored' }, 'Europe/London');
+    expect(ok.ok).toBe(true);
+    await client.pulse({ kind: 'circle', circleId: CIRCLE }, 5);
+    expect(calls.map((c) => `${c.init.method} ${c.path}`)).toEqual(['POST /api/status', 'POST /api/status']);
+    expect(calls.map((c) => c.body)).toEqual([{ pulse: true, scope: { kind: 'circle', circleId: CIRCLE }, timeZone: 'Europe/London' }, { pulse: true, scope: { kind: 'circle', circleId: CIRCLE } }]);
+    for (const bad of [undefined, { kind: 'personal' }, 'mine', { kind: 'circle', circleId: 'nope' }]) expect((await client.pulse(bad)).error, JSON.stringify(bad)).toMatchObject({ kind: 'invalid', field: 'scope' });
+    expect(calls).toHaveLength(2);
+    const refused = await fake(err(422, { code: 'INVALID_INPUT', message: 'a pulse takes no text', field: 'text' })).client.pulse({ kind: 'circle', circleId: CIRCLE });
+    expect(refused.error.kind).toBe('invalid');
+    expect(refused.error.field).toBeUndefined(); // 'text' is not a field of a pulse call
+  });
+
   it('checks the text first: blank, not text, or over 500 characters is refused naming text, and nothing is sent', async () => {
     const { calls, client } = fake(answer);
     for (const bad of ['', '   ', 5, null, undefined, 'x'.repeat(501)]) expect((await client.status(bad)).error, String(bad)).toMatchObject({ kind: 'invalid', field: 'text' });
@@ -570,7 +595,7 @@ describe('status updates (R-011)', () => {
     expect(await run(404, { code: 'NOT_FOUND', message: 'status updates are not available' })).toEqual({ kind: 'not-found', what: 'status', message: 'Status updates are not available here.' });
     expect(await run(422, { code: 'INVALID_INPUT', message: 'text is too long', field: 'text' })).toEqual({ kind: 'invalid', field: 'text', message: 'text is too long' });
     expect(await run(422, { code: 'INVALID_INPUT', message: 'unknown zone', field: 'timeZone' })).toMatchObject({ kind: 'invalid', field: 'timeZone' });
-    expect(await run(422, { code: 'INVALID_INPUT', message: 'odd', field: 'scope' })).toEqual({ kind: 'invalid', message: 'odd' });
+    expect(await run(422, { code: 'INVALID_INPUT', message: 'odd', field: 'graphId' })).toEqual({ kind: 'invalid', message: 'odd' });
     expect(await run(429, { code: 'THROTTLED', message: 'you have asked for the most statuses allowed in an hour (20)' }, { 'retry-after': '120' })).toEqual({ kind: 'limit', message: 'you have asked for the most statuses allowed in an hour (20)', retryAfterSeconds: 120 });
     expect(await run(502, { code: 'MODEL_TIMEOUT', message: 'the model took too long: try again' })).toEqual({ kind: 'model', reason: 'timeout', message: 'the model took too long: try again' });
     expect(await run(502, { code: 'MODEL_REFUSED', message: 'the model declined to answer' })).toMatchObject({ kind: 'model', reason: 'refused' });

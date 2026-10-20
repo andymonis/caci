@@ -1,11 +1,14 @@
 // The everyday app's chat (R-016): a thread of messages in memory, an update field that files a note and a question field that
 // asks CaCi. Pure logic over the notes client; the page only draws what this says.
 //
-// - **Send**: the note is checked, then (if the person may capture into a circle) CaCi asks "is this for you or a circle?" in the
-//   thread; the answer picks the scope. The note is then proposed AND approved in one go (no preview, no Undo, D5) and the thread
-//   says which brain it was recorded against, the facts recorded and any fact replaced (D6). Any problem, refusal or failure
-//   records nothing, says why in the service's words, and rejects the proposal so no place is held.
-// - **Ask**: `POST /api/status` as it is: it reads every brain the person can read. The answer comes with where each point came from.
+// - **Home** (no `circle` given): **Send** records the note against the person's own brain (R-016 D16, no question), **Ask** is
+//   `POST /api/status` reading every brain the person can read, with where each point came from.
+// - **A circle's screen** (`circle` given: its id, name and whether the person may add to it): **Send** records the note against
+//   that circle's brain (a read-only circle refuses it, the service decides in the end) and **Pulse** asks for a status of that
+//   circle only, with the predefined text the service holds (D18 to D21). There is no question field there.
+// - A note is proposed AND approved in one go (no preview, no Undo, D5) and the thread says which brain it was recorded against,
+//   the facts recorded and any fact replaced (D6). Any problem, refusal or failure records nothing, says why in the service's
+//   words, and rejects the proposal so no place is held.
 // - One request at a time. The thread is in memory only: `reset()` (sign-out, leaving) clears it and drops late answers.
 // - Nothing is written to the browser; nothing the person or CaCi wrote is treated as anything but text.
 
@@ -16,21 +19,22 @@ import { browserTimeZone } from './status-session.js';
 const BUSY = Object.freeze({ ok: false, kind: 'busy', message: 'Please wait: the last request is still being sent.' });
 const DROPPED = Object.freeze({ ok: false, kind: 'dropped', message: '' });
 const NOT_READY = Object.freeze({ ok: false, kind: 'mode-unknown', message: 'Wait until CaCi has said which model it uses.' });
-const CHOOSE = Object.freeze({ ok: false, kind: 'choose', message: 'Choose where the last update goes first.' });
+const READ_ONLY = Object.freeze({ ok: false, kind: 'read-only', message: 'You can read this circle but not add to it.' });
 const PERSONAL = Object.freeze({ kind: 'personal' });
 
-export const WHO_QUESTION = 'Is this for you or a circle?';
 export const RECORDED_PERSONAL = 'Recorded against your brain';
 export const recordedCircle = (name) => `Recorded against the circle "${typeof name === 'string' && name !== '' ? name : 'this circle'}"`;
 
-export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZone }) {
-  for (const m of ['mode', 'scopes', 'propose', 'approve', 'reject', 'status']) if (!notes || typeof notes[m] !== 'function') throw new TypeError(`createChatSession needs a notes client with ${m}()`);
+export const PULSE_LABEL = 'Pulse';
+
+export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZone, circle }) {
+  for (const m of ['mode', 'propose', 'approve', 'reject', 'status', ...(circle === undefined ? [] : ['pulse'])]) if (!notes || typeof notes[m] !== 'function') throw new TypeError(`createChatSession needs a notes client with ${m}()`);
   let epoch = 0;
   let busy = false;
   let counter = 0;
   let mode = { status: 'unknown', value: null, error: null };
   let messages = [];
-  let pending = null; // { text, choices } while CaCi waits to hear whose brain a note is for
+  const place = circle === undefined ? undefined : Object.freeze({ circleId: circle.circleId, circleName: circle.circleName, canCapture: circle.canCapture === true });
   const listeners = new Set();
 
   const snapshot = () =>
@@ -38,8 +42,9 @@ export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZo
       mode: Object.freeze({ ...mode }),
       messages: Object.freeze([...messages]),
       busy,
-      choosing: pending !== null,
-      canSend: mode.status === 'known' && !busy && pending === null,
+      circle: place,
+      canSend: mode.status === 'known' && !busy && (place === undefined || place.canCapture),
+      canAsk: mode.status === 'known' && !busy,
     });
   function notify() {
     const view = snapshot();
@@ -52,7 +57,7 @@ export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZo
     }
   }
   function say(from, kind, text, extra = {}) {
-    messages.push(Object.freeze({ id: ++counter, from, kind, text, lines: Object.freeze(extra.lines ?? []), ...(extra.choices === undefined ? {} : { choices: Object.freeze(extra.choices.map((c) => Object.freeze({ ...c }))) }) }));
+    messages.push(Object.freeze({ id: ++counter, from, kind, text, lines: Object.freeze(extra.lines ?? []) }));
   }
   function signedOut(error) {
     if (error.kind !== 'signed-out' || typeof onSignedOut !== 'function') return;
@@ -121,6 +126,20 @@ export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZo
     return Object.freeze({ ok: true });
   }
 
+  /** Puts a status answer (or its failure) in the thread. */
+  function present(r, mine) {
+    if (mine !== epoch) return DROPPED;
+    if (!r.ok) {
+      signedOut(r.error);
+      say('cacci', 'error', words(r.error));
+      return Object.freeze({ ok: false, kind: r.error.kind, message: r.error.message });
+    }
+    const a = r.value;
+    const lines = a.nothing || a.points.length === 0 ? [STATUS_NOTHING] : a.points.map((p) => `${p.text}${sourcesText(p.sources) === '' ? '' : ` (${sourcesText(p.sources)})`}`);
+    say('cacci', 'answer', a.headline, { lines });
+    return Object.freeze({ ok: true });
+  }
+
   return Object.freeze({
     getState: snapshot,
     subscribe(listener) {
@@ -131,7 +150,6 @@ export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZo
     reset() {
       epoch += 1;
       busy = false;
-      pending = null;
       messages = [];
       mode = { status: 'unknown', value: null, error: null };
       notify();
@@ -152,72 +170,35 @@ export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZo
         return Object.freeze({ ok: true });
       });
     },
-    /** An update from the person. Asks whose brain it is for when there is a choice. */
+    /** An update from the person: recorded against their own brain on Home, or against this circle's brain on a circle's screen. */
     async send(text) {
       if (busy) return BUSY;
-      if (pending !== null) return CHOOSE;
       if (mode.status !== 'known') return NOT_READY;
+      if (place !== undefined && !place.canCapture) return READ_ONLY;
       const problem = noteProblem(text);
       if (problem !== undefined) return Object.freeze({ ok: false, kind: 'invalid', message: problem });
       const note = text.trim();
       say('me', 'text', note);
-      return exclusive(async (mine) => {
-        const listed = await notes.scopes();
-        if (mine !== epoch) return DROPPED;
-        if (!listed.ok) {
-          signedOut(listed.error);
-          say('cacci', 'error', `Not recorded: ${words(listed.error)}`);
-          return Object.freeze({ ok: false, kind: listed.error.kind, message: listed.error.message });
-        }
-        const places = listed.value.items.filter((s) => s.canCapture === true && s.scope.kind === 'circle');
-        if (places.length === 0) return file(note, PERSONAL, mine, RECORDED_PERSONAL);
-        const choices = [{ key: 'personal', label: 'Me' }, ...places.map((s) => ({ key: `circle:${s.scope.circleId}`, label: s.scope.circleName })), { key: 'cancel', label: 'Cancel' }];
-        pending = { text: note, places: new Map(places.map((s) => [`circle:${s.scope.circleId}`, s.scope])), choices };
-        say('cacci', 'choice', WHO_QUESTION, { choices });
-        return Object.freeze({ ok: true, asked: true });
-      });
+      return exclusive((mine) => (place === undefined ? file(note, PERSONAL, mine, RECORDED_PERSONAL) : file(note, { kind: 'circle', circleId: place.circleId }, mine, recordedCircle(place.circleName))));
     },
-    /** The answer to "for you or a circle?": a key from the choices, or `cancel`. */
-    async choose(key) {
-      if (busy) return BUSY;
-      if (pending === null || !pending.choices.some((c) => c.key === key)) return Object.freeze({ ok: false, kind: 'invalid', message: 'There is nothing to choose.' });
-      const { text, places, choices } = pending;
-      const label = choices.find((c) => c.key === key).label;
-      pending = null;
-      say('me', 'text', label);
-      if (key === 'cancel') {
-        say('cacci', 'text', 'Not recorded.');
-        notify();
-        return Object.freeze({ ok: true, cancelled: true });
-      }
-      return exclusive(async (mine) => {
-        if (key === 'personal') return file(text, PERSONAL, mine, RECORDED_PERSONAL);
-        const scope = places.get(key);
-        return file(text, { kind: 'circle', circleId: scope.circleId }, mine, recordedCircle(scope.circleName));
-      });
-    },
-    /** A question from the person. */
+    /** A question from the person (Home only: a circle's screen has the Pulse instead). */
     async ask(text) {
       if (busy) return BUSY;
-      if (pending !== null) return CHOOSE;
+      if (place !== undefined) return Object.freeze({ ok: false, kind: 'invalid', message: 'Use the Pulse button here.' });
       if (mode.status !== 'known') return NOT_READY;
       const t = typeof text === 'string' ? text.trim() : '';
       if (t === '') return Object.freeze({ ok: false, kind: 'invalid', message: 'Type a question first.' });
       if ([...t].length > 500) return Object.freeze({ ok: false, kind: 'invalid', message: 'A question is at most 500 characters.' });
       say('me', 'text', t);
-      return exclusive(async (mine) => {
-        const r = await notes.status(t, timeZone());
-        if (mine !== epoch) return DROPPED;
-        if (!r.ok) {
-          signedOut(r.error);
-          say('cacci', 'error', words(r.error));
-          return Object.freeze({ ok: false, kind: r.error.kind, message: r.error.message });
-        }
-        const a = r.value;
-        const lines = a.nothing || a.points.length === 0 ? [STATUS_NOTHING] : a.points.map((p) => `${p.text}${sourcesText(p.sources) === '' ? '' : ` (${sourcesText(p.sources)})`}`);
-        say('cacci', 'answer', a.headline, { lines });
-        return Object.freeze({ ok: true });
-      });
+      return exclusive(async (mine) => present(await notes.status(t, timeZone()), mine));
+    },
+    /** The Pulse (a circle's screen only): a status of this circle alone, with the predefined text the service holds. */
+    async pulse() {
+      if (busy) return BUSY;
+      if (place === undefined) return Object.freeze({ ok: false, kind: 'invalid', message: 'The Pulse is on a circle\'s screen.' });
+      if (mode.status !== 'known') return NOT_READY;
+      say('me', 'text', PULSE_LABEL);
+      return exclusive(async (mine) => present(await notes.pulse({ kind: 'circle', circleId: place.circleId }, timeZone()), mine));
     },
   });
 }

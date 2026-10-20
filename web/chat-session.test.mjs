@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createChatSession, RECORDED_PERSONAL, recordedCircle, WHO_QUESTION } from './chat-session.js';
+import { createChatSession, PULSE_LABEL, RECORDED_PERSONAL, recordedCircle } from './chat-session.js';
 import { world } from './sharing-world.test-util.mjs';
 
 const C1 = 'c0123456789abcdef';
@@ -18,16 +18,17 @@ function fakeNotes(over = {}) {
     calls,
     notes: {
       mode: rec('mode', () => okv({ mode: 'demo' })),
-      scopes: rec('scopes', () => okv({ items: [{ scope: { kind: 'personal' }, canCapture: true }] })),
       propose: rec('propose', () => okv({ id: 'prop-1', summary: SUMMARY() })),
       approve: rec('approve', () => okv({ id: 'prop-1', applied: 3 })),
       reject: rec('reject', () => okv(true)),
+      pulse: rec('pulse', () => okv({ headline: 'Circle is quiet.', nothing: false, points: [{ text: 'Bins on Thursday', sources: [{ kind: 'circle', circleId: C1, circleName: 'Parent care' }] }] })),
       status: rec('status', () => okv({ headline: 'A quiet day.', nothing: false, points: [{ text: 'Mum has new tablets.', sources: [{ kind: 'personal' }] }] })),
       ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, rec(k, v)])),
     },
   };
 }
-const CIRCLES = { items: [{ scope: { kind: 'personal' }, canCapture: true }, { scope: { kind: 'circle', circleId: C1, circleName: 'Parent care' }, role: 'member', canCapture: true }, { scope: { kind: 'circle', circleId: 'cabcdefghij012345', circleName: 'Read only' }, role: 'observer', canCapture: false }] };
+const CIRCLE = { circleId: C1, circleName: 'Parent care', canCapture: true };
+const WATCH = { circleId: 'cabcdefghij012345', circleName: 'Read only', canCapture: false };
 const make = async (over = {}, options = {}) => {
   const f = fakeNotes(over);
   const s = createChatSession({ notes: f.notes, timeZone: () => 'Europe/London', ...options });
@@ -41,7 +42,7 @@ describe('before anything is sent', () => {
   it('nothing can be sent or asked until the model is known, and no request is made', async () => {
     const f = fakeNotes();
     const s = createChatSession({ notes: f.notes });
-    expect(s.getState()).toMatchObject({ mode: { status: 'unknown' }, canSend: false, messages: [] });
+    expect(s.getState()).toMatchObject({ mode: { status: 'unknown' }, canSend: false, canAsk: false, messages: [] });
     expect(await s.send('x')).toMatchObject({ ok: false, kind: 'mode-unknown' });
     expect(await s.ask('x')).toMatchObject({ ok: false, kind: 'mode-unknown' });
     expect(f.calls).toEqual([]);
@@ -65,11 +66,11 @@ describe('sending an update', () => {
   it('with only your own brain it files straight away: proposes, approves, and says what was recorded', async () => {
     const { s, calls } = await make();
     expect(await s.send('  Mum phone 0770  ')).toEqual({ ok: true });
-    expect(calls.map((c) => c[0])).toEqual(['mode', 'scopes', 'propose', 'approve']);
-    expect(calls[2]).toEqual(['propose', 'Mum phone 0770', undefined]);
+    expect(calls.map((c) => c[0])).toEqual(['mode', 'propose', 'approve']);
+    expect(calls[1]).toEqual(['propose', 'Mum phone 0770', undefined]);
     expect(texts(s)).toEqual(['me:text:Mum phone 0770', `cacci:recorded:${RECORDED_PERSONAL}`]);
     expect(s.getState().messages[1].lines).toEqual(['Mum: phone: 0770']);
-    expect(s.getState()).toMatchObject({ busy: false, choosing: false, canSend: true });
+    expect(s.getState()).toMatchObject({ busy: false, canSend: true, canAsk: true });
   });
   it('lists every fact, and each fact replaced', async () => {
     const summary = SUMMARY({ facts: [{ id: 'a', title: 'Dad: ward', summary: 'ward C' }, { id: 'b', title: '', summary: 'only a summary' }, { id: 'c', title: 'only a title', summary: '' }], removed: [{ id: 'o', title: 'Dad: ward', summary: 'ward B' }, { id: 'p', title: 'old', summary: '' }] });
@@ -87,67 +88,72 @@ describe('sending an update', () => {
   });
 });
 
-describe('for you or a circle', () => {
-  const circles = { scopes: () => okv(CIRCLES) };
-  it('asks in the thread, offering Me, each circle you may capture into, and Cancel (not the read-only one)', async () => {
-    const { s, calls } = await make(circles);
-    expect(await s.send('Bins on Thursday')).toEqual({ ok: true, asked: true });
-    const ask = s.getState().messages.at(-1);
-    expect(ask).toMatchObject({ from: 'cacci', kind: 'choice', text: WHO_QUESTION });
-    expect(ask.choices).toEqual([{ key: 'personal', label: 'Me' }, { key: `circle:${C1}`, label: 'Parent care' }, { key: 'cancel', label: 'Cancel' }]);
-    expect(names({ calls })).toEqual(['mode', 'scopes']);
-    expect(s.getState()).toMatchObject({ choosing: true, canSend: false });
-  });
-  it('sending or asking is refused while the question is open', async () => {
-    const { s } = await make(circles);
-    await s.send('Bins');
-    expect(await s.send('another')).toMatchObject({ ok: false, kind: 'choose' });
-    expect(await s.ask('why')).toMatchObject({ ok: false, kind: 'choose' });
-  });
-  it('Me files to your own brain, with no scope sent', async () => {
-    const { s, calls } = await make(circles);
-    await s.send('Bins');
-    expect(await s.choose('personal')).toEqual({ ok: true });
-    expect(calls.find((c) => c[0] === 'propose')).toEqual(['propose', 'Bins', undefined]);
-    expect(texts(s).slice(-2)).toEqual(['me:text:Me', `cacci:recorded:${RECORDED_PERSONAL}`]);
-    expect(s.getState().choosing).toBe(false);
-  });
-  it('a circle files to that circle, sending only its kind and id, and says its name', async () => {
-    const { s, calls } = await make(circles);
-    await s.send('Bins');
-    await s.choose(`circle:${C1}`);
-    expect(calls.find((c) => c[0] === 'propose')).toEqual(['propose', 'Bins', { kind: 'circle', circleId: C1 }]);
-    expect(texts(s).slice(-2)).toEqual(['me:text:Parent care', `cacci:recorded:${recordedCircle('Parent care')}`]);
+describe('on a circle\'s screen', () => {
+  const inCircle = (over = {}, circle = CIRCLE) => make(over, { circle });
+  it('Send records against that circle, sending only its kind and id, and says its name', async () => {
+    const { s, calls } = await inCircle();
+    expect(await s.send('Bins on Thursday')).toEqual({ ok: true });
+    expect(calls.map((c) => c[0])).toEqual(['mode', 'propose', 'approve']);
+    expect(calls.find((c) => c[0] === 'propose')).toEqual(['propose', 'Bins on Thursday', { kind: 'circle', circleId: C1 }]);
+    expect(texts(s)).toEqual(['me:text:Bins on Thursday', `cacci:recorded:${recordedCircle('Parent care')}`]);
     expect(recordedCircle('Parent care')).toBe('Recorded against the circle "Parent care"');
     expect(recordedCircle('')).toBe('Recorded against the circle "this circle"');
+    expect(s.getState().circle).toEqual(CIRCLE);
   });
-  it('Cancel records nothing', async () => {
-    const { s, calls } = await make(circles);
-    await s.send('Bins');
-    expect(await s.choose('cancel')).toEqual({ ok: true, cancelled: true });
-    expect(names({ calls })).toEqual(['mode', 'scopes']);
-    expect(texts(s).slice(-2)).toEqual(['me:text:Cancel', 'cacci:text:Not recorded.']);
-    expect(s.getState().canSend).toBe(true);
+  it('a read-only circle refuses Send and sends nothing, but the Pulse still works', async () => {
+    const { s, calls } = await inCircle({}, WATCH);
+    expect(s.getState()).toMatchObject({ canSend: false, canAsk: true });
+    expect(await s.send('x')).toMatchObject({ ok: false, kind: 'read-only' });
+    expect(names({ calls })).toEqual(['mode']);
+    expect(await s.pulse()).toEqual({ ok: true });
   });
-  it('a choice that was not offered, or none open, sends nothing', async () => {
-    const { s, calls } = await make(circles);
-    expect(await s.choose('personal')).toMatchObject({ ok: false, kind: 'invalid' });
-    await s.send('Bins');
-    expect(await s.choose('circle:cabcdefghij012345')).toMatchObject({ ok: false, kind: 'invalid' });
-    expect(await s.choose('__proto__')).toMatchObject({ ok: false, kind: 'invalid' });
-    expect(names({ calls })).toEqual(['mode', 'scopes']);
-    expect(s.getState().choosing).toBe(true);
+  it('the Pulse shows a Pulse message and the circle\'s answer with its sources, sending the circle and the time zone, not words', async () => {
+    const { s, calls } = await inCircle();
+    expect(await s.pulse()).toEqual({ ok: true });
+    expect(calls.find((c) => c[0] === 'pulse')).toEqual(['pulse', { kind: 'circle', circleId: C1 }, 'Europe/London']);
+    expect(PULSE_LABEL).toBe('Pulse');
+    expect(texts(s)).toEqual(['me:text:Pulse', 'cacci:answer:Circle is quiet.']);
+    expect(s.getState().messages.at(-1).lines).toEqual(['Bins on Thursday (From: "Parent care")']);
+    expect(names({ calls })).not.toContain('status');
   });
-  it('a list of circles that cannot be read records nothing and says why', async () => {
-    const { s, calls } = await make({ scopes: () => bad('server', 'down') });
-    expect(await s.send('Bins')).toMatchObject({ ok: false });
-    expect(names({ calls })).toEqual(['mode', 'scopes']);
-    expect(texts(s).at(-1)).toBe('cacci:error:Not recorded: down');
+  it('a pulse with nothing relevant, a limit or a missing circle is said in words', async () => {
+    const quiet = await inCircle({ pulse: () => okv({ headline: 'Nothing.', nothing: true, points: [] }) });
+    await quiet.s.pulse();
+    expect(quiet.s.getState().messages.at(-1).lines).toEqual(['Nothing relevant was found in what you can read.']);
+    const limited = await inCircle({ pulse: () => bad('limit', 'Too many.', { retryAfterSeconds: 60 }) });
+    expect(await limited.s.pulse()).toMatchObject({ ok: false, kind: 'limit' });
+    expect(texts(limited.s).at(-1)).toBe('cacci:error:Too many. Try again in 60 seconds.');
+    const gone = await inCircle({ pulse: () => bad('not-found', 'No such circle, or you are not in it.') });
+    await gone.s.pulse();
+    expect(texts(gone.s).at(-1)).toBe('cacci:error:No such circle, or you are not in it.');
   });
-  it('a circle name is only text', async () => {
-    const { s } = await make({ scopes: () => okv({ items: [{ scope: { kind: 'circle', circleId: C1, circleName: '<b>Parent</b>' }, role: 'owner', canCapture: true }] }) });
+  it('there is no question here, and Home has no Pulse', async () => {
+    const circle = await inCircle();
+    expect(await circle.s.ask('why')).toMatchObject({ ok: false, kind: 'invalid' });
+    expect(names(circle)).toEqual(['mode']);
+    const home = await make();
+    expect(await home.s.pulse()).toMatchObject({ ok: false, kind: 'invalid' });
+    expect(names(home)).toEqual(['mode']);
+    expect(home.s.getState().circle).toBeUndefined();
+  });
+  it('nothing can be pulsed or sent before the model is known, and a circle client needs pulse()', async () => {
+    const f = fakeNotes();
+    const s = createChatSession({ notes: f.notes, circle: CIRCLE });
+    expect(await s.pulse()).toMatchObject({ kind: 'mode-unknown' });
+    expect(await s.send('x')).toMatchObject({ kind: 'mode-unknown' });
+    expect(f.calls).toEqual([]);
+    const without = { ...f.notes };
+    delete without.pulse;
+    expect(() => createChatSession({ notes: without, circle: CIRCLE })).toThrow(TypeError);
+    expect(() => createChatSession({ notes: without })).not.toThrow();
+  });
+  it('a circle name is only text, and a signed-out pulse is reported', async () => {
+    let told = 0;
+    const { s } = await make({ pulse: () => bad('signed-out', 'ended') }, { circle: { ...CIRCLE, circleName: '<b>Parent</b>' }, onSignedOut: () => told++ });
     await s.send('x');
-    expect(s.getState().messages.at(-1).choices[1].label).toBe('<b>Parent</b>');
+    expect(texts(s).at(-1)).toBe('cacci:recorded:Recorded against the circle "<b>Parent</b>"');
+    await s.pulse();
+    expect(told).toBe(1);
   });
 });
 
@@ -155,7 +161,7 @@ describe('when filing does not work, nothing is kept', () => {
   it('a model failure says why, with the wait, and nothing is approved', async () => {
     const { s, calls } = await make({ propose: () => bad('model', 'The model is busy.', { retryAfterSeconds: 30 }) });
     expect(await s.send('x')).toMatchObject({ ok: false, kind: 'model' });
-    expect(names({ calls })).toEqual(['mode', 'scopes', 'propose']);
+    expect(names({ calls })).toEqual(['mode', 'propose']);
     expect(texts(s).at(-1)).toBe('cacci:error:Not recorded: The model is busy. Try again in 30 seconds.');
   });
   it('a proposal with problems is rejected, not approved', async () => {
@@ -227,16 +233,15 @@ describe('asking a question', () => {
 });
 
 describe('one request at a time, and forgetting', () => {
-  it('a second send, ask or choice meanwhile sends nothing', async () => {
+  it('a second send, ask, pulse or mode request meanwhile sends nothing', async () => {
     const d = deferred();
     const { s, calls } = await make({ propose: () => d.promise });
     const first = s.send('x');
     await Promise.resolve();
     await new Promise((r) => setTimeout(r, 0));
-    expect(s.getState()).toMatchObject({ busy: true, canSend: false });
+    expect(s.getState()).toMatchObject({ busy: true, canSend: false, canAsk: false });
     expect(await s.send('y')).toMatchObject({ kind: 'busy' });
     expect(await s.ask('y')).toMatchObject({ kind: 'busy' });
-    expect(await s.choose('personal')).toMatchObject({ kind: 'busy' });
     expect(await s.loadMode()).toMatchObject({ kind: 'busy' });
     expect(calls.filter((c) => c[0] === 'propose')).toHaveLength(1);
     d.resolve(okv({ id: 'p', summary: SUMMARY() }));
@@ -251,7 +256,7 @@ describe('one request at a time, and forgetting', () => {
     s.reset();
     d.resolve(okv({ headline: 'late', nothing: false, points: [] }));
     expect(await pendingAsk).toMatchObject({ kind: 'dropped' });
-    expect(s.getState()).toMatchObject({ messages: [], busy: false, choosing: false, mode: { status: 'unknown' } });
+    expect(s.getState()).toMatchObject({ messages: [], busy: false, mode: { status: 'unknown' } });
   });
   it('an old request finishing after a reset does not clear a newer request\'s busy mark', async () => {
     const d1 = deferred();
@@ -271,13 +276,6 @@ describe('one request at a time, and forgetting', () => {
     await fresh;
     expect(texts(s).filter((t) => t.includes('old'))).toEqual([]);
     expect(texts(s).at(-1)).toBe('cacci:answer:new');
-  });
-  it('a reset while a choice is open forgets it', async () => {
-    const { s } = await make({ scopes: () => okv(CIRCLES) });
-    await s.send('x');
-    s.reset();
-    expect(s.getState()).toMatchObject({ choosing: false, messages: [] });
-    expect(await s.choose('personal')).toMatchObject({ ok: false });
   });
   it('listeners hear every change; a broken one does not matter; unsubscribing works; messages are frozen with increasing ids', async () => {
     const { s } = await make();
@@ -319,38 +317,51 @@ describe('against the real service (demo model)', () => {
     expect(answer.lines.join(' ')).toContain('900456');
     expect(answer.lines.join(' ')).not.toContain('900123');
   });
-  it('a person in a circle is asked, and the note lands in the circle; another member can read it', async () => {
+  it('on Home a note always goes to the own brain, even for a person in a circle', async () => {
     const w = await world();
     const ann = await real(w.ann);
-    expect(await ann.send('Bin collection moved to Thursday')).toEqual({ ok: true, asked: true });
-    expect(ann.getState().messages.at(-1).choices.map((c) => c.label)).toEqual(['Me', 'Club', 'Cancel']);
-    expect(await ann.choose(`circle:${w.circle}`)).toEqual({ ok: true });
-    expect(ann.getState().messages.at(-1).text).toBe('Recorded against the circle "Club"');
-    const seen = await w.bob.notes.categories({ kind: 'circle', circleId: w.circle });
-    expect(seen.ok).toBe(true);
-    const ownBefore = (await w.ann.notes.summaryIn(undefined)).value.itemCount;
-    expect(ownBefore).toBeGreaterThanOrEqual(0);
+    expect(await ann.send('Bin collection moved to Thursday')).toEqual({ ok: true });
+    expect(ann.getState().messages.at(-1).text).toBe(RECORDED_PERSONAL);
+    const own = await w.ann.notes.categoriesIn({ kind: 'personal' });
+    expect(own.value.items.length).toBeGreaterThan(0);
+    const inCircle = await w.bob.notes.categoriesIn({ kind: 'circle', circleId: w.circle });
+    expect(inCircle.value.items).toEqual([]);
   });
-  it('an observer-only circle is not offered, so that person files straight to their own brain', async () => {
+  it('on a circle\'s screen a note lands in that circle and another member can read it; the own brain is untouched', async () => {
     const w = await world();
-    const club = w.circle;
-    const neighbours = (await w.ann.circles.createCircle({ name: 'Neighbours' })).value.id;
-    await w.ann.circles.invite(neighbours, { username: 'dan', role: 'observer' });
-    const invitation = (await w.dan.circles.myInvitations()).value.items.find((i) => i.circle.id === neighbours).id;
-    await w.dan.circles.acceptInvitation(invitation);
-    const dan = await real(w.dan);
-    expect(await dan.send('A note')).toEqual({ ok: true });
-    expect(dan.getState().messages.at(-1).text).toBe(RECORDED_PERSONAL);
-    expect(club).toBeDefined();
+    const ann = createChatSession({ notes: w.ann.notes, circle: { circleId: w.circle, circleName: 'Club', canCapture: true } });
+    await ann.loadMode();
+    const ownBefore = (await w.ann.notes.categoriesIn({ kind: 'personal' })).value.items.length;
+    expect(await ann.send('Bin collection moved to Thursday')).toEqual({ ok: true });
+    expect(ann.getState().messages.at(-1).text).toBe('Recorded against the circle "Club"');
+    expect((await w.bob.notes.categoriesIn({ kind: 'circle', circleId: w.circle })).value.items.length).toBeGreaterThan(0);
+    expect((await w.ann.notes.categoriesIn({ kind: 'personal' })).value.items.length).toBe(ownBefore);
   });
-  it('markup in a note comes back as text, and a cancelled choice records nothing', async () => {
+  it('an observer is refused by the page logic and by the service; the Pulse reads only that circle', async () => {
+    const w = await world();
+    await w.ann.notes.propose('Dentist appointment on Friday morning').then((m) => w.ann.notes.approve(m.value.id));
+    const m = await w.ann.notes.propose('Club bins go out on Thursday', { kind: 'circle', circleId: w.circle });
+    await w.ann.notes.approve(m.value.id);
+    const bob = createChatSession({ notes: w.bob.notes, circle: { circleId: w.circle, circleName: 'Club', canCapture: false } });
+    await bob.loadMode();
+    expect(await bob.send('x')).toMatchObject({ kind: 'read-only' });
+    expect(await bob.pulse()).toEqual({ ok: true });
+    const answer = bob.getState().messages.at(-1);
+    expect(answer.lines.join(' ')).toContain('Club bins');
+    expect(answer.lines.join(' ')).not.toContain('Dentist');
+    expect(answer.lines.every((l) => l.includes('Club') || l.startsWith('Nothing'))).toBe(true);
+  });
+  it('a stranger\'s pulse of the circle is the one not-found, in words', async () => {
+    const w = await world();
+    const dan = createChatSession({ notes: w.dan.notes, circle: { circleId: w.circle, circleName: 'Club', canCapture: true } });
+    await dan.loadMode();
+    expect(await dan.pulse()).toMatchObject({ ok: false, kind: 'not-found' });
+    expect(dan.getState().messages.at(-1).text).toBe('No such circle, or you are not in it.');
+  });
+  it('markup in a note comes back as text', async () => {
     const w = await world();
     const ann = await real(w.ann);
     await ann.send('<img src=x onerror=alert(1)> Mum phone 0770');
-    await ann.choose('cancel');
-    const before = (await w.ann.notes.summaryIn(undefined)).value.itemCount;
     expect(ann.getState().messages[0].text).toContain('<img');
-    expect(ann.getState().messages.at(-1).text).toBe('Not recorded.');
-    expect((await w.ann.notes.summaryIn(undefined)).value.itemCount).toBe(before);
   });
 });

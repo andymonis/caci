@@ -343,12 +343,23 @@ export function createNotesClient({ fetchFn }) {
      * person's IANA time zone. Only `{ text, timeZone }` is sent; nothing is filed. The service reads the person's
      * own notes and their circles' and says where each point came from.
      */
-    status(text, timeZone) {
+    status(text, timeZone, scope) {
       const request = typeof text === 'string' ? text.trim() : '';
       if (request === '') return Promise.resolve(fail({ kind: 'invalid', field: 'text', message: 'Say what you would like a status on.' }));
       if ([...request].length > STATUS_MAX) return Promise.resolve(fail({ kind: 'invalid', field: 'text', message: 'A request is at most 500 characters.' }));
+      const target = scope === undefined ? undefined : isCircle(scope) ? Object.freeze({ kind: 'circle', circleId: scope.circleId }) : null;
+      if (target === null) return Promise.resolve(badScope());
       const zone = typeof timeZone === 'string' && timeZone !== '' && timeZone.length <= TIME_ZONE_MAX ? timeZone : undefined;
-      return call({ method: 'POST', path: () => '/api/status', body: { text: request, ...(zone === undefined ? {} : { timeZone: zone }) }, parse: statusOf, what: 'status', fields: ['text', 'timeZone'] });
+      return call({ method: 'POST', path: () => '/api/status', body: { text: request, ...(zone === undefined ? {} : { timeZone: zone }), ...(target === undefined ? {} : { scope: target }) }, parse: statusOf, what: 'status', fields: ['text', 'timeZone', 'scope'] });
+    },
+    /**
+     * A circle's Pulse (R-016 D19 to D21): a status of that circle only. Only `{ pulse: true, scope, timeZone? }` is sent:
+     * the words come from the service, so the page never holds or sends them. The scope must be a circle.
+     */
+    pulse(scope, timeZone) {
+      if (!isCircle(scope)) return Promise.resolve(badScope());
+      const zone = typeof timeZone === 'string' && timeZone !== '' && timeZone.length <= TIME_ZONE_MAX ? timeZone : undefined;
+      return call({ method: 'POST', path: () => '/api/status', body: { pulse: true, scope: Object.freeze({ kind: 'circle', circleId: scope.circleId }), ...(zone === undefined ? {} : { timeZone: zone }) }, parse: statusOf, what: 'status', fields: ['pulse', 'scope', 'timeZone'] });
     },
     getProposal: (id) => call({ method: 'GET', proposal: [id], path: (p) => `/api/capture/proposals/${p}`, parse: proposalOf }),
     approve: (id) => call({ method: 'POST', proposal: [id], path: (p) => `/api/capture/proposals/${p}/approve`, parse: writtenOf }),
