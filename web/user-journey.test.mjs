@@ -4,9 +4,9 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startService } from '../src/service/service.ts';
 import { createCirclesClient } from './circles-client.js';
-import { mountChatPage } from './chat-page.js';
 import { fakePage, fill, waitFor } from './fake-page.test-util.mjs';
 import { createNotesClient } from './notes-client.js';
+import { userHooks } from './user-hooks.js';
 import { browserFetch, PW } from './sharing-world.test-util.mjs';
 import { mountUser } from './user-mount.js';
 
@@ -30,7 +30,7 @@ function browser(fetchFn = browserFetch(service.port), hash = '') {
   let current = hash;
   const listeners = [];
   const env = { getHash: () => current, setHash: (h) => { current = h; for (const l of listeners) l(); }, onHashChange: (fn) => listeners.push(fn) };
-  mountUser(page.document, fetchFn, env, ({ recheck }) => mountChatPage(page.document, createNotesClient({ fetchFn }), recheck));
+  mountUser(page.document, fetchFn, env, (context) => userHooks(page.document, fetchFn, context));
   return { page, fetchFn, go: (h) => env.setHash(h) };
 }
 const el = (b, id) => b.page.el(id);

@@ -87,11 +87,13 @@
           <p id="user-display-name" class="who"></p>
         </div>
         <nav aria-label="Main">
+          <span id="nav-circles" hidden></span>
           <a id="nav-home" href="#/">Chat</a>
           <a id="nav-settings" href="#/settings">Settings</a>
         </nav>
       </header>
       <p id="signed-in-notice" class="error" role="alert" hidden></p>
+      <p id="circle-notice" class="note" role="status" hidden></p>
 
       <section id="view-home" hidden>
         <h2 id="home-heading" tabindex="-1">Chat</h2>
@@ -115,8 +117,13 @@
           <button type="submit" id="question-ask">Ask</button>
         </form>
 
+        <template id="nav-circle-template"><span><a data-slot="link" href="#/"></a></span></template>
         <template id="msg-template"><li class="msg"><p data-slot="text"></p><ul data-slot="lines" class="lines"></ul></li></template>
         <template id="msg-line-template"><li><span data-slot="text"></span></li></template>
+      </section>
+
+      <section id="view-circle" hidden>
+        <h2 id="circle-heading" tabindex="-1"></h2>
       </section>
 
       <section id="view-settings" hidden>

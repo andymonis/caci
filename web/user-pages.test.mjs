@@ -103,7 +103,7 @@ describe('the page', () => {
 describe('the scripts', () => {
   it('are exactly the modules the entry point reaches, and import only each other by name', () => {
     // the chat reuses the notes client, which brings the back office's shared word and permission modules with it
-    expect(modules).toEqual(['api-client.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circles-client.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'settings-session.js', 'status-session.js', 'status-view.js', 'user-app.js', 'user-mount.js', 'view.js']);
+    expect(modules).toEqual(['api-client.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circles-client.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'settings-session.js', 'status-session.js', 'status-view.js', 'user-app.js', 'user-circles.js', 'user-hooks.js', 'user-mount.js', 'view.js']);
     for (const m of modules) for (const x of code(read(m)).matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)) expect(x[1], `${m} imports ${x[1]}`).toMatch(/^\.\/[a-z0-9.-]+\.js$/);
   });
   it('never turn text into markup, run strings as code, or use storage, cookies or the console', () => {
@@ -146,7 +146,7 @@ describe('the scripts', () => {
       else if (t.includes('-heading')) for (const v of ['home', 'settings']) wanted.add(`${v}-heading`);
       else throw new Error(`the guard does not know how to check ${t}`);
     }
-    for (const x of code(read('chat-page.js')).matchAll(/\$\('([a-zA-Z-]+)'\)/g)) wanted.add(x[1]);
+    for (const f of ['chat-page.js', 'user-circles.js']) for (const x of code(read(f)).matchAll(/\$\('([a-zA-Z-]+)'\)/g)) wanted.add(x[1]);
     for (const id of wanted) expect(ids, id).toContain(id);
     expect(wanted.size).toBeGreaterThan(30);
   });

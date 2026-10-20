@@ -1,7 +1,6 @@
 // The everyday app's entry point: start the page. Everything else is in the modules it imports.
-import { mountChatPage } from './chat-page.js';
-import { createNotesClient } from './notes-client.js';
 import { mountUser } from './user-mount.js';
+import { userHooks } from './user-hooks.js';
 
 const fetchFn = (...args) => window.fetch(...args);
 
@@ -15,5 +14,5 @@ mountUser(
     },
     onHashChange: (listener) => window.addEventListener('hashchange', listener),
   },
-  ({ recheck }) => mountChatPage(document, createNotesClient({ fetchFn }), recheck),
+  (context) => userHooks(document, fetchFn, context),
 );

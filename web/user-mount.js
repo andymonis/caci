@@ -5,6 +5,7 @@
 import { createApiClient } from './api-client.js';
 import { createSettingsSession } from './settings-session.js';
 import { createSession } from './session.js';
+import { isCircleId } from './circles-client.js';
 import { FORMS, formFeedback } from './view.js';
 
 const SCREENS = ['loading', 'unreachable', 'signed-out', 'signed-in'];
@@ -12,8 +13,14 @@ const NO_ENV = Object.freeze({ getHash: () => '', setHash: () => {}, onHashChang
 const TITLES = Object.freeze({ home: 'CaCi', settings: 'Settings – CaCi' });
 const SETTINGS_FORMS = Object.freeze({ profile: Object.freeze(['displayName', 'email']), password: Object.freeze(['currentPassword', 'newPassword']) });
 
-/** The address names Settings only exactly; anything else is Home. Never decoded. */
-export const routeOf = (hash) => (hash === '#/settings' ? 'settings' : 'home');
+/** The circle an address names (`#/circle/<id>`, the id in its exact shape), else `undefined`. Never decoded. */
+export const circleIdOf = (hash) => {
+  if (typeof hash !== 'string' || !hash.startsWith('#/circle/')) return undefined;
+  const id = hash.slice('#/circle/'.length);
+  return isCircleId(id) ? id : undefined;
+};
+/** The address names Settings or a circle only exactly; anything else is Home. Never decoded. */
+export const routeOf = (hash) => (hash === '#/settings' ? 'settings' : circleIdOf(hash) !== undefined ? 'circle' : 'home');
 
 export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) {
   const $ = (id) => {
@@ -61,7 +68,7 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) 
   const signedInNotice = $('signed-in-notice');
   const showRegister = $('show-register');
   const showSignin = $('show-signin');
-  const views = { home: $('view-home'), settings: $('view-settings') };
+  const views = { home: $('view-home'), circle: $('view-circle'), settings: $('view-settings') };
   const navLinks = { home: $('nav-home'), settings: $('nav-settings') };
   const headings = { home: $('home-heading'), settings: $('settings-heading') };
 
@@ -107,14 +114,15 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) 
       return;
     }
     const route = routeOf(env.getHash());
-    for (const name of Object.keys(views)) {
-      views[name].hidden = name !== route;
+    const param = circleIdOf(env.getHash());
+    for (const name of Object.keys(views)) views[name].hidden = name !== route;
+    for (const name of Object.keys(navLinks)) {
       if (name === route) navLinks[name].setAttribute('aria-current', 'page');
       else navLinks[name].removeAttribute('aria-current');
     }
-    if (shown === route) return;
-    shown = route;
-    document.title = TITLES[route];
+    const key = `${route}:${param ?? ''}`;
+    if (shown === key) return;
+    shown = key;
     if (route === 'settings') {
       for (const parts of Object.values(settingsForms)) {
         clearFeedback(parts);
@@ -126,7 +134,9 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) 
     } else {
       for (const parts of Object.values(settingsForms)) for (const { input } of Object.values(parts.fields)) input.value = '';
     }
-    hooks.route?.(route);
+    hooks.route?.(route, param);
+    if (route === 'circle') return; // the circle screen sets its own title and takes the focus once it knows the circle's name
+    document.title = TITLES[route];
     headings[route].focus();
   }
 
@@ -230,7 +240,7 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) 
   });
 
   // the hooks may be given ready, or built from what only this module can offer (the one-time re-check of a ended session)
-  hooks = typeof hooksOrFactory === 'function' ? hooksOrFactory({ recheck }) : hooksOrFactory;
+  hooks = typeof hooksOrFactory === 'function' ? hooksOrFactory({ recheck, go: (hash) => env.setHash(hash) }) : hooksOrFactory;
   session.subscribe(render);
   env.onHashChange(() => renderRoute(session.getState().screen === 'signed-in', session.getState()));
   render(session.getState());
