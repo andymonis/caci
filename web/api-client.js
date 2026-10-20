@@ -8,7 +8,7 @@
 // - Only the fields the app needs are passed on (no email, no graph id).
 
 const MAX_MESSAGE = 300;
-const FIELDS = ['username', 'displayName', 'email', 'password'];
+const FIELDS = ['username', 'displayName', 'email', 'password', 'currentPassword', 'newPassword'];
 
 /** Removes control characters, separators and the byte order mark, and cuts to a reasonable length. */
 export function cleanMessage(text, fallback) {
@@ -136,6 +136,10 @@ export function createApiClient({ fetchFn }) {
       request('register', 'POST', '/api/register', { username, displayName, ...(email === undefined || email === '' ? {} : { email }), password }, userFrom),
     login: ({ username, password }) => request('login', 'POST', '/api/login', { username, password }, userFrom),
     /** Signing out always counts as done if the service says you were not signed in. */
+    /** Changes the name and/or the email (R-016); `email: null` removes it. Only the fields given are sent. */
+    updateMe: ({ displayName, email } = {}) => request('updateMe', 'PATCH', '/api/me', { ...(displayName === undefined ? {} : { displayName }), ...(email === undefined ? {} : { email }) }, userFrom),
+    /** `{ currentPassword, newPassword }`; the service ends the person's other sessions. */
+    changePassword: ({ currentPassword, newPassword }) => request('changePassword', 'POST', '/api/me/password', { currentPassword, newPassword }, userFrom),
     logout: () => request('logout', 'POST', '/api/logout', undefined, () => true),
   });
 }

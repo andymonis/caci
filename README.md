@@ -349,7 +349,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these thirty-seven, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these thirty-eight, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -370,6 +370,7 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `ledger-page.js` | puts the change-log screen on the page |
 | `ledger-view.js` | the words on the change-log screen |
 | `ledger-session.js` | what the change-log screen shows: one brain's entries, newest first, a page at a time; held in memory only |
+| `settings-session.js` | what the everyday app's Settings screen does: change the name, email and password |
 | `scope-session.js` | which brains the person can capture into and read: their own, each circle (observers read only), and the combined view |
 | `brain-session.js` | what the Brain screen shows: the categories, the items in one, one item (read-only, the selection is page state) |
 | `capture-page.js` | puts the capture screen on the page: which model files the note, the note box, the preview, approve and reject |

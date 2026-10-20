@@ -127,7 +127,7 @@ describe('what a person is told when it does not work', () => {
       const r = await fake(err(422, { code: 'INVALID_INPUT', message: `bad ${field}`, field })).client.register({});
       expect(r.error).toEqual({ kind: 'invalid', message: `bad ${field}`, field });
     }
-    for (const field of ['role', 'body', '__proto__', 'currentPassword', 5, undefined]) {
+    for (const field of ['role', 'body', '__proto__', 'nope', 5, undefined]) {
       const r = await fake(err(422, { code: 'INVALID_INPUT', message: 'bad', field })).client.register({});
       expect(r.error.field, String(field)).toBeUndefined();
       expect(r.error.kind).toBe('invalid');
@@ -232,5 +232,38 @@ describe('the words shown', () => {
     expect(parseRetryAfter('1000000')).toBeUndefined(); // seven digits
     expect(parseRetryAfter(5)).toBeUndefined();
     expect(parseRetryAfter(null)).toBeUndefined();
+  });
+});
+
+describe('settings calls (R-016)', () => {
+  it('updateMe sends only the fields given, as a PATCH, and email null removes it', async () => {
+    const { calls, client } = fake({ status: 200, body: { user: USER } });
+    expect((await client.updateMe({ displayName: 'New Name' })).value).toEqual({ id: USER.id, username: 'ann', displayName: 'Ann A' });
+    await client.updateMe({ email: 'a@b.co' });
+    await client.updateMe({ email: null });
+    await client.updateMe({});
+    expect(calls.map((c) => [c.init.method, c.path, JSON.parse(c.init.body ?? '{}')])).toEqual([
+      ['PATCH', '/api/me', { displayName: 'New Name' }], ['PATCH', '/api/me', { email: 'a@b.co' }], ['PATCH', '/api/me', { email: null }], ['PATCH', '/api/me', {}],
+    ]);
+  });
+  it('changePassword sends only the two passwords to the password route', async () => {
+    const { calls, client } = fake({ status: 200, body: { user: USER } });
+    const r = await client.changePassword({ currentPassword: 'old password 12', newPassword: 'new password 345', extra: 'x' });
+    expect(r.ok).toBe(true);
+    expect(calls[0].path).toBe('/api/me/password');
+    expect(calls[0].init.method).toBe('POST');
+    expect(JSON.parse(calls[0].init.body)).toEqual({ currentPassword: 'old password 12', newPassword: 'new password 345' });
+  });
+  it('a refusal names currentPassword or newPassword only when it is one; other fields are dropped', async () => {
+    const e = (field) => fake(err(422, { code: 'INVALID_INPUT', message: 'currentPassword is incorrect', field })).client.changePassword({ currentPassword: 'a', newPassword: 'b' });
+    expect((await e('currentPassword')).error).toMatchObject({ kind: 'invalid', field: 'currentPassword', message: 'currentPassword is incorrect' });
+    expect((await e('newPassword')).error.field).toBe('newPassword');
+    expect((await e('role')).error.field).toBeUndefined();
+  });
+  it('signed out, throttled and server failures read as they do elsewhere', async () => {
+    expect((await fake(err(401, { code: 'UNAUTHENTICATED', message: 'x' })).client.updateMe({ displayName: 'a' })).error.kind).toBe('signed-out');
+    expect((await fake(err(429, { code: 'THROTTLED', message: 'x' }, { 'retry-after': '9' })).client.changePassword({ currentPassword: 'a', newPassword: 'b' })).error).toMatchObject({ kind: 'throttled', retryAfterSeconds: 9 });
+    expect((await fake({ status: 500, body: {} }).client.updateMe({ displayName: 'a' })).error.kind).toBe('server');
+    expect((await fake({ status: 200, body: { nope: 1 } }).client.updateMe({ displayName: 'a' })).error.kind).toBe('server');
   });
 });

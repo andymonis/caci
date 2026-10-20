@@ -89,3 +89,23 @@ export function checkLogin(input) {
     ['password', typeof i.password === 'string' && i.password !== '' ? { value: i.password } : { error: 'Enter your password.' }],
   ]);
 }
+
+/** Settings (R-016): a blank field means "leave it as it is". `{ displayName?, email? }` of what to change, or an error per field. */
+export function checkProfile(input) {
+  const i = input && typeof input === 'object' ? input : {};
+  const blank = (v) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+  const entries = [];
+  if (!blank(i.displayName)) entries.push(['displayName', checkDisplayName(i.displayName)]);
+  if (!blank(i.email)) entries.push(['email', checkEmail(i.email)]);
+  if (entries.length === 0) return { ok: false, errors: Object.freeze({ displayName: 'Change the name or the email first.' }) };
+  return collect(entries);
+}
+
+/** Changing the password needs the current one (anything) and a new one the rules allow. */
+export function checkPasswordChange(input) {
+  const i = input && typeof input === 'object' ? input : {};
+  return collect([
+    ['currentPassword', typeof i.currentPassword === 'string' && i.currentPassword !== '' ? { value: i.currentPassword } : { error: 'Enter your current password.' }],
+    ['newPassword', checkNewPassword(i.newPassword)],
+  ]);
+}

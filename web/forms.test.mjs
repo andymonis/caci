@@ -150,3 +150,25 @@ describe('signing in', () => {
     expect(checkLogin({ username: 5, password: 5 }).ok).toBe(false);
   });
 });
+
+describe('settings forms (R-016)', () => {
+  it('checkProfile: blank means unchanged; at least one change; the same rules as registering', async () => {
+    const { checkProfile } = await import('./forms.js');
+    expect(checkProfile({ displayName: '  New Name ', email: '' })).toEqual({ ok: true, value: { displayName: 'New Name' } });
+    expect(checkProfile({ displayName: '', email: ' a@b.co ' })).toEqual({ ok: true, value: { email: 'a@b.co' } });
+    expect(checkProfile({ displayName: 'N', email: 'a@b.co' }).value).toEqual({ displayName: 'N', email: 'a@b.co' });
+    for (const input of [{}, { displayName: ' ', email: ' ' }, undefined, null]) expect(checkProfile(input)).toMatchObject({ ok: false, errors: { displayName: 'Change the name or the email first.' } });
+    expect(checkProfile({ email: 'not an email' }).errors.email).toContain('email');
+    expect(checkProfile({ displayName: 'x'.repeat(81) }).errors.displayName).toContain('80');
+    expect(checkProfile({ displayName: 'a\u0007b' }).errors.displayName).toContain('control');
+  });
+  it('checkPasswordChange: a current password is needed and the new one follows the length rules, counted after normalising', async () => {
+    const { checkPasswordChange } = await import('./forms.js');
+    expect(checkPasswordChange({ currentPassword: 'old', newPassword: 'a long enough pass' })).toEqual({ ok: true, value: { currentPassword: 'old', newPassword: 'a long enough pass' } });
+    expect(checkPasswordChange({ currentPassword: '', newPassword: 'a long enough pass' }).errors).toEqual({ currentPassword: 'Enter your current password.' });
+    expect(checkPasswordChange({ currentPassword: 'x', newPassword: 'short' }).errors.newPassword).toContain('12');
+    expect(checkPasswordChange({ currentPassword: 'x', newPassword: 'x'.repeat(129) }).errors.newPassword).toContain('128');
+    expect(checkPasswordChange({ currentPassword: 'x', newPassword: ' '.repeat(12) }).ok).toBe(true);
+    expect(checkPasswordChange({}).errors).toMatchObject({ currentPassword: expect.any(String), newPassword: expect.any(String) });
+  });
+});

@@ -33,6 +33,7 @@ export const WEB_FILE_SPECS: readonly WebFileSpec[] = Object.freeze([
   { path: '/ledger-page.js', file: 'ledger-page.js', kind: 'js' },
   { path: '/ledger-view.js', file: 'ledger-view.js', kind: 'js' },
   { path: '/ledger-session.js', file: 'ledger-session.js', kind: 'js' },
+  { path: '/settings-session.js', file: 'settings-session.js', kind: 'js' },
   { path: '/scope-session.js', file: 'scope-session.js', kind: 'js' },
   { path: '/brain-view.js', file: 'brain-view.js', kind: 'js' },
   { path: '/capture-page.js', file: 'capture-page.js', kind: 'js' },
