@@ -564,9 +564,25 @@ describe('the README section on the minimal user app (R-016)', () => {
   });
 
   it('says the things a reader must not miss', () => {
-    for (const phrase of ['no preview and no Undo', 'Is this for you or a circle?', 'in memory only', 'not an installable app', 'no manifest, icon, service worker or HTTPS', 'observers are not offered theirs', 'not anonymised', 'nothing in the browser', 'signs your other devices out', 'any fact **replaced**']) {
+    for (const phrase of ['no preview and no Undo', 'always records against your own brain', 'records against that circle\'s brain', 'first in the navigation', 'in memory only', 'not an installable app', 'no manifest, icon, service worker or HTTPS', 'An **observer** can read but not add', '**Pulse** button asks for a status of **that circle only**', 'never words', 'No such circle, or you are not in it.', 'not anonymised', 'nothing in the browser', 'signs your other devices out', 'any fact **replaced**', 'nothing polls']) {
       expect(userApp.toLowerCase(), phrase).toContain(phrase.toLowerCase());
     }
+  });
+});
+
+describe('the README on the circle screens of the user app (R-016 D17 to D22)', () => {
+  const userApp = section('The minimal user app');
+  it('names the circle address the page really knows, and does not describe the old question', async () => {
+    const { routeOf } = await loadWeb<{ routeOf: (hash: string) => string }>('user-mount.js');
+    expect(userApp).toContain('`#/circle/<id>`');
+    expect(routeOf('#/circle/c0000000000000001')).toBe('circle');
+    expect(userApp).not.toContain('Is this for you or a circle?');
+    expect(userApp).not.toContain('observers are not offered theirs');
+  });
+  it('points at the pulse text section, which exists', () => {
+    expect(userApp).toContain('[The pulse text](#the-pulse-text)');
+    expect(readme).toContain('### The pulse text');
+    expect(userApp).toContain('`controls/pulse.txt`');
   });
 });
 

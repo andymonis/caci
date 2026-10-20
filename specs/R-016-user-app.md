@@ -57,10 +57,7 @@ Home (chat)      -------------------------------
                  |  <user name>                 |
                  |------------------------------|
                  |                  my update   |   right: the person
-                 | Is this for you or a circle? |   left: CaCi
-                 | [Me] [Parent care]           |
-                 |                  Me          |
-                 | Recorded against your brain  |
+                 | Recorded against your brain  |   left: CaCi
                  | • Mum: phone number …        |
                  | Replaced: Mum: old number    |
                  |                  my question |
@@ -68,6 +65,18 @@ Home (chat)      -------------------------------
                  |------------------------------|
                  | [ update ........... ] Send  |
                  | [ question ......... ] Ask   |
+                 -------------------------------
+
+Circle           -------------------------------      one for each circle you belong to,
+(one per circle) |  CaCi          Club  (Chat…) |      its link first in the navigation
+                 |------------------------------|
+                 |                  my update   |
+                 | Recorded against the circle  |
+                 |                  Pulse       |
+                 | Status of the circle …       |
+                 |------------------------------|
+                 | [ update ........... ] Send  |
+                 |                      [Pulse] |
                  -------------------------------
 
 Settings         display name, email, [Save]
@@ -81,8 +90,8 @@ Settings         display name, email, [Save]
 |----|-------------|
 | UP-FR-01 | `/` serves the minimal app and `/admin` serves the back office; every other served file keeps its path; no API route changes. |
 | UP-FR-02 | The app signs the person in and out, shows Login when there is no session (a stale session is handled as in the back office), and keeps the person on Home after a reload. |
-| UP-FR-03 | Send asks "for you or a circle?" in the thread with only the places the person may capture into; with none but their own it files straight away. |
-| UP-FR-04 | The chosen scope is sent with the note; the thread says which brain it was recorded against, by the circle's name. |
+| UP-FR-03 | On Home, Send always records against the person's own brain; no question is asked, whatever circles they are in (D16). |
+| UP-FR-04 | The thread says which brain a note was recorded against: "Recorded against your brain" or "Recorded against the circle <name>". |
 | UP-FR-05 | A note is proposed and approved in one go; a proposal with problems, a refused write or a model failure records nothing and says why; the pending proposal is rejected so it does not use a place. |
 | UP-FR-06 | The thread lists the facts recorded and any fact replaced. |
 | UP-FR-07 | Ask shows the answer with where each point came from, "nothing relevant was found" when so, and the service's words and wait for any failure or limit. |
@@ -90,6 +99,11 @@ Settings         display name, email, [Save]
 | UP-FR-09 | Nothing the person or CaCi wrote is ever parsed as markup, and nothing is stored in the browser. |
 | UP-FR-10 | Settings change the display name and email and the password with the service's words for refusals; a changed password ends the person's other sessions as the service does. |
 | UP-FR-11 | The model notice is shown before the first Send or Ask and the buttons wait for it. |
+| UP-FR-12 | The navigation lists each circle the person is in, by name, before Chat and Settings; each has a Circle screen at `#/circle/<id>` (exact id shape, otherwise Home); the list is re-read whenever a screen is shown, and a circle the person is not in or has left gives the one no-such-circle words and goes Home (D17). |
+| UP-FR-13 | On a Circle screen Send records against that circle only (kind and id sent, never a graph id); an observer's update box and Send are disabled with the reason (D18). |
+| UP-FR-14 | The Pulse button asks for a status of that circle only: the page sends `pulse: true` and the circle, never words; the answer shows with its sources, in the thread (D19, D20, D22). |
+| UP-FR-15 | The pulse text is the file `controls/pulse.txt`, read at start-up; a missing, blank, over-long or multi-line file stops the start (D21). |
+| UP-FR-16 | Each circle has its own thread, in memory only, kept while signed in and forgotten on sign-out; a changed right or name starts a fresh thread (D22). |
 | UP-NFR-01 | No new dependency, no build, no server API, no browser storage. |
 | UP-NFR-02 | The page works at phone width with touch targets of at least 2.75 rem and is usable by keyboard and screen reader (labels, focus, live updates for new messages). |
 
@@ -98,11 +112,16 @@ Settings         display name, email, [Save]
 | Threat | Control | Covered by |
 |--------|---------|------------|
 | Text from the person, a circle member or the model run as markup | Text only, as in the back office; guard tests on the files. | `web/chat-page.test.mjs` — "hostile text, from the person or from CaCi, is only text"; `web/user-mount.test.mjs` — "a hostile name is only text"; `web/user-pages.test.mjs` — "never turn text into markup, run strings as code, or use storage, cookies or the console"; `web/chat-session.test.mjs` — "markup in a note comes back as text" |
-| A note filed to the wrong brain | The scope is chosen in the thread, shown in the confirmation, and checked by the service (an observer or stranger is refused as today). | `web/chat-page.test.mjs` — "sending with only an own brain files straight away, shows both sides and clears the box"; `web/chat-session.test.mjs` — "Send records against that circle, sending only its kind and id, and says its name"; `web/user-journey.test.mjs` — "Home is the own brain for everyone" |
+| A note filed to the wrong brain | Home Send is always the own brain and a Circle screen's Send is that circle (the page sends the circle's kind and id only); the thread names the brain, and the service checks the right (an observer or stranger is refused as today). | `web/chat-page.test.mjs` — "sending with only an own brain files straight away, shows both sides and clears the box"; `web/chat-session.test.mjs` — "Send records against that circle, sending only its kind and id, and says its name"; `web/user-journey.test.mjs` — "Home is the own brain for everyone" |
 | A silent wrong deletion (no preview) | D6 lists every replacement in the thread; the back office keeps the change log. A residual risk. | `web/chat-page.test.mjs` — "a replaced fact is listed"; `web/chat-session.test.mjs` — "lists every fact, and each fact replaced"; `web/user-journey.test.mjs` — "register, the model notice first, record, replace, record into a circle, ask, change settings, sign out and sign in" |
 | The thread kept where it can be read later | D8: memory only, cleared on reload and sign-out. | `web/chat-page.test.mjs` — "the thread stays when going to Settings and back, and is gone after signing out"; `web/chat-session.test.mjs` — "reset clears the thread and the model, and drops an answer still on its way"; `web/user-pages.test.mjs` — "never turn text into markup, run strings as code, or use storage, cookies or the console" |
 | A pending proposal left behind by a failure | UP-FR-05: rejected on any failure. | `web/chat-session.test.mjs` — "a proposal with problems is rejected, not approved"; `web/chat-session.test.mjs` — "a refused write is rejected so it holds no place"; `web/chat-page.test.mjs` — "a refusal is said in the thread in the service" |
 | Two apps drifting apart | One set of clients and one API (D14). | `web/user-pages.test.mjs` — "name only routes that exist, by path"; `web/user-journey.test.mjs` — "the page is reachable at / and the back office at /admin, both from the same service"; `web/user-pages.test.mjs` — "are exactly the modules the entry point reaches, and import only each other by name" |
+| The pulse text forged by a member | D21: the words are a server file; the page sends only `pulse: true` and a circle, and the service refuses text with a pulse. | `src/service/status-end-to-end.test.ts` — "is refused by name with text, with no circle, with a personal scope or with a value that is not a boolean"; `src/service/status-end-to-end.test.ts` — "an edited pulse file is what the provider is asked, and the browser never sends the words"; `web/user-pages.test.mjs` — "holds no words for the Pulse: the text lives on the server" |
+| A circle read through a status or pulse by someone who is not in it | D20: the scope is resolved with the read right; a stranger, a made-up circle and a non-member administrator get the one not-found before anything is read or counted. | `src/service/status-end-to-end.test.ts` — "a member and an observer get a pulse of that circle only; a stranger and a made-up circle get the same 404; the pulse is not filed"; `src/caci/controller-status-scope.test.ts` — "a stranger, a person in another circle only and a made-up circle get the one not-found, and nothing is asked, read or counted"; `web/user-journey.test.mjs` — "circle screens: a link per circle at the top, Home Send is the own brain" |
+| A Pulse that reads more than the circle | D20: a circle scope narrows the context to that circle's notes; a recording adapter shows no other graph is read. | `src/caci/controller-status-scope.test.ts` — "reads only that circle and names it as the source"; `src/caci/controller-pulse.test.ts` — "text for that circle only, whoever asks (a member or an observer), and answers like a status" |
+| A link or screen for a circle the person has left | D17: the list is re-read whenever a screen is shown; an address for a circle not in the list gives the no-such-circle words and Home. | `web/user-circles.test.mjs` — "is read again whenever a screen is shown: a circle joined appears, a circle left disappears"; `web/user-circles.test.mjs` — "a circle the person is not in (or has left) gives the one set of words and goes to Home"; `web/user-journey.test.mjs` — "circle screens: a link per circle at the top, Home Send is the own brain" |
+| One person's circle threads shown to the next person on the same page | D22: threads are memory only and are forgotten, and late answers dropped, on sign-out. | `web/circle-chat-page.test.mjs` — "signing out forgets every thread, even for the next person on the same page, and drops an answer still on its way"; `web/circle-chat-page.test.mjs` — "each circle has its own thread, kept while moving between screens, and forgotten on sign-out"; `web/user-circles.test.mjs` — "signing out forgets the links, the heading and the notice" |
 
 ## Acceptance criteria
 
@@ -110,9 +129,9 @@ Settings         display name, email, [Save]
 |----|---------------------|
 | UP-AC-01 | Given the service, when `/` is opened, then the minimal app loads, and `/admin` loads the back office unchanged. |
 | UP-AC-02 | Given no session, when the person opens the app, then Login shows; after signing in, Home; after a reload, Home again. |
-| UP-AC-03 | Given the person is in a circle where they may capture, when they press Send, then the thread asks "for you or a circle" with Me and the circle; an observer-only circle is not offered. |
+| UP-AC-03 | Given the person is in a circle where they may capture, when they press Send on Home, then the note is recorded against their own brain and no question is asked. |
 | UP-AC-04 | Given Me chosen, when the note is filed, then the thread says it was recorded against their own brain and lists the facts. |
-| UP-AC-05 | Given a circle chosen, then the note is in that circle's brain and the thread names the circle. |
+| UP-AC-05 | Given a Circle screen, when they press Send, then the note is in that circle's brain, not their own, and the thread names the circle. |
 | UP-AC-06 | Given a note that changes an earlier fact, then the thread says which fact was replaced. |
 | UP-AC-07 | Given a refused write or a model failure, then nothing is recorded, the thread says why and no proposal stays pending. |
 | UP-AC-08 | Given a question, when Ask is pressed, then the answer shows with its sources and uses the person's own and circle brains. |
@@ -120,6 +139,12 @@ Settings         display name, email, [Save]
 | UP-AC-10 | Given a reload or sign-out, then the thread is gone and nothing was stored in the browser. |
 | UP-AC-11 | Given Settings, when the display name, email or password is changed, then the service's answer is shown and a wrong current password is refused in its words. |
 | UP-AC-12 | Given hostile text in a note, a name or an answer, then it is shown as text. |
+| UP-AC-13 | Given the person is in circles, then the navigation shows each circle's link first, a link opens its Circle screen, and a circle joined or left appears or disappears at the next screen. |
+| UP-AC-14 | Given an observer on a Circle screen, then the update box and Send are disabled with the reason and the Pulse still works. |
+| UP-AC-15 | Given a Circle screen, when the Pulse is pressed, then the answer is a status of that circle only with its sources, and the page sent no words. |
+| UP-AC-16 | Given a stranger or a removed member opens a circle address, then they see the one no-such-circle words on Home and the service answers a pulse for it the same way. |
+| UP-AC-17 | Given `controls/pulse.txt` is missing, blank, over 500 characters or multi-line, then the service does not start and names the file; an edited good file is what the model is asked. |
+| UP-AC-18 | Given several circles, then each has its own thread, kept while signed in and gone after sign-out, even for the next person on the same page. |
 
 
 ### Where each criterion is checked (T-249)
@@ -128,9 +153,9 @@ Settings         display name, email, [Save]
 |----|-------|
 | UP-AC-01 | `web/user-journey.test.mjs` — "the page is reachable at / and the back office at /admin, both from the same service"; `web/user-pages.test.mjs` — "loads one module script from /user-app.js and one style sheet, and nothing else" |
 | UP-AC-02 | `web/user-mount.test.mjs` — "shows the sign-in form to a person with no session, and nothing of the app"; `web/user-mount.test.mjs` — "signing in goes to Home and empties the form"; `web/user-mount.test.mjs` — "a person with a session lands on Home with their name, the title, the focus on the heading and the nav marked" |
-| UP-AC-03 | `web/chat-page.test.mjs` — "sending with only an own brain files straight away, shows both sides and clears the box"; `web/chat-session.test.mjs` — "a read-only circle refuses Send and sends nothing"; `web/user-journey.test.mjs` — "Home is the own brain for everyone" |
+| UP-AC-03 | `web/chat-page.test.mjs` — "sending with only an own brain files straight away, shows both sides and clears the box"; `web/user-journey.test.mjs` — "Home is the own brain for everyone"; `web/chat-session.test.mjs` — "on Home a note always goes to the own brain, even for a person in a circle" |
 | UP-AC-04 | `web/chat-page.test.mjs` — "sending with only an own brain files straight away, shows both sides and clears the box"; `web/chat-session.test.mjs` — "with only your own brain it files straight away: proposes, approves, and says what was recorded" |
-| UP-AC-05 | `web/chat-session.test.mjs` — "Send records against that circle, sending only its kind and id, and says its name"; `web/chat-session.test.mjs` — "screen a note lands in that circle and another member can read it"; `web/user-journey.test.mjs` — "register, the model notice first, record, replace, record into a circle, ask, change settings, sign out and sign in" |
+| UP-AC-05 | `web/circle-chat-page.test.mjs` — "Send records against this circle (kind and id only), says so by name, lists the facts, clears the box and keeps the focus there"; `web/chat-session.test.mjs` — "Send records against that circle, sending only its kind and id, and says its name"; `web/user-journey.test.mjs` — "circle screens: a link per circle at the top, Home Send is the own brain" |
 | UP-AC-06 | `web/chat-page.test.mjs` — "a replaced fact is listed"; `web/chat-session.test.mjs` — "lists every fact, and each fact replaced"; `web/chat-session.test.mjs` — "a profile note to your own brain, then a change that replaces only one fact, then a question" |
 | UP-AC-07 | `web/chat-session.test.mjs` — "a model failure says why, with the wait, and nothing is approved"; `web/chat-session.test.mjs` — "a refused write is rejected so it holds no place"; `web/chat-session.test.mjs` — "a proposal with problems is rejected, not approved"; `web/chat-page.test.mjs` — "a refusal is said in the thread in the service" |
 | UP-AC-08 | `web/chat-page.test.mjs` — "asking shows the question and the answer with where it came from, and clears the question"; `web/chat-session.test.mjs` — "shows the answer with where each point came from, and sends the browser time zone"; `web/user-journey.test.mjs` — "Home is the own brain for everyone" |
@@ -138,17 +163,25 @@ Settings         display name, email, [Save]
 | UP-AC-10 | `web/chat-page.test.mjs` — "signing out empties the boxes and their errors"; `web/chat-session.test.mjs` — "reset clears the thread and the model, and drops an answer still on its way"; `web/user-pages.test.mjs` — "never turn text into markup, run strings as code, or use storage, cookies or the console" |
 | UP-AC-11 | `web/user-mount.test.mjs` — "changing the password sends both, empties both fields, says the other devices were signed out and never shows a password"; `web/user-mount.test.mjs` — "saving a new name sends only the name, shows Saved, updates the name at the top and empties the email"; `web/user-mount.test.mjs` — "a refusal from the service is shown beside the field it names, or at the top"; `web/user-mount.test.mjs` — "early problems appear beside the fields; a wrong current password is the service" |
 | UP-AC-12 | `web/chat-page.test.mjs` — "hostile text, from the person or from CaCi, is only text"; `web/user-mount.test.mjs` — "a hostile name is only text"; `web/chat-session.test.mjs` — "a circle name is only text" |
+| UP-AC-13 | `web/user-circles.test.mjs` — "lists each circle the person is in, by name, before Chat and Settings, in the order the service gave, observers included"; `web/user-circles.test.mjs` — "is read again whenever a screen is shown: a circle joined appears, a circle left disappears"; `web/user-circles.test.mjs` — "shows only that screen, with the circle name as its heading and title, the focus on the heading and its link marked"; `web/user-circles.test.mjs` — "a circle address needs the exact id shape; anything else is Home, and Settings stays exact" |
+| UP-AC-14 | `web/circle-chat-page.test.mjs` — "an observer reads: the update box and Send are disabled with the reason, the Pulse works, and nothing can be sent"; `web/chat-session.test.mjs` — "a read-only circle refuses Send and sends nothing, but the Pulse still works" |
+| UP-AC-15 | `web/circle-chat-page.test.mjs` — "the Pulse sends only the circle (never words), shows a Pulse message and the answer with its sources"; `src/caci/controller-status-scope.test.ts` — "reads only that circle and names it as the source"; `web/notes-client.test.mjs` — "the pulse sends only pulse, the circle and the time zone, never words, and needs a circle"; `web/user-journey.test.mjs` — "circle screens: a link per circle at the top, Home Send is the own brain" |
+| UP-AC-16 | `web/user-circles.test.mjs` — "a circle the person is not in (or has left) gives the one set of words and goes to Home"; `src/service/status-end-to-end.test.ts` — "a member and an observer get a pulse of that circle only; a stranger and a made-up circle get the same 404; the pulse is not filed"; `web/user-journey.test.mjs` — "circle screens: a link per circle at the top, Home Send is the own brain" |
+| UP-AC-17 | `src/service/controls-files.test.ts` — "a missing file, a folder, a link, an empty file and blank text are each refused, naming the file"; `src/service/controls.test.ts` — "a missing, blank, over-long or multi-line pulse file stops the start, names the file and leaves no data folder behind"; `src/service/status-end-to-end.test.ts` — "an edited pulse file is what the provider is asked, and the browser never sends the words"; `src/service/status-end-to-end.test.ts` — "a bad pulse file stops the start"; `deploy/doctor-host.test.mjs` — "names pulse.txt when it is missing or bad, with the other problems" |
+| UP-AC-18 | `web/circle-chat-page.test.mjs` — "each circle has its own thread, kept while moving between screens, and forgotten on sign-out"; `web/circle-chat-page.test.mjs` — "signing out forgets every thread, even for the next person on the same page, and drops an answer still on its way"; `web/circle-chat-page.test.mjs` — "a late answer for one circle never shows on another" |
 
-Checked by hand in Chrome on the real service (T-248): the notice before sending, recording and replacing, a question, a hostile display name shown as text, Settings, sign-out clearing the thread, no cookie or storage visible to script, no horizontal overflow. Not checked by eye: a true phone-width window, typing and the keyboard path through the forms (they were submitted by script), a screen reader, and the real model.
+Checked by hand in Chrome on the real service (T-248, and T-256 for the circle screens: the circle link first in the navigation, a Circle screen with its name shown as text, Send recorded against the circle, the Pulse reading one note with its source, an observer's disabled box and working Pulse, no overflow and no cookie visible to script): the notice before sending, recording and replacing, a question, a hostile display name shown as text, Settings, sign-out clearing the thread, no cookie or storage visible to script, no horizontal overflow. Not checked by eye: a true phone-width window, typing and the keyboard path through the forms (they were submitted by script), a screen reader, and the real model.
 
 ### Residual risks (not covered, with the reason)
 
 1. **No preview and no Undo**: an automatic replacement can be wrong and the person finds out only from the thread; the back office's change log is the recovery.
 2. **The chat forgets everything on reload**, which may feel wrong; it is deliberate while the interface is an experiment.
 3. **Not installable yet**: no manifest, icon or HTTPS.
-4. **Ask reads every brain the person can read**, as the service does; there is no per-circle question.
+4. **Ask on Home reads every brain the person can read**, as the service does; a circle's Pulse reads only that circle, and there is no free per-circle question.
 5. **The model's choice of facts is not shown before saving**; a mis-split note is recorded as is.
 6. **Two pages share one cookie and one origin**: a flaw in either is a flaw in both.
 7. **Looked at by eye in one browser only**, with the demo model: no true phone-width window, no screen reader, forms driven by script; the page tests cover the same handlers.
-8. **A choice question in the thread is not a dialog**: a person who scrolls away leaves the question open; the update and question buttons stay disabled until it is answered or cancelled.
+8. **A circle's thread is lost when its right or its name changes**, so the words and buttons follow the service; a person who is promoted or demoted starts a fresh thread.
 9. **The thread shows facts in the model's own words**, which are the stored title and summary, so an odd split is visible only after it is saved.
+10. **The Pulse text is one text for every circle and every person**, changed only by whoever can change the file on the server (the operator); it is not per circle or per person.
+11. **The circle list is as old as the last screen change**: a person removed mid-screen sees the screen until the next change, and the service refuses what they try meanwhile.

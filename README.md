@@ -485,16 +485,17 @@ It needs a current browser (ES modules and `fetch`). It works with the keyboard 
 
 ## The minimal user app
 
-The page at `/` is a very small everyday app (specified in `specs/R-016-user-app.md`). It uses exactly the same API as the back office, which stays at `/admin`; it adds no server route and keeps **nothing in the browser** (no cookie or storage the page can read, no history).
+The page at `/` is a very small everyday app (specified in `specs/R-016-user-app.md`). It uses exactly the same API as the back office, which stays at `/admin`; it adds no server route (apart from the circle `scope` and `pulse` options of `POST /api/status`) and keeps **nothing in the browser** (no cookie or storage the page can read, no history).
 
 - **Login.** Sign in, or create an account (the first account made is the administrator). A reload keeps you signed in; Sign out ends the session on the service too.
 - **Home is a chat.** Two boxes: **Update** with *Send*, and **Question** with *Ask*. A line above them says which model handles your updates and questions (the free demo model, or Anthropic's, in which case what you type and the notes you can read are sent to Anthropic and are not anonymised); nothing can be sent until it is known.
-  - *Send* files the note straight away: there is **no preview and no Undo**. If you may add notes to a circle, CaCi first asks **"Is this for you or a circle?"** in the thread, with buttons: Me, each circle you may add to (observers are not offered theirs) and Cancel. The thread then says "Recorded against your brain" or the circle's name, lists the facts recorded and any fact **replaced**. A refusal or a failure records nothing and says why.
+  - *Send* **always records against your own brain**, whatever circles you are in, and files it straight away: there is **no preview and no Undo**. The thread says "Recorded against your brain", lists the facts recorded and any fact **replaced**. A refusal or a failure records nothing and says why.
   - *Ask* is a status request as it is elsewhere: it reads your own notes and every circle you can read, and each point says where it came from.
-  - The thread is **in memory only**: it is gone after a reload or signing out.
+- **A Circle screen for each circle you are in.** Each circle's link is **first in the navigation** (`#/circle/<id>`, by the circle's name; any role). There *Send* **records against that circle's brain** ("Recorded against the circle <name>", with the facts and any "Replaced:" line), and everyone in the circle can read it, which the page says. An **observer** can read but not add: the update box and Send are disabled, with the reason. There is no question box: the **Pulse** button asks for a status of **that circle only**, with a predefined text that the service holds (`controls/pulse.txt`, see [The pulse text](#the-pulse-text)); the page sends only that it is a pulse and which circle, never words. A circle you are not in, or have left, gives "No such circle, or you are not in it." and takes you Home. The list of circles is read again each time a screen is shown (nothing polls).
+- **Threads are in memory only**: Home and each circle have their own thread, kept while you are signed in and gone after a reload or signing out.
 - **Settings** (`#/settings`): your display name, your email (or remove it) and your password; changing the password signs your other devices out. A link leads to the back office.
 
-It is a plain page that works on a phone (large touch targets, one column, light only), **not an installable app**: no manifest, icon, service worker or HTTPS. Circles, invitations, the change log and the Brain screens are in the back office at `/admin`.
+It is a plain page that works on a phone (large touch targets, one column, light only), **not an installable app**: no manifest, icon, service worker or HTTPS. Managing circles and invitations, the change log and the Brain screens are in the back office at `/admin`.
 
 ## Capturing notes through the API
 
