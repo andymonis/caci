@@ -16,6 +16,7 @@ export function createProbes({
   parseServiceConfig,
   hashOnce,
   loadControls,
+  loadPulse = () => ({ ok: true, value: '' }),
   get = httpGet,
   now = Date.now,
   interfaces = networkInterfaces,
@@ -66,7 +67,9 @@ export function createProbes({
     },
     controls: async () => {
       const result = loadControls(layout.controlsDir);
-      return result.ok ? { ok: true, dir: layout.controlsDir } : { ok: false, dir: layout.controlsDir, problems: result.error };
+      const pulse = loadPulse(layout.controlsDir);
+      const problems = [...(result.ok ? [] : result.error), ...(pulse.ok ? [] : pulse.error)];
+      return problems.length === 0 ? { ok: true, dir: layout.controlsDir } : { ok: false, dir: layout.controlsDir, problems };
     },
     dataDir: async () => {
       const path = layout.dataDir;

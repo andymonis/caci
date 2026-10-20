@@ -1,10 +1,11 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';
 import { describeGraph, listGraphs } from '../graph_store/index.js';
 import type { ServiceConfig } from './config.js';
+import { defaultControlsDir } from './controls-files.js';
 import { startService, type RunningService } from './service.js';
 
 // Status updates as people use them (R-011): the real service on real SQLite files over real HTTP. root is the
@@ -276,4 +277,75 @@ describe('status updates with the real model, through a stand-in provider (no ne
     expect(r.json.error.message).toBe('the model could not make your status: try again');
     expect(r.text).not.toContain(KEY);
   }, 30_000);
+});
+
+describe('a circle\'s pulse over HTTP (R-016 D19 to D21)', () => {
+  const PULSE = 'Provide a status update for the circle. Keep the answer factual, stick to the point and be concise.';
+  const pulse = (who: Person, circleId: string, extra: Record<string, unknown> = {}) => who.call('POST', '/api/status', { pulse: true, scope: { kind: 'circle', circleId }, ...extra });
+
+  it('a member and an observer get a pulse of that circle only; a stranger and a made-up circle get the same 404; the pulse is not filed', async () => {
+    const w = await world();
+    const before = await shape(w.dir);
+    for (const who of [w.p.bob, w.p.cat, w.p.ann]) {
+      const r = await pulse(who, w.parent);
+      expect(r.status, r.text).toBe(200);
+      expect(r.json.status.entriesUsed).toBe(1);
+      expect(sources(r)).toEqual(['Parent']);
+      expect(r.text).not.toMatch(/MARK-ANN|MARK-INLAW|MARK-DAN/);
+    }
+    const stranger = await pulse(w.p.dan, w.parent);
+    const made = await pulse(w.p.dan, 'c0000000000000999');
+    const rootAdmin = await pulse(w.p.root, w.parent);
+    for (const r of [stranger, made, rootAdmin]) {
+      expect(r.status).toBe(404);
+      expect(r.json).toEqual({ error: { code: 'NOT_FOUND', message: 'no such circle' } });
+    }
+    expect(await shape(w.dir)).toEqual(before);
+  });
+
+  it('is refused by name with text, with no circle, with a personal scope or with a value that is not a boolean', async () => {
+    const w = await world();
+    const bad = async (body: Record<string, unknown>, field: string) => {
+      const r = await w.p.ann.call('POST', '/api/status', body);
+      expect(r.status, JSON.stringify(body)).toBe(422);
+      expect(r.json.error.field).toBe(field);
+    };
+    await bad({ pulse: true, text: 'my own words', scope: { kind: 'circle', circleId: w.parent } }, 'text');
+    await bad({ pulse: true }, 'scope');
+    await bad({ pulse: true, scope: { kind: 'personal' } }, 'scope');
+    await bad({ pulse: 'true', scope: { kind: 'circle', circleId: w.parent } }, 'pulse');
+  });
+
+  it('an edited pulse file is what the provider is asked, and the browser never sends the words', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'caci-pulse-controls-'));
+    dirs.push(dir);
+    cpSync(defaultControlsDir(), dir, { recursive: true });
+    writeFileSync(join(dir, 'pulse.txt'), 'EDITED-PULSE-WORDS: how is the circle?\n');
+    const seen: string[] = [];
+    const fetchFn: typeof fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { system?: string; messages: Array<{ content: string }>; model: string };
+      seen.push(`${body.system}\n${body.messages.map((m) => m.content).join('\n')}`);
+      const system = body.system ?? '';
+      const reply = system.startsWith('You are the status assistant')
+        ? { headline: 'Quiet.', points: [], nothing: true }
+        : { ops: [{ op: 'upsertNode', partition: 'item', id: /the first fact is "([^"]+)"/.exec(system)?.[1] ?? '', data: { title: 't', summary: 's' } }, { op: 'upsertNode', partition: 'category', id: 'misc', data: { name: 'Misc' } }, { op: 'link', item: /the first fact is "([^"]+)"/.exec(system)?.[1] ?? '', category: 'misc', weight: 0.5 }] };
+      const message = { id: 'm', type: 'message', role: 'assistant', model: String(body.model), content: [{ type: 'text', text: JSON.stringify(reply), citations: null }], stop_reason: 'end_turn', stop_sequence: null, stop_details: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: null, cache_read_input_tokens: null } };
+      return new Response(JSON.stringify(message), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const w = await world({ llm: 'anthropic' }, { apiKey: KEY, anthropic: { fetch: fetchFn }, controlsDir: dir });
+    seen.length = 0;
+    const r = await pulse(w.p.ann, w.parent);
+    expect(r.status, r.text).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('<request>\nEDITED-PULSE-WORDS: how is the circle?\n</request>');
+    expect(seen[0]).not.toContain(PULSE);
+  }, 30_000);
+
+  it('a bad pulse file stops the start', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'caci-pulse-bad-'));
+    dirs.push(dir);
+    cpSync(defaultControlsDir(), dir, { recursive: true });
+    writeFileSync(join(dir, 'pulse.txt'), '');
+    await expect(startService(config(join(dir, 'data')), { controlsDir: dir })).rejects.toThrow(/pulse text .* is not valid[\s\S]*pulse\.txt: is empty/);
+  });
 });

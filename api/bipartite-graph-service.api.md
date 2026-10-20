@@ -44,8 +44,14 @@ export const isLoopbackAddress: (bind: string) => boolean;
 // @public
 export function loadControlsFolder(dir: string): Result<Controls, readonly string[]>;
 
+// @public
+export function loadPulseText(dir: string): Result<string, readonly string[]>;
+
 // @public (undocumented)
 export const MAX_KEEP = 1000;
+
+// @public
+export const MAX_PULSE_CHARS = 500;
 
 // @public
 export function parseServiceConfig(env: Readonly<Record<string, string | undefined>>): Result<ServiceConfig, readonly ConfigError[]>;

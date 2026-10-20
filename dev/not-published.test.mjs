@@ -24,15 +24,15 @@ describe('the dev tools are never part of a release', () => {
     const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8' });
     const paths = JSON.parse(out)[0].files.map((f) => f.path);
     expect(paths.length).toBeGreaterThan(0);
-    const allowed = (path) => path === 'package.json' || /^(README\.md|LICENSE.*)$/i.test(path) || path.startsWith('dist/') || path.startsWith('schema/') || /^controls\/(categorise|status)\/(system\.txt|frame\.txt|settings\.json)$/.test(path) || /^web\/[a-z-]+\.(html|js|css)$/.test(path);
+    const allowed = (path) => path === 'package.json' || /^(README\.md|LICENSE.*)$/i.test(path) || path.startsWith('dist/') || path.startsWith('schema/') || /^controls\/(categorise|status)\/(system\.txt|frame\.txt|settings\.json)$/.test(path) || path === 'controls/pulse.txt' || /^web\/[a-z-]+\.(html|js|css)$/.test(path);
     expect(paths.filter((p) => !allowed(p))).toEqual([]);
     expect(paths.filter((p) => /explorer|lab|server-kit|^dev\/|^deploy\//.test(p))).toEqual([]);
   });
 
-  it('the LLM controls are published as exactly their six files', () => {
+  it('the LLM controls are published as exactly their six files and the pulse text', () => {
     const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8' });
     const controls = JSON.parse(out)[0].files.map((f) => f.path).filter((p) => p.startsWith('controls/')).sort();
-    expect(controls).toEqual(['controls/categorise/frame.txt', 'controls/categorise/settings.json', 'controls/categorise/system.txt', 'controls/status/frame.txt', 'controls/status/settings.json', 'controls/status/system.txt']);
+    expect(controls).toEqual(['controls/categorise/frame.txt', 'controls/categorise/settings.json', 'controls/categorise/system.txt', 'controls/pulse.txt', 'controls/status/frame.txt', 'controls/status/settings.json', 'controls/status/system.txt']);
   });
 
   it('the web app is published as its files and none of its tests', () => {

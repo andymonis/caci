@@ -750,7 +750,7 @@ A headline, at most five short points, and counts. The model only names the numb
 
 | Route | What it does |
 |-------|--------------|
-| `POST /api/status` | Body `{ text, timeZone? }` and nothing else (any other field or query parameter is refused by name); needs the session cookie; answers `{ status }` |
+| `POST /api/status` | Body `{ text, timeZone?, scope? }`, or for a circle's Pulse `{ pulse: true, scope }` with no `text`, and nothing else (any other field or query parameter is refused by name); a circle `scope` limits the context to that circle's notes (any role may ask; a stranger or a made-up circle gets the one "no such circle"); needs the session cookie; answers `{ status }` |
 
 Statuses are the usual ones: 401 without a session, 422 for a bad request with its field named, 429 with `Retry-After` for the hourly limit or a status already being made, 502 or 503 with fixed words when the model fails or is busy, 404 when status updates are not available.
 
@@ -831,6 +831,10 @@ It also holds `descriptions` with `headline`, `pointText`, `refs` and `nothing`.
 ### What stays in code
 
 The **shape of the reply** and **every check of the guard** (only the operations allowed, the item id the system minted, citations that exist, one line of plain text, the numbers above), the **escaping and the block delimiters** that keep a person's text from passing as instructions, and the **limits the service itself puts on the API** (a note of at most 8,000 characters and a status request of at most 500). The service **refuses to start** if the controls allow less than that. Two small pieces of wording are also still in code: the header of the category list, and the repair turn (when a reply is rejected, the second call carries the guard's numbered reasons and one fixed closing line, "Reply again with the corrected JSON object only.").
+
+### The pulse text
+
+`controls/pulse.txt` is the one predefined request a circle's **Pulse** button sends (see [The minimal user app](#the-minimal-user-app)): by default *"Provide a status update for the circle. Keep the answer factual, stick to the point and be concise."* It is **one paragraph of plain text, 1 to 500 characters**; the service reads it at start-up and **a missing, blank, too long or multi-line file stops the start**, naming `pulse.txt` (`npm run doctor` checks it too). A member's browser sends only `pulse: true` and a circle, never the words, so nobody can send their own text as a pulse; change the file and update as below to change what every Pulse asks. It is published with the package and never served.
 
 ### Trying a change without deploying it
 

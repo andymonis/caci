@@ -43,6 +43,8 @@ export interface CaciControllerInit {
   readonly scopes?: ScopeResolver;
   /** The change log (R-014): after an approved write, what was added, removed and updated is recorded here. Without it nothing is recorded. */
   readonly ledger?: LedgerStore;
+  /** The predefined text a pulse sends (R-016 D21), read by the service from `controls/pulse.txt`; without it a pulse is not available. */
+  readonly pulseText?: string;
   /** Who is who in the change log: only the display name and username of a user id are ever read from it. Without it entries carry no names. */
   readonly directory?: { get(id: string): Promise<{ readonly username: string; readonly displayName: string } | undefined> };
   /** Told, with one fixed sentence and no note text, when recording a change failed. The change itself stands. A throwing hook is ignored. */
@@ -136,7 +138,7 @@ export interface CaciController {
    * right now: their own brain and every circle brain they belong to (any role). Free text in (`text`, 1 to 500
    * characters; optional `timeZone`, an IANA name, default UTC). Writes nothing and keeps nothing.
    */
-  status(token: unknown, input: { readonly text: unknown; readonly timeZone?: unknown; readonly scope?: unknown }): Promise<Result<StatusView, CaciError>>;
+  status(token: unknown, input: { readonly text?: unknown; readonly timeZone?: unknown; readonly scope?: unknown; readonly pulse?: unknown }): Promise<Result<StatusView, CaciError>>;
   /** Which model files this person's notes: `demo` (nothing leaves the machine) or `anthropic` (the note and category names go to Anthropic). Nothing else is said. */
   mode(token: unknown): Promise<Result<{ readonly mode: 'demo' | 'anthropic' }, CaciError>>;
   /** The scopes the person may use, their own brain first: where each is, their role there and whether they may capture. */
@@ -217,6 +219,8 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   const statusHourly = createWindowLimiter({ max: statusPerHour, windowMs: HOUR_MS });
   const statusContext = createStatusContext(graphAdapter, init.limits?.status);
   const statusLlm = init.llm;
+  const pulseText = init.pulseText;
+  if (pulseText !== undefined && (typeof pulseText !== 'string' || pulseText.trim() === '' || [...pulseText].length > MAX_STATUS_REQUEST_CHARS)) throw new TypeError(`pulseText must be 1 to ${MAX_STATUS_REQUEST_CHARS} characters of text`);
   /** Accounts with a status being made right now: one at a time each. */
   const making = new Set<string>();
   /** Every pending proposal with its owner. */
@@ -386,8 +390,16 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       if (statusLlm === undefined) return err(caciError('NOT_FOUND', 'status updates are not available'));
       const userId = me.value.user.id;
       if (typeof input !== 'object' || input === null || Array.isArray(input)) return err(caciError('INVALID_INPUT', 'send { text }', { field: 'text' }));
-      for (const key of Object.keys(input)) if (key !== 'text' && key !== 'timeZone' && key !== 'scope') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
-      const asked = input.text;
+      for (const key of Object.keys(input)) if (key !== 'text' && key !== 'timeZone' && key !== 'scope' && key !== 'pulse') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
+      // a pulse (R-016 D21) is the predefined text for one circle: no text may come with it, the server supplies it
+      const pulse = input.pulse;
+      if (pulse !== undefined && typeof pulse !== 'boolean') return err(caciError('INVALID_INPUT', 'pulse must be true or false', { field: 'pulse' }));
+      if (pulse === true) {
+        if (pulseText === undefined) return err(caciError('NOT_FOUND', 'pulse is not available'));
+        if (input.text !== undefined) return err(caciError('INVALID_INPUT', 'a pulse takes no text', { field: 'text' }));
+        if (input.scope === undefined) return err(caciError('INVALID_INPUT', 'a pulse needs a circle scope', { field: 'scope' }));
+      }
+      const asked = pulse === true ? pulseText : input.text;
       if (typeof asked !== 'string') return err(caciError('INVALID_INPUT', 'text must be text', { field: 'text' }));
       const text = asked.trim();
       if (text === '') return err(caciError('INVALID_INPUT', 'text must not be empty', { field: 'text' }));
@@ -401,6 +413,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       if (input.scope !== undefined) {
         const parsed = parseScope(input.scope);
         if (!parsed.ok) return err(scopeProblem(parsed.error));
+        if (pulse === true && parsed.value.kind !== 'circle') return err(caciError('INVALID_INPUT', 'a pulse needs a circle scope', { field: 'scope' }));
         if (scopes === undefined) {
           if (parsed.value.kind !== 'personal') return err(noCircle());
           only = Object.freeze({ userId, scope: PERSONAL, graphId: me.value.graphId, provenance: Object.freeze({ kind: 'personal' as const }) });

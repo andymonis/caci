@@ -10,6 +10,7 @@ import { DEFAULT_GRANT_LIMITS } from '../sharing/index.js';
 import { CONTROL_FILES, SETTING_RANGES, SLOT_RULES } from '../llm/index.js';
 import { authoriseBrain } from '../scopes/index.js';
 import { parseServiceConfig, VARIABLES } from './config.js';
+import { MAX_PULSE_CHARS } from './controls-files.js';
 import { WEB_FILE_SPECS } from './web-app.js';
 
 // The README says what the service does. These checks make it fail the build when the README and the
@@ -566,5 +567,28 @@ describe('the README section on the minimal user app (R-016)', () => {
     for (const phrase of ['no preview and no Undo', 'Is this for you or a circle?', 'in memory only', 'not an installable app', 'no manifest, icon, service worker or HTTPS', 'observers are not offered theirs', 'not anonymised', 'nothing in the browser', 'signs your other devices out', 'any fact **replaced**']) {
       expect(userApp.toLowerCase(), phrase).toContain(phrase.toLowerCase());
     }
+  });
+});
+
+describe('the README on the pulse text (R-016 D21)', () => {
+  const pulseSection = controlsSection.slice(controlsSection.indexOf('### The pulse text'), controlsSection.indexOf('### Trying a change without deploying it'));
+
+  it('has the subsection, quotes the shipped text and states the limit that is in the code', () => {
+    expect(pulseSection.length).toBeGreaterThan(100);
+    const shipped = readFileSync(new URL('../../controls/pulse.txt', import.meta.url), 'utf8').trim();
+    expect(pulseSection).toContain(shipped);
+    expect(MAX_PULSE_CHARS).toBe(500);
+    expect(pulseSection).toContain(`1 to ${MAX_PULSE_CHARS} characters`);
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['controls/pulse.txt', 'a missing, blank, too long or multi-line file stops the start', 'never the words', 'published with the package and never served', 'npm run doctor']) {
+      expect(pulseSection, phrase).toContain(phrase);
+    }
+  });
+
+  it('the status route row in the README mentions pulse and the circle scope', () => {
+    expect(statusSection).toContain('{ pulse: true, scope }');
+    expect(statusSection).toContain('no such circle');
   });
 });

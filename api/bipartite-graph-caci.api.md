@@ -69,9 +69,10 @@ export interface CaciController {
         readonly id: string;
     }, CaciError>>;
     status(token: unknown, input: {
-        readonly text: unknown;
+        readonly text?: unknown;
         readonly timeZone?: unknown;
         readonly scope?: unknown;
+        readonly pulse?: unknown;
     }): Promise<Result<StatusView, CaciError>>;
     summary(token: unknown, scope?: unknown): Promise<Result<GraphSummary, CaciError>>;
 }
@@ -99,6 +100,7 @@ export interface CaciControllerInit {
     readonly llm?: Pick<Llm, 'status'>;
     readonly mode?: 'demo' | 'anthropic';
     readonly onLedgerFailure?: (message: string) => void;
+    readonly pulseText?: string;
     // Warning: (ae-forgotten-export) The symbol "ScopeResolver" needs to be exported by the entry point index.d.ts
     readonly scopes?: ScopeResolver;
     // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts

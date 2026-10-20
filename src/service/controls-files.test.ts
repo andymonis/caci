@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validFiles } from '../llm/controls/fixtures.test-util.js';
-import { defaultControlsDir, loadControlsFolder } from './controls-files.js';
+import { defaultControlsDir, loadControlsFolder, loadPulseText, MAX_PULSE_CHARS } from './controls-files.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -119,5 +119,57 @@ describe('loading the controls folder', () => {
 
   it('never throws, whatever the argument', () => {
     expect(loadControlsFolder(`${'x'.repeat(5000)}\0`).ok).toBe(false);
+  });
+});
+
+describe('loading the pulse text (R-016 D21)', () => {
+  const pulseIn = (content: string | Buffer | undefined): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'caci-pulse-'));
+    dirs.push(dir);
+    if (content !== undefined) writeFileSync(join(dir, 'pulse.txt'), content);
+    return dir;
+  };
+  const bad = (dir: string): readonly string[] => {
+    const r = loadPulseText(dir);
+    if (r.ok) throw new Error('expected problems');
+    return r.error;
+  };
+
+  it('reads the text, trimmed, and the shipped file is good', () => {
+    expect(loadPulseText(pulseIn('  Provide a status update.\n\n'))).toEqual({ ok: true, value: 'Provide a status update.' });
+    const shipped = loadPulseText(defaultControlsDir());
+    expect(shipped.ok).toBe(true);
+    if (shipped.ok) expect(shipped.value).toBe('Provide a status update for the circle. Keep the answer factual, stick to the point and be concise.');
+  });
+
+  it('a missing file, a folder, a link, an empty file and blank text are each refused, naming the file', () => {
+    expect(bad(pulseIn(undefined))[0]).toMatch(/^pulse\.txt: is missing/);
+    const dir = pulseIn(undefined);
+    mkdirSync(join(dir, 'pulse.txt'));
+    expect(bad(dir)).toEqual(['pulse.txt: is not an ordinary file']);
+    const linked = pulseIn(undefined);
+    writeFileSync(join(linked, 'real.txt'), 'x');
+    symlinkSync(join(linked, 'real.txt'), join(linked, 'pulse.txt'));
+    expect(bad(linked)).toEqual(['pulse.txt: is not an ordinary file']);
+    expect(bad(pulseIn(''))).toEqual(['pulse.txt: is empty']);
+    expect(bad(pulseIn(' \n\t '))).toEqual(['pulse.txt: is empty']);
+  });
+
+  it('the limit is 500 characters counted as characters, exactly', () => {
+    expect(MAX_PULSE_CHARS).toBe(500);
+    expect(loadPulseText(pulseIn('x'.repeat(500))).ok).toBe(true);
+    expect(loadPulseText(pulseIn('😀'.repeat(500))).ok).toBe(true);
+    expect(bad(pulseIn('x'.repeat(501)))[0]).toContain('501 characters, over the limit of 500');
+    expect(bad(pulseIn('x'.repeat(3000)))[0]).toContain('too long');
+  });
+
+  it('line breaks inside, control characters, separators and bytes that are not UTF-8 are refused', () => {
+    for (const text of ['one\ntwo', 'a\u0000b', 'a\u001bb', 'a\u2028b', 'a\u2029b', 'a\ufeffb', 'a\u0085b']) expect(bad(pulseIn(text))[0], JSON.stringify(text)).toContain('one paragraph of plain text');
+    expect(bad(pulseIn(Buffer.from([0xff, 0xfe, 0x41])))).toEqual(['pulse.txt: is not valid UTF-8 text']);
+  });
+
+  it('never throws, and quotes nothing from the file', () => {
+    expect(bad('/no/such/folder')[0]).toMatch(/^pulse\.txt: is missing/);
+    expect(bad(pulseIn('secret\nvalue')).join(' ')).not.toContain('secret');
   });
 });

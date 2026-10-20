@@ -73,3 +73,34 @@ export function loadControlsFolder(dir: string): Result<Controls, readonly strin
     return err([`the controls folder ${dir} could not be read`]);
   }
 }
+
+/** The longest pulse text: the same as the longest status request the API accepts (R-016 D21). */
+export const MAX_PULSE_CHARS = 500;
+
+/**
+ * Reads `pulse.txt` from the controls folder (R-016 D21): the predefined request a Circle screen's Pulse button
+ * sends. One ordinary file, strict UTF-8, trimmed, one paragraph of plain text, 1 to 500 characters. Every problem
+ * names the file; never throws.
+ */
+export function loadPulseText(dir: string): Result<string, readonly string[]> {
+  const path = join(dir, 'pulse.txt');
+  let stat;
+  try {
+    stat = lstatSync(path);
+  } catch {
+    return err([`pulse.txt: is missing in ${dir}`]);
+  }
+  if (!stat.isFile()) return err(['pulse.txt: is not an ordinary file']);
+  if (stat.size > 4 * MAX_PULSE_CHARS + 16) return err([`pulse.txt: ${stat.size} bytes, too long (the text may be at most ${MAX_PULSE_CHARS} characters)`]);
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path)).trim();
+  } catch {
+    return err(['pulse.txt: is not valid UTF-8 text']);
+  }
+  if (text === '') return err(['pulse.txt: is empty']);
+  if ([...text].length > MAX_PULSE_CHARS) return err([`pulse.txt: ${[...text].length} characters, over the limit of ${MAX_PULSE_CHARS}`]);
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/.test(text)) return err(['pulse.txt: must be one paragraph of plain text (no line breaks or control characters)']);
+  return ok(text);
+}

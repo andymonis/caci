@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -27,6 +27,7 @@ const folder = (change: (files: Record<string, string>) => void = () => {}): str
   change(files);
   const dir = tmp();
   writeControls(dir, files);
+  writeFileSync(join(dir, 'pulse.txt'), readFileSync(new URL('../../controls/pulse.txt', import.meta.url), 'utf8'));
   return dir;
 };
 const message = async (promise: Promise<unknown>): Promise<string> => {
@@ -113,6 +114,31 @@ describe('starting with the controls folder', () => {
     const m = await message(startService(baseConfig(join(tmp(), 'data')), { controlsDir: dir }));
     expect(m).toContain('maxTextChars');
     expect(m).toContain('maxRequestChars');
+  });
+});
+
+describe('the pulse text (R-016 D21)', () => {
+  const pulseFolder = (content: string | undefined): string => {
+    const dir = folder();
+    rmSync(join(dir, 'pulse.txt'));
+    if (content !== undefined) writeFileSync(join(dir, 'pulse.txt'), content);
+    return dir;
+  };
+
+  it('a missing, blank, over-long or multi-line pulse file stops the start, names the file and leaves no data folder behind', async () => {
+    for (const content of [undefined, '   ', 'x'.repeat(501), 'two\nlines']) {
+      const data = join(tmp(), 'data');
+      const dir = pulseFolder(content);
+      const m = await message(startService(baseConfig(data), { controlsDir: dir }));
+      expect(m, String(content)).toContain(`the pulse text in ${dir} is not valid`);
+      expect(m).toContain('pulse.txt');
+      expect(existsSync(data)).toBe(false);
+    }
+  });
+
+  it('a good pulse file starts the service', async () => {
+    const s = await startService(baseConfig(join(tmp(), 'data')), { controlsDir: pulseFolder('Give the circle status.') });
+    running.push(s);
   });
 });
 

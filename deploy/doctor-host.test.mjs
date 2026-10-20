@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseServiceConfig } from '../src/service/config.ts';
-import { loadControlsFolder } from '../src/service/controls-files.ts';
+import { loadControlsFolder, loadPulseText } from '../src/service/controls-files.ts';
 import { shippedFiles } from '../src/llm/testing/shipped-controls.test-util.ts';
 import { createProbes } from './doctor-host.mjs';
 import { LAYOUT } from './layout.mjs';
@@ -53,6 +53,30 @@ describe('the controls probe', () => {
   });
   it('is the real layout\'s controls folder in the checkout', () => {
     expect(LAYOUT.controlsDir).toBe(`${LAYOUT.appDir}/controls`);
+  });
+});
+
+describe('the controls probe and the pulse text', () => {
+  const write = (layout, pulse) => {
+    for (const [name, text] of Object.entries(shippedFiles())) {
+      mkdirSync(join(layout.controlsDir, name.split('/')[0]), { recursive: true });
+      writeFileSync(join(layout.controlsDir, ...name.split('/')), text);
+    }
+    if (pulse !== undefined) writeFileSync(join(layout.controlsDir, 'pulse.txt'), pulse);
+  };
+  it('is good with a good pulse file', async () => {
+    const { layout, probes } = setup({ deps: { loadPulse: loadPulseText } });
+    write(layout, 'Give the circle status.');
+    expect(await probes.controls()).toEqual({ ok: true, dir: layout.controlsDir });
+  });
+  it('names pulse.txt when it is missing or bad, with the other problems', async () => {
+    const { layout, probes } = setup({ deps: { loadPulse: loadPulseText } });
+    write(layout, undefined);
+    const missing = await probes.controls();
+    expect(missing.ok).toBe(false);
+    expect(missing.problems.some((p) => p.startsWith('pulse.txt'))).toBe(true);
+    writeFileSync(join(layout.controlsDir, 'pulse.txt'), 'two\nlines');
+    expect((await probes.controls()).problems).toEqual([expect.stringContaining('pulse.txt: must be one paragraph')]);
   });
 });
 

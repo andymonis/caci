@@ -16,7 +16,7 @@ export interface StatusRoutesOptions {
 const asJson = (value: unknown): JsonValue => value as JsonValue;
 
 /**
- * The status route of R-011: `POST /api/status` with `{ text, timeZone? }` and nothing else. It needs the session
+ * The status route of R-011: `POST /api/status` with `{ text, timeZone?, scope? }` or, for a circle's Pulse (R-016), `{ pulse: true, scope }` and nothing else. It needs the session
  * cookie and cannot name a graph, a scope or a person: the controller reads what the signed-in person may read.
  * The answer is the status view (headline, points with their sources, counts) and never anything from the inside.
  * POST because each request costs a model call, so the cross-origin rules apply.
@@ -34,11 +34,11 @@ export function createStatusRoutes(options: StatusRoutesOptions): readonly Route
       handler: async (ctx) => {
         const token = ctx.cookies[cookieName];
         if (token === undefined) return fail({ source: 'caci', error: { code: 'UNAUTHENTICATED', message: 'not signed in' } }, false);
-        const bad = unknownKey(ctx.body ?? NO_BODY, ['text', 'timeZone', 'scope']);
+        const bad = unknownKey(ctx.body ?? NO_BODY, ['text', 'timeZone', 'scope', 'pulse']);
         if (bad !== undefined) return fail({ source: 'caci', error: { code: 'INVALID_INPUT', message: bad.message, ...(bad.field === undefined ? {} : { field: bad.field }) } }, false);
         const stray = Object.keys(ctx.query)[0];
         if (stray !== undefined) return fail({ source: 'caci', error: { code: 'INVALID_INPUT', message: `${stray} is not accepted here`, field: stray } }, false);
-        const made = await caci.status(token, { text: ctx.body?.text, ...(ctx.body?.timeZone === undefined ? {} : { timeZone: ctx.body.timeZone }), ...(ctx.body?.scope === undefined ? {} : { scope: ctx.body.scope }) });
+        const made = await caci.status(token, { ...(ctx.body?.text === undefined ? {} : { text: ctx.body.text }), ...(ctx.body?.pulse === undefined ? {} : { pulse: ctx.body.pulse }), ...(ctx.body?.timeZone === undefined ? {} : { timeZone: ctx.body.timeZone }), ...(ctx.body?.scope === undefined ? {} : { scope: ctx.body.scope }) });
         if (made.ok) return { status: 200, body: { status: asJson(made.value) } };
         return fail(made.error, made.error.source === 'caci' && made.error.error.code === 'UNAUTHENTICATED');
       },
