@@ -2,7 +2,7 @@
 
 Oct 20, 2026 · @Andy
 
-**Status: planned as N1 (T-242 to T-249); not built.** The flow comes from the owner's `architecture/user_pwa.md`: *Login → Home (a chat) → Profile / Settings*. The existing web app stays exactly as it is, as the **back office** for testing, at `/admin`.
+**Status: being built as N1 (T-242 to T-249); decisions D1 to D15 taken as confirmed by the owner's instruction to build (2026-10-20).** The flow comes from the owner's `architecture/user_pwa.md`: *Login → Home (a chat) → Profile / Settings*. The existing web app stays exactly as it is, as the **back office** for testing, at `/admin`.
 
 ## Overview
 
