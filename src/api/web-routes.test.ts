@@ -125,6 +125,15 @@ describe('the list is checked when the routes are made', () => {
     expect(() => createWebRoutes({ files: [page, { path: '/other.html', kind: 'html', text: 'x' }] })).toThrow(TypeError);
   });
 
+  it('the back office page /admin is html too, and only / and /admin are', () => {
+    const admin: WebFile = { path: '/admin', kind: 'html', text: 'y' };
+    const routes = createWebRoutes({ files: [page, admin] });
+    expect(routes.map((r) => r.path)).toEqual(['/', '/admin']);
+    expect(() => createWebRoutes({ files: [page, { path: '/admin', kind: 'js', text: 'x' }] })).toThrow(TypeError);
+    expect(() => createWebRoutes({ files: [page, { path: '/admin2', kind: 'html', text: 'x' }] })).toThrow(TypeError);
+    expect(() => createWebRoutes({ files: [{ path: '/admin', kind: 'html', text: 'x' }] })).toThrow(/no page/);
+  });
+
   it('refuses odd paths', () => {
     for (const path of ['', 'app.js', '/a/b.js', '/.hidden', '/a..b', '/APP.JS', '/a b', '/a.', '/-a', '/_a', '/a/', '/a%2fb', '/é', `/${'a'.repeat(65)}`, '//', '/app.js?x', 5 as never]) {
       expect(() => createWebRoutes({ files: [page, { path, kind: 'js', text: 'x' }] }), String(path)).toThrow(TypeError);

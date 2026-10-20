@@ -38,9 +38,10 @@ describe('the list of files', () => {
   });
 
   it('serves the page at / and each other file at its own name', () => {
-    expect(WEB_FILE_SPECS.map((s) => s.path).sort()).toEqual(['/', '/api-client.js', '/app.js', '/brain-page.js', '/brain-session.js', '/brain-view.js', '/capture-page.js', '/capture-session.js', '/capture-view.js', '/circle-page.js', '/circle-session.js', '/circles-client.js', '/circles-pages.js', '/circles-session.js', '/circles-view.js', '/forms.js', '/grants-session.js', '/ledger-client.js', '/ledger-page.js', '/ledger-session.js', '/ledger-view.js', '/mount.js', '/notes-client.js', '/permissions.js', '/router.js', '/scope-session.js', '/session.js', '/share-page.js', '/shared-page.js', '/shared-session.js', '/sharing-client.js', '/status-page.js', '/status-session.js', '/status-view.js', '/style.css', '/view.js']);
+    expect(WEB_FILE_SPECS.map((s) => s.path).sort()).toEqual(['/', '/admin', '/api-client.js', '/app.js', '/brain-page.js', '/brain-session.js', '/brain-view.js', '/capture-page.js', '/capture-session.js', '/capture-view.js', '/circle-page.js', '/circle-session.js', '/circles-client.js', '/circles-pages.js', '/circles-session.js', '/circles-view.js', '/forms.js', '/grants-session.js', '/ledger-client.js', '/ledger-page.js', '/ledger-session.js', '/ledger-view.js', '/mount.js', '/notes-client.js', '/permissions.js', '/router.js', '/scope-session.js', '/session.js', '/share-page.js', '/shared-page.js', '/shared-session.js', '/sharing-client.js', '/status-page.js', '/status-session.js', '/status-view.js', '/style.css', '/view.js']);
     for (const spec of WEB_FILE_SPECS) {
-      if (spec.path === '/') expect(spec.file).toBe('index.html');
+      if (spec.path === '/') expect(spec.file).toBe('user.html');
+      else if (spec.path === '/admin') expect(spec.file).toBe('index.html');
       else expect(spec.path).toBe(`/${spec.file}`);
     }
   });
@@ -68,9 +69,20 @@ describe('the running service serves the web app', () => {
     }
   });
 
-  it('the page is the web app\'s page, and it asks for exactly the files that are served', async () => {
+  it('/ is the everyday app\'s page and asks only for files that are served', async () => {
     const { base } = await start();
-    const page = await (await fetch(`${base}/`)).text();
+    const res = await fetch(`${base}/`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    const page = await res.text();
+    expect(page).toContain('<title>CaCi</title>');
+    for (const m of page.matchAll(/(?:src|href)="(\/[^"]*)"/g)) if (m[1] !== '/admin') expect((await fetch(`${base}${m[1]}`)).status, m[1]).toBe(200);
+    expect(page).toContain('href="/admin"');
+  });
+
+  it('/admin is the back office page, and it asks for exactly the files that are served', async () => {
+    const { base } = await start();
+    const page = await (await fetch(`${base}/admin`)).text();
     expect(page).toContain('<title>CaCi</title>');
     const asked = [...page.matchAll(/(?:src|href)="(\/[^"]*)"/g)].map((m) => m[1]);
     expect(asked.sort()).toEqual(['/app.js', '/style.css']);
@@ -168,7 +180,7 @@ describe('the folder it reads from', () => {
 
   it('a folder that does not exist stops the start the same way', async () => {
     const data = join(tmp(), 'data');
-    await expect(startService(config(data), { webDir: join(tmp(), 'nowhere') })).rejects.toThrow(/missing its file "index.html"/);
+    await expect(startService(config(data), { webDir: join(tmp(), 'nowhere') })).rejects.toThrow(/missing its file "user.html"/);
     expect(existsSync(data)).toBe(false);
   });
 });
@@ -180,6 +192,6 @@ describe('serve', () => {
     const result = await serve({ CACI_PORT: '0', CACI_DATA_DIR: dir }, { stdout: (t) => void out.push(t), stderr: () => undefined });
     expect(result.code).toBe(0);
     if (result.code === 0) running.push(result.service);
-    expect(out.join('')).toMatch(/Open http:\/\/127\.0\.0\.1:\d+\/ in a browser to register and sign in\./);
+    expect(out.join('')).toMatch(/Open http:\/\/127\.0\.0\.1:\d+\/ in a browser to register and sign in \(the back office is at \/admin\)\./);
   });
 });

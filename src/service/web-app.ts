@@ -7,7 +7,8 @@ import type { WebFileSpec } from './web-files.js';
  * (and the test that compares the folder with this list says so).
  */
 export const WEB_FILE_SPECS: readonly WebFileSpec[] = Object.freeze([
-  { path: '/', file: 'index.html', kind: 'html' },
+  { path: '/', file: 'user.html', kind: 'html' }, // the everyday app (R-016)
+  { path: '/admin', file: 'index.html', kind: 'html' }, // the back office: the whole of the app, unchanged
   { path: '/app.js', file: 'app.js', kind: 'js' },
   { path: '/mount.js', file: 'mount.js', kind: 'js' },
   { path: '/view.js', file: 'view.js', kind: 'js' },

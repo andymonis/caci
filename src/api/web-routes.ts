@@ -2,7 +2,7 @@ import { documentResponse, type DocumentKind, type Route } from './router.js';
 
 /** One file of the web app, already read: where it is served, what kind it is, and its text. */
 export interface WebFile {
-  /** `/` for the page, otherwise one segment such as `/app.js`: lower-case letters, digits, `.`, `_` and `-`. */
+  /** `/` for the everyday app and `/admin` for the back office (the only pages), otherwise one segment such as `/app.js`: lower-case letters, digits, `.`, `_` and `-`. */
   readonly path: string;
   readonly kind: DocumentKind;
   readonly text: string;
@@ -38,7 +38,7 @@ export function createWebRoutes(options: WebRoutesOptions): readonly Route[] {
     seen.add(file.path);
     if (!(WEB_KINDS as readonly string[]).includes(file.kind)) throw new TypeError(`createWebRoutes: ${file.path} must be html, js, css or text`);
     if (typeof file.text !== 'string' || file.text.length > MAX_FILE_CHARS) throw new TypeError(`createWebRoutes: ${file.path} must be text of at most ${MAX_FILE_CHARS} characters`);
-    if ((file.path === '/') !== (file.kind === 'html')) throw new TypeError(`createWebRoutes: the page (/) must be html, and html must be the page`);
+    if ((file.path === '/' || file.path === '/admin') !== (file.kind === 'html')) throw new TypeError(`createWebRoutes: the pages (/ and /admin) must be html, and html must be a page`);
     const response = documentResponse({ kind: file.kind, text: file.text, policy: WEB_POLICY });
     routes.push({ method: 'GET', path: file.path, handler: () => response });
   }

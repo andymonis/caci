@@ -343,17 +343,18 @@ The service also serves a small web app from the same address as the API. It let
 
 ### Open it
 
-Run `npm run serve` and open the address it prints (by default `http://127.0.0.1:8080/`). **Register yourself first**: the first account created on a new installation becomes the administrator, and the create-account form says so. After registering you are signed in with the same values and land on the home page; reloading keeps you signed in until you sign out or the session ends, and signing out ends the session on the service as well as in the page.
+**This app is the back office, served at `/admin`** (`http://127.0.0.1:8080/admin` by default); the page at `/` is the minimal everyday app. Run `npm run serve` and open the address it prints, adding `/admin`. **Register yourself first**: the first account created on a new installation becomes the administrator, and the create-account form says so. After registering you are signed in with the same values and land on the home page; reloading keeps you signed in until you sign out or the session ends, and signing out ends the session on the service as well as in the page.
 
 It is a plain web page, not an installable app: there is no manifest, no service worker and no offline use, so it needs the service to be reachable (it says so, with a button to try again).
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these thirty-six, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these thirty-seven, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
-| `index.html` | the page: the sign-in and create-account forms, the home page and the circle screens |
+| `index.html` | the back office page, served at `/admin`: the sign-in and create-account forms, the home page and every screen |
+| `user.html` | the everyday app's page, served at `/` (see [The minimal user app](#the-minimal-user-app)) |
 | `style.css` | the look, light and dark by the system setting |
 | `app.js` | starts the page |
 | `mount.js` | puts the session on the page |
@@ -470,6 +471,10 @@ They also carry `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` and
 ### Browsers and limits
 
 It needs a current browser (ES modules and `fetch`). It works with the keyboard alone, at phone width and in light and dark, but it was only looked at by hand in one browser, and nothing here was tried with a screen reader. The form checks are early feedback only, and a password manager may behave differently from one browser to the next.
+
+## The minimal user app
+
+The page at `/` is a very small everyday app (specified in `specs/R-016-user-app.md`): sign in, a chat to send updates and ask questions, and profile and password. It uses exactly the same API as the back office at `/admin`, adds no server route, and keeps nothing in the browser. **It is being built** (milestone N1): today `/` is a placeholder that links to `/admin`.
 
 ## Capturing notes through the API
 
@@ -947,7 +952,7 @@ sudo ufw enable
 
 ### 9. The first accounts
 
-Open `http://192.168.1.50:8080/` on your phone. **Register yourself first**: the first account becomes the administrator. Then let the family register. When everyone has an account, set `CACI_ALLOW_REGISTRATION=false` in `/etc/caci/caci.env` and run `sudo systemctl restart caci`. The app is a plain web page, not an installable app: bookmark it.
+Open `http://192.168.1.50:8080/admin` on your phone (the back office; `/` is the everyday app). **Register yourself first**: the first account becomes the administrator. Then let the family register. When everyone has an account, set `CACI_ALLOW_REGISTRATION=false` in `/etc/caci/caci.env` and run `sudo systemctl restart caci`. The app is a plain web page, not an installable app: bookmark it.
 
 ### 10. Updating
 

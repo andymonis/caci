@@ -48,7 +48,7 @@ export async function serve(env: Readonly<Record<string, string | undefined>>, i
     });
     const shown = service.host.includes(':') ? `[${service.host}]` : service.host;
     io.stdout(`Listening on http://${shown}:${service.port}\n`);
-    io.stdout(`Open http://${shown}:${service.port}/ in a browser to register and sign in.\n`);
+    io.stdout(`Open http://${shown}:${service.port}/ in a browser to register and sign in (the back office is at /admin).\n`);
     io.stdout(`Data is kept in ${service.dataDir} (graphs.db and users.db, not encrypted).\n`);
     io.stdout(`Model instructions and limits: ${service.controlsDir} (six text files).\n`);
     io.stdout(
