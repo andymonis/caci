@@ -65,6 +65,21 @@ async function started(limits: { statusPerHour?: number } = {}) {
 }
 
 describe('POST /api/status', () => {
+  it('a circle scope narrows the answer to that circle; a stranger gets the made-up-circle 404 and a stray key is refused by name', async () => {
+    const { a, t, circle, file } = await started();
+    await file(t.bob, 'Mum new tablets one a day with food', { kind: 'circle', circleId: circle });
+    await file(t.ann, 'Dentist appointment on Friday morning');
+    const scoped = await post(a, { text: 'status', scope: { kind: 'circle', circleId: circle } }, t.ann);
+    expect(scoped.status).toBe(200);
+    expect(scoped.json.status.entriesUsed).toBe(1);
+    const stray = await post(a, { text: 'status', scope: { kind: 'circle', circleId: circle, graphId: 'x' } }, t.ann);
+    expect(stray.status).toBe(422);
+    expect(stray.json.error.field).toBe('scope.graphId');
+    const made = await post(a, { text: 'status', scope: { kind: 'circle', circleId: 'c0000000000000999' } }, t.ann);
+    expect(made.status).toBe(404);
+    expect(made.json.error.message).toBe('no such circle');
+  });
+
   it('answers 200 with the status view, names the circle a point came from, and nothing from the inside', async () => {
     const { a, t, circle, file } = await started();
     await file(t.bob, 'Mum new tablets one a day with food', { kind: 'circle', circleId: circle });

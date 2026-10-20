@@ -71,6 +71,7 @@ export interface CaciController {
     status(token: unknown, input: {
         readonly text: unknown;
         readonly timeZone?: unknown;
+        readonly scope?: unknown;
     }): Promise<Result<StatusView, CaciError>>;
     summary(token: unknown, scope?: unknown): Promise<Result<GraphSummary, CaciError>>;
 }

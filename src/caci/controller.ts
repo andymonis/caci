@@ -136,7 +136,7 @@ export interface CaciController {
    * right now: their own brain and every circle brain they belong to (any role). Free text in (`text`, 1 to 500
    * characters; optional `timeZone`, an IANA name, default UTC). Writes nothing and keeps nothing.
    */
-  status(token: unknown, input: { readonly text: unknown; readonly timeZone?: unknown }): Promise<Result<StatusView, CaciError>>;
+  status(token: unknown, input: { readonly text: unknown; readonly timeZone?: unknown; readonly scope?: unknown }): Promise<Result<StatusView, CaciError>>;
   /** Which model files this person's notes: `demo` (nothing leaves the machine) or `anthropic` (the note and category names go to Anthropic). Nothing else is said. */
   mode(token: unknown): Promise<Result<{ readonly mode: 'demo' | 'anthropic' }, CaciError>>;
   /** The scopes the person may use, their own brain first: where each is, their role there and whether they may capture. */
@@ -386,7 +386,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       if (statusLlm === undefined) return err(caciError('NOT_FOUND', 'status updates are not available'));
       const userId = me.value.user.id;
       if (typeof input !== 'object' || input === null || Array.isArray(input)) return err(caciError('INVALID_INPUT', 'send { text }', { field: 'text' }));
-      for (const key of Object.keys(input)) if (key !== 'text' && key !== 'timeZone') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
+      for (const key of Object.keys(input)) if (key !== 'text' && key !== 'timeZone' && key !== 'scope') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
       const asked = input.text;
       if (typeof asked !== 'string') return err(caciError('INVALID_INPUT', 'text must be text', { field: 'text' }));
       const text = asked.trim();
@@ -395,13 +395,29 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       if (input.timeZone !== undefined && !isTimeZone(input.timeZone)) return err(caciError('INVALID_INPUT', 'timeZone must be a time zone name such as "Europe/London" or "UTC"', { field: 'timeZone' }));
       const timeZone = input.timeZone === undefined ? 'UTC' : (input.timeZone as string);
 
+      // an optional scope narrows the context to one brain (R-016 D20): resolved now with the read right, so a stranger or a made-up
+      // circle gets the one NOT_FOUND before anything is counted, read or asked
+      let only: ResolvedScope | undefined;
+      if (input.scope !== undefined) {
+        const parsed = parseScope(input.scope);
+        if (!parsed.ok) return err(scopeProblem(parsed.error));
+        if (scopes === undefined) {
+          if (parsed.value.kind !== 'personal') return err(noCircle());
+          only = Object.freeze({ userId, scope: PERSONAL, graphId: me.value.graphId, provenance: Object.freeze({ kind: 'personal' as const }) });
+        } else {
+          const resolved = await scopes.resolve(token, parsed.value, 'read');
+          if (!resolved.ok) return err(scopeProblem(resolved.error));
+          only = resolved.value;
+        }
+      }
+
       // one at a time per account, and an hourly limit: both are checked before anything is read or any model is asked, and a refusal is not counted
       if (making.has(userId)) return err(caciError('THROTTLED', 'a status for you is already being made: wait for it', { retryAfterMs: 5000 }));
       const wait = statusHourly.check(userId, clock());
       if (!wait.allowed) return err(caciError('THROTTLED', `you have asked for the most statuses allowed in an hour (${statusPerHour})`, { retryAfterMs: wait.retryAfterMs }));
       making.add(userId);
       try {
-        const all = await readableScopes(token);
+        const all = only === undefined ? await readableScopes(token) : ok([only] as readonly ResolvedScope[]);
         if (!all.ok) return all;
         const context = await statusContext.read(all.value, clock());
         if (!context.ok) return context;
