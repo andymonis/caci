@@ -88,14 +88,14 @@ Settings         display name, email, [Save]
 
 ## Threats and controls
 
-| Threat | Control |
-|--------|---------|
-| Text from the person, a circle member or the model run as markup | Text only, as in the back office; guard tests on the files. |
-| A note filed to the wrong brain | The scope is chosen in the thread, shown in the confirmation, and checked by the service (an observer or stranger is refused as today). |
-| A silent wrong deletion (no preview) | D6 lists every replacement in the thread; the back office keeps the change log. A residual risk. |
-| The thread kept where it can be read later | D8: memory only, cleared on reload and sign-out. |
-| A pending proposal left behind by a failure | UP-FR-05: rejected on any failure. |
-| Two apps drifting apart | One set of clients and one API (D14). |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| Text from the person, a circle member or the model run as markup | Text only, as in the back office; guard tests on the files. | `web/chat-page.test.mjs` — "hostile text, from the person or from CaCi, is only text"; `web/user-mount.test.mjs` — "a hostile name is only text"; `web/user-pages.test.mjs` — "never turn text into markup, run strings as code, or use storage, cookies or the console"; `web/chat-session.test.mjs` — "markup in a note comes back as text, and a cancelled choice records nothing" |
+| A note filed to the wrong brain | The scope is chosen in the thread, shown in the confirmation, and checked by the service (an observer or stranger is refused as today). | `web/chat-page.test.mjs` — "with a circle to write to it asks in the thread, with buttons, and the first button takes the focus"; `web/chat-session.test.mjs` — "a circle files to that circle, sending only its kind and id, and says its name"; `web/user-journey.test.mjs` — "an observer is not offered the circle and her update goes to her own brain" |
+| A silent wrong deletion (no preview) | D6 lists every replacement in the thread; the back office keeps the change log. A residual risk. | `web/chat-page.test.mjs` — "a replaced fact is listed"; `web/chat-session.test.mjs` — "lists every fact, and each fact replaced"; `web/user-journey.test.mjs` — "register, the model notice first, record, replace, record into a circle, ask, change settings, sign out and sign in" |
+| The thread kept where it can be read later | D8: memory only, cleared on reload and sign-out. | `web/chat-page.test.mjs` — "the thread stays when going to Settings and back, and is gone after signing out"; `web/chat-session.test.mjs` — "reset clears the thread and the model, and drops an answer still on its way"; `web/user-pages.test.mjs` — "never turn text into markup, run strings as code, or use storage, cookies or the console" |
+| A pending proposal left behind by a failure | UP-FR-05: rejected on any failure. | `web/chat-session.test.mjs` — "a proposal with problems is rejected, not approved"; `web/chat-session.test.mjs` — "a refused write is rejected so it holds no place"; `web/chat-page.test.mjs` — "a refusal is said in the thread in the service" |
+| Two apps drifting apart | One set of clients and one API (D14). | `web/user-pages.test.mjs` — "name only routes that exist, by path"; `web/user-journey.test.mjs` — "the page is reachable at / and the back office at /admin, both from the same service"; `web/user-pages.test.mjs` — "are exactly the modules the entry point reaches, and import only each other by name" |
 
 ## Acceptance criteria
 
@@ -114,7 +114,27 @@ Settings         display name, email, [Save]
 | UP-AC-11 | Given Settings, when the display name, email or password is changed, then the service's answer is shown and a wrong current password is refused in its words. |
 | UP-AC-12 | Given hostile text in a note, a name or an answer, then it is shown as text. |
 
-## Residual risks
+
+### Where each criterion is checked (T-249)
+
+| ID | Tests |
+|----|-------|
+| UP-AC-01 | `web/user-journey.test.mjs` — "the page is reachable at / and the back office at /admin, both from the same service"; `web/user-pages.test.mjs` — "loads one module script from /user-app.js and one style sheet, and nothing else" |
+| UP-AC-02 | `web/user-mount.test.mjs` — "shows the sign-in form to a person with no session, and nothing of the app"; `web/user-mount.test.mjs` — "signing in goes to Home and empties the form"; `web/user-mount.test.mjs` — "a person with a session lands on Home with their name, the title, the focus on the heading and the nav marked" |
+| UP-AC-03 | `web/chat-page.test.mjs` — "with a circle to write to it asks in the thread, with buttons, and the first button takes the focus"; `web/chat-session.test.mjs` — "asks in the thread, offering Me, each circle you may capture into, and Cancel"; `web/user-journey.test.mjs` — "an observer is not offered the circle and her update goes to her own brain" |
+| UP-AC-04 | `web/chat-page.test.mjs` — "sending with only an own brain files straight away, shows both sides and clears the box"; `web/chat-session.test.mjs` — "with only your own brain it files straight away: proposes, approves, and says what was recorded" |
+| UP-AC-05 | `web/chat-session.test.mjs` — "a circle files to that circle, sending only its kind and id, and says its name"; `web/chat-session.test.mjs` — "a person in a circle is asked, and the note lands in the circle; another member can read it"; `web/user-journey.test.mjs` — "register, the model notice first, record, replace, record into a circle, ask, change settings, sign out and sign in" |
+| UP-AC-06 | `web/chat-page.test.mjs` — "a replaced fact is listed"; `web/chat-session.test.mjs` — "lists every fact, and each fact replaced"; `web/chat-session.test.mjs` — "a profile note to your own brain, then a change that replaces only one fact, then a question" |
+| UP-AC-07 | `web/chat-session.test.mjs` — "a model failure says why, with the wait, and nothing is approved"; `web/chat-session.test.mjs` — "a refused write is rejected so it holds no place"; `web/chat-session.test.mjs` — "a proposal with problems is rejected, not approved"; `web/chat-page.test.mjs` — "a refusal is said in the thread in the service" |
+| UP-AC-08 | `web/chat-page.test.mjs` — "asking shows the question and the answer with where it came from, and clears the question"; `web/chat-session.test.mjs` — "shows the answer with where each point came from, and sends the browser time zone"; `web/user-journey.test.mjs` — "an observer is not offered the circle and her update goes to her own brain" |
+| UP-AC-09 | `web/chat-page.test.mjs` — "controls are disabled while a request is out, and nothing is sent twice"; `web/chat-session.test.mjs` — "a second send, ask or choice meanwhile sends nothing"; `web/user-mount.test.mjs` — "controls are disabled while a request is out, and a second submit sends nothing" |
+| UP-AC-10 | `web/chat-page.test.mjs` — "signing out empties the boxes and their errors"; `web/chat-session.test.mjs` — "reset clears the thread and the model, and drops an answer still on its way"; `web/user-pages.test.mjs` — "never turn text into markup, run strings as code, or use storage, cookies or the console" |
+| UP-AC-11 | `web/user-mount.test.mjs` — "changing the password sends both, empties both fields, says the other devices were signed out and never shows a password"; `web/user-mount.test.mjs` — "saving a new name sends only the name, shows Saved, updates the name at the top and empties the email"; `web/user-mount.test.mjs` — "a refusal from the service is shown beside the field it names, or at the top"; `web/user-mount.test.mjs` — "early problems appear beside the fields; a wrong current password is the service" |
+| UP-AC-12 | `web/chat-page.test.mjs` — "hostile text, from the person or from CaCi, is only text"; `web/user-mount.test.mjs` — "a hostile name is only text"; `web/chat-session.test.mjs` — "a circle name is only text" |
+
+Checked by hand in Chrome on the real service (T-248): the notice before sending, recording and replacing, a question, a hostile display name shown as text, Settings, sign-out clearing the thread, no cookie or storage visible to script, no horizontal overflow. Not checked by eye: a true phone-width window, typing and the keyboard path through the forms (they were submitted by script), a screen reader, and the real model.
+
+### Residual risks (not covered, with the reason)
 
 1. **No preview and no Undo**: an automatic replacement can be wrong and the person finds out only from the thread; the back office's change log is the recovery.
 2. **The chat forgets everything on reload**, which may feel wrong; it is deliberate while the interface is an experiment.
@@ -122,3 +142,6 @@ Settings         display name, email, [Save]
 4. **Ask reads every brain the person can read**, as the service does; there is no per-circle question.
 5. **The model's choice of facts is not shown before saving**; a mis-split note is recorded as is.
 6. **Two pages share one cookie and one origin**: a flaw in either is a flaw in both.
+7. **Looked at by eye in one browser only**, with the demo model: no true phone-width window, no screen reader, forms driven by script; the page tests cover the same handlers.
+8. **A choice question in the thread is not a dialog**: a person who scrolls away leaves the question open; the update and question buttons stay disabled until it is answered or cancelled.
+9. **The thread shows facts in the model's own words**, which are the stored title and summary, so an odd split is visible only after it is saved.

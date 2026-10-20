@@ -549,3 +549,22 @@ describe('the current-view brain section of the README', () => {
     }
   });
 });
+
+describe('the README section on the minimal user app (R-016)', () => {
+  const userApp = section('The minimal user app');
+
+  it('names its specification, which exists, and the two addresses', () => {
+    expect(userApp).toContain('specs/R-016-user-app.md');
+    expect(existsSync(new URL('../../specs/R-016-user-app.md', import.meta.url))).toBe(true);
+    expect(userApp).toContain('`#/settings`');
+    expect(userApp).toContain('`/admin`');
+    expect(WEB_FILE_SPECS.find((s) => s.path === '/')?.file).toBe('user.html');
+    expect(WEB_FILE_SPECS.find((s) => s.path === '/admin')?.file).toBe('index.html');
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['no preview and no Undo', 'Is this for you or a circle?', 'in memory only', 'not an installable app', 'no manifest, icon, service worker or HTTPS', 'observers are not offered theirs', 'not anonymised', 'nothing in the browser', 'signs your other devices out', 'any fact **replaced**']) {
+      expect(userApp.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+});
