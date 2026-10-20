@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'chat-session.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'ledger-client.js', 'ledger-page.js', 'ledger-session.js', 'ledger-view.js', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'scope-session.js', 'session.js', 'settings-session.js', 'share-page.js', 'shared-page.js', 'shared-session.js', 'sharing-client.js', 'status-page.js', 'status-session.js', 'status-view.js', 'style.css', 'user.html', 'view.js']);
+    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'chat-session.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'ledger-client.js', 'ledger-page.js', 'ledger-session.js', 'ledger-view.js', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'scope-session.js', 'session.js', 'settings-session.js', 'share-page.js', 'shared-page.js', 'shared-session.js', 'sharing-client.js', 'status-page.js', 'status-session.js', 'status-view.js', 'style.css', 'user-app.js', 'user-mount.js', 'user-style.css', 'user.html', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -289,10 +289,11 @@ describe('the templates and the address bar', () => {
 
   it('only the entry point touches the address bar', () => {
     for (const name of scripts) {
-      if (name === 'app.js') continue;
+      if (name === 'app.js' || name === 'user-app.js') continue;
       expect(code(read(name)), name).not.toMatch(/\blocation\b|\bhistory\b|\bhashchange\b/);
     }
     expect(code(read('app.js'))).toMatch(/window\.location\.hash/);
+    expect(code(read('user-app.js'))).toMatch(/window\.location\.hash/);
   });
 
   it('the navigation and heading elements exist, and each heading can take the focus', () => {

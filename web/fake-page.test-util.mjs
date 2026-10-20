@@ -4,10 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 // A stand-in for the page, made from the real index.html, shared by the tests that run the page's script.
 
-const HTML = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'index.html'), 'utf8');
+const FOLDER = dirname(fileURLToPath(import.meta.url));
 
 /** A page made from the real index.html: an element for each id in it, starting hidden if the HTML says so; the templates can be cloned. */
-export function fakePage() {
+export function fakePage(file = 'index.html') {
+  const HTML = readFileSync(join(FOLDER, file), 'utf8');
   const elements = new Map();
   const state = { focused: undefined };
 

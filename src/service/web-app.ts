@@ -46,6 +46,9 @@ export const WEB_FILE_SPECS: readonly WebFileSpec[] = Object.freeze([
   { path: '/circle-session.js', file: 'circle-session.js', kind: 'js' },
   { path: '/circles-session.js', file: 'circles-session.js', kind: 'js' },
   { path: '/style.css', file: 'style.css', kind: 'css' },
+  { path: '/user-app.js', file: 'user-app.js', kind: 'js' },
+  { path: '/user-mount.js', file: 'user-mount.js', kind: 'js' },
+  { path: '/user-style.css', file: 'user-style.css', kind: 'css' },
 ] as const);
 
 /**
