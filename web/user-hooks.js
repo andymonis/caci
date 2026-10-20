@@ -8,7 +8,7 @@ import { mountUserCircles } from './user-circles.js';
 export function userHooks(document, fetchFn, { recheck, go }) {
   const notes = createNotesClient({ fetchFn });
   const chat = mountChatPage(document, notes, recheck);
-  const circles = mountUserCircles(document, notes, { go });
+  const circles = mountUserCircles(document, notes, { go, recheck });
   return Object.freeze({
     route(name, param) {
       chat.route(name);

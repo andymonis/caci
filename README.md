@@ -349,13 +349,15 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these forty-six, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these forty-eight, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
 | `index.html` | the back office page, served at `/admin`: the sign-in and create-account forms, the home page and every screen |
 | `user.html` | the everyday app's page, served at `/` (see [The minimal user app](#the-minimal-user-app)) |
 | `user-app.js` | the everyday app's entry point |
+| `circle-chat-page.js` | the chat on a Circle screen: Send records against that circle, the Pulse button asks for a status of it (no question field) |
+| `thread-view.js` | draws a chat thread from the page's templates, shared by Home and the Circle screens |
 | `user-circles.js` | the everyday app's circle links (one per circle you are in, at the top of the navigation) and the Circle screens |
 | `user-hooks.js` | puts the everyday app's Home chat and circle screens together for `user-mount.js` |
 | `user-mount.js` | puts the everyday app on its page: sign-in and create-account, the frame, Settings |

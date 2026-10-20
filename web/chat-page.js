@@ -3,7 +3,8 @@
 // It returns the hooks `user-mount.js` calls: `route(name)` when the screen changes and `reset()` on sign-out.
 
 import { createChatSession } from './chat-session.js';
-import { chatModeNotice, messageClass } from './chat-view.js';
+import { chatModeNotice } from './chat-view.js';
+import { createThreadDrawer } from './thread-view.js';
 
 export function mountChatPage(document, notes, onSignedOut) {
   const $ = (id) => {
@@ -27,49 +28,19 @@ export function mountChatPage(document, notes, onSignedOut) {
   const msgTemplate = $('msg-template');
   const lineTemplate = $('msg-line-template');
 
-  const clone = (template) => template.content.firstElementChild.cloneNode(true);
-  const slot = (row, name) => {
-    const found = row.querySelector(`[data-slot="${name}"]`);
-    if (!found) throw new Error(`a row template has no slot "${name}"`);
-    return found;
-  };
   const setError = (target, message) => {
     target.textContent = message;
     target.hidden = message === '';
   };
 
-  let drawn = '';
-
-  function draw(state) {
-    const last = state.messages.at(-1);
-    const key = `${state.messages.length}:${last ? last.id : 0}`;
-    if (key === drawn) return;
-    drawn = key;
-    const rows = state.messages.map((message) => {
-      const row = clone(msgTemplate);
-      row.setAttribute('class', messageClass(message));
-      slot(row, 'text').textContent = message.text;
-      const lines = slot(row, 'lines');
-      lines.replaceChildren(
-        ...message.lines.map((line) => {
-          const item = clone(lineTemplate);
-          slot(item, 'text').textContent = line;
-          return item;
-        }),
-      );
-      lines.hidden = message.lines.length === 0;
-      return row;
-    });
-    thread.replaceChildren(...rows);
-    thread.scrollTop = thread.scrollHeight;
-  }
+  const drawer = createThreadDrawer({ thread, msgTemplate, lineTemplate });
 
   function render(state) {
     notice.textContent = chatModeNotice(state.mode);
     setError(modeError, state.mode.status === 'error' && typeof state.mode.error === 'string' ? state.mode.error : '');
     retry.hidden = state.mode.status !== 'error';
     retry.disabled = state.busy;
-    draw(state);
+    drawer.draw(state.messages);
     updateSend.disabled = !state.canSend;
     questionAsk.disabled = !state.canAsk;
     updateForm.setAttribute('aria-busy', state.busy ? 'true' : 'false');
@@ -119,7 +90,7 @@ export function mountChatPage(document, notes, onSignedOut) {
     },
     reset() {
       chat.reset();
-      drawn = '';
+      drawer.clear();
       updateText.value = '';
       questionText.value = '';
       setError(updateError, '');

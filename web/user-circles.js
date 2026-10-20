@@ -4,7 +4,9 @@
 // `disabled`, values, a few ARIA attributes and the focus, and builds rows from `<template>` elements. Returns the hooks
 // `user-mount.js` calls: `route(name, param)` and `reset()`.
 
-export function mountUserCircles(document, notes, { go }) {
+import { mountCircleChat } from './circle-chat-page.js';
+
+export function mountUserCircles(document, notes, { go, recheck }) {
   const $ = (id) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`the page has no element "${id}"`);
@@ -15,6 +17,7 @@ export function mountUserCircles(document, notes, { go }) {
   const notice = $('circle-notice');
   const view = $('view-circle');
   const heading = $('circle-heading');
+  const chat = mountCircleChat(document, notes, recheck);
 
   let epoch = 0; // each screen change takes a number; only the latest one is allowed to draw
   let circles = []; // [{ circleId, circleName, role, canCapture }] as the service last said
@@ -64,6 +67,7 @@ export function mountUserCircles(document, notes, { go }) {
       if (name === 'circle' && found === undefined) {
         // a circle the person is not in (or has left): the one set of words, and back to Home
         drawNav(undefined);
+        chat.hide();
         current = undefined;
         keepNotice = true;
         setNotice('No such circle, or you are not in it.');
@@ -72,15 +76,18 @@ export function mountUserCircles(document, notes, { go }) {
       }
       drawNav(found?.circleId);
       current = found;
-      if (found !== undefined) {
+      if (found === undefined) chat.hide();
+      else {
         heading.textContent = found.circleName;
         document.title = `${found.circleName} – CaCi`;
+        chat.show(found);
         heading.focus();
       }
     },
     /** Sign-out: forget the list, the screen and everything on it. */
     reset() {
       epoch += 1;
+      chat.reset();
       circles = [];
       current = undefined;
       navCircles.replaceChildren();

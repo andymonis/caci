@@ -6,6 +6,8 @@ export const CHAT_MODE_WORDS = Object.freeze({
 });
 export const CHAT_MODE_UNKNOWN = 'Could not tell which model handles your updates.';
 export const CHAT_MODE_LOADING = 'Checking which model handles your updates…';
+export const CIRCLE_VISIBLE = 'Everyone in this circle can read what is added here, and it cannot be taken back.';
+export const CIRCLE_READ_ONLY = 'You can read this circle but not add to it.';
 export const CHAT_EMPTY_HINT = 'Type an update to record it, or a question to ask CaCi.';
 
 /** The notice about which model is used, from the chat session's mode state. */

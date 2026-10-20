@@ -103,7 +103,7 @@ describe('the page', () => {
 describe('the scripts', () => {
   it('are exactly the modules the entry point reaches, and import only each other by name', () => {
     // the chat reuses the notes client, which brings the back office's shared word and permission modules with it
-    expect(modules).toEqual(['api-client.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circles-client.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'settings-session.js', 'status-session.js', 'status-view.js', 'user-app.js', 'user-circles.js', 'user-hooks.js', 'user-mount.js', 'view.js']);
+    expect(modules).toEqual(['api-client.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circle-chat-page.js', 'circles-client.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'settings-session.js', 'status-session.js', 'status-view.js', 'thread-view.js', 'user-app.js', 'user-circles.js', 'user-hooks.js', 'user-mount.js', 'view.js']);
     for (const m of modules) for (const x of code(read(m)).matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)) expect(x[1], `${m} imports ${x[1]}`).toMatch(/^\.\/[a-z0-9.-]+\.js$/);
   });
   it('never turn text into markup, run strings as code, or use storage, cookies or the console', () => {
@@ -146,8 +146,27 @@ describe('the scripts', () => {
       else if (t.includes('-heading')) for (const v of ['home', 'settings']) wanted.add(`${v}-heading`);
       else throw new Error(`the guard does not know how to check ${t}`);
     }
-    for (const f of ['chat-page.js', 'user-circles.js']) for (const x of code(read(f)).matchAll(/\$\('([a-zA-Z-]+)'\)/g)) wanted.add(x[1]);
+    for (const f of ['chat-page.js', 'user-circles.js', 'circle-chat-page.js']) for (const x of code(read(f)).matchAll(/\$\('([a-zA-Z-]+)'\)/g)) wanted.add(x[1]);
     for (const id of wanted) expect(ids, id).toContain(id);
     expect(wanted.size).toBeGreaterThan(30);
+  });
+});
+
+describe('the Circle screen', () => {
+  const section = html.slice(html.indexOf('<section id="view-circle"'), html.indexOf('<section id="view-settings"'));
+  it('has one update box, Send and a Pulse button, and no question field', () => {
+    expect(section.match(/<textarea/g)).toHaveLength(1);
+    expect(section).not.toMatch(/<input/);
+    expect(section).toMatch(/<button type="button" id="circle-pulse"[^>]*>Pulse<\/button>/);
+    expect(section).toMatch(/<button type="submit" id="circle-update-send">Send<\/button>/);
+    expect(section).not.toMatch(/question/i);
+  });
+  it('holds no words for the Pulse: the text lives on the server', () => {
+    expect(section).not.toMatch(/status update for the circle/i);
+    for (const m of modules) expect(code(read(m)), m).not.toMatch(/status update for the circle/i);
+  });
+  it('is a log that announces new messages, and the model notice, the reader line and the read-only line are on the page', () => {
+    expect(section).toMatch(/<ol id="circle-thread"[^>]*role="log"[^>]*aria-live="polite"/);
+    for (const id of ['circle-model-notice', 'circle-visible', 'circle-readonly', 'circle-notice']) expect(html + '').toContain(`id="${id}"`);
   });
 });
