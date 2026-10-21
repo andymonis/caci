@@ -26,7 +26,7 @@ Two things the owner asked for after trying CaCi on the Raspberry Pi:
 | D9 | A failed or throwing append never undoes or refuses the change (as today); nothing is recorded for a proposal only made, rejected, refused, failed, or approved twice. | Same discipline as R-014 D17. |
 | D10 | `GET /api/ledger` answers `input` entries with the same scope, paging and not-found rules as facts. The change-log screen shows an input as *Entered by <name>: "<text>"* next to its facts, as text only. | One route, one rule. |
 | D11 | The export **takes its own consistent snapshot** of `graphs.db` and `users.db` into a temporary owner-only folder, reads from that, and removes it (also on failure). The live files are never opened for writing. | Safe while the service runs; no half-written transaction. |
-| D12 | The export is **one JSON document** `{ format: 'caci-brain-export', version: 1 }` holding the facts (id, title, summary, key, author as username, time), the categories (id, name), the links (weights), and the ledger (facts and inputs, newest first, authors as usernames). Written **owner-only (0600), never overwriting a file**, printing counts and the path but never note text. | Everything needed to rebuild a brain or a scenario, nothing about passwords or sessions. |
+| D12 | The export is **one JSON document** `{ format: 'caci-brain-export', version: 1 }` holding the facts (id, title, summary, key, author as username, time), the categories (id, name), the links (weights), and the ledger (facts and inputs, newest first, authors as usernames). Written **owner-only (0600), never overwriting a file, refusing a path inside the project folder or the data folder**, printing counts and the path but never note text. | Everything needed to rebuild a brain or a scenario, nothing about passwords or sessions. |
 | D13 | `--format scenario` writes a **brain-eval draft**: dated notes from the recorded inputs (or `title: summary` for facts with no recorded input, flagged in its description) and **no questions**, which the owner adds by hand. | Real notes become scenarios; the questions need a human who knows what a good answer is. |
 | D14 | Out of scope: redaction, a signed-in download, exporting several brains at once, importing an export, keeping questions and answers, and any change to what the model is sent. | Keep it small. |
 
@@ -72,7 +72,7 @@ A ledger entry gains kind `input` and `text`:
 | LX-FR-06 | The change-log screen shows who entered which words next to the facts, as text, and says the words are stored (D10). |
 | LX-FR-07 | Deleting an account or a circle removes its inputs; the retention setting purges them (D8). |
 | LX-FR-08 | `export-brain` exports one user's or one circle's brain from a consistent snapshot without opening the live files for writing, and removes its temporary folder (D11, D12). |
-| LX-FR-09 | The export file is owner-only, never overwrites, never prints note text, and refuses a path inside the repository's tracked tree (D12). |
+| LX-FR-09 | The export file is owner-only, never overwrites, never prints note text, and refuses a path inside the project folder or the data folder (D12). |
 | LX-FR-10 | `--format scenario` writes a draft with no questions and says it cannot run until some are added (D13). |
 | LX-NFR-01 | No new dependency and no new server route. |
 | LX-NFR-02 | The text is stored unencrypted in `users.db`, as everything else is; the README says so. |
@@ -80,16 +80,16 @@ A ledger entry gains kind `input` and `text`:
 
 ## Threats and controls
 
-| Threat | Control |
-|--------|---------|
-| Raw text read by someone who may not read the brain | D2: the same scope and not-found rules as the facts; a stranger, a made-up circle and a non-member administrator get the one answer. |
-| Input text left behind after an account or circle is deleted | D8: the existing triggers remove personal and circle entries. |
-| A failed log write loses or blocks the change | D9: the write is first, the log second, and a failure only warns. |
-| The export reads half a transaction or changes live data | D11: its own snapshot, the live files never opened for writing. |
-| The export leaks passwords, hashes, session tokens or other people's brains | D12: only facts, names and ledger of one brain are read; authors are usernames; tests scan the file. |
-| The export file readable by others or overwritten | D12: mode 0600, refuses an existing file, refuses a path inside the repository. |
-| Text from a note run as markup in the change log | The screen sets text only, as every page does. |
-| One brain's export mixing another's data (same ids) | D12: each export is for one scope; tests use the same ids in two brains. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| Raw text read by someone who may not read the brain | D2: the same scope and not-found rules as the facts; a stranger, a made-up circle and a non-member administrator get the one answer. | `src/api/ledger-routes.test.ts` — "an observer and every member read the words of a circle update; a stranger, the administrator and a made-up circle get the one 404"; `src/service/input-ledger-end-to-end.test.ts` — "every member and the observer read the same words; a stranger, the administrator and a made-up circle get the identical 404"; `web/ledger-service.test.mjs` — "keeps the words of each update (R-017): a member, an observer and the owner read the same words and the author" |
+| Input text left behind after an account or circle is deleted | D8: the existing triggers remove personal and circle entries. | `src/ledger/sqlite/sqlite-store.test.ts` — "keeps every entry exactly, then accepts inputs"; `src/service/input-ledger-end-to-end.test.ts` — "after an account and a circle are deleted their words are in no later export, and the person is no longer found"; `src/service/brain-export.test.ts` — "a deleted circle is no longer found, and its words are in no later export" |
+| A failed log write loses or blocks the change | D9: the write is first, the log second, and a failure only warns. | `src/caci/controller-ledger.test.ts` — "when the log cannot be written the update is still made and the operator hears the one fixed sentence"; `src/caci/controller-ledger.test.ts` — "a failed write records nothing, words included" |
+| The export reads half a transaction or changes live data | D11: its own snapshot, the live files never opened for writing. | `src/service/brain-export.test.ts` — "the live files are never changed, and no temporary folder is left, whether it works or refuses"; `src/service/brain-export.test.ts` — "works while the service is running and holds only what had happened by then" |
+| The export leaks passwords, hashes, session tokens or other people's brains | D12: only facts, names and ledger of one brain are read; authors are usernames; tests scan the file. | `src/service/brain-export.test.ts` — "is found by username in any case and never holds a password, hash, session, email or user id"; `src/service/input-ledger-end-to-end.test.ts` — "the export of a person and of a circle holds the same words and facts as the change log shows, and nothing of the other brain"; `src/service/brain-export.test.ts` — "s brain with the same words never mixes in" |
+| The export file readable by others, overwritten, or committed by accident | D12: mode 0600, refuses an existing file, refuses a path inside the project folder or the data folder (also through a link). | `src/service/export-command.test.ts` — "writes the user brain as JSON, owner-only, and prints counts, the path and the warning but never the words"; `src/service/export-command.test.ts` — "an existing file (also a folder, or a link to nowhere) is never overwritten"; `src/service/export-command.test.ts` — "a path inside the project folder or inside the data folder is refused" |
+| Text from a note run as markup in the change log | The screen sets text only, as every page does. | `web/ledger-view.test.mjs` — "reads as who entered which words, as text"; `web/ledger-service.test.mjs` — "keeps the words of each update (R-017): a member, an observer and the owner read the same words and the author" |
+| One brain's export mixing another's data (same ids) | D12: each export is for one scope; tests use the same ids in two brains. | `src/service/brain-export.test.ts` — "s brain with the same words never mixes in"; `src/service/input-ledger-end-to-end.test.ts` — "the export of a person and of a circle holds the same words and facts as the change log shows, and nothing of the other brain" |
 
 ## What the person is told
 
@@ -107,10 +107,30 @@ The change-log screen says: *The words typed for each update are kept with the c
 | LX-AC-06 | Given an account or circle is deleted, then its inputs are gone from the database and from a later export. |
 | LX-AC-07 | Given the export command for a user and for a circle, then the file holds that brain's facts, categories, links and ledger with inputs and usernames, and nothing of any other brain. |
 | LX-AC-08 | Given the live service is running, then the export works and the live files are unchanged. |
-| LX-AC-09 | Given an existing output file, a path inside the repository, or a missing brain, then the command refuses and creates nothing. |
+| LX-AC-09 | Given an existing output file, a path inside the project folder or the data folder, or a missing brain, then the command refuses and creates nothing. |
 | LX-AC-10 | Given `--format scenario`, then the draft has dated notes and no questions, becomes valid when a question is added, and the brain-eval says what is missing otherwise. |
 
-## Residual risks (not covered, with the reason)
+
+### Where each criterion is checked (T-265)
+
+| ID | Tests |
+|----|-------|
+| LX-AC-01 | `src/caci/controller-ledger.test.ts` — "an approved update records one input with its exact words, the actor, the scope and the proposal, directly under the facts it produced"; `src/caci/controller-ledger.test.ts` — "a circle update is recorded in the circle"; `src/service/input-ledger-end-to-end.test.ts` — "update each show the words typed and who typed them, beside the facts, and a replacement shows both" |
+| LX-AC-02 | `src/caci/controller-ledger.test.ts` — "nothing is recorded for a proposal only made, rejected, or refused, nor for a question or a pulse"; `src/service/input-ledger-end-to-end.test.ts` — "a question, a pulse and a rejected proposal leave no words behind" |
+| LX-AC-03 | `src/caci/controller-ledger.test.ts` — "when the log cannot be written the update is still made and the operator hears the one fixed sentence" |
+| LX-AC-04 | `src/api/ledger-routes.test.ts` — "an observer and every member read the words of a circle update; a stranger, the administrator and a made-up circle get the one 404"; `web/ledger-service.test.mjs` — "keeps the words of each update (R-017): a member, an observer and the owner read the same words and the author" |
+| LX-AC-05 | `src/ledger/sqlite/sqlite-store.test.ts` — "keeps every entry exactly, then accepts inputs"; `src/ledger/sqlite/sqlite-store.test.ts` — "an input without text, text on any other kind, and text that is not JSON" |
+| LX-AC-06 | `src/service/input-ledger-end-to-end.test.ts` — "after an account and a circle are deleted their words are in no later export, and the person is no longer found"; `src/service/input-ledger-end-to-end.test.ts` — "a restart keeps the words, and the retention setting removes old ones at start-up" |
+| LX-AC-07 | `src/service/brain-export.test.ts` — "holds the facts, categories, links and the change log with the words typed and who entered them"; `src/service/brain-export.test.ts` — "after an account is deleted the circle keeps what the person added, without a name"; `src/service/input-ledger-end-to-end.test.ts` — "the export of a person and of a circle holds the same words and facts as the change log shows, and nothing of the other brain"; `src/service/brain-export.test.ts` — "more than a page of facts and entries all come out, in a stable order, with odd ids and text kept exactly" |
+| LX-AC-08 | `src/service/brain-export.test.ts` — "works while the service is running and holds only what had happened by then"; `src/service/brain-export.test.ts` — "the live files are never changed, and no temporary folder is left, whether it works or refuses" |
+| LX-AC-09 | `src/service/export-command.test.ts` — "an existing file (also a folder, or a link to nowhere) is never overwritten"; `src/service/export-command.test.ts` — "a path inside the project folder or inside the data folder is refused"; `src/service/export-command.test.ts` — "a user or circle that does not exist, or no databases, exits 1 and creates no file"; `src/service/brain-export.test.ts` — "a data folder with no databases is refused and nothing is created" |
+| LX-AC-10 | `src/service/export-command.test.ts` — "--format scenario writes the typed words as dated notes with no questions, owner-only, and says it cannot run yet"; `src/service/scenario-draft.test.ts` — "has the typed words as notes, oldest first, dated to the second in UTC, with numbered ids and no questions"; `dev/brain-eval/export-draft.test.mjs` — "is a sound scenario once a valid question is added, and then loads"; `dev/brain-eval/export-draft.test.mjs` — "is not runnable as it is: the validator and the loader say that questions are missing, naming the draft" |
+
+Also covered by the storage conformance suite (an input keeps its text exactly; its rules; one batch is all or nothing): `src/ledger/testing/cases.ts` — "an input keeps its text exactly: emoji, new lines, markup, a lone surrogate and exactly 8,000 characters"; `src/ledger/testing/cases.ts` — "an input needs text of 1 to 8,000 characters, is only ever added, and carries no title or summary; no other kind has text"; `src/ledger/testing/cases.ts` — "inputs and facts in one batch are all or nothing, and an input is listed with its facts in time order".
+
+Not looked at in a browser: the change-log line for an input was checked through the real mount and the real service, not by eye.
+
+### Residual risks (not covered, with the reason)
 
 1. **Raw text is now stored in plain files** on the Pi (and in every snapshot); anyone who can read `users.db` can read it.
 2. **An exported file holds real notes**; the operator must keep it out of the repository and off shared machines.
@@ -118,3 +138,6 @@ The change-log screen says: *The words typed for each update are kept with the c
 4. **An observer reads every input** in a circle's log, including words a member might not expect to be shared.
 5. **Facts entered before this change have no recorded input**; their exports fall back to the stored title and summary.
 6. **The input is the text as the proposal holds it**; if the page ever changes what it sends (for example trimming), the log holds what the service received.
+7. **The export never inspects what the words say**: a note that contains a password or a phone number is exported as typed.
+8. **The project-folder guard is a path check**: an operator who copies the file into the project afterwards, or into a synced folder, defeats it.
+9. **The change-log line for an input was not looked at in a browser**; its text is set only as text and tested through the real mount.

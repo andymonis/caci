@@ -585,6 +585,33 @@ The capture preview and outcome say what is removed. The **Change log** screen (
 - The word-overlap search misses a paraphrase that shares no word, so a stale note can stay. Keys can drift too ("phone" and "mobile" as two facts), leaving a stale fact beside the new one.
 - The log and the removed text are plain text in `users.db`, readable by whoever can read the file and by every member who may read a circle's log. Restoring from the log and questions about history are not built.
 
+## Input history and exporting a brain
+
+The change log (see [The current-view brain and its change log](#the-current-view-brain-and-its-change-log)) also keeps **the words typed for each update**, as specified in `specs/R-017-input-ledger-and-export.md`. This lets a change be confirmed against what was entered and by whom, and gives an operator real notes to test with.
+
+- **What is stored.** One `input` entry for every approved update (Send), holding the text **exactly as typed** (up to 8,000 characters), who sent it, when, and which brain it went to. It sits directly under the facts it produced in the change log; the back office's change-log screen shows it as *Entered by <name>: "<words>"*. **Questions, Pulses, rejected proposals and failed writes keep nothing.** Updates made before this existed have no recorded words.
+- **Who can read it.** Everyone who can read that brain's change log: you for your own brain; the owner, managers, members **and observers** of a circle for the circle's. A stranger, a made-up circle and the platform administrator get the one "no such circle" answer. The change-log screen says so.
+- **How long.** As long as the change log: `CACI_LEDGER_DAYS` (90 by default), then the entries are removed at start-up and once a day. Deleting an account removes its personal entries (the words included); deleting a circle removes the circle's. If the log cannot be written, the update is still made and the operator is told once.
+- **Unencrypted.** The words are in `users.db` as plain text, like everything else, and in every snapshot.
+
+### Exporting a brain
+
+```
+npm run export-brain -- --user ann --out ~/exports/ann.json
+npm run export-brain -- --circle c0123456789abcdef --out ~/exports/club.json
+npm run export-brain -- --user ann --out ~/exports/ann-draft.json --format scenario
+```
+
+It writes **one brain** (a person's own or a circle's) as JSON from a **consistent copy of the databases** taken for the purpose, so it is safe while the service runs and the live files are never changed. `--data-dir DIR` names another data folder (default: `CACI_DATA_DIR`, then `./data`). The document (`caci-brain-export`, version 1) holds the facts (title, summary, key, who entered them as a **username**, when, and their categories with weights), the categories, and the change log with the typed words, newest first. It holds **no password, hash, session, email or user id**, and nothing of any other brain.
+
+Safety: the file is created **owner-only**; an **existing file is never overwritten** and a **folder is never created**; a path **inside the project folder or the data folder is refused** (so it cannot be committed by accident); note text is **never printed**, only counts and the path. A user or circle that does not exist, or a folder with no databases, exits 1 and leaves nothing behind; wrong arguments exit 2 with the usage.
+
+`--format scenario` writes a **draft for the brain-eval** instead: the typed words as dated notes (older facts from before the words were recorded become `title: summary` notes) and **no questions**. The brain-eval refuses it until you add questions by hand; see `dev/brain-eval/README.md` ("From real notes to a scenario"). On the Pi, see the runbook (step 11) for taking a file off the machine.
+
+### What is not protected
+
+**An exported file holds real notes**: keep it out of the repository, off shared machines and away from the model. Nothing inspects what the words say (a password typed into a note is exported as typed). The folder guard is a path check, so copying the file into the project afterwards defeats it. Facts entered before the words were recorded export as their stored title and summary only. Entries older than the retention are gone from the live database, so take a snapshot or an export before they expire.
+
 ## Circles
 
 A **circle** is a group of people, each with a role in it. A person can be in several circles in different roles (a helper in one, helped in another), and everyone keeps their own graph. It is specified in `specs/R-004-circles.md`.
@@ -1017,6 +1044,16 @@ sudo systemctl start caci
 ```
 
 It checks the snapshot first, copies the files it replaces into a `pre-restore-` folder beside the snapshots, and refuses a snapshot made by a newer version than the one installed.
+
+**Taking a brain off the Pi for testing.** `npm run export-brain` (see [Exporting a brain](#exporting-a-brain)) writes one person's or one circle's brain as JSON. The service account owns the file and the backup folder is owner-only, so write it there and read it with `sudo`:
+
+```
+sudo -u caci sh -c 'cd /opt/caci/app && CACI_DATA_DIR=/var/lib/caci npm run export-brain -- --user ann --out /var/backups/caci/ann-export.json'
+ssh <pi> 'sudo cat /var/backups/caci/ann-export.json' > ann-export.json
+sudo rm /var/backups/caci/ann-export.json
+```
+
+The file holds **real notes**: keep it out of the repository and delete the copy on the Pi when you have it.
 
 ### 12. Power cuts, a dead card and a forgotten password
 

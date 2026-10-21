@@ -78,6 +78,11 @@ describe('the Pi runbook in the README', () => {
   it('says the things a reader must not miss', () => {
     for (const phrase of [
       'Nothing here has been run on a real Pi',
+      'Taking a brain off the Pi for testing',
+      'sudo rm /var/backups/caci/ann-export.json',
+      '(#exporting-a-brain)',
+      "ssh <pi> 'sudo cat /var/backups/caci/ann-export.json'",
+      'delete the copy on the Pi when you have it',
       'Set `ANTHROPIC_API_KEY`, and set `CACI_ALLOWED_HOSTS`',
       'CaCi needs Node 22.13 or later',
       'Do not pipe a download into a shell',

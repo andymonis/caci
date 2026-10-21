@@ -11,6 +11,8 @@ import { CONTROL_FILES, SETTING_RANGES, SLOT_RULES } from '../llm/index.js';
 import { authoriseBrain } from '../scopes/index.js';
 import { parseServiceConfig, VARIABLES } from './config.js';
 import { MAX_PULSE_CHARS } from './controls-files.js';
+import { EXPORT_FORMAT, EXPORT_VERSION } from './brain-export.js';
+import { EXPORT_USAGE } from './export-command.js';
 import { WEB_FILE_SPECS } from './web-app.js';
 
 // The README says what the service does. These checks make it fail the build when the README and the
@@ -606,5 +608,35 @@ describe('the README on the pulse text (R-016 D21)', () => {
   it('the status route row in the README mentions pulse and the circle scope', () => {
     expect(statusSection).toContain('{ pulse: true, scope }');
     expect(statusSection).toContain('no such circle');
+  });
+});
+
+describe('the README on the input history and exporting a brain (R-017)', () => {
+  const sec = section('Input history and exporting a brain');
+
+  it('names its specification, which exists, and the commands, which are npm scripts', () => {
+    expect(sec).toContain('specs/R-017-input-ledger-and-export.md');
+    expect(existsSync(new URL('../../specs/R-017-input-ledger-and-export.md', import.meta.url))).toBe(true);
+    for (const m of sec.matchAll(/npm run ([\w:-]+)/g)) expect(pkg.scripts, m[1]).toHaveProperty(m[1] as string);
+    expect(pkg.scripts['export-brain']).toBe('node scripts/export-brain.mjs');
+  });
+
+  it('every option it shows is one the command accepts, and the document format is the one in the code', () => {
+    for (const option of new Set(sec.match(/--[a-z-]+/g) ?? [])) expect(EXPORT_USAGE, option).toContain(option);
+    expect(sec).toContain(`(\`${EXPORT_FORMAT}\`, version ${EXPORT_VERSION})`);
+    expect(sec).toContain('--format scenario');
+  });
+
+  it('states the numbers in the code: 8,000 characters, 90 days by default', () => {
+    expect(MAX_NOTE_CHARS).toBe(8000);
+    expect(sec).toContain('up to 8,000 characters');
+    expect(defaults.ok ? defaults.value.ledgerDays : 0).toBe(90);
+    expect(sec).toContain('`CACI_LEDGER_DAYS` (90 by default)');
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['One `input` entry for every approved update (Send)', 'npm run export-brain -- --user ann --out ~/exports/ann-draft.json --format scenario', 'exactly as typed', 'Questions, Pulses, rejected proposals and failed writes keep nothing', 'observers', 'Everyone who can read that brain', 'the one "no such circle" answer', 'Unencrypted', 'consistent copy of the databases', 'never changed', 'owner-only', 'never overwritten', 'never printed', 'inside the project folder or the data folder is refused', 'no password, hash, session, email or user id', 'no questions', 'An exported file holds real notes', 'a password typed into a note is exported as typed']) {
+      expect(sec.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
   });
 });
