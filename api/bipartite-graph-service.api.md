@@ -72,6 +72,9 @@ export function defaultControlsDir(): string;
 export const EXPORT_FORMAT = "caci-brain-export";
 
 // @public (undocumented)
+export const EXPORT_USAGE = "Usage: npm run export-brain -- (--user USERNAME | --circle CIRCLE_ID) --out FILE [--data-dir DIR]   (FILE is a new file in an existing folder outside the project; DIR defaults to CACI_DATA_DIR or ./data)";
+
+// @public (undocumented)
 export const EXPORT_VERSION = 1;
 
 // @public
@@ -80,6 +83,21 @@ export function exportBrain(options: {
     readonly target: ExportTarget;
     readonly now?: () => number;
 }): Promise<ExportResult>;
+
+// Warning: (ae-forgotten-export) The symbol "Env_3" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export function exportBrainCommand(args: readonly string[], env: Env_3, io: ExportCommandIo): Promise<0 | 1 | 2>;
+
+// @public (undocumented)
+export interface ExportCommandIo {
+    // (undocumented)
+    readonly now?: () => number;
+    // (undocumented)
+    readonly stderr: (text: string) => void;
+    // (undocumented)
+    readonly stdout: (text: string) => void;
+}
 
 // @public (undocumented)
 export interface ExportEntry {

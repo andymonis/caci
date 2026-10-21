@@ -16,3 +16,5 @@ export type { RecoverIo } from './recover.js';
 export { defaultControlsDir, loadControlsFolder, loadPulseText, MAX_PULSE_CHARS } from './controls-files.js';
 export { EXPORT_FORMAT, EXPORT_VERSION, exportBrain } from './brain-export.js';
 export type { BrainExport, ExportEntry, ExportFact, ExportResult, ExportTarget } from './brain-export.js';
+export { EXPORT_USAGE, exportBrainCommand } from './export-command.js';
+export type { ExportCommandIo } from './export-command.js';
