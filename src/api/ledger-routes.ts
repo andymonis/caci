@@ -39,5 +39,20 @@ export function createLedgerRoutes(options: LedgerRoutesOptions): readonly Route
         return respond(done.error, done.error.source === 'caci' && done.error.error.code === 'UNAUTHENTICATED' ? [clearCookie(cookieName, { secure })] : undefined);
       },
     },
+    {
+      method: 'GET',
+      path: '/api/ledger/source',
+      handler: async (ctx): Promise<ApiResponse> => {
+        const token = ctx.cookies[cookieName];
+        if (token === undefined) return respond({ source: 'caci', error: { code: 'UNAUTHENTICATED', message: 'not signed in' } });
+        const stray = Object.keys(ctx.query).find((key) => key !== 'scope' && key !== 'id');
+        if (stray !== undefined) return respond({ source: 'caci', error: { code: 'INVALID_INPUT', message: `${stray} is not accepted here`, field: stray } });
+        const scope = scopeFrom(ctx.query.scope, 'scope', false);
+        if (!scope.ok) return respond(scope.error);
+        const done = await caci.source(token, { scope: scope.value, id: ctx.query.id });
+        if (done.ok) return { status: 200, body: { source: done.value } as unknown as JsonValue };
+        return respond(done.error, done.error.source === 'caci' && done.error.error.code === 'UNAUTHENTICATED' ? [clearCookie(cookieName, { secure })] : undefined);
+      },
+    },
   ];
 }

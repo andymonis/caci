@@ -494,7 +494,7 @@ describe('the current-view brain section of the README', () => {
     const real = createLedgerRoutes({ caci: {} as never }).map((r) => `${r.method} ${r.path}`);
     const documented = [...viewSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => m[1] as string);
     expect(documented).toEqual(real);
-    expect(real).toEqual(['GET /api/ledger']);
+    expect(real).toEqual(['GET /api/ledger', 'GET /api/ledger/source']);
     expect(defaults.ok ? defaults.value.ledgerDays : 0).toBe(90);
     expect(viewSection).toContain(`\`CACI_LEDGER_DAYS\` days (default ${defaults.ok ? defaults.value.ledgerDays : 0}, 1 to 3650`);
     expect(readme).toMatch(/\| `CACI_LEDGER_DAYS` \|[^|]*\| `90` \|/);

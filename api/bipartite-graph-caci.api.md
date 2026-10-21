@@ -68,6 +68,7 @@ export interface CaciController {
     reject(token: unknown, proposalId: unknown): Promise<Result<{
         readonly id: string;
     }, CaciError>>;
+    source(token: unknown, ref: unknown): Promise<Result<SourceView, CaciError>>;
     status(token: unknown, input: {
         readonly text?: unknown;
         readonly timeZone?: unknown;
@@ -346,6 +347,29 @@ export interface ProposalView {
     // (undocumented)
     readonly summary: ProposalSummary;
     readonly text: string;
+}
+
+// @public
+export const SOURCE_NOT_KEPT = "The words behind this fact are not kept: it was entered before they were recorded, or the change log no longer holds them.";
+
+// @public
+export interface SourceView {
+    readonly at?: number;
+    readonly current: boolean;
+    // (undocumented)
+    readonly enteredBy?: {
+        readonly username: string;
+        readonly displayName: string;
+    };
+    readonly fact: {
+        readonly title?: string;
+        readonly summary?: string;
+    };
+    readonly note?: string;
+    readonly recorded: boolean;
+    readonly replacedLater: boolean;
+    readonly scope?: Provenance;
+    readonly words?: string;
 }
 
 // @public (undocumented)

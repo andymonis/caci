@@ -570,6 +570,7 @@ After a successful approval the service records one line per change: when, who, 
 | Route | What it does |
 |-------|--------------|
 | `GET /api/ledger` | The log of one brain, newest first: `scope` is `personal` (the default) or `circle:<id>`, with `limit` and `cursor`. Needs the session cookie. |
+| `GET /api/ledger/source` | Where one fact came from (see [Tracing a fact to its words](#tracing-a-fact-to-its-words)): `scope` as above and `id` (the fact's id). Needs the session cookie. |
 
 You can read your own log, and a circle's log if you may read the circle (any role). A stranger, the administrator who is not a member, and a made-up circle all get the same 404. Unknown parameters are refused by name.
 
@@ -593,6 +594,10 @@ The change log (see [The current-view brain and its change log](#the-current-vie
 - **Who can read it.** Everyone who can read that brain's change log: you for your own brain; the owner, managers, members **and observers** of a circle for the circle's. A stranger, a made-up circle and the platform administrator get the one "no such circle" answer. The change-log screen says so.
 - **How long.** As long as the change log: `CACI_LEDGER_DAYS` (90 by default), then the entries are removed at start-up and once a day. Deleting an account removes its personal entries (the words included); deleting a circle removes the circle's. If the log cannot be written, the update is still made and the operator is told once.
 - **Unencrypted.** The words are in `users.db` as plain text, like everything else, and in every snapshot.
+
+### Tracing a fact to its words
+
+`GET /api/ledger/source?scope=personal|circle:<id>&id=<fact id>` says where one fact came from: **who entered it** (username and display name), **when**, and **the exact words**, whether the fact is **still in the brain** and whether it was **replaced later** (a replaced fact is found through the change log, with what it said). It is read-only and needs the session cookie. Exactly the people who can read that brain's change log can ask; a stranger, a made-up circle and the platform administrator get the one "no such circle" answer, and an id that is not a fact of that brain is "no such item". When the words are no longer kept (the fact is older than the words were recorded, or older than `CACI_LEDGER_DAYS`) the answer still says who and when if it can, and says plainly that the words are not kept.
 
 ### Exporting a brain
 

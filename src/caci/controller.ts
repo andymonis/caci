@@ -85,6 +85,30 @@ export interface LedgerEntryView {
   readonly by?: { readonly username: string; readonly displayName: string };
 }
 
+/** Where one fact came from (R-017 D15 to D19): who entered it, when, and the words, as far as the change log still holds them. */
+export interface SourceView {
+  /** The brain it is in, for a circle. */
+  readonly scope?: Provenance;
+  /** What the fact says now, or said when it was removed. */
+  readonly fact: { readonly title?: string; readonly summary?: string };
+  /** True when the fact is in the brain now. */
+  readonly current: boolean;
+  /** True when a later change removed it (it was replaced, or tidied away). */
+  readonly replacedLater: boolean;
+  /** True when the words as typed are still in the change log. */
+  readonly recorded: boolean;
+  readonly enteredBy?: { readonly username: string; readonly displayName: string };
+  /** When the fact was added, in milliseconds since 1970. */
+  readonly at?: number;
+  /** The update as typed, when it is still kept. */
+  readonly words?: string;
+  /** Plain words when something is not known. */
+  readonly note?: string;
+}
+
+/** What the page is told when the words are no longer there. */
+export const SOURCE_NOT_KEPT = 'The words behind this fact are not kept: it was entered before they were recorded, or the change log no longer holds them.';
+
 /** A page of the change log of one brain, newest first. */
 export interface LedgerView {
   readonly items: readonly LedgerEntryView[];
@@ -173,6 +197,8 @@ export interface CaciController {
    * review log of what was added, removed and updated, not a history of the notes. A stranger gets the made-up-circle answer.
    */
   ledger(token: unknown, scope?: unknown, page?: PageInput): Promise<Result<LedgerView, CaciError>>;
+  /** Where one fact came from (R-017): the change log's scope and not-found rules; `ref` is `{ scope?, id }`. */
+  source(token: unknown, ref: unknown): Promise<Result<SourceView, CaciError>>;
   /** Discards the owner's pending proposal. Nothing is written. */
   reject(token: unknown, proposalId: unknown): Promise<Result<{ readonly id: string }, CaciError>>;
 }
@@ -587,6 +613,69 @@ export function createCaciController(init: CaciControllerInit): CaciController {
         items.push(Object.freeze({ id: e.id, at: e.at, action: e.action, kind: e.kind, ...(e.kind === 'input' ? {} : { subject: e.subject }), ...(e.title === undefined ? {} : { title: e.title }), ...(e.summary === undefined ? {} : { summary: e.summary }), ...(e.text === undefined ? {} : { text: e.text }), ...(by === undefined ? {} : { by: Object.freeze(by) }) }));
       }
       return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor, ...(provenance === undefined ? {} : { scope: provenance }) }));
+    },
+
+    async source(token, ref) {
+      const me = await whoIs(token);
+      if (!me.ok) return me;
+      const store = init.ledger;
+      if (store === undefined) return err(caciError('NOT_FOUND', 'the change log is not available'));
+      if (typeof ref !== 'object' || ref === null || Array.isArray(ref)) return err(caciError('INVALID_INPUT', 'name the fact as { scope, id }', { field: 'id' }));
+      for (const key of Object.keys(ref)) if (key !== 'scope' && key !== 'id') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
+      const given = (ref as { scope?: unknown; id?: unknown }).scope;
+      const id = (ref as { id?: unknown }).id;
+      const parsed = parseScope(given);
+      if (!parsed.ok) return err(scopeProblem(parsed.error));
+      let which: LedgerScope;
+      let where: ResolvedScope | { graphId: string; provenance: Provenance | undefined };
+      if (parsed.value.kind === 'personal') {
+        which = { kind: 'personal', userId: me.value.user.id };
+        where = { graphId: me.value.graphId, provenance: undefined };
+      } else {
+        if (scopes === undefined) return err(noCircle());
+        const resolved = await scopes.resolve(token, parsed.value, 'read');
+        if (!resolved.ok) return err(scopeProblem(resolved.error));
+        which = { kind: 'circle', circleId: parsed.value.circleId };
+        where = resolved.value;
+      }
+      if (typeof id !== 'string' || id === '' || [...id].length > 256) return err(caciError('INVALID_INPUT', 'id must be text of 1 to 256 characters', { field: 'id' }));
+      let found;
+      let current;
+      try {
+        found = await store.sourceOf(which, id);
+        current = await browser.item(where.graphId, id);
+      } catch {
+        return err(storage());
+      }
+      if (!current.ok && !(current.error.source === 'caci' && current.error.error.code === 'NOT_FOUND')) return current;
+      const there = current.ok;
+      // a fact that is neither in the brain nor remembered by the log is not found, as in browse
+      if (!there && found.added === undefined && found.removed === undefined) return err(caciError('NOT_FOUND', 'no such item'));
+      const data = there ? current.value.item.data : undefined;
+      const title = there ? (typeof data?.['title'] === 'string' ? data['title'] : undefined) : (found.removed?.title ?? undefined);
+      const summary = there ? (typeof data?.['summary'] === 'string' ? data['summary'] : undefined) : (found.removed?.summary ?? undefined);
+      let by: { username: string; displayName: string } | undefined;
+      if (found.added !== undefined) {
+        try {
+          const u = await init.directory?.get(found.added.actor);
+          if (u !== undefined) by = { username: u.username, displayName: u.displayName };
+        } catch {
+          by = undefined;
+        }
+      }
+      const recorded = found.input?.text !== undefined;
+      return ok(
+        Object.freeze({
+          ...(where.provenance === undefined ? {} : { scope: where.provenance }),
+          fact: Object.freeze({ ...(title === undefined ? {} : { title }), ...(summary === undefined ? {} : { summary }) }),
+          current: there,
+          replacedLater: found.removed !== undefined,
+          recorded,
+          ...(by === undefined ? {} : { enteredBy: Object.freeze(by) }),
+          ...(found.added === undefined ? {} : { at: found.added.at }),
+          ...(recorded ? { words: found.input?.text as string } : { note: SOURCE_NOT_KEPT }),
+        }),
+      );
     },
 
     async approve(token, proposalId) {

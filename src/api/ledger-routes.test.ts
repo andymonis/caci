@@ -109,6 +109,65 @@ describe('GET /api/ledger', () => {
     expect((await get(a, '/api/ledger', t.cat)).text).not.toContain('CIRCLE-WORDS');
   });
 
+  it('GET /api/ledger/source traces a fact to who entered it, when and the exact words, for a member and the observer, with the circle named', async () => {
+    const { a, t, c1, file } = await started();
+    const words = 'Dentist appointment on Friday morning TRACE-WORDS <b>x</b>';
+    await file(t.bob, words, { kind: 'circle', circleId: c1 });
+    const listed = await get(a, `/api/ledger?scope=circle:${c1}`, t.ann);
+    const subject = (listed.json.items as Array<{ kind: string; subject?: string }>).find((e) => e.kind === 'item')?.subject as string;
+    for (const who of ['ann', 'bob', 'cat'] as const) {
+      const r = await get(a, `/api/ledger/source?scope=circle:${c1}&id=${encodeURIComponent(subject)}`, t[who]);
+      expect(r.status, who).toBe(200);
+      expect(Object.keys(r.json)).toEqual(['source']);
+      expect(r.json.source).toMatchObject({ current: true, replacedLater: false, recorded: true, words, enteredBy: { username: 'bob' }, scope: { kind: 'circle', circleId: c1 } });
+    }
+  });
+
+  it('the source route: a stranger, the administrator and a made-up circle get the same 404, an id from another brain is not found, and bad input is refused by name', async () => {
+    const { a, t, c1, file } = await started();
+    await file(t.bob, 'Dentist appointment on Friday morning TRACE-WORDS', { kind: 'circle', circleId: c1 });
+    await file(t.ann, OLD);
+    const circleFact = ((await get(a, `/api/ledger?scope=circle:${c1}`, t.ann)).json.items as Array<{ kind: string; subject?: string }>).find((e) => e.kind === 'item')?.subject as string;
+    const ownFact = ((await get(a, '/api/ledger', t.ann)).json.items as Array<{ kind: string; subject?: string }>).find((e) => e.kind === 'item')?.subject as string;
+    const made = await get(a, `/api/ledger/source?scope=circle:c0000000000000999&id=${circleFact}`, t.dan);
+    expect(made.status).toBe(404);
+    for (const who of ['dan', 'root'] as const) {
+      const r = await get(a, `/api/ledger/source?scope=circle:${c1}&id=${circleFact}`, t[who]);
+      expect(r.status, who).toBe(404);
+      expect(r.json).toEqual(made.json);
+      expect(r.text).not.toContain('TRACE-WORDS');
+    }
+    const other = await get(a, `/api/ledger/source?scope=circle:${c1}&id=${ownFact}`, t.ann);
+    expect(other.status).toBe(404);
+    expect(other.json.error.message).toBe('no such item');
+    expect((await get(a, `/api/ledger/source?scope=personal&id=${circleFact}`, t.ann)).status).toBe(404);
+    for (const [path, field] of [['/api/ledger/source', 'id'], ['/api/ledger/source?id=', 'id'], [`/api/ledger/source?id=${'x'.repeat(257)}`, 'id'], ['/api/ledger/source?id=x&limit=5', 'limit'], ['/api/ledger/source?id=x&scope=mine', 'scope'], ['/api/ledger/source?id=x&scope=circle:nope', 'scope.circleId']] as const) {
+      const r = await get(a, path, t.ann);
+      expect(r.status, path).toBe(422);
+      expect(r.json.error.field, path).toBe(field);
+    }
+  });
+
+  it('the source route needs the session cookie alone, is read-only, and says when the words are not kept', async () => {
+    const { a, t, file, ledger } = await started();
+    await file(t.ann, OLD);
+    const fact = ((await get(a, '/api/ledger', t.ann)).json.items as Array<{ kind: string; subject?: string }>).find((e) => e.kind === 'item')?.subject as string;
+    const none = await get(a, `/api/ledger/source?id=${fact}`);
+    expect(none.status).toBe(401);
+    expect((await get(a, `/api/ledger/source?id=${fact}&token=${t.ann}`)).status).toBe(401);
+    expect((await get(a, `/api/ledger/source?id=${fact}`, undefined, { Authorization: `Bearer ${t.ann}` })).status).toBe(401);
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      const r = await call(a.port, method, `/api/ledger/source?id=${fact}`, { token: t.ann });
+      expect(r.status, method).toBe(405);
+      expect(r.headers.allow).toContain('GET');
+    }
+    await ledger.purgeBefore(Number.MAX_SAFE_INTEGER);
+    const gone = await get(a, `/api/ledger/source?id=${fact}`, t.ann);
+    expect(gone.status).toBe(200);
+    expect(gone.json.source).toMatchObject({ current: true, recorded: false });
+    expect(gone.json.source.note).toContain('not kept');
+  });
+
   it('is the same for a member, an observer and the owner of a circle, and names the circle', async () => {
     const { a, t, c1, file } = await started();
     await file(t.bob, OLD, { kind: 'circle', circleId: c1 });
