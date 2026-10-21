@@ -507,7 +507,7 @@ describe('My Brain', () => {
 
 describe('status updates (R-011)', () => {
   const CIRCLE = 'c0123456789abcdef';
-  const VIEW = { headline: 'A quiet morning.', points: [{ text: 'Mum has new tablets.', sources: [{ kind: 'circle', circleId: CIRCLE, circleName: 'Parent care' }, { kind: 'personal' }] }], nothing: false, generatedAt: 5, mode: 'demo', entriesUsed: 3, entriesLeftOut: 1 };
+  const VIEW = { headline: 'A quiet morning.', points: [{ text: 'Mum has new tablets.', sources: [{ kind: 'circle', circleId: CIRCLE, circleName: 'Parent care' }, { kind: 'personal' }], facts: [{ scope: { kind: 'circle', circleId: CIRCLE, circleName: 'Parent care' }, id: 'note-1' }, { scope: { kind: 'personal' }, id: 'a/b?c' }] }], nothing: false, generatedAt: 5, mode: 'demo', entriesUsed: 3, entriesLeftOut: 1 };
   const answer = { status: 200, body: { status: VIEW } };
 
   it('the limit is 500 characters', () => expect(STATUS_MAX).toBe(500));
@@ -559,6 +559,18 @@ describe('status updates (R-011)', () => {
     expect((await client.status('😀'.repeat(500))).ok).toBe(true);
     expect((await client.status('😀'.repeat(501))).ok).toBe(false);
     expect(calls).toHaveLength(2);
+  });
+
+  it('keeps each point\'s facts (scope and id, frozen); an answer without them has none; a wrong shape is a server problem', async () => {
+    const r = await fake(answer).client.status('x');
+    expect(r.value.points[0].facts).toEqual(VIEW.points[0].facts);
+    expect(Object.isFrozen(r.value.points[0].facts) && Object.isFrozen(r.value.points[0].facts[0]) && Object.isFrozen(r.value.points[0].facts[0].scope)).toBe(true);
+    const bare = { ...VIEW, points: [{ text: 't', sources: [] }] };
+    expect((await fake({ status: 200, body: { status: bare } }).client.status('x')).value.points[0].facts).toEqual([]);
+    const bad = (facts) => ({ status: 200, body: { status: { ...VIEW, points: [{ text: 't', sources: [], facts }] } } });
+    for (const facts of ['x', [{ scope: { kind: 'personal' }, id: '' }], [{ scope: { kind: 'personal' } }], [{ scope: { kind: 'other' }, id: 'a' }], [{ id: 'a' }], [{ scope: { kind: 'personal' }, id: 'a'.repeat(257) }], Array.from({ length: 6 }, (_, i) => ({ scope: { kind: 'personal' }, id: `a${i}` }))]) {
+      expect((await fake(bad(facts)).client.status('x')).error, JSON.stringify(facts).slice(0, 40)).toMatchObject({ kind: 'server' });
+    }
   });
 
   it('cuts the answer down to the view, frozen all the way down', async () => {

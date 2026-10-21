@@ -123,7 +123,7 @@ export const MAX_STATUS_REQUEST_CHARS = 500;
 /** A status as a person is allowed to see it: the short answer, where each point came from, and nothing about the plumbing. */
 export interface StatusView {
   readonly headline: string;
-  readonly points: ReadonlyArray<{ readonly text: string; readonly sources: readonly Provenance[] }>;
+  readonly points: ReadonlyArray<{ readonly text: string; readonly sources: readonly Provenance[]; readonly facts: ReadonlyArray<{ readonly scope: Provenance; readonly id: string }> }>;
   /** True when nothing relevant was found (and there are no points). */
   readonly nothing: boolean;
   readonly generatedAt: number;
@@ -472,15 +472,23 @@ export function createCaciController(init: CaciControllerInit): CaciController {
         const points = answered.value.points.map((p) => {
           const seen = new Set<string>();
           const sources: Provenance[] = [];
+          const factSeen = new Set<string>();
+          const facts: Array<{ readonly scope: Provenance; readonly id: string }> = [];
           for (const ref of p.refs) {
             const where = provenance[ref - 1];
-            if (where === undefined) continue;
+            const factId = context.value.ids[ref - 1];
+            if (where === undefined || factId === undefined) continue;
+            const factKey = JSON.stringify([where.kind === 'personal' ? '' : where.circleId, factId]);
+            if (!factSeen.has(factKey) && facts.length < 5) {
+              factSeen.add(factKey);
+              facts.push(Object.freeze({ scope: Object.freeze(where.kind === 'personal' ? { kind: 'personal' as const } : { kind: 'circle' as const, circleId: where.circleId, circleName: where.circleName }), id: factId }));
+            }
             const key = where.kind === 'personal' ? 'personal' : `circle:${where.circleId}`;
             if (seen.has(key)) continue;
             seen.add(key);
             sources.push(Object.freeze(where.kind === 'personal' ? { kind: 'personal' as const } : { kind: 'circle' as const, circleId: where.circleId, circleName: where.circleName }));
           }
-          return Object.freeze({ text: p.text, sources: Object.freeze(sources) });
+          return Object.freeze({ text: p.text, sources: Object.freeze(sources), facts: Object.freeze(facts) });
         });
         return ok(
           Object.freeze({

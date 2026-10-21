@@ -218,7 +218,16 @@ function statusOf(json) {
       if (tag === undefined) return undefined;
       sources.push(tag);
     }
-    points.push(Object.freeze({ text: raw.text, sources: Object.freeze(sources) }));
+    const facts = [];
+    if (raw.facts !== undefined) {
+      if (!Array.isArray(raw.facts) || raw.facts.length > 5) return undefined;
+      for (const f of raw.facts) {
+        const scope = isObject(f) ? provenanceOf(f.scope) : undefined;
+        if (scope === undefined || typeof f.id !== 'string' || f.id === '' || [...f.id].length > 256) return undefined;
+        facts.push(Object.freeze({ scope, id: f.id }));
+      }
+    }
+    points.push(Object.freeze({ text: raw.text, sources: Object.freeze(sources), facts: Object.freeze(facts) }));
   }
   return Object.freeze({ headline: v.headline, points: Object.freeze(points), nothing: v.nothing, generatedAt: v.generatedAt, mode: v.mode, entriesUsed: v.entriesUsed, entriesLeftOut: v.entriesLeftOut });
 }

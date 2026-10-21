@@ -397,6 +397,10 @@ export interface StatusView {
     readonly points: ReadonlyArray<{
         readonly text: string;
         readonly sources: readonly Provenance[];
+        readonly facts: ReadonlyArray<{
+            readonly scope: Provenance;
+            readonly id: string;
+        }>;
     }>;
 }
 

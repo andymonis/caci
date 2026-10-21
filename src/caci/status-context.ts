@@ -29,6 +29,8 @@ export interface StatusContext {
   readonly entries: readonly StatusEntry[];
   /** Where each entry came from, in the same order. */
   readonly provenance: readonly Provenance[];
+  /** The graph id of each entry's item, in the same order (never sent to the model; the controller turns it into a fact reference). */
+  readonly ids: readonly string[];
   /** Items read and not used (too old for the budget or beyond the per-scope cap). */
   readonly entriesLeftOut: number;
 }
@@ -161,6 +163,7 @@ export function createStatusContext(adapter: StorageAdapter, limits: StatusConte
       }
       const entries: StatusEntry[] = [];
       const provenance: Provenance[] = [];
+      const ids: string[] = [];
       const names = new Map<number, Map<string, string[]>>();
       for (const index of new Set(chosen.map((c) => c.scopeIndex))) {
         const got = await categoriesOf((readable[index] as ResolvedScope).graphId, chosen.filter((c) => c.scopeIndex === index).map((c) => c.id));
@@ -171,8 +174,9 @@ export function createStatusContext(adapter: StorageAdapter, limits: StatusConte
         const scope = readable[c.scopeIndex] as ResolvedScope;
         entries.push(Object.freeze({ where: whereOf(scope.provenance), text: textOf(c.data, names.get(c.scopeIndex)?.get(c.id) ?? [], settings.maxEntryChars), ...(c.when === undefined ? {} : { when: c.when }) }));
         provenance.push(scope.provenance);
+        ids.push(c.id);
       }
-      return ok(Object.freeze({ entries: Object.freeze(entries), provenance: Object.freeze(provenance), entriesLeftOut: totalRead - chosen.length }));
+      return ok(Object.freeze({ entries: Object.freeze(entries), provenance: Object.freeze(provenance), ids: Object.freeze(ids), entriesLeftOut: totalRead - chosen.length }));
     },
   };
 }

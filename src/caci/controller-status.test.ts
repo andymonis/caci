@@ -141,7 +141,8 @@ describe('what the view holds', () => {
     expect(Object.keys(v).sort()).toEqual(['entriesLeftOut', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
     expect(Object.isFrozen(v) && Object.isFrozen(v.points) && Object.isFrozen(v.points[0]) && Object.isFrozen(v.points[0]?.sources)).toBe(true);
     const json = JSON.stringify(v);
-    for (const leak of ['usage', 'inputTokens', 'prompt', 'graphId', 'user-u', 'circle-c', 'contributedBy', 'attempts', 'note-0']) expect(json, leak).not.toContain(leak);
+    for (const leak of ['usage', 'inputTokens', 'prompt', 'graphId', 'user-u', 'circle-c', 'contributedBy', 'attempts']) expect(json, leak).not.toContain(leak);
+    expect(Object.keys(v.points[0] ?? {}).sort()).toEqual(['facts', 'sources', 'text']);
     expect(json).not.toContain(w.graphIds.ann as string);
   });
 
@@ -323,5 +324,30 @@ describe('text that tries to give orders', () => {
     expect(content.match(/<\/request>/g)).toHaveLength(1);
     expect(v.headline).toContain('I read 1 note');
     expect(v.points[0]?.sources).toEqual([{ kind: 'personal' }]);
+  });
+
+  it('each point carries the facts it came from: scope and graph id, de-duplicated, never another brain', async () => {
+    const { w, parent } = await story();
+    const v = await ask(w, 'ann', 'How is Mum doing with her tablets?');
+    const mum = v.points.find((p) => p.text.includes('tablets'));
+    expect(mum?.facts.length).toBeGreaterThan(0);
+    for (const f of mum?.facts ?? []) {
+      expect(f.scope).toEqual({ kind: 'circle', circleId: parent, circleName: 'Circle 1' });
+      expect(typeof f.id).toBe('string');
+      expect(f.id).not.toBe('');
+    }
+    expect(new Set((mum?.facts ?? []).map((f) => f.id)).size).toBe(mum?.facts.length);
+    const personal = v.points.find((p) => p.text.includes('Dentist'));
+    expect(personal?.facts.every((f) => f.scope.kind === 'personal')).toBe(true);
+    expect(Object.isFrozen(mum?.facts) && Object.isFrozen(mum?.facts[0]) && Object.isFrozen(mum?.facts[0]?.scope)).toBe(true);
+    expect(sentToModel(w)).not.toContain(mum?.facts[0]?.id ?? 'x-none');
+  });
+
+  it('a pulse names only its own circle in its facts', async () => {
+    const { w, parent } = await story();
+    const v = await ask(w, 'ann', 'Give me a status', { scope: { kind: 'circle', circleId: parent } });
+    const all = v.points.flatMap((p) => p.facts);
+    expect(all.length).toBeGreaterThan(0);
+    expect(all.every((f) => f.scope.kind === 'circle' && f.scope.circleId === parent)).toBe(true);
   });
 });
