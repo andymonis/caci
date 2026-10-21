@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { startService } from '../src/service/service.ts';
 import { createCirclesClient } from './circles-client.js';
 import { fakePage, fill, waitFor } from './fake-page.test-util.mjs';
+import { createLedgerClient } from './ledger-client.js';
 import { createNotesClient } from './notes-client.js';
 import { userHooks } from './user-hooks.js';
 import { browserFetch, PW } from './sharing-world.test-util.mjs';
@@ -239,5 +240,71 @@ describe('the everyday app, through the pages, against the real service', () => 
     await waitFor(() => !el(fay, 'circle-notice').hidden, 'the removed member\'s notice');
     expect(el(fay, 'circle-notice').textContent).toBe('No such circle, or you are not in it.');
     expect(fay.page.document.title).toBe('CaCi');
+  });
+
+  it('tracing a fact: a member changes a dose in the circle, the owner asks on Home, and Show the source names who, when and the exact words; a fact whose words are gone says so; a stranger gets nothing', async () => {
+    await boot();
+    const eve = browser();
+    await register(eve, 'eve', 'Eve');
+    const eveCircles = createCirclesClient({ fetchFn: eve.fetchFn });
+    const club = (await eveCircles.createCircle({ name: 'Club' })).value.id;
+    const fay = browser();
+    await register(fay, 'fay', 'Fay F');
+    const dan = browser();
+    await register(dan, 'dan', 'Dan');
+    expect((await eveCircles.invite(club, { username: 'fay', role: 'member' })).ok).toBe(true);
+    const fayCircles = createCirclesClient({ fetchFn: fay.fetchFn });
+    expect((await fayCircles.acceptInvitation((await fayCircles.myInvitations()).value.items[0].id)).ok).toBe(true);
+
+    // fay records the dose and then changes it, on the circle's screen
+    fay.go(`#/circle/${club}`);
+    await waitFor(() => circleReady(fay), 'the circle screen');
+    for (const words of ['Mum: tablets are Tablet A, 2 x daily.', 'Mum: tablets are now Tablet B, 1 x daily <b>after food</b>.']) {
+      const before = cthread(fay).length;
+      el(fay, 'circle-update-text').value = words;
+      el(fay, 'circle-update-form').fire('submit');
+      await waitFor(() => cthread(fay).length === before + 2 && cthread(fay).at(-1)?.text.startsWith('Recorded') && circleReady(fay), 'the filing');
+    }
+
+    // eve asks on Home: the answer names the new dose, and a button traces it
+    await askQ(eve, 'What tablets is Mum on?');
+    const answer = thread(eve).at(-1);
+    const line = answer.lines.findIndex((l) => l.includes('Tablet B'));
+    expect(line).toBeGreaterThanOrEqual(0);
+    expect(answer.lines.join(' ')).not.toContain('Tablet A');
+    const buttonOf = (index) => el(eve, 'chat-thread').children.at(-1).querySelector('[data-slot="lines"]').children[index].querySelector('[data-slot="source"]');
+    expect(buttonOf(line).hidden).toBe(false);
+    buttonOf(line).fire('click');
+    await waitFor(() => el(eve, 'chat-thread').children.at(-1)?.getAttribute('tabindex') === '-1', 'the source message');
+    const shown = thread(eve).at(-1);
+    expect(shown.lines.join('\n')).toMatch(/^Entered by Fay F on \d{4}-\d\d-\d\d \d\d:\d\d UTC: "Mum: tablets are now Tablet B, 1 x daily <b>after food<\/b>\."$/);
+    expect(eve.page.focused()).toBe(el(eve, 'chat-thread').children.at(-1));
+
+    // the fact it replaced can still be traced, and says it was replaced
+    const ledger = createLedgerClient({ fetchFn: eve.fetchFn });
+    const removed = (await ledger.list({ kind: 'circle', circleId: club })).value.items.find((e) => e.action === 'removed' && e.kind === 'item');
+    const old = (await ledger.source({ kind: 'circle', circleId: club }, removed.subject)).value;
+    expect(old).toMatchObject({ current: false, replacedLater: true, recorded: true, words: 'Mum: tablets are Tablet A, 2 x daily.' });
+    expect(old.enteredBy.username).toBe('fay');
+
+    // a fact whose words are gone says so plainly (who and when remain)
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(join(dir, 'users.db'));
+    db.prepare("DELETE FROM ledger WHERE kind = 'input'").run();
+    db.close();
+    await askQ(eve, 'What tablets is Mum on?');
+    const again = thread(eve).at(-1);
+    const idx = again.lines.findIndex((l) => l.includes('Tablet B'));
+    el(eve, 'chat-thread').children.at(-1).querySelector('[data-slot="lines"]').children[idx].querySelector('[data-slot="source"]').fire('click');
+    await waitFor(() => el(eve, 'chat-thread').children.at(-1)?.getAttribute('tabindex') === '-1', 'the second source message');
+    const gone = thread(eve).at(-1).lines.join('\n');
+    expect(gone).toMatch(/^Entered by Fay F on /);
+    expect(gone).toContain('not kept');
+    expect(gone).not.toContain('Tablet B, 1 x daily');
+
+    // a stranger cannot trace anything in the circle, and an id from another brain is not found
+    const strangerLedger = createLedgerClient({ fetchFn: dan.fetchFn });
+    expect((await strangerLedger.source({ kind: 'circle', circleId: club }, removed.subject)).error).toMatchObject({ kind: 'not-found', what: 'circle' });
+    expect((await ledger.source({ kind: 'personal' }, removed.subject)).error).toMatchObject({ kind: 'not-found', what: 'item' });
   });
 });
