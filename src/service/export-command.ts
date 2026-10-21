@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dataDirOf, isInside } from './backup.js';
 import { exportBrain, type ExportTarget } from './brain-export.js';
+import { scenarioDraft } from './scenario-draft.js';
 
 // `npm run export-brain -- --user <username> | --circle <id> --out FILE [--data-dir DIR]` (R-017 D11, D12): writes one brain as
 // a JSON document. Like backup and restore it reads the data folder directly and does not rebuild. The file holds real notes, so
@@ -15,13 +16,14 @@ export interface ExportCommandIo {
   readonly now?: () => number;
 }
 
-export const EXPORT_USAGE = 'Usage: npm run export-brain -- (--user USERNAME | --circle CIRCLE_ID) --out FILE [--data-dir DIR]   (FILE is a new file in an existing folder outside the project; DIR defaults to CACI_DATA_DIR or ./data)';
+export const EXPORT_USAGE = 'Usage: npm run export-brain -- (--user USERNAME | --circle CIRCLE_ID) --out FILE [--format json|scenario] [--data-dir DIR]   (json is the whole brain, scenario a brain-eval draft with no questions; FILE is a new file in an existing folder outside the project; DIR defaults to CACI_DATA_DIR or ./data)';
 const CIRCLE_ID = /^c[a-z0-9]{16}$/;
 type Env = Readonly<Record<string, string | undefined>>;
 
 interface Parsed {
   readonly target: ExportTarget;
   readonly out: string;
+  readonly format: 'json' | 'scenario';
   readonly dataDir?: string;
 }
 
@@ -29,7 +31,7 @@ function parse(args: readonly string[]): Parsed | string {
   const seen = new Map<string, string>();
   for (let i = 0; i < args.length; i++) {
     const flag = args[i] as string;
-    if (!['--user', '--circle', '--out', '--data-dir'].includes(flag)) return `unknown argument "${flag.slice(0, 40)}"`;
+    if (!['--user', '--circle', '--out', '--data-dir', '--format'].includes(flag)) return `unknown argument "${flag.slice(0, 40)}"`;
     if (seen.has(flag)) return `${flag} was given twice`;
     const value = args[i + 1];
     if (value === undefined || value.startsWith('--') || value === '') return `${flag} needs a value`;
@@ -45,8 +47,10 @@ function parse(args: readonly string[]): Parsed | string {
   if (user !== undefined && (user.length > 64 || /[\u0000-\u001f\u007f]/.test(user))) return '--user is not a username';
   if (circle !== undefined && !CIRCLE_ID.test(circle)) return '--circle is not a circle id';
   if (out.includes('\0')) return '--out is not a path';
+  const format = seen.get('--format') ?? 'json';
+  if (format !== 'json' && format !== 'scenario') return '--format must be json or scenario';
   const dataDir = seen.get('--data-dir');
-  return { target: user !== undefined ? { kind: 'user', username: user } : { kind: 'circle', circleId: circle as string }, out: resolve(out), ...(dataDir === undefined ? {} : { dataDir: resolve(dataDir) }) };
+  return { format, target: user !== undefined ? { kind: 'user', username: user } : { kind: 'circle', circleId: circle as string }, out: resolve(out), ...(dataDir === undefined ? {} : { dataDir: resolve(dataDir) }) };
 }
 
 /** The application's own folder (two levels above `src/service` and `dist/service`). */
@@ -82,11 +86,16 @@ export async function exportBrainCommand(args: readonly string[], env: Env, io: 
     io.stderr(`${r.message}.\n`);
     return 1;
   }
+  const document = parsed.format === 'scenario' ? scenarioDraft(r.value) : r.value;
+  if ('notes' in document && document.notes.length === 0) {
+    io.stderr('This brain has no notes to turn into a scenario.\n');
+    return 1;
+  }
   let fd: number | undefined;
   try {
     fd = openSync(out, 'wx', 0o600);
     fchmodSync(fd, 0o600);
-    writeSync(fd, `${JSON.stringify(r.value, null, 2)}\n`);
+    writeSync(fd, `${JSON.stringify(document, null, 2)}\n`);
     closeSync(fd);
     fd = undefined;
   } catch {
@@ -98,6 +107,7 @@ export async function exportBrainCommand(args: readonly string[], env: Env, io: 
   const c = r.value.counts;
   io.stdout(`Exported the ${r.value.brain.kind === 'personal' ? 'brain of' : 'circle'} "${r.value.brain.name}": ${c.facts} facts, ${c.categories} categories, ${c.links} links, ${c.entries} change-log entries (${c.inputs} with the words typed).\n`);
   io.stdout(`Written to ${out}, readable only by you.\n`);
+  if (parsed.format === 'scenario') io.stdout('This is a draft with no questions: the brain-eval cannot run it until you add some (see dev/brain-eval/README.md).\n');
   io.stdout('This file holds real notes: keep it out of the repository and off shared machines.\n');
   return 0;
 }

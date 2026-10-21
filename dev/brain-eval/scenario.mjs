@@ -41,7 +41,7 @@ export function validateScenario(s) {
   if (typeof s.title !== 'string' || s.title.trim() === '') p(name, 'title must be non-empty text');
   if (s.description !== undefined && typeof s.description !== 'string') p(name, 'description must be text');
   if (!Array.isArray(s.notes) || s.notes.length === 0) p(name, 'notes must be a non-empty list');
-  if (!Array.isArray(s.questions) || s.questions.length === 0) p(name, 'questions must be a non-empty list');
+  if (!Array.isArray(s.questions) || s.questions.length === 0) p(name, 'questions must be a non-empty list (a draft made by export-brain has none: add some)');
   if (!Array.isArray(s.notes) || !Array.isArray(s.questions)) return problems;
 
   const noteIds = new Map();

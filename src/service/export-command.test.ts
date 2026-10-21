@@ -104,6 +104,40 @@ describe('writing the file', () => {
   });
 });
 
+describe('a brain-eval scenario draft', () => {
+  it('--format scenario writes the typed words as dated notes with no questions, owner-only, and says it cannot run yet', async () => {
+    const w = await world();
+    const out = join(tmp(), 'draft.json');
+    const r = await run(['--user', 'ann', '--out', out, '--format', 'scenario', '--data-dir', w.data]);
+    expect(r.code).toBe(0);
+    expect(mode(out)).toBe(0o600);
+    const draft = JSON.parse(readFileSync(out, 'utf8'));
+    expect(Object.keys(draft).sort()).toEqual(['description', 'id', 'notes', 'questions', 'title']);
+    expect(draft.questions).toEqual([]);
+    expect(draft.id).toBe('brain-ann');
+    expect(draft.notes).toEqual([{ id: 'n001', at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/), text: SECRET_WORDS }]);
+    expect(r.out).toContain('draft with no questions');
+    expect(r.out + r.err).not.toContain('SECRET-NOTE-WORDS');
+  });
+
+  it('--format json is the default and says nothing about a draft', async () => {
+    const w = await world();
+    const r = await run(['--user', 'ann', '--out', join(tmp(), 'a.json'), '--format', 'json', '--data-dir', w.data]);
+    expect(r.code).toBe(0);
+    expect(r.out).not.toContain('draft');
+  });
+
+  it('a brain with no notes cannot become a scenario, and nothing is written', async () => {
+    const w = await world();
+    const out = join(tmp(), 'root.json');
+    const r = await run(['--user', 'root', '--out', out, '--format', 'scenario', '--data-dir', w.data]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain('no notes to turn into a scenario');
+    expect(existsSync(out)).toBe(false);
+    expect((await run(['--user', 'root', '--out', out, '--data-dir', w.data])).code).toBe(0); // the plain export of an empty brain is fine
+  });
+});
+
 describe('what it refuses, leaving everything as it was', () => {
   it('an existing file (also a folder, or a link to nowhere) is never overwritten', async () => {
     const w = await world();

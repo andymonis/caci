@@ -18,3 +18,5 @@ export { EXPORT_FORMAT, EXPORT_VERSION, exportBrain } from './brain-export.js';
 export type { BrainExport, ExportEntry, ExportFact, ExportResult, ExportTarget } from './brain-export.js';
 export { EXPORT_USAGE, exportBrainCommand } from './export-command.js';
 export type { ExportCommandIo } from './export-command.js';
+export { scenarioDraft } from './scenario-draft.js';
+export type { ScenarioDraft } from './scenario-draft.js';

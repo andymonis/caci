@@ -72,7 +72,7 @@ export function defaultControlsDir(): string;
 export const EXPORT_FORMAT = "caci-brain-export";
 
 // @public (undocumented)
-export const EXPORT_USAGE = "Usage: npm run export-brain -- (--user USERNAME | --circle CIRCLE_ID) --out FILE [--data-dir DIR]   (FILE is a new file in an existing folder outside the project; DIR defaults to CACI_DATA_DIR or ./data)";
+export const EXPORT_USAGE = "Usage: npm run export-brain -- (--user USERNAME | --circle CIRCLE_ID) --out FILE [--format json|scenario] [--data-dir DIR]   (json is the whole brain, scenario a brain-eval draft with no questions; FILE is a new file in an existing folder outside the project; DIR defaults to CACI_DATA_DIR or ./data)";
 
 // @public (undocumented)
 export const EXPORT_VERSION = 1;
@@ -221,6 +221,27 @@ export interface RunningService {
     readonly host: string;
     readonly port: number;
 }
+
+// @public (undocumented)
+export interface ScenarioDraft {
+    // (undocumented)
+    readonly description: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly notes: ReadonlyArray<{
+        readonly id: string;
+        readonly at: string;
+        readonly text: string;
+    }>;
+    // (undocumented)
+    readonly questions: readonly never[];
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export function scenarioDraft(doc: BrainExport): ScenarioDraft;
 
 // @public
 export function serve(env: Readonly<Record<string, string | undefined>>, io: ServeIo): Promise<ServeResult>;

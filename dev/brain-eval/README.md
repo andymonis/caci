@@ -33,6 +33,17 @@ A real run needs `ANTHROPIC_API_KEY` in the environment (`source ./set-key.sh` i
 | `--yes` | actually call the real models |
 | `--out DIR` | where results are saved (default `brain-eval-results`, git-ignored) |
 
+## From real notes to a scenario
+
+Real notes can become scenarios (R-017). On the machine that holds the data (the Pi, or a copy of its data folder), export the brain as a draft:
+
+```
+npm run export-brain -- --user ann --out ~/ann-draft.json --format scenario
+npm run export-brain -- --circle c0123456789abcdef --out ~/club-draft.json --format scenario
+```
+
+The draft has the **words that were typed** as dated notes (older facts from before the words were recorded become notes of the form `title: summary`) and **no questions**: the brain-eval refuses it, naming the missing questions, until you add some. Write each question by hand (`kind`, `after` a note id, `ask`, what the answer `must` contain, what it must not give as current in `stale`, and a `why`), then copy the file into a scenarios folder and run it as usual (`--scenarios DIR`). The file holds **real notes**: keep it out of the repository and do not send it anywhere; a real run sends the notes to the model.
+
 ## What is in here
 
 | File | What it does |
