@@ -146,3 +146,5 @@ Also checked on the web: `web/replace-journey.test.mjs` — "previews the remova
 8. **An item is a whole note**: a note with several facts replaces whole items or none.
 9. **The preview shows the removals but a person may not read them**; approving covers them (D2).
 10. **The hand check in a browser was not repeated for the ledger screen**: the page logic is tested through the real mount and the real service, but no real browser was used for T-227 or T-229, and the real model path (which decides what is actually replaced) is the owner's run.
+
+*Amended by `specs/R-017-input-ledger-and-export.md` (2026-10-21): the ledger also records one `input` entry per approved update, carrying the text as sent.*

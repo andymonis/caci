@@ -59,6 +59,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-014 | [The Current-View Brain — Specification](specs/R-014-current-view-brain.md) |
 | R-015 | [The Fact-Level Brain — Specification](specs/R-015-fact-level-brain.md) |
 | R-016 | [The Minimal User App — Specification](specs/R-016-user-app.md) |
+| R-017 | [The Input Ledger and the Brain Export — Specification](specs/R-017-input-ledger-and-export.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -117,6 +118,7 @@ Local-only development tools live under `dev/` and are never published: `dev/gra
 - **Done (2026-10, awaiting the owner's real run):** F1 (T-232 to T-241, R-015) the fact-level brain: a note that states several facts is stored as separate fact items (each with a short key), so a changed value replaces only its own fact and unchanged facts survive; `maxFacts` 1 is today's behaviour and the A/B switch; the brain-eval gains multi-fact scenarios and a collateral-loss count.
 - **Done as N1 (T-242 to T-249, R-016):** a very minimal user app at `/` (login, an iMessage-style chat with Send for updates and Ask for questions, profile and password), using the same APIs as the back office, which moves to `/admin`; chat in memory only, notes saved straight away, simple PWA without manifest or HTTPS. From the owner's `architecture/user_pwa.md`.
 - **Done as N2 (T-250 to T-257, R-016 D16 to D22):** from the owner's updated `architecture/user_pwa.md`: Home Send always records against the own brain; each circle gets its own Circle screen at the top of the navigation (Send records against the circle, observers read only, a Pulse button asks for a status of that circle with predefined text from `controls/pulse.txt`); `POST /api/status` gains an optional circle `scope` and `pulse: true`.
+- **Being built as L2 (T-258 to T-265, R-017):** the change ledger also keeps the text of each update as sent (readable by everyone who can read that brain's log), shown beside the facts in the back office's change log; an operator command `npm run export-brain` exports a user's or circle's brain from a consistent snapshot as JSON (and as a brain-eval scenario draft), so real brains can be used as test input to improve answers.
 - **After that, to be planned (decided on the evidence of the real before and after run):** further changes to the brain itself (for example carrying unchanged details into a replacing note); then writing into another brain via approval, relationship labels, invitation notifications.
 - **After that, to be planned:** making the web app installable, M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Each roadmap item in the Backlog needs its own spec first.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
