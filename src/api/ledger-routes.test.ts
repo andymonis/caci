@@ -76,6 +76,39 @@ describe('GET /api/ledger', () => {
     expect(Object.keys(rows[0] as object).sort()).toEqual(['action', 'at', 'by', 'id', 'kind', 'subject', 'summary', 'title']);
     expect((await get(a, '/api/ledger?scope=personal', t.ann)).json).toEqual(r.json);
   });
+  it('shows the words of each update as an input: the exact text, who, no subject and nothing of the proposal', async () => {
+    const { a, t, file } = await started();
+    const words = '  Mum new tablets one a day with food 😀 <b>MARK</b>\nsecond line  ';
+    await file(t.ann, words);
+    const r = await get(a, '/api/ledger', t.ann);
+    const input = (r.json.items as Array<Record<string, unknown>>).filter((e) => e.kind === 'input');
+    expect(input).toHaveLength(1);
+    expect(Object.keys(input[0] as object).sort()).toEqual(['action', 'at', 'by', 'id', 'kind', 'text']);
+    expect(input[0]).toMatchObject({ action: 'added', kind: 'input', text: words, by: { username: 'ann' } });
+    expect(r.text).not.toContain('prop-');
+    expect((r.json.items as Array<{ kind: string }>).at(-1)?.kind).toBe('input'); // directly under the facts it produced
+  });
+
+  it('an observer and every member read the words of a circle update; a stranger, the administrator and a made-up circle get the one 404', async () => {
+    const { a, t, c1, file } = await started();
+    await file(t.bob, 'Dentist appointment on Friday morning CIRCLE-WORDS', { kind: 'circle', circleId: c1 });
+    for (const who of ['ann', 'bob', 'cat'] as const) {
+      const r = await get(a, `/api/ledger?scope=circle:${c1}`, t[who]);
+      expect(r.status, who).toBe(200);
+      expect((r.json.items as Array<{ kind: string; text?: string; by?: { username: string } }>).find((e) => e.kind === 'input')).toMatchObject({ text: 'Dentist appointment on Friday morning CIRCLE-WORDS', by: { username: 'bob' } });
+    }
+    const made = await get(a, '/api/ledger?scope=circle:c0000000000000999', t.dan);
+    for (const who of ['dan', 'root'] as const) {
+      const r = await get(a, `/api/ledger?scope=circle:${c1}`, t[who]);
+      expect(r.status, who).toBe(404);
+      expect(r.json).toEqual(made.json);
+      expect(r.text).not.toContain('CIRCLE-WORDS');
+    }
+    // the same words never appear in anyone's personal log
+    expect((await get(a, '/api/ledger', t.bob)).text).not.toContain('CIRCLE-WORDS');
+    expect((await get(a, '/api/ledger', t.cat)).text).not.toContain('CIRCLE-WORDS');
+  });
+
   it('is the same for a member, an observer and the owner of a circle, and names the circle', async () => {
     const { a, t, c1, file } = await started();
     await file(t.bob, OLD, { kind: 'circle', circleId: c1 });

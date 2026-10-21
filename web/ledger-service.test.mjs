@@ -74,4 +74,32 @@ describe('the change log against the real service', () => {
     const anon = createLedgerClient({ fetchFn: (path, init) => fetch(`http://127.0.0.1:${w.service.port}${path}`, { method: init.method, headers: { origin: `http://127.0.0.1:${w.service.port}`, 'x-forwarded-for': '203.0.113.9' } }) });
     expect((await anon.list(undefined)).error.kind).toBe('signed-out');
   });
+
+  it('keeps the words of each update (R-017): a member, an observer and the owner read the same words and the author; a stranger gets the one not-found; hostile text is data', async () => {
+    const w = await world();
+    const club = { kind: 'circle', circleId: w.circle };
+    const words = '<img src=x onerror=alert(1)> Bin collection moved to Thursday 😀\nsecond line';
+    await file(w.cat, words, w.circle);
+    // dan is not in the circle yet: the same answer as a made-up circle
+    const outside = await w.dan.ledger.list(club);
+    const madeUp = await w.dan.ledger.list({ kind: 'circle', circleId: 'c0000000000000000' });
+    expect(outside.error).toEqual(madeUp.error);
+    // then dan joins as an observer and reads it
+    await w.ann.circles.invite(w.circle, { username: 'dan', role: 'observer' });
+    const invitation = (await w.dan.circles.myInvitations()).value.items.find((i) => i.circle.id === w.circle).id;
+    expect((await w.dan.circles.acceptInvitation(invitation)).ok).toBe(true);
+    const seen = [];
+    for (const who of [w.ann, w.bob, w.cat, w.dan]) {
+      const r = await who.ledger.list(club);
+      expect(r.ok).toBe(true);
+      const input = r.value.items.find((e) => e.kind === 'input');
+      expect(input).toMatchObject({ action: 'added', kind: 'input', text: words, by: { username: 'cat' } });
+      expect('subject' in input).toBe(false);
+      seen.push(input.text);
+    }
+    expect(new Set(seen).size).toBe(1);
+    // it is in the circle's log only
+    expect((await w.cat.ledger.list(undefined)).value.items.some((e) => e.kind === 'input')).toBe(false);
+  });
 });
+
