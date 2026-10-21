@@ -2,7 +2,7 @@
 
 Oct 21, 2026 · @Andy
 
-**Status: being built as L2 (T-258 to T-265); decisions D1 to D4 are the owner's (2026-10-21), D5 to D14 are mine and stand unless changed.** It extends the change ledger of `specs/R-014-current-view-brain.md` and adds an operator command that exports a brain.
+**Status: L2 (T-258 to T-265) built; part 2, tracing a fact to its words, is being built as L3 (T-266 to T-273). D1 to D4 and D15 are the owner's (2026-10-21), the rest are mine and stand unless changed.** It extends the change ledger of `specs/R-014-current-view-brain.md` and adds an operator command that exports a brain.
 
 ## Overview
 
@@ -29,6 +29,11 @@ Two things the owner asked for after trying CaCi on the Raspberry Pi:
 | D12 | The export is **one JSON document** `{ format: 'caci-brain-export', version: 1 }` holding the facts (id, title, summary, key, author as username, time), the categories (id, name), the links (weights), and the ledger (facts and inputs, newest first, authors as usernames). Written **owner-only (0600), never overwriting a file, refusing a path inside the project folder or the data folder**, printing counts and the path but never note text. | Everything needed to rebuild a brain or a scenario, nothing about passwords or sessions. |
 | D13 | `--format scenario` writes a **brain-eval draft**: dated notes from the recorded inputs (or `title: summary` for facts with no recorded input, flagged in its description) and **no questions**, which the owner adds by hand. | Real notes become scenarios; the questions need a human who knows what a good answer is. |
 | D14 | Out of scope: redaction, a signed-in download, exporting several brains at once, importing an export, keeping questions and answers, and any change to what the model is sent. | Keep it small. |
+| D15 | **Owner:** a person can **trace a fact to the words it came from** when something unexpected shows up (a prescription changes because someone updated the circle brain): who entered it, when, and the original words. **Only this**: the model is not shown the source and answers are not checked against it. | The facts are trusted as they are; the trace is for the unexpected case. |
+| D16 | The trace is **on demand**: nothing is added to an answer's text. A page asks for the source of one fact. | Keeps answers short and prompts unchanged. |
+| D17 | A fact's source is found **through the ledger**: the fact's `added item` entry carries the approval's id, and the `input` entry of that approval carries the same id. The lookup also says whether a later entry **removed** that fact (so a changed value can be followed from the old fact to the new one). No schema change. | The link already exists. |
+| D18 | The status answer's points carry **the ids of the facts they came from** (with their scope), at most five per point, in citation order, de-duplicated; the model is not told the ids (the server maps them, as it maps the sources). | A page needs something to ask about. |
+| D19 | The source is readable by exactly the people who can read that brain's change log (the same one-answer rule for a stranger, a made-up circle and a non-member administrator). When the words are no longer there (the fact is older than the words were recorded, or older than `CACI_LEDGER_DAYS`) the answer says so plainly. The minimal user app shows a **Show the source** button on each point of an answer. | Same permissions; honest about limits. |
 
 ## Goals and non-goals
 
@@ -74,6 +79,12 @@ A ledger entry gains kind `input` and `text`:
 | LX-FR-08 | `export-brain` exports one user's or one circle's brain from a consistent snapshot without opening the live files for writing, and removes its temporary folder (D11, D12). |
 | LX-FR-09 | The export file is owner-only, never overwrites, never prints note text, and refuses a path inside the project folder or the data folder (D12). |
 | LX-FR-10 | `--format scenario` writes a draft with no questions and says it cannot run until some are added (D13). |
+| LX-FR-11 | `GET /api/ledger/source?scope&id` answers `{ fact, enteredBy?, at?, words?, replacedLater, recorded }` for a fact in that brain now, or for one replaced (D17). |
+| LX-FR-12 | When the words are gone the answer has `recorded: false` and a plain sentence, never an error (D19). |
+| LX-FR-13 | The scope and not-found rules are the change log's; an id that is not in that brain's graph or ledger is the same not-found as browse (D19). |
+| LX-FR-14 | Each point of a status answer carries `facts` (scope and id, at most five, de-duplicated), and nothing else about the answer changes (D18). |
+| LX-FR-15 | The user app shows a Show the source button on each point and adds the source to the thread; the model is never told (D15, D19). |
+| LX-FR-16 | A source says who entered it as a username and display name, the time, and the exact words, as text only. |
 | LX-NFR-01 | No new dependency and no new server route. |
 | LX-NFR-02 | The text is stored unencrypted in `users.db`, as everything else is; the README says so. |
 | LX-NFR-03 | Ids and text round-trip through the ledger and the export unchanged. |
@@ -109,7 +120,12 @@ The change-log screen says: *The words typed for each update are kept with the c
 | LX-AC-08 | Given the live service is running, then the export works and the live files are unchanged. |
 | LX-AC-09 | Given an existing output file, a path inside the project folder or the data folder, or a missing brain, then the command refuses and creates nothing. |
 | LX-AC-10 | Given `--format scenario`, then the draft has dated notes and no questions, becomes valid when a question is added, and the brain-eval says what is missing otherwise. |
-
+| LX-AC-11 | Given an answer built from a fact a member entered in the circle, when the person presses Show the source, then the thread says who entered it, when, and the exact words. |
+| LX-AC-12 | Given a fact that replaced an earlier one, then the source of the old fact says it was replaced, and the new fact's source is its own words. |
+| LX-AC-13 | Given a fact from before the words were recorded, or older than the retention, then the source says plainly that the words are not kept. |
+| LX-AC-14 | Given a stranger, a made-up circle or a non-member administrator asks for a source, then they get the same not-found as the change log, and an id in another brain is not found. |
+| LX-AC-15 | Given a status answer, then each point carries the ids of its facts and the model's request never contains them. |
+| LX-AC-16 | Given a pulse, then its points name only that circle's facts. |
 
 ### Where each criterion is checked (T-265)
 
@@ -141,3 +157,6 @@ Not looked at in a browser: the change-log line for an input was checked through
 7. **The export never inspects what the words say**: a note that contains a password or a phone number is exported as typed.
 8. **The project-folder guard is a path check**: an operator who copies the file into the project afterwards, or into a synced folder, defeats it.
 9. **The change-log line for an input was not looked at in a browser**; its text is set only as text and tested through the real mount.
+10. **A trace is only as long as the change log is kept**: after `CACI_LEDGER_DAYS` the words are gone (a separate longer retention is on the Backlog).
+11. **The source of a fact is the first input that made it**: a later note that changed it has its own fact and its own words; a fact the model merged from two notes names the note that created the item.
+12. **Showing the source does not show the model the words**: an answer can still be wrong where a fact dropped a detail; the owner checks by tracing.
