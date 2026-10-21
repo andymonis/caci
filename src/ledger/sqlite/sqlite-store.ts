@@ -113,6 +113,15 @@ export function createSqliteLedgerStore(options: SqliteLedgerStoreOptions = {}):
       return { items: shown.map(entryOf), nextCursor: rows.length > limit && last !== undefined ? encodeCursor(scope, Number(last.at), last.id) : null };
     },
 
+    sourceOf: async (scope, subject) => {
+      const [kind, id] = scopeColumns(scope);
+      const json = JSON.stringify(subject);
+      const added = db.get<Row>(`SELECT ${COLUMNS} FROM ledger WHERE scope_kind = ? AND scope_id = ? AND kind = 'item' AND action = 'added' AND subject = ? ORDER BY at ASC, id ASC LIMIT 1`, kind, id, json);
+      const removed = db.get<Row>(`SELECT ${COLUMNS} FROM ledger WHERE scope_kind = ? AND scope_id = ? AND kind = 'item' AND action = 'removed' AND subject = ? ORDER BY at DESC, id DESC LIMIT 1`, kind, id, json);
+      const input = added === undefined ? undefined : db.get<Row>(`SELECT ${COLUMNS} FROM ledger WHERE scope_kind = ? AND scope_id = ? AND kind = 'input' AND proposal_id = ? ORDER BY at ASC, id ASC LIMIT 1`, kind, id, added.proposal_id);
+      return { ...(added === undefined ? {} : { added: entryOf(added) }), ...(input === undefined ? {} : { input: entryOf(input) }), ...(removed === undefined ? {} : { removed: entryOf(removed) }) };
+    },
+
     purgeBefore: async (time) => db.run('DELETE FROM ledger WHERE at < ?', time),
 
     removeScope: async (scope) => {

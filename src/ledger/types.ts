@@ -37,6 +37,19 @@ export interface LedgerEntry {
   readonly proposalId: string;
 }
 
+/**
+ * What the log knows about where one fact came from (R-017 D17), in one scope. Every part is optional: a fact from before the
+ * words were recorded has no `input`, one older than the retention has nothing at all.
+ */
+export interface LedgerSource {
+  /** The entry that added the fact (the earliest, if the id was ever added twice). */
+  readonly added?: LedgerEntry;
+  /** The `input` of the same approval: the words as typed. */
+  readonly input?: LedgerEntry;
+  /** The newest entry that removed the fact (it was replaced or tidied away), if any. */
+  readonly removed?: LedgerEntry;
+}
+
 export interface LedgerPage {
   readonly items: readonly LedgerEntry[];
   readonly nextCursor: string | null;

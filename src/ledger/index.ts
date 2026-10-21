@@ -5,7 +5,7 @@
 export { LEDGER_ERROR_CODES, ledgerError } from './errors.js';
 export type { LedgerError, LedgerErrorCode } from './errors.js';
 export { LEDGER_ACTIONS, LEDGER_KINDS, SUBJECT_MAX, SUMMARY_MAX, TITLE_MAX } from './types.js';
-export type { LedgerAction, LedgerEntry, LedgerKind, LedgerPage, LedgerScope } from './types.js';
+export type { LedgerAction, LedgerEntry, LedgerKind, LedgerPage, LedgerScope, LedgerSource } from './types.js';
 export { isLedgerId, LEDGER_ID_PATTERN, newLedgerId } from './ids.js';
 export { capText, copyEntry, entryProblem, scopeKey, scopeProblem } from './validate.js';
 export type { Err, Ok, Result } from './result.js';

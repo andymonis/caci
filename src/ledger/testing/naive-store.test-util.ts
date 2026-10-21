@@ -34,6 +34,11 @@ export const DEFECTS = [
   'drops-text',
   'accepts-stray-text',
   'text-limit-in-units',
+  'source-ignores-scope',
+  'source-wrong-input',
+  'source-ignores-removal',
+  'source-empty',
+  'source-shared-copy',
 ] as const;
 export type Defect = (typeof DEFECTS)[number];
 
@@ -110,6 +115,17 @@ export function createNaiveLedgerStore(defect?: Defect): LedgerStore {
       if (is('ties-lowest-id-first')) items = [...items].sort((a, b) => b.at - a.at || (a.id < b.id ? -1 : 1));
       if (is('skips-after-append') && page.cursor !== null && items.length > 0) items = items.slice(1);
       return { items: is('no-copies') ? items : items.map(copyEntry), nextCursor };
+    },
+
+    async sourceOf(scope, subject) {
+      if (is('source-empty')) return {};
+      const mine = entries.filter((e) => is('source-ignores-scope') || sameScope(e, scope));
+      const about = mine.filter((e) => e.kind === 'item' && e.subject === subject);
+      const added = about.filter((e) => e.action === 'added').sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1))[0];
+      const removed = is('source-ignores-removal') ? undefined : about.filter((e) => e.action === 'removed').sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1)).at(-1);
+      const input = added === undefined ? undefined : is('source-wrong-input') ? mine.find((e) => e.kind === 'input') : mine.find((e) => e.kind === 'input' && e.proposalId === added.proposalId);
+      const copy = (e: LedgerEntry): LedgerEntry => (is('source-shared-copy') ? e : copyEntry(e));
+      return { ...(added === undefined ? {} : { added: copy(added) }), ...(input === undefined ? {} : { input: copy(input) }), ...(removed === undefined ? {} : { removed: copy(removed) }) };
     },
 
     async purgeBefore(time) {

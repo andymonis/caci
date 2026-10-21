@@ -229,6 +229,77 @@ export function ledgerStoreCases(): LedgerStoreCase[] {
       },
     },
     {
+      name: 'sourceOf finds the entry that added a fact, the input of the same approval, and the newest removal, in that scope only',
+      run: async (store) => {
+        const add = entry(1, { at: NOW + 11, subject: 'fact-a', proposalId: 'prop-a', title: 'Mum: dose', summary: '2 x Tablet A' });
+        const input = entry(2, { at: NOW + 10, kind: 'input', subject: 'prop-a', proposalId: 'prop-a', text: 'Mum takes 2 x Tablet A' });
+        const other = entry(3, { at: NOW + 20, kind: 'input', subject: 'prop-b', proposalId: 'prop-b', text: 'a different update' });
+        const gone = entry(4, { at: NOW + 31, action: 'removed', subject: 'fact-a', proposalId: 'prop-c', title: 'Mum: dose', summary: '2 x Tablet A' });
+        const later = entry(5, { at: NOW + 41, action: 'removed', subject: 'fact-a', proposalId: 'prop-d', title: 'Mum: dose', summary: 'older still' });
+        must(await store.append([input, add, other, gone, later]));
+        const got = await store.sourceOf(P1, 'fact-a');
+        assert.deepEqual(got.added, add);
+        assert.deepEqual(got.input, input);
+        assert.deepEqual(got.removed, later);
+        assert.deepEqual(await store.sourceOf(P1, 'never-seen'), {});
+      },
+    },
+    {
+      name: 'sourceOf never uses another scope\'s entries, even for the same ids, and a category or an input with the same subject is not a fact',
+      run: async (store) => {
+        const mine = [entry(1, { at: NOW + 11, subject: 'same', proposalId: 'prop-1' }), entry(2, { at: NOW + 10, kind: 'input', subject: 'prop-1', proposalId: 'prop-1', text: 'mine' })];
+        const theirs = [entry(3, { scope: P2, at: NOW + 11, subject: 'same', proposalId: 'prop-1' }), entry(4, { scope: P2, at: NOW + 10, kind: 'input', subject: 'prop-1', proposalId: 'prop-1', text: 'THEIRS' }), entry(5, { scope: C1, at: NOW + 12, subject: 'same', proposalId: 'prop-1' }), entry(6, { scope: C1, at: NOW + 10, kind: 'input', subject: 'prop-1', proposalId: 'prop-1', text: 'CIRCLE' })];
+        const notFacts = [entry(7, { kind: 'category', subject: 'cat-x', proposalId: 'prop-1' }), entry(8, { kind: 'input', subject: 'cat-x', proposalId: 'prop-9', text: 'x' })];
+        must(await store.append([...mine, ...theirs, ...notFacts]));
+        assert.equal((await store.sourceOf(P1, 'same')).input?.text, 'mine');
+        assert.equal((await store.sourceOf(P2, 'same')).input?.text, 'THEIRS');
+        assert.equal((await store.sourceOf(C1, 'same')).input?.text, 'CIRCLE');
+        assert.deepEqual(await store.sourceOf(P1, 'cat-x'), {});
+        assert.deepEqual(await store.sourceOf({ kind: 'personal', userId: 'u0000000000000099' }, 'same'), {});
+      },
+    },
+    {
+      name: 'sourceOf says what it can: a fact with no recorded words, one that was only removed, and the earliest of two additions',
+      run: async (store) => {
+        const old = entry(1, { at: NOW + 5, subject: 'old', proposalId: 'prop-old' });
+        const removedOnly = entry(2, { at: NOW + 6, action: 'removed', subject: 'only-removed', proposalId: 'prop-r', title: 't' });
+        const first = entry(3, { at: NOW + 7, subject: 'twice', proposalId: 'prop-1' });
+        const second = entry(4, { at: NOW + 9, subject: 'twice', proposalId: 'prop-2' });
+        const w1 = entry(5, { at: NOW + 6, kind: 'input', subject: 'prop-1', proposalId: 'prop-1', text: 'first words' });
+        const w2 = entry(6, { at: NOW + 8, kind: 'input', subject: 'prop-2', proposalId: 'prop-2', text: 'second words' });
+        must(await store.append([old, removedOnly, first, second, w1, w2]));
+        assert.deepEqual(await store.sourceOf(P1, 'old'), { added: old });
+        assert.deepEqual(await store.sourceOf(P1, 'only-removed'), { removed: removedOnly });
+        const twice = await store.sourceOf(P1, 'twice');
+        assert.equal(twice.added?.id, first.id);
+        assert.equal(twice.input?.text, 'first words');
+      },
+    },
+    {
+      name: 'sourceOf finds odd ids exactly: emoji, markup, slashes, a lone surrogate and 256 characters',
+      run: async (store) => {
+        const subjects = ['a/b?c=d&e#f %é😀<b>..', `x${String.fromCharCode(0xd800)}y`, 's'.repeat(256), '😀'.repeat(256), 'Case', 'case'];
+        const batch: LedgerEntry[] = [];
+        subjects.forEach((subject, i) => {
+          batch.push(entry(100 + i, { at: NOW + 10 + i, subject, proposalId: `prop-${i}` }), entry(200 + i, { at: NOW + 5 + i, kind: 'input', subject: `prop-${i}`, proposalId: `prop-${i}`, text: `words ${i}` }));
+        });
+        must(await store.append(batch));
+        for (const [i, subject] of subjects.entries()) assert.equal((await store.sourceOf(P1, subject)).input?.text, `words ${i}`, subject.slice(0, 20));
+      },
+    },
+    {
+      name: 'sourceOf gives copies: changing the answer changes nothing in the store',
+      run: async (store) => {
+        must(await store.append([entry(1, { at: NOW + 2, subject: 'f', proposalId: 'prop-1', title: 'T' }), entry(2, { at: NOW + 1, kind: 'input', subject: 'prop-1', proposalId: 'prop-1', text: 'words' })]));
+        const first = await store.sourceOf(P1, 'f');
+        (first.added as { title?: string }).title = 'CHANGED';
+        (first.input as { text?: string }).text = 'CHANGED';
+        const again = await store.sourceOf(P1, 'f');
+        assert.equal(again.added?.title, 'T');
+        assert.equal(again.input?.text, 'words');
+      },
+    },
+    {
       name: 'an empty batch is fine and changes nothing',
       run: async (store) => {
         must(await store.append([]));

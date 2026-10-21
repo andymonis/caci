@@ -122,7 +122,7 @@ describe('scopes', () => {
 });
 
 describe('a ledger that cannot record never undoes or refuses the change', () => {
-  const broken: LedgerStore = { append: async () => ({ ok: false, error: { code: 'STORAGE_ERROR', message: 'secret path /var/db' } }), list: async () => ({ items: [], nextCursor: null }), purgeBefore: async () => 0, removeScope: async () => 0 };
+  const broken: LedgerStore = { append: async () => ({ ok: false, error: { code: 'STORAGE_ERROR', message: 'secret path /var/db' } }), list: async () => ({ items: [], nextCursor: null }), purgeBefore: async () => 0, removeScope: async () => 0, sourceOf: async () => ({}) };
   const throwing: LedgerStore = { ...broken, append: async () => { throw new Error('boom /var/db'); } };
   for (const [name, store] of [['returns an error', broken], ['throws', throwing]] as const) {
     it(`when it ${name}: the approval succeeds, the notes are there, and the operator hears one fixed sentence`, async () => {
@@ -349,7 +349,7 @@ describe('reading the change log', () => {
     expect(ownErrorOf(await plain.caci.ledger(plain.tokens.ann as string))).toMatchObject({ code: 'NOT_FOUND', message: 'the change log is not available' });
   });
   it('a failing store is the fixed storage error, never its message', async () => {
-    const bad: LedgerStore = { append: async () => ({ ok: true, value: undefined }), list: async () => { throw new Error('secret /var/db'); }, purgeBefore: async () => 0, removeScope: async () => 0 };
+    const bad: LedgerStore = { append: async () => ({ ok: true, value: undefined }), list: async () => { throw new Error('secret /var/db'); }, purgeBefore: async () => 0, removeScope: async () => 0, sourceOf: async () => ({}) };
     const { w } = await setup({ ledger: bad });
     const r = await read(w, 'ann');
     expect(r).toMatchObject({ ok: false, error: { source: 'graph', error: { code: 'STORAGE_ERROR' } } });

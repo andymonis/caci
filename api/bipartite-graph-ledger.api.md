@@ -100,11 +100,19 @@ export type LedgerScope = {
 };
 
 // @public
+export interface LedgerSource {
+    readonly added?: LedgerEntry;
+    readonly input?: LedgerEntry;
+    readonly removed?: LedgerEntry;
+}
+
+// @public
 export interface LedgerStore {
     append(entries: readonly LedgerEntry[]): Promise<Result<void, LedgerError>>;
     list(scope: LedgerScope, page: LedgerPageRequest): Promise<LedgerPage>;
     purgeBefore(time: number): Promise<number>;
     removeScope(scope: LedgerScope): Promise<number>;
+    sourceOf(scope: LedgerScope, subject: string): Promise<LedgerSource>;
 }
 
 // Warning: (ae-forgotten-export) The symbol "Random" needs to be exported by the entry point index.d.ts
