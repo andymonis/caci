@@ -6,13 +6,13 @@ import { createChatSession } from './chat-session.js';
 import { chatModeNotice } from './chat-view.js';
 import { createThreadDrawer } from './thread-view.js';
 
-export function mountChatPage(document, notes, onSignedOut) {
+export function mountChatPage(document, notes, onSignedOut, ledger) {
   const $ = (id) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`the page has no element "${id}"`);
     return element;
   };
-  const chat = createChatSession({ notes, onSignedOut });
+  const chat = createChatSession({ notes, ledger, onSignedOut });
   const notice = $('chat-notice');
   const modeError = $('chat-mode-error');
   const retry = $('chat-retry');
@@ -33,14 +33,18 @@ export function mountChatPage(document, notes, onSignedOut) {
     target.hidden = message === '';
   };
 
-  const drawer = createThreadDrawer({ thread, msgTemplate, lineTemplate });
+  const showSource = async (id, index) => {
+    const result = await chat.showSource(id, index);
+    if (result.ok) drawer.focusLast();
+  };
+  const drawer = createThreadDrawer({ thread, msgTemplate, lineTemplate, onShowSource: ledger === undefined ? undefined : showSource });
 
   function render(state) {
     notice.textContent = chatModeNotice(state.mode);
     setError(modeError, state.mode.status === 'error' && typeof state.mode.error === 'string' ? state.mode.error : '');
     retry.hidden = state.mode.status !== 'error';
     retry.disabled = state.busy;
-    drawer.draw(state.messages);
+    drawer.draw(state.messages, state.busy);
     updateSend.disabled = !state.canSend;
     questionAsk.disabled = !state.canAsk;
     updateForm.setAttribute('aria-busy', state.busy ? 'true' : 'false');

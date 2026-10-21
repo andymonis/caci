@@ -103,7 +103,7 @@ describe('the page', () => {
 describe('the scripts', () => {
   it('are exactly the modules the entry point reaches, and import only each other by name', () => {
     // the chat reuses the notes client, which brings the back office's shared word and permission modules with it
-    expect(modules).toEqual(['api-client.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circle-chat-page.js', 'circles-client.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'settings-session.js', 'status-session.js', 'status-view.js', 'thread-view.js', 'user-app.js', 'user-circles.js', 'user-hooks.js', 'user-mount.js', 'view.js']);
+    expect(modules).toEqual(['api-client.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circle-chat-page.js', 'circles-client.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'ledger-client.js', 'notes-client.js', 'permissions.js', 'router.js', 'session.js', 'settings-session.js', 'status-session.js', 'status-view.js', 'thread-view.js', 'user-app.js', 'user-circles.js', 'user-hooks.js', 'user-mount.js', 'view.js']);
     for (const m of modules) for (const x of code(read(m)).matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)) expect(x[1], `${m} imports ${x[1]}`).toMatch(/^\.\/[a-z0-9.-]+\.js$/);
   });
   it('never turn text into markup, run strings as code, or use storage, cookies or the console', () => {
@@ -124,7 +124,7 @@ describe('the scripts', () => {
   it('name only routes that exist, by path (the chat itself uses the account, capture, scope and status routes: see the journey)', () => {
     const paths = new Set();
     for (const m of modules) for (const x of code(read(m)).matchAll(/['"`](\/api\/[^'"`?$]*)/g)) paths.add(x[1]);
-    expect([...paths].sort()).toEqual(['/api/brain', '/api/brain/categories', '/api/brain/category', '/api/brain/item', '/api/brain/scopes', '/api/capture/mode', '/api/capture/proposals/', '/api/capture/propose', '/api/circles', '/api/circles/', '/api/graph/categories', '/api/graph/category', '/api/graph/item', '/api/invitations', '/api/invitations/', '/api/login', '/api/logout', '/api/me', '/api/me/password', '/api/register', '/api/status']);
+    expect([...paths].sort()).toEqual(['/api/brain', '/api/brain/categories', '/api/brain/category', '/api/brain/item', '/api/brain/scopes', '/api/capture/mode', '/api/capture/proposals/', '/api/capture/propose', '/api/circles', '/api/circles/', '/api/graph/categories', '/api/graph/category', '/api/graph/item', '/api/invitations', '/api/invitations/', '/api/ledger', '/api/ledger/source', '/api/login', '/api/logout', '/api/me', '/api/me/password', '/api/register', '/api/status']);
   });
   it('every element the script looks up exists in the page', () => {
     const wanted = new Set();

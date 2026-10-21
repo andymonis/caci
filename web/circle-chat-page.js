@@ -7,7 +7,7 @@ import { createChatSession } from './chat-session.js';
 import { chatModeNotice, CIRCLE_READ_ONLY, CIRCLE_VISIBLE } from './chat-view.js';
 import { createThreadDrawer } from './thread-view.js';
 
-export function mountCircleChat(document, notes, onSignedOut) {
+export function mountCircleChat(document, notes, onSignedOut, ledger) {
   const $ = (id) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`the page has no element "${id}"`);
@@ -23,7 +23,12 @@ export function mountCircleChat(document, notes, onSignedOut) {
   const error = $('circle-update-error');
   const send = $('circle-update-send');
   const pulse = $('circle-pulse');
-  const drawer = createThreadDrawer({ thread: $('circle-thread'), msgTemplate: $('msg-template'), lineTemplate: $('msg-line-template') });
+  const showSource = async (id, index) => {
+    if (active === undefined) return;
+    const result = await active.showSource(id, index);
+    if (result.ok) drawer.focusLast();
+  };
+  const drawer = createThreadDrawer({ thread: $('circle-thread'), msgTemplate: $('msg-template'), lineTemplate: $('msg-line-template'), onShowSource: ledger === undefined ? undefined : showSource });
 
   const sessions = new Map(); // circle id -> { session, name, canCapture }
   let active;
@@ -38,7 +43,7 @@ export function mountCircleChat(document, notes, onSignedOut) {
     const have = sessions.get(circle.circleId);
     // a renamed circle, or a changed right, starts a fresh thread: the words and the buttons must follow the service
     if (have && have.name === circle.circleName && have.canCapture === circle.canCapture) return have.session;
-    const session = createChatSession({ notes, onSignedOut, circle: { circleId: circle.circleId, circleName: circle.circleName, canCapture: circle.canCapture } });
+    const session = createChatSession({ notes, ledger, onSignedOut, circle: { circleId: circle.circleId, circleName: circle.circleName, canCapture: circle.canCapture } });
     sessions.set(circle.circleId, { session, name: circle.circleName, canCapture: circle.canCapture });
     return session;
   }
@@ -52,7 +57,7 @@ export function mountCircleChat(document, notes, onSignedOut) {
     modeError.textContent = state.mode.status === 'error' && typeof state.mode.error === 'string' ? state.mode.error : '';
     modeError.hidden = modeError.textContent === '';
     retry.hidden = state.mode.status !== 'error';
-    drawer.draw(state.messages);
+    drawer.draw(state.messages, state.busy);
     text.disabled = !canAdd;
     send.disabled = !state.canSend;
     pulse.disabled = !state.canAsk;
