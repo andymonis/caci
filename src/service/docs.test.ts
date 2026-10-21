@@ -640,3 +640,26 @@ describe('the README on the input history and exporting a brain (R-017)', () => 
     }
   });
 });
+
+describe('the README on tracing a fact to its words (R-017)', () => {
+  const sec = section('Input history and exporting a brain');
+  const trace = sec.slice(sec.indexOf('### Tracing a fact to its words'), sec.indexOf('### Exporting a brain'));
+
+  it('names the one route, which the server has, and the plain sentence the code says when words are gone', async () => {
+    expect(trace).toContain('GET /api/ledger/source?scope=personal|circle:<id>&id=<fact id>');
+    const { SOURCE_NOT_KEPT } = await import('../caci/index.js');
+    expect(trace).toContain('The words behind this fact are not kept');
+    expect(SOURCE_NOT_KEPT).toContain('The words behind this fact are not kept');
+    expect(trace).toContain('`CACI_LEDGER_DAYS`');
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['Show the source', 'who entered it', 'the exact words', 'replaced later', 'as text', 'never shown them', 'at most five', 'never a graph id or user id', 'raise `CACI_LEDGER_DAYS`', 'does not check a fact against its words', 'the one "no such circle" answer', 'the platform administrator', 'read-only']) {
+      expect(trace.toLowerCase(), phrase).toContain(phrase.toLowerCase());
+    }
+  });
+
+  it('the user app section mentions the button', () => {
+    expect(section('The minimal user app')).toContain('**Show the source** button');
+  });
+});
