@@ -69,7 +69,7 @@ describe('GET /api/ledger', () => {
     expect(r.status).toBe(200);
     expect(r.json.nextCursor).toBeNull();
     const rows = r.json.items as Array<{ action: string; kind: string; title?: string; summary?: string; by?: { username: string; displayName: string } }>;
-    expect(rows.map((e) => `${e.action} ${e.kind}`)).toEqual(['added item', 'added category', 'removed item', 'removed category', 'added item', 'added category']);
+    expect(rows.map((e) => `${e.action} ${e.kind}`)).toEqual(['added item', 'added category', 'removed item', 'removed category', 'added input', 'added item', 'added category', 'added input']);
     expect(rows[2]?.summary).toContain('2 x Tablet A');
     expect(rows[0]?.by).toEqual({ username: 'ann', displayName: 'Display ann' });
     expect('scope' in r.json).toBe(false);

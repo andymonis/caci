@@ -84,3 +84,24 @@ describe('the ledger client', () => {
     expect(server.error.message).not.toContain('secret');
   });
 });
+
+describe('inputs, the words of an update (R-017)', () => {
+  const INPUT = { id: 'l2', at: 1700000000001, action: 'added', kind: 'input', text: 'Mum now takes 1 tablet 😀 <b>daily</b>\nsecond line', by: { username: 'ann', displayName: 'Ann A' } };
+
+  it('keeps an input with its exact text and no subject, frozen, next to ordinary entries', async () => {
+    const { client } = fake(page([INPUT, ENTRY]));
+    const r = await client.list(undefined);
+    expect(r.ok).toBe(true);
+    expect(r.value.items[0]).toEqual({ id: 'l2', at: 1700000000001, action: 'added', kind: 'input', text: INPUT.text, by: { username: 'ann', displayName: 'Ann A' } });
+    expect('subject' in r.value.items[0]).toBe(false);
+    expect(Object.isFrozen(r.value.items[0])).toBe(true);
+    expect(r.value.items[1].subject).toBe('note-0');
+  });
+
+  it('refuses a wrongly shaped input or text on another kind as a server problem', async () => {
+    const bad = [{ ...INPUT, text: undefined }, { ...INPUT, text: '' }, { ...INPUT, text: 5 }, { ...INPUT, text: 'x'.repeat(8001) }, { ...INPUT, action: 'removed' }, { ...ENTRY, text: 'stray' }, { ...ENTRY, subject: undefined }];
+    for (const entry of bad) expect((await fake(page([entry])).client.list(undefined)).error, JSON.stringify(entry).slice(0, 60)).toMatchObject({ kind: 'server' });
+    expect((await fake(page([{ ...INPUT, text: '😀'.repeat(8000) }])).client.list(undefined)).ok).toBe(true);
+  });
+});
+

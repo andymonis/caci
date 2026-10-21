@@ -22,7 +22,8 @@ const file = async (w: World, who: string, text: string, scope?: ReturnType<type
   const made = must(await w.caci.propose(w.tokens[who] as string, scope === undefined ? { text } : { text, scope }));
   return { made, done: must(await w.caci.approve(w.tokens[who] as string, made.id)) };
 };
-const entries = async (ledger: LedgerStore, scope: LedgerScope): Promise<LedgerEntry[]> => (await ledger.list(scope, { limit: 100, cursor: null })).items.slice();
+/** The changes to facts in a log, newest first; `withInputs` also gives the entries holding the words as sent (R-017). */
+const entries = async (ledger: LedgerStore, scope: LedgerScope, withInputs = false): Promise<LedgerEntry[]> => (await ledger.list(scope, { limit: 100, cursor: null })).items.filter((e) => withInputs || e.kind !== 'input');
 const personal = (w: World, who: string): LedgerScope => ({ kind: 'personal', userId: (w.graphIds[who] as string).slice('user-'.length) });
 const summary = (e: LedgerEntry): string => `${e.action} ${e.kind} ${e.subject}`;
 
@@ -200,7 +201,7 @@ describe('reading the change log', () => {
     w.now.value += 5000;
     await file(w, 'ann', CHANGE);
     const got = must(await read(w, 'ann'));
-    expect(got.items.map((e) => `${e.action} ${e.kind}`)).toEqual(['added item', 'added category', 'removed item', 'removed category', 'added item', 'added category']);
+    expect(got.items.map((e) => `${e.action} ${e.kind}`)).toEqual(['added item', 'added category', 'removed item', 'removed category', 'added input', 'added item', 'added category', 'added input']);
     expect(got.items[0]?.by).toEqual({ username: 'ann', displayName: 'ann' });
     expect(got.items[2]).toMatchObject({ title: expect.stringContaining('Mum takes'), summary: expect.stringContaining('2 x Tablet A') });
     expect(got.nextCursor).toBeNull();
@@ -336,8 +337,8 @@ describe('reading the change log', () => {
       await file(w, 'ann', OLD);
       expect(must(await read(w, 'ann', circle(c))).items).toEqual([]);
       await file(w, 'ann', 'Dentist appointment on Friday morning here', circle(c));
-      expect(must(await read(w, 'ann')).items.every((e) => e.subject !== undefined)).toBe(true);
-      expect(must(await read(w, 'ann')).items).toHaveLength(2);
+      expect(must(await read(w, 'ann')).items.every((e) => e.kind === 'input' || e.subject !== undefined)).toBe(true);
+      expect(must(await read(w, 'ann')).items.filter((e) => e.kind !== 'input')).toHaveLength(2);
     });
   });
 
@@ -353,5 +354,94 @@ describe('reading the change log', () => {
     const r = await read(w, 'ann');
     expect(r).toMatchObject({ ok: false, error: { source: 'graph', error: { code: 'STORAGE_ERROR' } } });
     expect(JSON.stringify(r)).not.toContain('secret');
+  });
+});
+
+describe('the words of an update as sent (R-017)', () => {
+  const inputsOf = async (ledger: LedgerStore, scope: LedgerScope) => (await entries(ledger, scope, true)).filter((e) => e.kind === 'input');
+
+  it('an approved update records one input with its exact words, the actor, the scope and the proposal, directly under the facts it produced', async () => {
+    const { w, ledger } = await setup();
+    const text = '  Mum now takes tablet day blood morning 😀 <b>dose</b>\nsecond line  ';
+    const { made } = await file(w, 'ann', text);
+    const all = await entries(ledger, personal(w, 'ann'), true);
+    const inputs = all.filter((e) => e.kind === 'input');
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]).toMatchObject({ action: 'added', kind: 'input', subject: made.id, proposalId: made.id, actor: (w.graphIds.ann as string).slice(5), scope: personal(w, 'ann'), text });
+    expect(inputs[0]?.title).toBeUndefined();
+    expect(inputs[0]?.summary).toBeUndefined();
+    // newest first: the facts, then the input directly under them, one millisecond before the oldest of them
+    expect(all.map((e) => e.kind)).toEqual([...all.filter((e) => e.kind !== 'input').map((e) => e.kind), 'input']);
+    expect(all.at(-1)?.kind).toBe('input');
+    const facts = all.filter((e) => e.kind !== 'input');
+    expect(Math.min(...facts.map((e) => e.at)) - (inputs[0]?.at ?? 0)).toBe(1);
+  });
+
+  it('a replacing update records its own words and the removal beside them; the older input stays as it was', async () => {
+    const { w, ledger } = await setup();
+    await file(w, 'ann', OLD);
+    w.now.value += 60_000;
+    await file(w, 'ann', CHANGE);
+    const inputs = await inputsOf(ledger, personal(w, 'ann'));
+    expect(inputs.map((e) => e.text)).toEqual([CHANGE, OLD]);
+  });
+
+  it('a circle update is recorded in the circle\'s log, by the member who made it, and not in anyone\'s personal log', async () => {
+    const { w, ledger } = await setup();
+    const c = await w.circle(1, 'ann', [['bob', 'member']]);
+    await file(w, 'bob', 'Dentist appointment on Friday morning', circle(c));
+    const inputs = await inputsOf(ledger, { kind: 'circle', circleId: c });
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]).toMatchObject({ actor: (w.graphIds.bob as string).slice(5), text: 'Dentist appointment on Friday morning' });
+    expect(await inputsOf(ledger, personal(w, 'bob'))).toEqual([]);
+    expect(await inputsOf(ledger, personal(w, 'ann'))).toEqual([]);
+  });
+
+  it('nothing is recorded for a proposal only made, rejected, or refused, nor for a question or a pulse', async () => {
+    const { w, ledger } = await setup();
+    const made = must(await w.caci.propose(w.tokens.ann as string, { text: OLD }));
+    expect(await entries(ledger, personal(w, 'ann'), true)).toEqual([]);
+    must(await w.caci.reject(w.tokens.ann as string, made.id));
+    await w.caci.status(w.tokens.ann as string, { text: 'what is happening' });
+    expect(await entries(ledger, personal(w, 'ann'), true)).toEqual([]);
+  });
+
+  it('two approvals at once record the words once', async () => {
+    const { w, ledger } = await setup();
+    const made = must(await w.caci.propose(w.tokens.ann as string, { text: OLD }));
+    await Promise.all([w.caci.approve(w.tokens.ann as string, made.id), w.caci.approve(w.tokens.ann as string, made.id)]);
+    expect(await inputsOf(ledger, personal(w, 'ann'))).toHaveLength(1);
+  });
+
+  it('a failed write records nothing, words included', async () => {
+    let failing = false;
+    const { w, ledger } = await setup({ captureAdapter: (a) => ({ ...a, transaction: (g, fn) => (failing ? Promise.reject(new Error('disk')) : a.transaction(g, fn)) }) });
+    const made = must(await w.caci.propose(w.tokens.ann as string, { text: OLD }));
+    failing = true;
+    expect((await w.caci.approve(w.tokens.ann as string, made.id)).ok).toBe(false);
+    expect(await entries(ledger, personal(w, 'ann'), true)).toEqual([]);
+  });
+
+  it('when the log cannot be written the update is still made and the operator hears the one fixed sentence', async () => {
+    const heard: string[] = [];
+    const broken: LedgerStore = { ...createMemoryLedgerStore(), append: async () => { throw new Error('disk full'); } };
+    const w = await world({ people: ['ann'], ledger: broken, onLedgerFailure: (m) => heard.push(m) });
+    const made = must(await w.caci.propose(w.tokens.ann as string, { text: OLD }));
+    expect((await w.caci.approve(w.tokens.ann as string, made.id)).ok).toBe(true);
+    expect(heard).toEqual(['the change was made but could not be recorded in the change log']);
+  });
+
+  it('with no ledger nothing is recorded and nothing breaks', async () => {
+    const w = await world({ people: ['ann'] });
+    const made = must(await w.caci.propose(w.tokens.ann as string, { text: OLD }));
+    expect((await w.caci.approve(w.tokens.ann as string, made.id)).ok).toBe(true);
+  });
+
+  it('an update of exactly 8,000 characters is recorded whole', async () => {
+    const { w, ledger } = await setup();
+    const text = `Mum takes tablets. ${'x'.repeat(8000 - 19)}`;
+    expect(text.length).toBe(8000);
+    await file(w, 'ann', text);
+    expect((await inputsOf(ledger, personal(w, 'ann')))[0]?.text).toBe(text);
   });
 });

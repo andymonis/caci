@@ -80,7 +80,8 @@ describe('a new fact replaces the old one, through the capture page', () => {
     const lines = lineTexts(ann, 'ledger-list');
     expect(lines.some((l) => l.includes('· Display ann · removed note ·') && l.includes('twice a day'))).toBe(true);
     expect(lines.filter((l) => l.includes('added note'))).toHaveLength(2);
-    expect(lines.every((l) => l.includes('· Display ann ·'))).toBe(true);
+    expect(lines.every((l) => l.includes('· Display ann ·') || l.includes('· Entered by Display ann: "'))).toBe(true);
+    expect(lines.filter((l) => l.includes('Entered by Display ann: "'))).toHaveLength(2); // the words typed for each of the two updates
     expect(el(ann, 'ledger-notice').textContent).toContain('review log');
     expect(ann.page.focused().id).toBe('ledger-heading');
   });

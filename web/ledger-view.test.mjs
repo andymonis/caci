@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entryText, ledgerScopeHint, NO_ONE } from './ledger-view.js';
+import { entryText, INPUT_SHOWN, LEDGER_NOTICE, ledgerScopeHint, NO_ONE } from './ledger-view.js';
 
 const AT = Date.UTC(2026, 9, 14, 9, 30);
 const base = { at: AT, action: 'removed', kind: 'item', subject: 's1', by: { username: 'a', displayName: 'Ann' } };
@@ -29,3 +29,26 @@ describe('the words on the change-log screen', () => {
     expect(ledgerScopeHint('circle:zz', scopes)).toBe('Showing the changes to your own notes.');
   });
 });
+
+describe('an input on the change-log screen (R-017)', () => {
+  const INPUT = { id: 'l2', at: Date.UTC(2026, 9, 14, 9, 30), action: 'added', kind: 'input', text: 'Mum now takes 1 tablet', by: { username: 'ann', displayName: 'Ann A' } };
+
+  it('reads as who entered which words, as text', () => {
+    expect(entryText(INPUT)).toBe('2026-10-14 09:30 UTC · Entered by Ann A: "Mum now takes 1 tablet"');
+    expect(entryText({ ...INPUT, text: '<img src=x onerror=alert(1)>' })).toContain('"<img src=x onerror=alert(1)>"');
+  });
+  it('names nobody who cannot be named', () => {
+    expect(entryText({ ...INPUT, by: undefined })).toBe('2026-10-14 09:30 UTC · Entered by someone who has since left: "Mum now takes 1 tablet"');
+  });
+  it('cuts long words for the line at 600 characters, by character, and shows short ones whole', () => {
+    expect(INPUT_SHOWN).toBe(600);
+    expect(entryText({ ...INPUT, text: 'x'.repeat(600) })).toContain(`"${'x'.repeat(600)}"`);
+    expect(entryText({ ...INPUT, text: 'x'.repeat(601) })).toContain(`"${'x'.repeat(600)}…"`);
+    expect(entryText({ ...INPUT, text: '😀'.repeat(601) })).toContain(`"${'😀'.repeat(600)}…"`);
+  });
+  it('the notice says the words are kept and who can read them', () => {
+    expect(LEDGER_NOTICE).toContain('The words typed for each update are kept with the change');
+    expect(LEDGER_NOTICE).toContain('everyone who can read this log can read them');
+  });
+});
+

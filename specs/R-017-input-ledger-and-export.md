@@ -45,7 +45,7 @@ A ledger entry gains kind `input` and `text`:
 | `kind` | `input` |
 | `action` | `added` |
 | `subject` | the proposal id |
-| `text` | the update, as the proposal holds it (trimmed), at most 8,000 characters |
+| `text` | the update exactly as the proposal holds it (as typed, spaces and new lines included), at most 8,000 characters |
 | `title`, `summary` | absent |
 
 ## Export document (version 1)
@@ -117,4 +117,4 @@ The change-log screen says: *The words typed for each update are kept with the c
 3. **Retention versus export timing**: inputs older than `CACI_LEDGER_DAYS` are gone from the live database; only a snapshot or an earlier export has them.
 4. **An observer reads every input** in a circle's log, including words a member might not expect to be shared.
 5. **Facts entered before this change have no recorded input**; their exports fall back to the stored title and summary.
-6. **The input is the text as the proposal holds it** (trimmed), not necessarily every character the person typed.
+6. **The input is the text as the proposal holds it**; if the page ever changes what it sends (for example trimming), the log holds what the service received.

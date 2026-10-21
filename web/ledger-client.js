@@ -13,15 +13,19 @@ import { NO_CIRCLE, provenanceOf, query, scopeText } from './notes-client.js';
 
 const SIGNED_OUT = 'Your session has ended. Sign in again.';
 const ACTIONS = Object.freeze(['added', 'updated', 'removed']);
-const KINDS = Object.freeze(['item', 'category']);
+const KINDS = Object.freeze(['item', 'category', 'input']);
+const TEXT_MAX = 8000;
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const whole = (v) => Number.isSafeInteger(v) && v >= 0;
 const optionalText = (v) => v === undefined || typeof v === 'string';
 
 function entryOf(raw) {
-  if (!isObject(raw) || typeof raw.id !== 'string' || raw.id === '' || !whole(raw.at) || !ACTIONS.includes(raw.action) || !KINDS.includes(raw.kind) || typeof raw.subject !== 'string') return undefined;
+  if (!isObject(raw) || typeof raw.id !== 'string' || raw.id === '' || !whole(raw.at) || !ACTIONS.includes(raw.action) || !KINDS.includes(raw.kind)) return undefined;
   if (!optionalText(raw.title) || !optionalText(raw.summary)) return undefined;
+  const input = raw.kind === 'input';
+  // an input (R-017) holds the words as sent and no subject; every other entry names the note or category it is about
+  if (input ? raw.action !== 'added' || typeof raw.text !== 'string' || raw.text === '' || [...raw.text].length > TEXT_MAX : typeof raw.subject !== 'string' || raw.text !== undefined) return undefined;
   let by;
   if (raw.by !== undefined) {
     if (!isObject(raw.by) || typeof raw.by.username !== 'string' || typeof raw.by.displayName !== 'string') return undefined;
@@ -32,7 +36,7 @@ function entryOf(raw) {
     at: raw.at,
     action: raw.action,
     kind: raw.kind,
-    subject: raw.subject,
+    ...(input ? { text: raw.text } : { subject: raw.subject }),
     ...(typeof raw.title === 'string' && raw.title !== '' ? { title: raw.title } : {}),
     ...(typeof raw.summary === 'string' && raw.summary !== '' ? { summary: raw.summary } : {}),
     ...(by === undefined ? {} : { by }),

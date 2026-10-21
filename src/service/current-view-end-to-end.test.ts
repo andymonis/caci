@@ -117,7 +117,9 @@ describe('in a personal brain', () => {
     const log = await w.p.ann.call('GET', '/api/ledger');
     expect(log.status).toBe(200);
     const rows = log.json.items as Array<{ action: string; kind: string; summary?: string; by?: { username: string } }>;
-    expect(rows.map((r) => `${r.action} ${r.kind}`)).toEqual(['added item', 'added category', 'removed item', 'removed category', 'added item', 'added category']);
+    expect(rows.map((r) => `${r.action} ${r.kind}`)).toEqual(['added item', 'added category', 'removed item', 'removed category', 'added input', 'added item', 'added category', 'added input']);
+    // the words typed for each update are kept beside the facts they made (R-017)
+    expect(rows.filter((r) => r.kind === 'input').map((r) => (r as { text?: string }).text)).toEqual([expect.stringContaining('Mum now takes tablet day blood morning'), expect.stringContaining('2 x Tablet A')]);
     expect(rows[2]?.summary).toContain('2 x Tablet A');
     expect(rows.every((r) => r.by?.username === 'ann')).toBe(true);
   });
@@ -138,7 +140,7 @@ describe('in a personal brain', () => {
     await w.capture(w.p.ann, CHANGE);
     expect(await notes(w.p.dan)).toEqual([expect.stringContaining('2 x Tablet A')]);
     const danLog = (await w.p.dan.call('GET', '/api/ledger')).json.items as Array<{ action: string }>;
-    expect(danLog.map((r) => r.action)).toEqual(['added', 'added']);
+    expect(danLog.map((r) => r.action)).toEqual(['added', 'added', 'added']);
   });
 
   it('a restart keeps the new state and the log', async () => {
@@ -162,11 +164,11 @@ describe('in a personal brain', () => {
     const store = createSqliteLedgerStore({ path: join(w.dir, 'users.db') });
     const rows = async (scope: Parameters<typeof store.list>[0]) => (await store.list(scope, { limit: 100, cursor: null })).items.length;
     const bobId = w.ids.bob as string;
-    expect(await rows({ kind: 'personal', userId: bobId })).toBe(2);
-    expect(await rows({ kind: 'circle', circleId: w.circleId })).toBe(2);
+    expect(await rows({ kind: 'personal', userId: bobId })).toBe(3); // the note, its category and the words typed
+    expect(await rows({ kind: 'circle', circleId: w.circleId })).toBe(3);
     expect((await w.p.bob.call('DELETE', '/api/me', { password: PW })).status).toBe(204);
     expect(await rows({ kind: 'personal', userId: bobId })).toBe(0);
-    expect(await rows({ kind: 'circle', circleId: w.circleId })).toBe(2); // what bob added to the circle stays in its log
+    expect(await rows({ kind: 'circle', circleId: w.circleId })).toBe(3); // what bob added to the circle stays in its log
     expect((await w.p.ann.call('DELETE', `/api/circles/${w.circleId}`)).status).toBe(204);
     expect(await rows({ kind: 'circle', circleId: w.circleId })).toBe(0);
     store.close();
@@ -211,7 +213,7 @@ describe('the settings and the off switch', () => {
     await w.capture(w.p.ann, OLD);
     clock.value += 2 * day;
     await w.capture(w.p.ann, 'Dentist appointment on Friday at the surgery today.');
-    expect((await w.p.ann.call('GET', '/api/ledger?limit=100')).json.items).toHaveLength(4);
+    expect((await w.p.ann.call('GET', '/api/ledger?limit=100')).json.items).toHaveLength(6);
     await w.service.close();
     running.splice(running.indexOf(w.service), 1);
     clock.value = t0 + 3 * day + 1000; // the first note is now older than 3 days, the second is not
@@ -219,8 +221,8 @@ describe('the settings and the off switch', () => {
     w.port.value = again.port;
     await w.p.ann.signInAgain('ann');
     const rest = (await w.p.ann.call('GET', '/api/ledger?limit=100')).json.items as Array<{ title?: string }>;
-    expect(rest).toHaveLength(2);
-    expect(rest.every((r) => r.title !== undefined)).toBe(true);
+    expect(rest).toHaveLength(3);
+    expect(rest.filter((r) => (r as { kind?: string }).kind !== 'input').every((r) => r.title !== undefined)).toBe(true);
     expect(JSON.stringify(rest)).not.toContain('2 x Tablet A');
   });
 

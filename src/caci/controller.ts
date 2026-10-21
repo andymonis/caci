@@ -281,8 +281,11 @@ export function createCaciController(init: CaciControllerInit): CaciController {
         return { ...(typeof title === 'string' ? { title: capText(title, TITLE_MAX) } : {}), ...(typeof data?.summary === 'string' ? { summary: capText(data.summary, SUMMARY_MAX) } : {}) };
       };
       const at = clock();
-      // Oldest first: the tidy, then the removals, then what was created; the newest-first listing then shows the new note on top.
+      // Oldest first: the words as sent (R-017), then the tidy, the removals and what was created; the newest-first listing then shows the
+      // new note on top and the words directly under the group of changes they caused.
+      const words = proposal.note;
       const parts: Array<Omit<LedgerEntry, 'id' | 'at' | 'scope' | 'actor' | 'proposalId'>> = [
+        ...([...words].length > 8000 ? [] : [{ action: 'added' as const, kind: 'input' as const, subject: proposal.id, text: words }]),
         ...done.tidied.map((c) => ({ action: 'removed' as const, kind: 'category' as const, subject: c.id, ...(c.name === undefined ? {} : { title: capText(c.name, TITLE_MAX) }) })),
         ...proposal.summary.removed.map((r) => ({ action: 'removed' as const, kind: 'item' as const, subject: r.id, title: r.title, summary: r.summary })),
         ...proposal.summary.updatedCategories.map((id) => ({ action: 'updated' as const, kind: 'category' as const, subject: id, ...textOf('category', id) })),
