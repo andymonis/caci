@@ -117,7 +117,7 @@ describe('nothing is kept in the browser and nothing is sent anywhere else', () 
       '/api/graph/item',
       '/api/invitations',
       '/api/invitations/${i}/accept',
-      '/api/invitations/${i}/decline', '/api/ledger${q.text}',
+      '/api/invitations/${i}/decline', '/api/ledger${q.text}', '/api/ledger/source?scope=${text}&id=${encodeURIComponent(id)}',
       '/api/login',
       '/api/logout',
       '/api/me', '/api/me/password',

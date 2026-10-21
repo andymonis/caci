@@ -12,7 +12,7 @@
 // - One request at a time. The thread is in memory only: `reset()` (sign-out, leaving) clears it and drops late answers.
 // - Nothing is written to the browser; nothing the person or CaCi wrote is treated as anything but text.
 
-import { withWait } from './capture-view.js';
+import { formatTime, withWait } from './capture-view.js';
 import { sourcesText, STATUS_NOTHING } from './status-view.js';
 import { browserTimeZone } from './status-session.js';
 
@@ -27,7 +27,21 @@ export const recordedCircle = (name) => `Recorded against the circle "${typeof n
 
 export const PULSE_LABEL = 'Pulse';
 
-export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZone, circle }) {
+/** The thread's words for where a fact came from (R-017): who, when, the exact words, and whether it was replaced later. */
+export function sourceLines(source) {
+  const who = source.enteredBy === undefined ? 'someone who has since left' : source.enteredBy.displayName === '' ? source.enteredBy.username : source.enteredBy.displayName;
+  const when = source.at === undefined ? '' : formatTime(source.at);
+  const lines = [];
+  if (source.words !== undefined) lines.push(`Entered by ${who}${when === '' ? '' : ` on ${when}`}: "${source.words}"`);
+  else if (source.at !== undefined || source.enteredBy !== undefined) lines.push(`Entered by ${who}${when === '' ? '' : ` on ${when}`}.`);
+  if (source.words === undefined && source.note !== undefined) lines.push(source.note);
+  else if (source.words === undefined && source.at === undefined && source.enteredBy === undefined) lines.push(SOURCE_NOT_KEPT);
+  if (source.replacedLater) lines.push('This fact was replaced later.');
+  return lines;
+}
+export const SOURCE_NOT_KEPT = 'The words behind this fact are not kept: it was entered before they were recorded, or the change log no longer holds them.';
+
+export function createChatSession({ notes, ledger, onSignedOut, timeZone = browserTimeZone, circle }) {
   for (const m of ['mode', 'propose', 'approve', 'reject', 'status', ...(circle === undefined ? [] : ['pulse'])]) if (!notes || typeof notes[m] !== 'function') throw new TypeError(`createChatSession needs a notes client with ${m}()`);
   let epoch = 0;
   let busy = false;
@@ -57,7 +71,7 @@ export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZo
     }
   }
   function say(from, kind, text, extra = {}) {
-    messages.push(Object.freeze({ id: ++counter, from, kind, text, lines: Object.freeze(extra.lines ?? []) }));
+    messages.push(Object.freeze({ id: ++counter, from, kind, text, lines: Object.freeze(extra.lines ?? []), lineFacts: Object.freeze((extra.lineFacts ?? []).map((f) => Object.freeze([...f]))) }));
   }
   function signedOut(error) {
     if (error.kind !== 'signed-out' || typeof onSignedOut !== 'function') return;
@@ -135,8 +149,10 @@ export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZo
       return Object.freeze({ ok: false, kind: r.error.kind, message: r.error.message });
     }
     const a = r.value;
-    const lines = a.nothing || a.points.length === 0 ? [STATUS_NOTHING] : a.points.map((p) => `${p.text}${sourcesText(p.sources) === '' ? '' : ` (${sourcesText(p.sources)})`}`);
-    say('cacci', 'answer', a.headline, { lines });
+    const empty = a.nothing || a.points.length === 0;
+    const lines = empty ? [STATUS_NOTHING] : a.points.map((p) => `${p.text}${sourcesText(p.sources) === '' ? '' : ` (${sourcesText(p.sources)})`}`);
+    const lineFacts = empty ? [[]] : a.points.map((p) => (Array.isArray(p.facts) ? p.facts : []));
+    say('cacci', 'answer', a.headline, { lines, lineFacts });
     return Object.freeze({ ok: true });
   }
 
@@ -191,6 +207,35 @@ export function createChatSession({ notes, onSignedOut, timeZone = browserTimeZo
       if ([...t].length > 500) return Object.freeze({ ok: false, kind: 'invalid', message: 'A question is at most 500 characters.' });
       say('me', 'text', t);
       return exclusive(async (mine) => present(await notes.status(t, timeZone()), mine));
+    },
+    /** Whether a line of an answer has facts behind it that can be traced. */
+    canShowSource(messageId, lineIndex) {
+      if (ledger === undefined || typeof ledger.source !== 'function') return false;
+      const m = messages.find((x) => x.id === messageId);
+      return m !== undefined && m.kind === 'answer' && Number.isInteger(lineIndex) && (m.lineFacts[lineIndex]?.length ?? 0) > 0;
+    },
+    /** Adds to the thread who entered the facts behind one line of an answer, when, and their words (R-017). */
+    async showSource(messageId, lineIndex) {
+      if (busy) return BUSY;
+      if (!this.canShowSource(messageId, lineIndex)) return Object.freeze({ ok: false, kind: 'invalid', message: 'There is nothing to trace for that line.' });
+      const facts = messages.find((x) => x.id === messageId).lineFacts[lineIndex];
+      return exclusive(async (mine) => {
+        const blocks = [];
+        for (const f of facts) {
+          const r = await ledger.source(f.scope, f.id);
+          if (mine !== epoch) return DROPPED;
+          if (!r.ok) {
+            signedOut(r.error);
+            say('cacci', 'error', words(r.error));
+            return Object.freeze({ ok: false, kind: r.error.kind, message: r.error.message });
+          }
+          const fact = r.value.fact;
+          const title = [fact.title, fact.summary].filter((x) => typeof x === 'string' && x !== '').join(': ');
+          blocks.push(...(blocks.length > 0 || facts.length > 1 ? [title === '' ? 'A fact' : title] : []), ...sourceLines(r.value));
+        }
+        say('cacci', 'source', 'The source of this fact', { lines: blocks });
+        return Object.freeze({ ok: true });
+      });
     },
     /** The Pulse (a circle's screen only): a status of this circle alone, with the predefined text the service holds. */
     async pulse() {

@@ -105,3 +105,54 @@ describe('inputs, the words of an update (R-017)', () => {
   });
 });
 
+
+describe('the source of a fact (R-017)', () => {
+  const SRC = { fact: { title: 'Tablet B', summary: '1 x daily' }, current: true, replacedLater: false, recorded: true, enteredBy: { username: 'bob', displayName: 'Bob B' }, at: 1700000000000, words: 'Mum now has 1 x Tablet B daily', scope: { kind: 'circle', circleId: C, circleName: 'Parent care' } };
+  const ok = (s = SRC) => ({ status: 200, body: { source: s } });
+
+  it('asks one route with the scope and the encoded id, and sends nothing else', async () => {
+    const { client, calls } = fake(ok());
+    const r = await client.source({ kind: 'circle', circleId: C }, 'a/b?c=d&e#f 😀');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].path).toBe(`/api/ledger/source?scope=circle:${C}&id=${encodeURIComponent('a/b?c=d&e#f 😀')}`);
+    expect(calls[0].init.method).toBe('GET');
+    expect(calls[0].init.body).toBeUndefined();
+    expect(r.value).toEqual(SRC);
+    expect(Object.isFrozen(r.value) && Object.isFrozen(r.value.fact) && Object.isFrozen(r.value.enteredBy) && Object.isFrozen(r.value.scope)).toBe(true);
+  });
+
+  it('the own notes are the default scope; a bad scope or id is refused before sending', async () => {
+    const { client, calls } = fake(ok({ fact: {}, current: false, replacedLater: true, recorded: false }));
+    expect((await client.source(undefined, 'x')).ok).toBe(true);
+    expect(calls[0].path).toBe('/api/ledger/source?scope=personal&id=x');
+    expect((await client.source('mine', 'x')).error).toMatchObject({ kind: 'invalid', field: 'scope' });
+    for (const bad of ['', 5, undefined, null, 'x'.repeat(257), '\ud800']) expect((await client.source(undefined, bad)).error, String(bad)).toMatchObject({ kind: 'not-found', what: 'item' });
+    expect(calls).toHaveLength(1);
+    expect((await fake(ok()).client.source(undefined, 'x'.repeat(256))).ok).toBe(true);
+  });
+
+  it('cuts the answer down and treats a wrong shape as a server problem', async () => {
+    const extra = { ...SRC, graphId: 'user-x', userId: 'u1', proposalId: 'p1' };
+    expect(Object.keys((await fake(ok(extra)).client.source(undefined, 'x')).value).sort()).toEqual(['at', 'current', 'enteredBy', 'fact', 'recorded', 'replacedLater', 'scope', 'words']);
+    for (const bad of [{ ...SRC, current: 'yes' }, { ...SRC, recorded: 1 }, { ...SRC, replacedLater: null }, { ...SRC, fact: 'x' }, { ...SRC, at: -1 }, { ...SRC, words: 5 }, { ...SRC, enteredBy: { username: 1, displayName: 'x' } }, { ...SRC, scope: { kind: 'zzz' } }]) {
+      expect((await fake(ok(bad)).client.source(undefined, 'x')).error).toMatchObject({ kind: 'server' });
+    }
+    expect((await fake({ status: 200, body: {} }).client.source(undefined, 'x')).error.kind).toBe('server');
+  });
+
+  it('keeps the note when the words are gone', async () => {
+    const r = await fake(ok({ fact: { title: 'T' }, current: true, replacedLater: false, recorded: false, note: 'The words behind this fact are not kept.' })).client.source(undefined, 'x');
+    expect(r.value.note).toBe('The words behind this fact are not kept.');
+    expect(r.value.words).toBeUndefined();
+  });
+
+  it('puts refusals in our words: a missing circle, a missing fact, signed out, invalid, limit, server', async () => {
+    const e = (status, error, headers) => fake({ status, body: { error }, headers }).client.source(undefined, 'x');
+    expect((await e(404, { code: 'NOT_FOUND', message: 'no such circle' })).error).toMatchObject({ kind: 'not-found', what: 'circle' });
+    expect((await e(404, { code: 'NOT_FOUND', message: 'no such item' })).error).toMatchObject({ kind: 'not-found', what: 'item', message: 'Not found: the change log no longer knows this fact.' });
+    expect((await e(401, {})).error.kind).toBe('signed-out');
+    expect((await e(422, { message: 'bad', field: 'id' })).error.kind).toBe('invalid');
+    expect((await e(429, {}, { 'retry-after': '7' })).error).toMatchObject({ kind: 'limit', retryAfterSeconds: 7 });
+    expect((await e(500, { message: 'secret' })).error).toMatchObject({ kind: 'server' });
+  });
+});

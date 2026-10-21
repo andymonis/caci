@@ -56,6 +56,44 @@ function ledgerOf(json) {
   return Object.freeze({ items: Object.freeze(items), nextCursor: json.nextCursor, ...(scope === undefined ? {} : { scope }) });
 }
 
+const NOT_KNOWN = 'Not found: the change log no longer knows this fact.';
+const ID_MAX = 256;
+const validId = (id) => typeof id === 'string' && id !== '' && [...id].length <= ID_MAX && !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(id);
+
+/** Where a fact came from (R-017): who, when, the words, whether it was replaced later. */
+function sourceOf(json) {
+  const v = isObject(json) ? json.source : undefined;
+  if (!isObject(v) || !isObject(v.fact) || !optionalText(v.fact.title) || !optionalText(v.fact.summary)) return undefined;
+  if (typeof v.current !== 'boolean' || typeof v.replacedLater !== 'boolean' || typeof v.recorded !== 'boolean') return undefined;
+  if (v.at !== undefined && !whole(v.at)) return undefined;
+  if (!optionalText(v.words) || !optionalText(v.note)) return undefined;
+  let enteredBy;
+  if (v.enteredBy !== undefined) {
+    if (!isObject(v.enteredBy) || typeof v.enteredBy.username !== 'string' || typeof v.enteredBy.displayName !== 'string') return undefined;
+    enteredBy = Object.freeze({ username: v.enteredBy.username, displayName: v.enteredBy.displayName });
+  }
+  const scope = v.scope === undefined ? undefined : provenanceOf(v.scope);
+  if (v.scope !== undefined && scope === undefined) return undefined;
+  return Object.freeze({
+    fact: Object.freeze({ ...(typeof v.fact.title === 'string' && v.fact.title !== '' ? { title: v.fact.title } : {}), ...(typeof v.fact.summary === 'string' && v.fact.summary !== '' ? { summary: v.fact.summary } : {}) }),
+    current: v.current,
+    replacedLater: v.replacedLater,
+    recorded: v.recorded,
+    ...(enteredBy === undefined ? {} : { enteredBy }),
+    ...(v.at === undefined ? {} : { at: v.at }),
+    ...(typeof v.words === 'string' && v.words !== '' ? { words: v.words } : {}),
+    ...(typeof v.note === 'string' && v.note !== '' ? { note: v.note } : {}),
+    ...(scope === undefined ? {} : { scope }),
+  });
+}
+
+function sourceError(status, json, retryAfter) {
+  const base = errorFor(status, json, retryAfter);
+  if (status !== 404) return base;
+  const message = isObject(json) && isObject(json.error) && typeof json.error.message === 'string' ? json.error.message : '';
+  return message.includes('circle') ? base : { kind: 'not-found', what: 'item', message: NOT_KNOWN };
+}
+
 function errorFor(status, json, retryAfter) {
   const error = isObject(json) && isObject(json.error) ? json.error : {};
   const seconds = parseRetryAfter(retryAfter);
@@ -79,6 +117,13 @@ export function createLedgerClient({ fetchFn }) {
       const q = query(page, [`scope=${text}`]);
       if (q.problem) return Promise.resolve(fail(q.problem));
       return send('GET', `/api/ledger${q.text}`, undefined, ledgerOf, errorFor);
+    },
+    /** Who entered a fact, when, and the words they typed (while the change log still holds them). */
+    source(scope, id) {
+      const text = scopeText(scope);
+      if (text === undefined) return Promise.resolve(fail({ kind: 'invalid', field: 'scope', message: 'Choose your own notes or one of your circles.' }));
+      if (!validId(id)) return Promise.resolve(fail({ kind: 'not-found', what: 'item', message: NOT_KNOWN }));
+      return send('GET', `/api/ledger/source?scope=${text}&id=${encodeURIComponent(id)}`, undefined, sourceOf, sourceError);
     },
   });
 }

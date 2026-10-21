@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createChatSession, PULSE_LABEL, RECORDED_PERSONAL, recordedCircle } from './chat-session.js';
+import { createChatSession, PULSE_LABEL, RECORDED_PERSONAL, recordedCircle, SOURCE_NOT_KEPT, sourceLines } from './chat-session.js';
 import { world } from './sharing-world.test-util.mjs';
 
 const C1 = 'c0123456789abcdef';
@@ -317,6 +317,25 @@ describe('against the real service (demo model)', () => {
     expect(answer.lines.join(' ')).toContain('900456');
     expect(answer.lines.join(' ')).not.toContain('900123');
   });
+  it('Show the source: a circle member changes a fact, the owner asks, and the source names who, when, the exact words and the replacement', async () => {
+    const w = await world();
+    const circle = { circleId: w.circle, circleName: 'Club', canCapture: true };
+    const bob = createChatSession({ notes: w.bob.notes, circle });
+    await bob.loadMode();
+    expect(await bob.send('Mum: tablets are Tablet A, 2 x daily.')).toEqual({ ok: true });
+    expect(await bob.send('Mum: tablets are now Tablet B, 1 x daily.')).toEqual({ ok: true });
+    const ann = createChatSession({ notes: w.ann.notes, ledger: w.ann.ledger });
+    await ann.loadMode();
+    await ann.ask('What tablets is Mum on?');
+    const answer = ann.getState().messages.find((m) => m.kind === 'answer');
+    expect(answer.lines.join(' ')).toContain('Tablet B');
+    const index = answer.lines.findIndex((l) => l.includes('Tablet B'));
+    expect(ann.canShowSource(answer.id, index)).toBe(true);
+    expect(await ann.showSource(answer.id, index)).toEqual({ ok: true });
+    const shown = ann.getState().messages.at(-1);
+    expect(shown.kind).toBe('source');
+    expect(shown.lines.join('\n')).toMatch(/Entered by .* on \d{4}-\d\d-\d\d \d\d:\d\d UTC: "Mum: tablets are now Tablet B, 1 x daily\."/);
+  });
   it('on Home a note always goes to the own brain, even for a person in a circle', async () => {
     const w = await world();
     const ann = await real(w.ann);
@@ -363,5 +382,114 @@ describe('against the real service (demo model)', () => {
     const ann = await real(w.ann);
     await ann.send('<img src=x onerror=alert(1)> Mum phone 0770');
     expect(ann.getState().messages[0].text).toContain('<img');
+  });
+});
+
+describe('showing the source of a fact (R-017)', () => {
+  const F1 = { scope: { kind: 'circle', circleId: C1, circleName: 'Parent care' }, id: 'note-1' };
+  const F2 = { scope: { kind: 'personal' }, id: 'note-2' };
+  const answer = (facts) => okv({ headline: 'Quiet.', nothing: false, points: [{ text: 'Mum has Tablet B.', sources: [], facts }, { text: 'Bins Thursday.', sources: [] }] });
+  const SRC = { fact: { title: 'Tablet B', summary: '1 x daily' }, current: true, replacedLater: true, recorded: true, enteredBy: { username: 'bob', displayName: 'Bob B' }, at: Date.UTC(2026, 9, 20, 9, 30), words: 'Mum now has 1 x Tablet B daily' };
+  const mk = async (src = () => okv(SRC), facts = [F1]) => {
+    const calls = [];
+    const ledger = { source: (scope, id) => (calls.push([scope, id]), Promise.resolve(src(scope, id))) };
+    const f = fakeNotes({ status: () => answer(facts) });
+    const s = createChatSession({ notes: f.notes, ledger, timeZone: () => 'UTC' });
+    await s.loadMode();
+    await s.ask('what is Mum on?');
+    const msg = s.getState().messages.find((m) => m.kind === 'answer');
+    return { s, calls, msg };
+  };
+
+  it('an answer line keeps its facts and says it can be traced; a line without facts cannot', async () => {
+    const { s, msg } = await mk();
+    expect(msg.lineFacts).toEqual([[F1], []]);
+    expect(Object.isFrozen(msg.lineFacts) && Object.isFrozen(msg.lineFacts[0])).toBe(true);
+    expect(s.canShowSource(msg.id, 0)).toBe(true);
+    expect(s.canShowSource(msg.id, 1)).toBe(false);
+    expect(s.canShowSource(msg.id, 7)).toBe(false);
+    expect(s.canShowSource(999, 0)).toBe(false);
+    expect(s.canShowSource(msg.id, '0')).toBe(false);
+  });
+
+  it('asks the ledger for each fact of the line and adds who, when, the exact words and the replaced note to the thread', async () => {
+    const { s, calls, msg } = await mk();
+    const r = await s.showSource(msg.id, 0);
+    expect(r.ok).toBe(true);
+    expect(calls).toEqual([[F1.scope, 'note-1']]);
+    const last = s.getState().messages.at(-1);
+    expect(last).toMatchObject({ from: 'cacci', kind: 'source' });
+    expect(last.lines).toEqual(['Entered by Bob B on 2026-10-20 09:30 UTC: "Mum now has 1 x Tablet B daily"', 'This fact was replaced later.']);
+    expect(s.getState().busy).toBe(false);
+  });
+
+  it('several facts on one line are each named; at most the line\'s own facts are asked', async () => {
+    const { s, calls, msg } = await mk((scope, id) => okv({ ...SRC, fact: { title: id }, replacedLater: false }), [F1, F2]);
+    await s.showSource(msg.id, 0);
+    expect(calls.map((c) => c[1])).toEqual(['note-1', 'note-2']);
+    expect(s.getState().messages.at(-1).lines).toEqual(['note-1', expect.stringContaining('Entered by Bob B'), 'note-2', expect.stringContaining('Entered by Bob B')]);
+  });
+
+  it('says plainly when the words are gone: who and when if known, else the not-kept sentence', async () => {
+    expect(sourceLines({ fact: {}, current: true, replacedLater: false, recorded: false, enteredBy: { username: 'bob', displayName: 'Bob B' }, at: Date.UTC(2026, 0, 2, 3, 4), note: 'gone' })).toEqual(['Entered by Bob B on 2026-01-02 03:04 UTC.', 'gone']);
+    expect(sourceLines({ fact: {}, current: true, replacedLater: false, recorded: false })).toEqual([SOURCE_NOT_KEPT]);
+    expect(sourceLines({ fact: {}, current: true, replacedLater: false, recorded: false, enteredBy: { username: 'bob', displayName: 'Bob B' } })[0]).toBe('Entered by Bob B.');
+    expect(sourceLines({ fact: {}, current: true, replacedLater: false, recorded: false, at: Date.UTC(2026, 0, 2, 3, 4) })[0]).toBe('Entered by someone who has since left on 2026-01-02 03:04 UTC.');
+    expect(sourceLines({ fact: {}, current: true, replacedLater: false, recorded: true, words: 'w', at: 0 })[0]).toBe('Entered by someone who has since left on 1970-01-01 00:00 UTC: "w"');
+    expect(sourceLines({ fact: {}, current: true, replacedLater: false, recorded: true, words: 'w', enteredBy: { username: 'u', displayName: '' } })[0]).toBe('Entered by u: "w"');
+  });
+
+  it('a failure puts the service\'s words in the thread and a sign-out is reported', async () => {
+    let out = 0;
+    const f = fakeNotes({ status: () => answer([F1]) });
+    const ledger = { source: () => Promise.resolve(bad('signed-out', 'Your session has ended.')) };
+    const s = createChatSession({ notes: f.notes, ledger, onSignedOut: () => (out += 1) });
+    await s.loadMode();
+    await s.ask('q');
+    const id = s.getState().messages.find((m) => m.kind === 'answer').id;
+    const r = await s.showSource(id, 0);
+    expect(r).toMatchObject({ ok: false, kind: 'signed-out' });
+    expect(out).toBe(1);
+    expect(s.getState().messages.at(-1)).toMatchObject({ kind: 'error', text: 'Your session has ended.' });
+    const s2 = await mk(() => bad('limit', 'Slow down.', { retryAfterSeconds: 5 }));
+    await s2.s.showSource(s2.msg.id, 0);
+    expect(s2.s.getState().messages.at(-1).text).toBe('Slow down. Try again in 5 seconds.');
+  });
+
+  it('one request at a time; nothing to trace sends nothing; no ledger means no button; reset drops a late answer', async () => {
+    const d = deferred();
+    const { s, calls, msg } = await mk(() => d.promise);
+    const first = s.showSource(msg.id, 0);
+    expect(s.getState().busy).toBe(true);
+    expect(await s.showSource(msg.id, 0)).toMatchObject({ ok: false, kind: 'busy' });
+    s.reset();
+    d.resolve(okv(SRC));
+    expect(await first).toMatchObject({ kind: 'dropped' });
+    expect(s.getState().messages).toHaveLength(0);
+    expect(calls).toHaveLength(1);
+    const again = await mk();
+    expect(await again.s.showSource(again.msg.id, 1)).toMatchObject({ ok: false, kind: 'invalid' });
+    expect(again.calls).toHaveLength(0);
+    const f = fakeNotes({ status: () => answer([F1]) });
+    const bare = createChatSession({ notes: f.notes });
+    await bare.loadMode();
+    await bare.ask('q');
+    expect(bare.canShowSource(bare.getState().messages.find((m) => m.kind === 'answer').id, 0)).toBe(false);
+    const odd = createChatSession({ notes: f.notes, ledger: {} });
+    await odd.loadMode();
+    await odd.ask('q');
+    expect(odd.canShowSource(odd.getState().messages.find((m) => m.kind === 'answer').id, 0)).toBe(false);
+  });
+
+  it('a pulse answer and the nothing line carry their facts too, or none', async () => {
+    const f = fakeNotes({ pulse: () => okv({ headline: 'Quiet.', nothing: false, points: [{ text: 'Bins', sources: [], facts: [F1] }] }), status: () => okv({ headline: 'None', nothing: true, points: [] }) });
+    const c = createChatSession({ notes: f.notes, ledger: { source: () => okv(SRC) }, circle: CIRCLE });
+    await c.loadMode();
+    await c.pulse();
+    expect(c.getState().messages.find((m) => m.kind === 'answer').lineFacts).toEqual([[F1]]);
+    const h = createChatSession({ notes: f.notes, ledger: { source: () => okv(SRC) } });
+    await h.loadMode();
+    await h.ask('q');
+    expect(h.getState().messages.find((m) => m.kind === 'answer').lineFacts).toEqual([[]]);
   });
 });
