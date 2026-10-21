@@ -1,7 +1,7 @@
-import { LEDGER_ACTIONS, LEDGER_KINDS, SUBJECT_MAX, SUMMARY_MAX, TITLE_MAX, type LedgerEntry, type LedgerScope } from './types.js';
+import { LEDGER_ACTIONS, LEDGER_KINDS, SUBJECT_MAX, SUMMARY_MAX, TEXT_MAX, TITLE_MAX, type LedgerEntry, type LedgerScope } from './types.js';
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
-const FIELDS = ['id', 'at', 'scope', 'actor', 'action', 'kind', 'subject', 'title', 'summary', 'proposalId'] as const;
+const FIELDS = ['id', 'at', 'scope', 'actor', 'action', 'kind', 'subject', 'title', 'summary', 'text', 'proposalId'] as const;
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const length = (text: string): number => [...text].length;
 
@@ -37,6 +37,12 @@ export function entryProblem(entry: unknown): string | undefined {
   if (typeof entry.subject !== 'string' || entry.subject === '' || length(entry.subject) > SUBJECT_MAX) return `subject must be 1 to ${SUBJECT_MAX} characters`;
   if (entry.title !== undefined && (typeof entry.title !== 'string' || length(entry.title) > TITLE_MAX)) return `title must be text of at most ${TITLE_MAX} characters`;
   if (entry.summary !== undefined && (typeof entry.summary !== 'string' || length(entry.summary) > SUMMARY_MAX)) return `summary must be text of at most ${SUMMARY_MAX} characters`;
+  if (entry.kind === 'input') {
+    // R-017 D5: one entry holds the words of an update, as an addition, and nothing else about a fact
+    if (entry.action !== 'added') return 'an input is always added';
+    if (entry.title !== undefined || entry.summary !== undefined) return 'an input has text, not a title or summary';
+    if (typeof entry.text !== 'string' || entry.text === '' || length(entry.text) > TEXT_MAX) return `an input needs text of 1 to ${TEXT_MAX} characters`;
+  } else if (entry.text !== undefined) return 'only an input has text';
   if (typeof entry.proposalId !== 'string' || !ID.test(entry.proposalId)) return 'proposalId must be 1 to 128 letters, digits, - or _';
   return undefined;
 }
@@ -53,6 +59,7 @@ export function copyEntry(entry: LedgerEntry): LedgerEntry {
     subject: entry.subject,
     ...(entry.title === undefined ? {} : { title: entry.title }),
     ...(entry.summary === undefined ? {} : { summary: entry.summary }),
+    ...(entry.text === undefined ? {} : { text: entry.text }),
     proposalId: entry.proposalId,
   };
 }

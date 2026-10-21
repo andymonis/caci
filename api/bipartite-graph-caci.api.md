@@ -246,10 +246,11 @@ export interface LedgerEntryView {
     // (undocumented)
     readonly id: string;
     // (undocumented)
-    readonly kind: 'item' | 'category';
-    readonly subject: string;
+    readonly kind: 'item' | 'category' | 'input';
+    readonly subject?: string;
     // (undocumented)
     readonly summary?: string;
+    readonly text?: string;
     readonly title?: string;
 }
 

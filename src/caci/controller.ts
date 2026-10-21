@@ -73,12 +73,14 @@ export interface LedgerEntryView {
   readonly id: string;
   readonly at: number;
   readonly action: 'added' | 'updated' | 'removed';
-  readonly kind: 'item' | 'category';
-  /** The id of the note or category that changed. */
-  readonly subject: string;
+  readonly kind: 'item' | 'category' | 'input';
+  /** The id of the note or category that changed (absent for an input, whose subject is an internal proposal id). */
+  readonly subject?: string;
   /** What it was called; for a removal, the removed text. */
   readonly title?: string;
   readonly summary?: string;
+  /** For an input (R-017): the update as sent. */
+  readonly text?: string;
   /** Who made the change, when they can still be named. */
   readonly by?: { readonly username: string; readonly displayName: string };
 }
@@ -579,7 +581,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       const items: LedgerEntryView[] = [];
       for (const e of listed.items) {
         const by = await who(e.actor);
-        items.push(Object.freeze({ id: e.id, at: e.at, action: e.action, kind: e.kind, subject: e.subject, ...(e.title === undefined ? {} : { title: e.title }), ...(e.summary === undefined ? {} : { summary: e.summary }), ...(by === undefined ? {} : { by: Object.freeze(by) }) }));
+        items.push(Object.freeze({ id: e.id, at: e.at, action: e.action, kind: e.kind, ...(e.kind === 'input' ? {} : { subject: e.subject }), ...(e.title === undefined ? {} : { title: e.title }), ...(e.summary === undefined ? {} : { summary: e.summary }), ...(e.text === undefined ? {} : { text: e.text }), ...(by === undefined ? {} : { by: Object.freeze(by) }) }));
       }
       return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor, ...(provenance === undefined ? {} : { scope: provenance }) }));
     },

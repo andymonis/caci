@@ -30,10 +30,11 @@ interface Row {
   subject: string;
   title: string | null;
   summary: string | null;
+  text: string | null;
   proposal_id: string;
 }
 
-const COLUMNS = 'id, at, scope_kind, scope_id, actor, action, kind, subject, title, summary, proposal_id';
+const COLUMNS = 'id, at, scope_kind, scope_id, actor, action, kind, subject, title, summary, text, proposal_id';
 const scopeOf = (row: Row): LedgerScope => (row.scope_kind === 'personal' ? { kind: 'personal', userId: row.scope_id } : { kind: 'circle', circleId: row.scope_id });
 const entryOf = (row: Row): LedgerEntry => ({
   id: row.id,
@@ -45,6 +46,7 @@ const entryOf = (row: Row): LedgerEntry => ({
   subject: JSON.parse(row.subject) as string,
   ...(row.title === null ? {} : { title: JSON.parse(row.title) as string }),
   ...(row.summary === null ? {} : { summary: JSON.parse(row.summary) as string }),
+  ...(row.text === null ? {} : { text: JSON.parse(row.text) as string }),
   proposalId: row.proposal_id,
 });
 const scopeColumns = (scope: LedgerScope): [string, string] => (scope.kind === 'personal' ? ['personal', scope.userId] : ['circle', scope.circleId]);
@@ -83,9 +85,9 @@ export function createSqliteLedgerStore(options: SqliteLedgerStoreOptions = {}):
             }
             const [kind, id] = scopeColumns(entry.scope);
             db.run(
-              `INSERT INTO ledger (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO ledger (${COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               entry.id, entry.at, kind, id, entry.actor, entry.action, entry.kind, JSON.stringify(entry.subject),
-              entry.title === undefined ? null : JSON.stringify(entry.title), entry.summary === undefined ? null : JSON.stringify(entry.summary), entry.proposalId,
+              entry.title === undefined ? null : JSON.stringify(entry.title), entry.summary === undefined ? null : JSON.stringify(entry.summary), entry.text === undefined ? null : JSON.stringify(entry.text), entry.proposalId,
             );
           }
           db.commit();

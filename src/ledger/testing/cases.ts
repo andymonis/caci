@@ -187,6 +187,48 @@ export function ledgerStoreCases(): LedgerStoreCase[] {
       },
     },
     {
+      name: 'an input keeps its text exactly: emoji, new lines, markup, a lone surrogate and exactly 8,000 characters',
+      run: async (store) => {
+        const lone = `before${String.fromCharCode(0xd800)}after`;
+        const inputs = [
+          entry(1, { kind: 'input', subject: 'prop-1', text: 'Mum now takes 1 tablet 😀\n<b>daily</b> "quoted"' }),
+          entry(2, { kind: 'input', subject: 'prop-2', text: lone }),
+          entry(3, { kind: 'input', subject: 'prop-3', text: 'x'.repeat(8000) }),
+          entry(4, { kind: 'input', subject: 'prop-4', text: '😀'.repeat(8000) }),
+        ];
+        must(await store.append(inputs));
+        const got = await everything(store, P1);
+        for (const e of inputs) assert.deepEqual(got.find((x) => x.id === e.id), e);
+        assert.equal(got.find((x) => x.id === lid(2))?.text, lone);
+      },
+    },
+    {
+      name: 'an input needs text of 1 to 8,000 characters, is only ever added, and carries no title or summary; no other kind has text',
+      run: async (store) => {
+        const input = (n: number, extra: Record<string, unknown> = {}): LedgerEntry => ({ ...entry(n, { kind: 'input', subject: `prop-${n}`, text: 'a note' }), ...extra }) as LedgerEntry;
+        const bad: LedgerEntry[] = [
+          input(1, { text: undefined }), input(2, { text: '' }), input(3, { text: 'x'.repeat(8001) }), input(4, { text: '😀'.repeat(8001) }), input(5, { text: 5 as never }), input(6, { action: 'removed' }),
+          input(7, { action: 'updated' }), input(8, { title: 't' }), input(9, { summary: 's' }),
+          entry(10, { text: 'stray text' }), entry(11, { kind: 'category', text: 'stray text' }), entry(12, { text: '' }),
+        ];
+        for (const [i, e] of bad.entries()) assert.equal(code(await store.append([e])), 'INVALID_INPUT', `case ${i + 1}`);
+        assert.deepEqual(await everything(store, P1), []);
+        must(await store.append([input(20)]));
+        assert.equal((await everything(store, P1)).length, 1);
+      },
+    },
+    {
+      name: 'inputs and facts in one batch are all or nothing, and an input is listed with its facts in time order',
+      run: async (store) => {
+        const facts = entry(2, { at: NOW + 11, subject: 'fact-a' });
+        const input = entry(1, { at: NOW + 10, kind: 'input', subject: 'prop-9', text: 'the words', proposalId: 'prop-9' });
+        assert.equal(code(await store.append([input, { ...facts, text: 'stray' } as LedgerEntry])), 'INVALID_INPUT');
+        assert.deepEqual(await everything(store, P1), []);
+        must(await store.append([input, facts]));
+        assert.deepEqual(ids(await everything(store, P1)), [lid(2), lid(1)]);
+      },
+    },
+    {
       name: 'an empty batch is fine and changes nothing',
       run: async (store) => {
         must(await store.append([]));

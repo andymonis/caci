@@ -35,7 +35,7 @@ export const LEDGER_ERROR_CODES: readonly ["INVALID_INPUT", "STORAGE_ERROR"];
 export const LEDGER_ID_PATTERN: RegExp;
 
 // @public (undocumented)
-export const LEDGER_KINDS: readonly ["item", "category"];
+export const LEDGER_KINDS: readonly ["item", "category", "input"];
 
 // @public (undocumented)
 export type LedgerAction = (typeof LEDGER_ACTIONS)[number];
@@ -55,6 +55,7 @@ export interface LedgerEntry {
     readonly subject: string;
     // (undocumented)
     readonly summary?: string;
+    readonly text?: string;
     readonly title?: string;
 }
 

@@ -31,10 +31,18 @@ export const DEFECTS = [
   'skips-after-append',
   'cursor-accepts-garbage',
   'bad-limit-accepted',
+  'drops-text',
+  'accepts-stray-text',
+  'text-limit-in-units',
 ] as const;
 export type Defect = (typeof DEFECTS)[number];
 
 const shared: LedgerEntry[] = [];
+const withoutText = (e: LedgerEntry): LedgerEntry => {
+  const copy: Record<string, unknown> = { ...e };
+  delete copy.text;
+  return copy as unknown as LedgerEntry;
+};
 
 export function createNaiveLedgerStore(defect?: Defect): LedgerStore {
   const is = (d: Defect): boolean => defect === d;
@@ -45,7 +53,9 @@ export function createNaiveLedgerStore(defect?: Defect): LedgerStore {
     async append(batch) {
       const kept: LedgerEntry[] = [];
       for (const e of batch) {
-        const problem = is('no-validation') ? undefined : entryProblem(e);
+        let problem = is('no-validation') ? undefined : entryProblem(e);
+        if (is('accepts-stray-text') && problem === 'only an input has text') problem = undefined;
+        if (is('text-limit-in-units') && problem !== undefined && problem.startsWith('an input needs text') && typeof e.text === 'string' && e.text.length > 0 && e.text.length <= 16000) problem = undefined;
         if (problem !== undefined && !is('no-length-check')) {
           if (is('partial-batch')) {
             entries.push(...kept);
@@ -54,7 +64,7 @@ export function createNaiveLedgerStore(defect?: Defect): LedgerStore {
         }
         if (!is('duplicate-ids-allowed') && entries.some((x) => x.id === e.id)) return err(ledgerError('INVALID_INPUT', 'duplicate'));
         if (!is('duplicate-in-batch-allowed') && kept.some((x) => x.id === e.id)) return err(ledgerError('INVALID_INPUT', 'duplicate'));
-        kept.push(is('no-copies') ? e : copyEntry(e));
+        kept.push(is('no-copies') ? e : is('drops-text') ? withoutText(copyEntry(e)) : copyEntry(e));
       }
       if (is('racy-duplicate-check')) await Promise.resolve();
       entries.push(...kept);

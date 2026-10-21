@@ -71,13 +71,13 @@ runLedgerStoreConformance(() => createSqliteLedgerStore(), { describe, it }, { d
 }
 
 describe('the schema', () => {
-  it('is version 6 with the table, its indexes and the two triggers', () => {
+  it('is version 7 with the table, its indexes and the two triggers', () => {
     const dir = tmp();
     openAt(join(dir, 'users.db'));
     const db = openDb({ path: join(dir, 'users.db') });
     stores.push(db);
-    expect(USERS_SCHEMA_VERSION).toBe(6);
-    expect(db.pragma('user_version')).toBe(6);
+    expect(USERS_SCHEMA_VERSION).toBe(7);
+    expect(db.pragma('user_version')).toBe(7);
     expect(db.pragma('application_id')).toBe(USERS_APPLICATION_ID);
     const names = (type: string): string[] => db.all<{ name: string }>('SELECT name FROM sqlite_master WHERE type = ? ORDER BY name', type).map((r) => r.name);
     expect(names('table')).toContain('ledger');
@@ -98,7 +98,7 @@ describe('the schema', () => {
     expect(await listAll(store, P1)).toEqual([]);
     const db = openDb({ path });
     stores.push(db);
-    expect(db.pragma('user_version')).toBe(6);
+    expect(db.pragma('user_version')).toBe(7);
     expect(db.get<{ n: number }>('SELECT count(*) AS n FROM users')?.n).toBe(1);
     expect(db.get<{ n: number }>('SELECT count(*) AS n FROM circles')?.n).toBe(1);
   });
@@ -122,9 +122,61 @@ describe('the schema', () => {
     expect(codeOf(() => createSqliteLedgerStore({ path: join(dir, 'graphs.db') }))).toBe('NOT_A_USERS_DATABASE');
     const newer = openDb({ path: join(dir, 'newer.db') });
     prepareSchema(newer, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });
-    newer.exec('PRAGMA user_version = 7');
+    newer.exec('PRAGMA user_version = 8');
     newer.close();
     expect(codeOf(() => createSqliteLedgerStore({ path: join(dir, 'newer.db') }))).toBeDefined();
+  });
+});
+
+describe('upgrading from version 6 (R-017)', () => {
+  it('keeps every entry exactly, then accepts inputs, and the triggers still remove a circle\'s and a person\'s entries', async () => {
+    const path = join(tmp(), 'users.db');
+    const old = openDb({ path });
+    prepareSchema(old, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS.slice(0, 6), foreignCode: 'NOT_A_USERS_DATABASE' });
+    expect(old.pragma('user_version')).toBe(6);
+    old.run("INSERT INTO users (id, username, display_name, password_hash, role, created_at, updated_at) VALUES ('u0000000000000001', 'ann', 'Ann', 'h', 'admin', 1, 1)");
+    old.run("INSERT INTO circles (id, name, created_at, updated_at) VALUES ('c0000000000000001', 'Club', 1, 1)");
+    const lone = String.fromCharCode(0xd800);
+    const insert = (id: string, scopeKind: string, scopeId: string, kind: string, subject: string, title: string | null): void => {
+      old.run("INSERT INTO ledger (id, at, scope_kind, scope_id, actor, action, kind, subject, title, summary, proposal_id) VALUES (?, 5, ?, ?, 'u0000000000000001', 'removed', ?, ?, ?, NULL, 'prop-1')", id, scopeKind, scopeId, kind, JSON.stringify(subject), title === null ? null : JSON.stringify(title));
+    };
+    insert('l0000000000000001', 'personal', 'u0000000000000001', 'item', `old${lone}note`, 'Mum: dose');
+    insert('l0000000000000002', 'circle', 'c0000000000000001', 'category', 'club', null);
+    old.close();
+    const ledger = openAt(path);
+    expect((await listAll(ledger, P1)).map((e) => [e.id, e.kind, e.subject, e.title, 'text' in e])).toEqual([['l0000000000000001', 'item', `old${lone}note`, 'Mum: dose', false]]);
+    expect((await listAll(ledger, C1)).length).toBe(1);
+    expect((await ledger.append([entry(9, { kind: 'input', subject: 'prop-9', text: `typed ${lone} words`, action: 'added' })])).ok).toBe(true);
+    expect((await listAll(ledger, P1)).find((e) => e.kind === 'input')?.text).toBe(`typed ${lone} words`);
+    const db = openDb({ path });
+    stores.push(db);
+    expect(db.pragma('user_version')).toBe(7);
+    expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'ledger_%' ORDER BY name").map((r) => r.name)).toEqual(['ledger_ends_with_circle', 'ledger_ends_with_user']);
+    expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'ledger_by_%' ORDER BY name").map((r) => r.name)).toEqual(['ledger_by_scope', 'ledger_by_time']);
+    expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE name LIKE 'ledger_v7%'")).toEqual([]);
+    db.run("DELETE FROM circles WHERE id = 'c0000000000000001'");
+    expect(await listAll(ledger, C1)).toEqual([]);
+    db.run("DELETE FROM users WHERE id = 'u0000000000000001'");
+    expect(await listAll(ledger, P1)).toEqual([]);
+  });
+});
+
+describe('what the database itself refuses', () => {
+  it('an input without text, text on any other kind, and text that is not JSON', () => {
+    const dir = tmp();
+    openAt(join(dir, 'users.db'));
+    const db = openDb({ path: join(dir, 'users.db') });
+    stores.push(db);
+    const insert = (id: string, kind: string, text: string | null): void => {
+      db.run("INSERT INTO ledger (id, at, scope_kind, scope_id, actor, action, kind, subject, text, proposal_id) VALUES (?, 1, 'personal', 'u1', 'u1', 'added', ?, '\"s\"', ?, 'p')", id, kind, text);
+    };
+    expect(() => insert('l1', 'input', '"words"')).not.toThrow();
+    expect(() => insert('l2', 'item', null)).not.toThrow();
+    expect(() => insert('l3', 'input', null)).toThrow();
+    expect(() => insert('l4', 'item', '"stray"')).toThrow();
+    expect(() => insert('l5', 'category', '"stray"')).toThrow();
+    expect(() => insert('l6', 'input', 'not json')).toThrow();
+    expect(() => insert('l7', 'edge', null)).toThrow();
   });
 });
 

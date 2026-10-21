@@ -79,7 +79,7 @@ describe('the database', () => {
     const db = openDb({ path });
     expect(db.pragma('application_id')).toBe(USERS_APPLICATION_ID);
     expect(db.pragma('user_version')).toBe(USERS_SCHEMA_VERSION);
-    expect(USERS_SCHEMA_VERSION).toBe(6);
+    expect(USERS_SCHEMA_VERSION).toBe(7);
     expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").map((r) => r.name)).toEqual(['circle_grants', 'circle_invitations', 'circle_members', 'circles', 'ledger', 'sessions', 'users']);
     db.close();
   });

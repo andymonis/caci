@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 6;
+export const USERS_SCHEMA_VERSION = 7;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -196,7 +196,49 @@ const V6: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6]);
+/**
+ * Version 7: the text of an update as sent (R-017). The ledger gains the kind `input` and a `text` column. SQLite cannot change a
+ * CHECK, so the table is rebuilt: the two triggers that refer to it are dropped first (renaming a table while a trigger names a
+ * table that no longer exists is an error), the rows are copied unchanged, and the indexes and triggers are made again.
+ */
+const V7: Migration = Object.freeze({
+  to: 7,
+  creates: Object.freeze([]),
+  sql: Object.freeze([
+    'DROP TRIGGER ledger_ends_with_circle',
+    'DROP TRIGGER ledger_ends_with_user',
+    `CREATE TABLE ledger_v7 (
+       id TEXT NOT NULL PRIMARY KEY,
+       at INTEGER NOT NULL CHECK (at >= 0),
+       scope_kind TEXT NOT NULL CHECK (scope_kind IN ('personal', 'circle')),
+       scope_id TEXT NOT NULL,
+       actor TEXT NOT NULL,
+       action TEXT NOT NULL CHECK (action IN ('added', 'updated', 'removed')),
+       kind TEXT NOT NULL CHECK (kind IN ('item', 'category', 'input')),
+       subject TEXT NOT NULL CHECK (json_valid(subject)),
+       title TEXT CHECK (title IS NULL OR json_valid(title)),
+       summary TEXT CHECK (summary IS NULL OR json_valid(summary)),
+       text TEXT CHECK (text IS NULL OR json_valid(text)),
+       proposal_id TEXT NOT NULL,
+       CHECK ((kind = 'input') = (text IS NOT NULL))
+     ) WITHOUT ROWID`,
+    'INSERT INTO ledger_v7 (id, at, scope_kind, scope_id, actor, action, kind, subject, title, summary, proposal_id) SELECT id, at, scope_kind, scope_id, actor, action, kind, subject, title, summary, proposal_id FROM ledger',
+    'DROP TABLE ledger',
+    'ALTER TABLE ledger_v7 RENAME TO ledger',
+    'CREATE INDEX ledger_by_scope ON ledger (scope_kind, scope_id, at DESC, id DESC)',
+    'CREATE INDEX ledger_by_time ON ledger (at)',
+    `CREATE TRIGGER ledger_ends_with_circle AFTER DELETE ON circles
+     BEGIN
+       DELETE FROM ledger WHERE scope_kind = 'circle' AND scope_id = old.id;
+     END`,
+    `CREATE TRIGGER ledger_ends_with_user AFTER DELETE ON users
+     BEGIN
+       DELETE FROM ledger WHERE scope_kind = 'personal' AND scope_id = old.id;
+     END`,
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });

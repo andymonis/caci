@@ -63,7 +63,7 @@ describe('deleting an account', () => {
   it('the database has the trigger, and it is part of the schema', () => {
     const { db } = open();
     expect(db.get<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'circles_leave_with_user'")?.name).toBe('circles_leave_with_user');
-    expect(USERS_SCHEMA_VERSION).toBe(6);
+    expect(USERS_SCHEMA_VERSION).toBe(7);
   });
 
   it('takes the person out of every circle and removes their invitations, both addressed to them and sent by them, and leaves everything else', async () => {
