@@ -21,6 +21,39 @@ export interface BackupIo {
     readonly stdout: (text: string) => void;
 }
 
+// @public (undocumented)
+export interface BrainExport {
+    // (undocumented)
+    readonly brain: {
+        readonly kind: 'personal' | 'circle';
+        readonly name: string;
+        readonly circleId?: string;
+    };
+    // (undocumented)
+    readonly categories: ReadonlyArray<{
+        readonly id: string;
+        readonly name?: string;
+    }>;
+    // (undocumented)
+    readonly counts: {
+        readonly facts: number;
+        readonly categories: number;
+        readonly links: number;
+        readonly entries: number;
+        readonly inputs: number;
+    };
+    // (undocumented)
+    readonly exportedAt: number;
+    // (undocumented)
+    readonly facts: readonly ExportFact[];
+    // (undocumented)
+    readonly format: typeof EXPORT_FORMAT;
+    // (undocumented)
+    readonly ledger: readonly ExportEntry[];
+    // (undocumented)
+    readonly version: typeof EXPORT_VERSION;
+}
+
 // @public
 export interface ConfigError {
     // (undocumented)
@@ -34,6 +67,78 @@ export const DEFAULT_KEEP = 14;
 
 // @public
 export function defaultControlsDir(): string;
+
+// @public (undocumented)
+export const EXPORT_FORMAT = "caci-brain-export";
+
+// @public (undocumented)
+export const EXPORT_VERSION = 1;
+
+// @public
+export function exportBrain(options: {
+    readonly dataDir: string;
+    readonly target: ExportTarget;
+    readonly now?: () => number;
+}): Promise<ExportResult>;
+
+// @public (undocumented)
+export interface ExportEntry {
+    // (undocumented)
+    readonly action: 'added' | 'updated' | 'removed';
+    // (undocumented)
+    readonly at: number;
+    // (undocumented)
+    readonly by?: string;
+    // (undocumented)
+    readonly kind: 'item' | 'category' | 'input';
+    // (undocumented)
+    readonly subject?: string;
+    // (undocumented)
+    readonly summary?: string;
+    // (undocumented)
+    readonly text?: string;
+    // (undocumented)
+    readonly title?: string;
+}
+
+// @public (undocumented)
+export interface ExportFact {
+    // (undocumented)
+    readonly at?: number;
+    readonly author?: string;
+    // (undocumented)
+    readonly categories: ReadonlyArray<{
+        readonly id: string;
+        readonly weight: number;
+    }>;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly key?: string;
+    // (undocumented)
+    readonly summary?: string;
+    // (undocumented)
+    readonly title?: string;
+}
+
+// @public (undocumented)
+export type ExportResult = {
+    readonly ok: true;
+    readonly value: BrainExport;
+} | {
+    readonly ok: false;
+    readonly code: 'MISSING_DATABASE' | 'NOT_FOUND' | 'FAILED';
+    readonly message: string;
+};
+
+// @public (undocumented)
+export type ExportTarget = {
+    readonly kind: 'user';
+    readonly username: string;
+} | {
+    readonly kind: 'circle';
+    readonly circleId: string;
+};
 
 // @public (undocumented)
 export const isLoopbackAddress: (bind: string) => boolean;
