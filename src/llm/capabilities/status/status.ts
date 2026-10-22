@@ -8,7 +8,7 @@ import { addUsage, isValidUsage, NO_USAGE, type TokenUsage } from '../../usage.j
 import type { Controls } from '../../controls/controls.js';
 import { inspectStatusReply, statusGuardSettingsOf, type GuardedStatus } from './guard.js';
 import { buildStatusPrompt, isTimeZone, type StatusEntry } from './prompt.js';
-import { isHorizon, type Horizon } from './window.js';
+import { horizonWindow, isHorizon, type Horizon } from './window.js';
 
 /** What the controller hands over for one status request. */
 export interface StatusInput {
@@ -153,6 +153,8 @@ async function run(deps: StatusDeps, input: StatusInput, options: StatusOptions 
   if (!prompt.ok) return prompt;
   emit({ type: 'prompt', system: prompt.value.system, messages: prompt.value.messages, schema: prompt.value.outputSchema, parts: prompt.value.parts });
   const guardContext = { entryCount: input.entries.length };
+  const windowMade = input.horizon === undefined ? undefined : horizonWindow(started, input.timeZone ?? 'UTC', input.horizon);
+  const window = windowMade !== undefined && windowMade.ok ? windowMade.value : undefined;
 
   const attempt = async (messages: readonly ModelMessage[]): Promise<Result<Attempt, LlmError>> => {
     if (options?.signal?.aborted === true) return err(llmError('CANCELLED', 'the call was cancelled'));
@@ -172,7 +174,7 @@ async function run(deps: StatusDeps, input: StatusInput, options: StatusOptions 
         system: prompt.value.system,
         messages,
         outputSchema: prompt.value.outputSchema,
-        meta: { capability: 'status', entryCount: input.entries.length, now: started, timeZone: input.timeZone ?? 'UTC' },
+        meta: { capability: 'status', entryCount: input.entries.length, now: started, timeZone: input.timeZone ?? 'UTC', ...(window === undefined ? {} : { horizon: { name: window.horizon, fromDay: window.fromDay, toDay: window.toDay, maxPoints: deps.controls.status.settings.horizons[window.horizon].maxPoints } }) },
         maxOutputTokens: settings.maxOutputTokens,
         timeoutMs: remaining,
         ...(options?.signal === undefined ? {} : { signal: options.signal }),

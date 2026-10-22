@@ -285,11 +285,12 @@ describe('a circle\'s pulse over HTTP (R-016 D19 to D21)', () => {
 
   it('a member and an observer get a pulse of that circle only; a stranger and a made-up circle get the same 404; the pulse is not filed', async () => {
     const w = await world();
+    await w.capture(w.p.bob, 'Hospital visit on Friday MARK-PARENT-DATED', w.parent); // a pulse is the week check (R-018): only dated notes surface
     const before = await shape(w.dir);
     for (const who of [w.p.bob, w.p.cat, w.p.ann]) {
       const r = await pulse(who, w.parent);
       expect(r.status, r.text).toBe(200);
-      expect(r.json.status.entriesUsed).toBe(1);
+      expect(r.json.status.entriesUsed).toBe(2); // read: both notes of that circle; named: only the dated one
       expect(sources(r)).toEqual(['Parent']);
       expect(r.text).not.toMatch(/MARK-ANN|MARK-INLAW|MARK-DAN/);
     }
@@ -348,4 +349,66 @@ describe('a circle\'s pulse over HTTP (R-016 D19 to D21)', () => {
     writeFileSync(join(dir, 'pulse.txt'), '');
     await expect(startService(config(join(dir, 'data')), { controlsDir: dir })).rejects.toThrow(/check texts .* are not valid[\s\S]*pulse\.txt: is empty/);
   });
+});
+
+describe('the three checks over HTTP (R-018 D10, D11)', () => {
+  it('a member and an observer can ask each check of a circle, anyone of every brain; a stranger and a made-up circle get the one 404; nothing is filed', async () => {
+    const w = await world();
+    const before = await shape(w.dir);
+    for (const name of ['pulse', 'coming-up', 'long-range']) {
+      for (const who of [w.p.bob, w.p.cat, w.p.ann]) {
+        const r = await who.call('POST', '/api/status', { check: name, scope: { kind: 'circle', circleId: w.parent } });
+        expect(r.status, `${name} ${r.text}`).toBe(200);
+        expect(r.text).not.toMatch(/MARK-ANN|MARK-INLAW|MARK-DAN/);
+      }
+      const all = await w.p.ann.call('POST', '/api/status', { check: name });
+      expect(all.status, name).toBe(200);
+    }
+    for (const body of [{ check: 'pulse', scope: { kind: 'circle', circleId: w.parent } }, { check: 'long-range', scope: { kind: 'circle', circleId: 'c0000000000000999' } }]) {
+      for (const who of [w.p.dan, w.p.root]) {
+        const r = await who.call('POST', '/api/status', body);
+        if (body.scope.circleId === w.parent && who === w.p.root) expect(r.status).toBe(404);
+        expect(r.json).toEqual({ error: { code: 'NOT_FOUND', message: 'no such circle' } });
+      }
+    }
+    expect(await shape(w.dir)).toEqual(before);
+  });
+
+  it('are refused by name with text, with an unknown or non-text check, or with a pulse', async () => {
+    const w = await world();
+    const bad = async (body: Record<string, unknown>, field: string) => {
+      const r = await w.p.ann.call('POST', '/api/status', body);
+      expect(r.status, JSON.stringify(body)).toBe(422);
+      expect(r.json.error.field).toBe(field);
+    };
+    await bad({ check: 'pulse', text: 'my own words' }, 'text');
+    await bad({ check: 'weekly' }, 'check');
+    await bad({ check: ['pulse'] }, 'check');
+    await bad({ check: 'pulse', pulse: true }, 'check');
+  });
+
+  it('the window is stated to the real provider\'s system prompt and the edited text is what it is asked', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'caci-checks-controls-'));
+    dirs.push(dir);
+    cpSync(defaultControlsDir(), dir, { recursive: true });
+    writeFileSync(join(dir, 'long-range.txt'), 'EDITED-YEAR-WORDS: what is on the radar?\n');
+    const seen: string[] = [];
+    const fetchFn: typeof fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { system?: string; messages: Array<{ content: string }>; model: string };
+      seen.push(`${body.system}\n${body.messages.map((m) => m.content).join('\n')}`);
+      const system = body.system ?? '';
+      const reply = system.startsWith('You are the status assistant')
+        ? { headline: 'Nothing is on the radar for the next year.', points: [], nothing: true }
+        : { ops: [{ op: 'upsertNode', partition: 'item', id: /the first fact is "([^"]+)"/.exec(system)?.[1] ?? '', data: { title: 't', summary: 's' } }, { op: 'upsertNode', partition: 'category', id: 'misc', data: { name: 'Misc' } }, { op: 'link', item: /the first fact is "([^"]+)"/.exec(system)?.[1] ?? '', category: 'misc', weight: 0.5 }] };
+      const message = { id: 'm', type: 'message', role: 'assistant', model: String(body.model), content: [{ type: 'text', text: JSON.stringify(reply), citations: null }], stop_reason: 'end_turn', stop_sequence: null, stop_details: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: null, cache_read_input_tokens: null } };
+      return new Response(JSON.stringify(message), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    const w = await world({ llm: 'anthropic' }, { apiKey: KEY, anthropic: { fetch: fetchFn }, controlsDir: dir });
+    seen.length = 0;
+    const r = await w.p.ann.call('POST', '/api/status', { check: 'long-range' });
+    expect(r.status, r.text).toBe(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('one-year check. Answer only about');
+    expect(seen[0]).toContain('<request>\nEDITED-YEAR-WORDS: what is on the radar?\n</request>');
+  }, 30_000);
 });

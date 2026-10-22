@@ -20,7 +20,7 @@ async function story() {
   const parent = await w.circle(1, 'ann', [['bob', 'member'], ['cat', 'observer']]);
   const other = await w.circle(2, 'ann', [['bob', 'member']]);
   await note(w, 'ann', 'Dentist appointment on Friday morning');
-  await note(w, 'ann', 'Mum new tablets one a day with food', parent);
+  await note(w, 'ann', 'Mum new tablets one a day with food from Friday', parent);
   await note(w, 'bob', 'Inlaw hospital visit moved to Monday', other);
   return { w, parent, other };
 }

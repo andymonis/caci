@@ -564,7 +564,7 @@ export type TraceEvent =
 // Warnings were encountered during analysis:
 //
 // dist/llm/controls/settings.d.ts:58:5 - (ae-forgotten-export) The symbol "Range" needs to be exported by the entry point index.d.ts
-// dist/llm/model-client.d.ts:46:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
+// dist/llm/model-client.d.ts:52:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
 // dist/llm/trace.d.ts:26:5 - (ae-forgotten-export) The symbol "PromptParts" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)

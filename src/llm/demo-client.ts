@@ -3,6 +3,7 @@ import { runWithDeadline } from './deadline.js';
 import { llmError, type LlmError } from './errors.js';
 import type { ModelClient, ModelRequest, ModelResponse } from './model-client.js';
 import { checkRequest } from './request-check.js';
+import { datesInWindow } from './demo-dates.js';
 
 // A model that costs nothing and sends nothing anywhere. It reads the real prompt the categoriser builds
 // (the note's id, the note, the existing categories) and answers with a simple, deterministic rule: link
@@ -91,6 +92,8 @@ function dayText(now: number, timeZone: string): string {
   }
 }
 
+const SILENT = Object.freeze({ week: 'Nothing needs your attention this week.', month: 'Nothing needs your attention in the next month.', year: 'Nothing is on the radar for the next year.' });
+const FOR = Object.freeze({ week: 'this week', month: 'in the next month', year: 'in the next year' });
 const MAX_HEADLINE = 160;
 const MAX_POINT = 240;
 const MAX_POINTS = 5;
@@ -116,6 +119,18 @@ function demoStatusReply(request: ModelRequest): JsonObject | undefined {
     if (m === null) continue;
     const n = Number(m[1]);
     if (n >= 1 && n <= count) entries.push({ n, where: m[2] ?? '', text: oneLine(m[3] ?? '') });
+  }
+  const focus = meta.horizon;
+  if (focus !== undefined) {
+    // a focused check (R-018): only entries with a date inside the window; nothing in the window is a one-line, silent answer
+    const found = entries
+      .map((e, i) => ({ ...e, i, first: datesInWindow(e.text, focus.fromDay, focus.toDay)[0] }))
+      .filter((e): e is typeof e & { first: string } => e.first !== undefined)
+      .sort((a, b) => (a.first < b.first ? -1 : a.first > b.first ? 1 : a.i - b.i));
+    if (found.length === 0) return { headline: SILENT[focus.name], points: [], nothing: true };
+    const shown = found.slice(0, focus.maxPoints);
+    const points = shown.map((e) => ({ text: clip(`${e.text}${e.where === 'personal' || e.where === '' ? '' : ` (${oneLine(e.where)})`}`, MAX_POINT), refs: [e.n] }));
+    return { headline: clip(`${day}: ${found.length} thing${found.length === 1 ? '' : 's'} to look at ${FOR[focus.name]}.`, MAX_HEADLINE), points, nothing: false };
   }
   if (entries.length === 0) return { headline: clip(`${day}: nothing relevant was found in your notes.`, MAX_HEADLINE), points: [], nothing: true };
   const wanted = wordsOf(unescapeBlock(asked));

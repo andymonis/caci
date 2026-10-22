@@ -43,6 +43,12 @@ describe('checkRequest accepts', () => {
   });
 });
 
+describe('checkRequest accepts a status horizon (R-018)', () => {
+  it('a status meta with a good horizon for each name', () => {
+    for (const name of ['week', 'month', 'year']) expect(checkRequest(good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', horizon: { name, fromDay: '2026-10-22', toDay: '2027-10-22', maxPoints: 5 } } }))).toBeUndefined();
+  });
+});
+
 describe('checkRequest refuses, as CONFIG, saying which part is wrong', () => {
   const cases: Array<[string, unknown, RegExp]> = [
     ['a meta that is not an object', good({ meta: 'x' }), /request\.meta.*object/],
@@ -59,6 +65,13 @@ describe('checkRequest refuses, as CONFIG, saying which part is wrong', () => {
     ['a status meta with an empty zone', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: '' } }), /request\.meta.*timeZone/],
     ['a status meta with no zone', good({ meta: { capability: 'status', entryCount: 1, now: 0 } }), /request\.meta.*timeZone/],
     ['a status meta with a stray field', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', extra: 1 } }), /request\.meta.*only/],
+    ['a status horizon that is not an object', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', horizon: 'week' } }), /request\.meta.*horizon/],
+    ['a status horizon with a stray field', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', horizon: { ...{ name: 'week', fromDay: '2026-10-22', toDay: '2026-10-28', maxPoints: 3 }, extra: 1 } } }), /request\.meta.*horizon may hold only/],
+    ['a status horizon with an unknown name', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', horizon: { ...{ name: 'week', fromDay: '2026-10-22', toDay: '2026-10-28', maxPoints: 3 }, name: 'day' } } }), /request\.meta.*horizon\.name/],
+    ['a status horizon with a bad day', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', horizon: { ...{ name: 'week', fromDay: '2026-10-22', toDay: '2026-10-28', maxPoints: 3 }, fromDay: '22/10/2026' } } }), /request\.meta.*horizon\.fromDay/],
+    ['a status horizon with a bad last day', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', horizon: { ...{ name: 'week', fromDay: '2026-10-22', toDay: '2026-10-28', maxPoints: 3 }, toDay: 5 } } }), /request\.meta.*horizon\.toDay/],
+    ['a status horizon with no points allowed', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', horizon: { ...{ name: 'week', fromDay: '2026-10-22', toDay: '2026-10-28', maxPoints: 3 }, maxPoints: 0 } } }), /request\.meta.*horizon\.maxPoints/],
+    ['a status horizon with fractional points', good({ meta: { capability: 'status', entryCount: 1, now: 0, timeZone: 'UTC', horizon: { ...{ name: 'week', fromDay: '2026-10-22', toDay: '2026-10-28', maxPoints: 3 }, maxPoints: 2.5 } } }), /request\.meta.*horizon\.maxPoints/],
     ['no model', good({ model: undefined }), /request\.model/],
     ['an empty model', good({ model: '' }), /request\.model.*empty/],
     ['a model with a space', good({ model: 'a b' }), /request\.model.*spaces/],

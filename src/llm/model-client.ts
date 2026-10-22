@@ -13,7 +13,7 @@ export interface ModelMessage {
  */
 export type ModelMeta =
   | { readonly capability: 'categorise'; readonly itemId: string; /** Most facts a reply may hold (R-015); absent means 1. */ readonly maxFacts?: number }
-  | { readonly capability: 'status'; readonly entryCount: number; readonly now: number; readonly timeZone: string };
+  | { readonly capability: 'status'; readonly entryCount: number; readonly now: number; readonly timeZone: string; /** A focused check (R-018): the window and the most points it may have, for the demo client. */ readonly horizon?: { readonly name: 'week' | 'month' | 'year'; readonly fromDay: string; readonly toDay: string; readonly maxPoints: number } };
 
 /**
  * One call to a model. Every request names its model, so no client hides a default and the model

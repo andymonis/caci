@@ -204,7 +204,7 @@ describe('the everyday app, through the pages, against the real service', () => 
     expect((await eveNotes.summaryIn({ kind: 'circle', circleId: club })).value.itemCount).toBe(1); // only the club note
     // the Pulse reads only that circle and says where it came from
     el(eve, 'circle-pulse').fire('click');
-    await waitFor(() => cthread(eve).at(-1)?.text.includes('read 1 note') === true && circleReady(eve), 'the pulse answer');
+    await waitFor(() => cthread(eve).at(-1)?.text.includes('to look at this week') === true && circleReady(eve), 'the pulse answer');
     const pulseAnswer = cthread(eve).at(-1);
     expect(pulseAnswer.lines.join('\n')).toContain('CLUB-MARK');
     expect(pulseAnswer.lines.join('\n')).not.toContain('OWN-MARK');
@@ -218,7 +218,7 @@ describe('the everyday app, through the pages, against the real service', () => 
     expect(el(fay, 'circle-update-send').disabled).toBe(true);
     expect(el(fay, 'circle-readonly').hidden).toBe(false);
     el(fay, 'circle-pulse').fire('click');
-    await waitFor(() => cthread(fay).at(-1)?.text.includes('read 1 note') === true && circleReady(fay), 'the observer\'s pulse');
+    await waitFor(() => cthread(fay).at(-1)?.text.includes('to look at this week') === true && circleReady(fay), 'the observer\'s pulse');
     expect(cthread(fay).at(-1).lines.join('\n')).toContain('CLUB-MARK');
 
     // a stranger is sent Home with the one set of words, and the service says the same

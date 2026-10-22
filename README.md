@@ -794,7 +794,7 @@ A headline, at most five short points, and counts. The model only names the numb
 
 | Route | What it does |
 |-------|--------------|
-| `POST /api/status` | Body `{ text, timeZone?, scope? }`, or for a circle's Pulse `{ pulse: true, scope }` with no `text`, and nothing else (any other field or query parameter is refused by name); a circle `scope` limits the context to that circle's notes (any role may ask; a stranger or a made-up circle gets the one "no such circle"); needs the session cookie; answers `{ status }` |
+| `POST /api/status` | Body `{ text, timeZone?, scope? }`, for a **check** (R-018) `{ check: "pulse" | "coming-up" | "long-range", scope?, timeZone? }` with **no `text`** (the server holds each check's words; the check looks over a week, a month or a year, a window the code works out in your time zone and states to the model; the answer is silent, one line, when nothing falls in it; `scope` may be omitted for every brain you can read), or for a circle's Pulse `{ pulse: true, scope }` (the week check, kept for older pages), and nothing else (any other field or query parameter is refused by name); a circle `scope` limits the context to that circle's notes (any role may ask; a stranger or a made-up circle gets the one "no such circle"); needs the session cookie; answers `{ status }` |
 
 Statuses are the usual ones: 401 without a session, 422 for a bad request with its field named, 429 with `Retry-After` for the hourly limit or a status already being made, 502 or 503 with fixed words when the model fails or is busy, 404 when status updates are not available.
 

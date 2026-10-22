@@ -74,6 +74,7 @@ export interface CaciController {
         readonly timeZone?: unknown;
         readonly scope?: unknown;
         readonly pulse?: unknown;
+        readonly check?: unknown;
     }): Promise<Result<StatusView, CaciError>>;
     summary(token: unknown, scope?: unknown): Promise<Result<GraphSummary, CaciError>>;
 }
@@ -82,6 +83,7 @@ export interface CaciController {
 export interface CaciControllerInit {
     // Warning: (ae-forgotten-export) The symbol "Controller" needs to be exported by the entry point index.d.ts
     readonly capture: Controller;
+    readonly checkTexts?: Readonly<Partial<Record<Check, string>>>;
     readonly clock?: () => number;
     readonly directory?: {
         get(id: string): Promise<{
@@ -183,6 +185,17 @@ export interface CategoryView {
     readonly itemCountCapped?: true;
     readonly name?: string;
 }
+
+// @public (undocumented)
+export type Check = (typeof CHECKS)[number];
+
+// Warning: (ae-forgotten-export) The symbol "Horizon" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export const CHECK_HORIZON: Readonly<Record<Check, Horizon>>;
+
+// @public
+export const CHECKS: readonly ["pulse", "coming-up", "long-range"];
 
 // @public (undocumented)
 export function createCaciController(init: CaciControllerInit): CaciController;

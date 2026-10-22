@@ -611,6 +611,9 @@ describe('the README on the pulse text (R-016 D21)', () => {
 
   it('the status route row in the README mentions pulse and the circle scope', () => {
     expect(statusSection).toContain('{ pulse: true, scope }');
+    expect(statusSection).toContain('{ check: "pulse" | "coming-up" | "long-range", scope?, timeZone? }');
+    expect(statusSection).toContain('no `text`');
+    expect(statusSection).toContain('the answer is silent');
     expect(statusSection).toContain('no such circle');
   });
 });

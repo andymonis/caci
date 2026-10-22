@@ -5,7 +5,8 @@
 
 export { CACI_ERROR_CODES, caciError } from './errors.js';
 export type { CaciError, CaciErrorCode, CaciOwnError } from './errors.js';
-export { createCaciController, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS, viewOf } from './controller.js';
+export { CHECK_HORIZON, CHECKS, createCaciController, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS, viewOf } from './controller.js';
+export type { Check } from './controller.js';
 export type { ApprovedView, CaciControllerInit, CaciController, CaciLimits, LedgerEntryView, LedgerView, ProposalView, SourceView, StatusView } from './controller.js';
 export { SOURCE_NOT_KEPT } from './controller.js';
 export type { StatusContextLimits } from './status-context.js';

@@ -32,7 +32,7 @@ const post = async (a: CircleApp, body: unknown, token?: string, path = '/api/st
   return r;
 };
 
-async function started(limits: { statusPerHour?: number } = {}) {
+async function started(limits: { statusPerHour?: number } = {}, checkTexts?: Record<string, string>) {
   const demo = createDemoModelClient();
   const client: ModelClient = {
     complete: async (request) => {
@@ -47,7 +47,7 @@ async function started(limits: { statusPerHour?: number } = {}) {
       const llm = createLlm({ controls: SHIPPED_CONTROLS, client });
       const capture = createController({ adapter: graphs, llm, now: () => now.value });
       const scopes = createScopeResolver({ users, store });
-      const caci = createCaciController({ users, capture, graphAdapter: graphs, scopes, clock: () => now.value, llm, limits });
+      const caci = createCaciController({ users, capture, graphAdapter: graphs, scopes, clock: () => now.value, llm, limits, ...(checkTexts === undefined ? {} : { checkTexts }) });
       return [...createCaptureRoutes({ caci }), ...createStatusRoutes({ caci })];
     },
   });
@@ -196,5 +196,54 @@ describe('POST /api/status', () => {
     expect(r.status).toBe(404);
     expect(r.json.error.code).toBe('NOT_FOUND');
     void t;
+  });
+});
+
+describe('POST /api/status with a check (R-018)', () => {
+  const TEXTS = { pulse: 'WEEK-TEXT', 'coming-up': 'MONTH-TEXT', 'long-range': 'YEAR-TEXT' };
+
+  it('answers a check with the same view, for any brain asked, and a silent one as a single line', async () => {
+    const { a, t, circle, file } = await started({}, TEXTS);
+    await file(t.bob, 'Mum new tablets one a day with food', { kind: 'circle', circleId: circle });
+    for (const name of ['pulse', 'coming-up', 'long-range']) {
+      const r = await post(a, { check: name }, t.ann);
+      expect(r.status, name).toBe(200);
+      expect(Object.keys(r.json.status).sort()).toEqual(['entriesLeftOut', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
+      expect(r.json.status.nothing).toBe(true); // the note has no date in any window
+      expect(r.json.status.points).toEqual([]);
+      expect(r.json.status.headline.length).toBeGreaterThan(0);
+    }
+    const scoped = await post(a, { check: 'pulse', scope: { kind: 'circle', circleId: circle } }, t.ann);
+    expect(scoped.status).toBe(200);
+    const personal = await post(a, { check: 'long-range', scope: { kind: 'personal' }, timeZone: 'Europe/London' }, t.ann);
+    expect(personal.status).toBe(200);
+  });
+
+  it('refuses text, an unknown or non-text check, and a check with a pulse, by name, before the model is asked', async () => {
+    const { a, t } = await started({}, TEXTS);
+    for (const [body, field] of [[{ check: 'day' }, 'check'], [{ check: 5 }, 'check'], [{ check: null }, 'check'], [{ check: 'pulse', text: 'my words' }, 'text'], [{ check: 'pulse', pulse: true }, 'check']] as const) {
+      const r = await post(a, body, t.ann);
+      expect(r.status, JSON.stringify(body)).toBe(422);
+      expect(r.json.error.field).toBe(field);
+    }
+    expect(statusCalls).toBe(0);
+  });
+
+  it('a check the server has no text for is a plain 404 in fixed words, and a stranger gets the made-up-circle 404', async () => {
+    const { a, t, circle } = await started({}, { pulse: 'WEEK-TEXT' });
+    const missing = await post(a, { check: 'long-range' }, t.ann);
+    expect(missing.status).toBe(404);
+    expect(missing.json.error.message).toBe('the long-range check is not available');
+    const stranger = await post(a, { check: 'pulse', scope: { kind: 'circle', circleId: circle } }, t.cat);
+    const made = await post(a, { check: 'pulse', scope: { kind: 'circle', circleId: 'c0000000000000999' } }, t.cat);
+    expect(stranger.status).toBe(404);
+    expect(stranger.text).toBe(made.text);
+    expect(statusCalls).toBe(0);
+  });
+
+  it('needs the session cookie like a status', async () => {
+    const { a } = await started({}, TEXTS);
+    const r = await post(a, { check: 'pulse' });
+    expect(r.status).toBe(401);
   });
 });

@@ -345,6 +345,15 @@ describe('status: a focused check (R-018)', () => {
     expect(r.ok && r.value.nothing && r.value.points.length === 0).toBe(true);
   });
 
+  it('tells the demo and test clients the window and the cap through the meta, and only for a focused check', async () => {
+    const w = setup([reply(TWO)]);
+    await w.llm.status({ ...INPUT, horizon: 'month' });
+    expect((w.client.requests[0] as ModelRequest).meta).toEqual({ capability: 'status', entryCount: 2, now: NOW, timeZone: 'Europe/London', horizon: { name: 'month', fromDay: '2026-10-15', toDay: '2026-11-14', maxPoints: 4 } });
+    const p = setup([reply(TWO)]);
+    await p.llm.status(INPUT);
+    expect((p.client.requests[0] as ModelRequest).meta).toEqual({ capability: 'status', entryCount: 2, now: NOW, timeZone: 'Europe/London' });
+  });
+
   it('an unknown horizon is a CONFIG error and the model is never asked', async () => {
     const { client, llm } = setup([reply(TWO)]);
     for (const bad of ['day', 'Week', '', 3, null]) {

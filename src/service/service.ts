@@ -142,6 +142,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       mode: config.llm,
       llm,
       pulseText: checks.value.pulse,
+      checkTexts: checks.value,
       limits: { maxPendingPerUser: config.maxPendingPerUser, proposalsPerHour: config.proposalsPerHour, statusPerHour: config.statusPerHour },
       ledger,
       directory: users,

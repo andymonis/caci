@@ -19,7 +19,14 @@ function metaProblemOf(meta: unknown): string | undefined {
     return typeof meta.itemId === 'string' && meta.itemId !== '' ? undefined : 'itemId must be non-empty text';
   }
   if (meta.capability === 'status') {
-    if (Object.keys(meta).some((k) => !['capability', 'entryCount', 'now', 'timeZone'].includes(k))) return 'a status meta may hold only capability, entryCount, now and timeZone';
+    if (Object.keys(meta).some((k) => !['capability', 'entryCount', 'now', 'timeZone', 'horizon'].includes(k))) return 'a status meta may hold only capability, entryCount, now, timeZone and horizon';
+    if (meta.horizon !== undefined) {
+      const h = meta.horizon;
+      if (!isObject(h) || Object.keys(h).some((k) => !['name', 'fromDay', 'toDay', 'maxPoints'].includes(k))) return 'horizon may hold only name, fromDay, toDay and maxPoints';
+      if (h.name !== 'week' && h.name !== 'month' && h.name !== 'year') return 'horizon.name must be "week", "month" or "year"';
+      for (const day of [h.fromDay, h.toDay]) if (typeof day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return 'horizon.fromDay and horizon.toDay must be days like 2026-10-22';
+      if (typeof h.maxPoints !== 'number' || !Number.isSafeInteger(h.maxPoints) || h.maxPoints < 1) return 'horizon.maxPoints must be a whole number from 1';
+    }
     if (typeof meta.entryCount !== 'number' || !Number.isSafeInteger(meta.entryCount) || meta.entryCount < 0) return 'entryCount must be a whole number';
     if (typeof meta.now !== 'number' || !Number.isSafeInteger(meta.now) || meta.now < 0) return 'now must be milliseconds since 1970';
     return typeof meta.timeZone === 'string' && meta.timeZone !== '' ? undefined : 'timeZone must be text';

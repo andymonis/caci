@@ -7,7 +7,7 @@ import { createBrowser, pageOf, type CategoryItemsPage, type CategoryPage, type 
 import { caciError, type CaciError } from './errors.js';
 import { createStatusContext, type StatusContextLimits } from './status-context.js';
 import { capText, newLedgerId, SUMMARY_MAX, TITLE_MAX, type LedgerEntry, type LedgerScope, type LedgerStore } from '../ledger/index.js';
-import type { Llm } from '../llm/index.js';
+import type { Horizon, Llm } from '../llm/index.js';
 import { isTimeZone } from '../llm/index.js';
 
 /** The longest note accepted: the categoriser's own limit, so a refusal here is clear and costs no model call. */
@@ -45,6 +45,8 @@ export interface CaciControllerInit {
   readonly ledger?: LedgerStore;
   /** The predefined text a pulse sends (R-016 D21), read by the service from `controls/pulse.txt`; without it a pulse is not available. */
   readonly pulseText?: string;
+  /** The server-held texts of the checks (R-018 D10): what each of the three checks asks. `pulse` here is the same as `pulseText`. */
+  readonly checkTexts?: Readonly<Partial<Record<Check, string>>>;
   /** Who is who in the change log: only the display name and username of a user id are ever read from it. Without it entries carry no names. */
   readonly directory?: { get(id: string): Promise<{ readonly username: string; readonly displayName: string } | undefined> };
   /** Told, with one fixed sentence and no note text, when recording a change failed. The change itself stands. A throwing hook is ignored. */
@@ -117,6 +119,11 @@ export interface LedgerView {
   readonly scope?: Provenance;
 }
 
+/** The three checks (R-018 D10, D11) and the horizon each one looks over. */
+export const CHECKS = Object.freeze(['pulse', 'coming-up', 'long-range'] as const);
+export type Check = (typeof CHECKS)[number];
+export const CHECK_HORIZON: Readonly<Record<Check, Horizon>> = Object.freeze({ pulse: 'week', 'coming-up': 'month', 'long-range': 'year' });
+
 /** The longest request accepted for a status. */
 export const MAX_STATUS_REQUEST_CHARS = 500;
 
@@ -164,7 +171,7 @@ export interface CaciController {
    * right now: their own brain and every circle brain they belong to (any role). Free text in (`text`, 1 to 500
    * characters; optional `timeZone`, an IANA name, default UTC). Writes nothing and keeps nothing.
    */
-  status(token: unknown, input: { readonly text?: unknown; readonly timeZone?: unknown; readonly scope?: unknown; readonly pulse?: unknown }): Promise<Result<StatusView, CaciError>>;
+  status(token: unknown, input: { readonly text?: unknown; readonly timeZone?: unknown; readonly scope?: unknown; readonly pulse?: unknown; readonly check?: unknown }): Promise<Result<StatusView, CaciError>>;
   /** Which model files this person's notes: `demo` (nothing leaves the machine) or `anthropic` (the note and category names go to Anthropic). Nothing else is said. */
   mode(token: unknown): Promise<Result<{ readonly mode: 'demo' | 'anthropic' }, CaciError>>;
   /** The scopes the person may use, their own brain first: where each is, their role there and whether they may capture. */
@@ -247,8 +254,12 @@ export function createCaciController(init: CaciControllerInit): CaciController {
   const statusHourly = createWindowLimiter({ max: statusPerHour, windowMs: HOUR_MS });
   const statusContext = createStatusContext(graphAdapter, init.limits?.status);
   const statusLlm = init.llm;
-  const pulseText = init.pulseText;
-  if (pulseText !== undefined && (typeof pulseText !== 'string' || pulseText.trim() === '' || [...pulseText].length > MAX_STATUS_REQUEST_CHARS)) throw new TypeError(`pulseText must be 1 to ${MAX_STATUS_REQUEST_CHARS} characters of text`);
+  const pulseText = init.pulseText ?? init.checkTexts?.pulse;
+  const checkTexts: Partial<Record<Check, string>> = { ...(init.checkTexts ?? {}), ...(pulseText === undefined ? {} : { pulse: pulseText }) };
+  for (const [name, text] of Object.entries(checkTexts)) {
+    if (!(CHECKS as readonly string[]).includes(name)) throw new TypeError(`checkTexts has an unknown check "${name}"`);
+    if (typeof text !== 'string' || text.trim() === '' || [...text].length > MAX_STATUS_REQUEST_CHARS) throw new TypeError(`the ${name} text must be 1 to ${MAX_STATUS_REQUEST_CHARS} characters of text`);
+  }
   /** Accounts with a status being made right now: one at a time each. */
   const making = new Set<string>();
   /** Every pending proposal with its owner. */
@@ -421,16 +432,23 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       if (statusLlm === undefined) return err(caciError('NOT_FOUND', 'status updates are not available'));
       const userId = me.value.user.id;
       if (typeof input !== 'object' || input === null || Array.isArray(input)) return err(caciError('INVALID_INPUT', 'send { text }', { field: 'text' }));
-      for (const key of Object.keys(input)) if (key !== 'text' && key !== 'timeZone' && key !== 'scope' && key !== 'pulse') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
+      for (const key of Object.keys(input)) if (key !== 'text' && key !== 'timeZone' && key !== 'scope' && key !== 'pulse' && key !== 'check') return err(caciError('INVALID_INPUT', `${key} is not accepted here`, { field: key }));
       // a pulse (R-016 D21) is the predefined text for one circle: no text may come with it, the server supplies it
       const pulse = input.pulse;
       if (pulse !== undefined && typeof pulse !== 'boolean') return err(caciError('INVALID_INPUT', 'pulse must be true or false', { field: 'pulse' }));
+      // a check (R-018 D11) is one of three predefined texts, each over its own horizon; the person may not send words with it
+      const check = input.check;
+      if (check !== undefined && !(typeof check === 'string' && (CHECKS as readonly string[]).includes(check))) return err(caciError('INVALID_INPUT', `check must be one of ${CHECKS.join(', ')}`, { field: 'check' }));
+      if (check !== undefined && pulse !== undefined) return err(caciError('INVALID_INPUT', 'send a check or pulse, not both', { field: 'check' }));
+      if (check !== undefined && input.text !== undefined) return err(caciError('INVALID_INPUT', 'a check takes no text', { field: 'text' }));
       if (pulse === true) {
         if (pulseText === undefined) return err(caciError('NOT_FOUND', 'pulse is not available'));
         if (input.text !== undefined) return err(caciError('INVALID_INPUT', 'a pulse takes no text', { field: 'text' }));
         if (input.scope === undefined) return err(caciError('INVALID_INPUT', 'a pulse needs a circle scope', { field: 'scope' }));
       }
-      const asked = pulse === true ? pulseText : input.text;
+      if (check !== undefined && checkTexts[check as Check] === undefined) return err(caciError('NOT_FOUND', `the ${check} check is not available`));
+      const horizon: Horizon | undefined = check !== undefined ? CHECK_HORIZON[check as Check] : pulse === true ? 'week' : undefined;
+      const asked = check !== undefined ? checkTexts[check as Check] : pulse === true ? pulseText : input.text;
       if (typeof asked !== 'string') return err(caciError('INVALID_INPUT', 'text must be text', { field: 'text' }));
       const text = asked.trim();
       if (text === '') return err(caciError('INVALID_INPUT', 'text must not be empty', { field: 'text' }));
@@ -466,7 +484,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
         const context = await statusContext.read(all.value, clock());
         if (!context.ok) return context;
         statusHourly.record(userId, clock()); // the model is about to be asked
-        const answered = await statusLlm.status({ text, entries: context.value.entries, timeZone });
+        const answered = await statusLlm.status({ text, entries: context.value.entries, timeZone, ...(horizon === undefined ? {} : { horizon }) });
         if (!answered.ok) return err({ source: 'llm' as const, error: answered.error });
         const provenance = context.value.provenance;
         const points = answered.value.points.map((p) => {
