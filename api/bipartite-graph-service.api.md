@@ -55,6 +55,22 @@ export interface BrainExport {
 }
 
 // @public
+export const CHECK_FILES: Readonly<{
+    readonly pulse: "pulse.txt";
+    readonly 'coming-up': "coming-up.txt";
+    readonly 'long-range': "long-range.txt";
+}>;
+
+// @public (undocumented)
+export const CHECK_NAMES: readonly ("pulse" | "coming-up" | "long-range")[];
+
+// @public (undocumented)
+export type CheckName = keyof typeof CHECK_FILES;
+
+// @public
+export type CheckTexts = Readonly<Record<CheckName, string>>;
+
+// @public
 export interface ConfigError {
     // (undocumented)
     readonly message: string;
@@ -162,6 +178,10 @@ export type ExportTarget = {
 export const isLoopbackAddress: (bind: string) => boolean;
 
 // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function loadCheckTexts(dir: string): Result<CheckTexts, readonly string[]>;
+
 // Warning: (ae-forgotten-export) The symbol "Controls" needs to be exported by the entry point index.d.ts
 //
 // @public

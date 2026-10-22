@@ -74,33 +74,60 @@ export function loadControlsFolder(dir: string): Result<Controls, readonly strin
   }
 }
 
-/** The longest pulse text: the same as the longest status request the API accepts (R-016 D21). */
+/** The longest check text: the same as the longest status request the API accepts (R-016 D21, R-018 D10). */
 export const MAX_PULSE_CHARS = 500;
 
+/** The three server-held check texts (R-018 D10): the file of each and the name the API and the pages use. */
+export const CHECK_FILES = Object.freeze({ pulse: 'pulse.txt', 'coming-up': 'coming-up.txt', 'long-range': 'long-range.txt' } as const);
+export type CheckName = keyof typeof CHECK_FILES;
+export const CHECK_NAMES = Object.freeze(Object.keys(CHECK_FILES) as CheckName[]);
+
 /**
- * Reads `pulse.txt` from the controls folder (R-016 D21): the predefined request a Circle screen's Pulse button
- * sends. One ordinary file, strict UTF-8, trimmed, one paragraph of plain text, 1 to 500 characters. Every problem
- * names the file; never throws.
+ * Reads one check text from the controls folder (R-016 D21): the predefined request a check button sends. One ordinary
+ * file, strict UTF-8, trimmed, one paragraph of plain text, 1 to 500 characters. Every problem names the file; never throws.
  */
-export function loadPulseText(dir: string): Result<string, readonly string[]> {
-  const path = join(dir, 'pulse.txt');
+function loadCheckText(dir: string, file: string): Result<string, readonly string[]> {
+  const path = join(dir, file);
   let stat;
   try {
     stat = lstatSync(path);
   } catch {
-    return err([`pulse.txt: is missing in ${dir}`]);
+    return err([`${file}: is missing in ${dir}`]);
   }
-  if (!stat.isFile()) return err(['pulse.txt: is not an ordinary file']);
-  if (stat.size > 4 * MAX_PULSE_CHARS + 16) return err([`pulse.txt: ${stat.size} bytes, too long (the text may be at most ${MAX_PULSE_CHARS} characters)`]);
+  if (!stat.isFile()) return err([`${file}: is not an ordinary file`]);
+  if (stat.size > 4 * MAX_PULSE_CHARS + 16) return err([`${file}: ${stat.size} bytes, too long (the text may be at most ${MAX_PULSE_CHARS} characters)`]);
   let text: string;
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path)).trim();
   } catch {
-    return err(['pulse.txt: is not valid UTF-8 text']);
+    return err([`${file}: is not valid UTF-8 text`]);
   }
-  if (text === '') return err(['pulse.txt: is empty']);
-  if ([...text].length > MAX_PULSE_CHARS) return err([`pulse.txt: ${[...text].length} characters, over the limit of ${MAX_PULSE_CHARS}`]);
+  if (text === '') return err([`${file}: is empty`]);
+  if ([...text].length > MAX_PULSE_CHARS) return err([`${file}: ${[...text].length} characters, over the limit of ${MAX_PULSE_CHARS}`]);
   // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/.test(text)) return err(['pulse.txt: must be one paragraph of plain text (no line breaks or control characters)']);
+  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/.test(text)) return err([`${file}: must be one paragraph of plain text (no line breaks or control characters)`]);
   return ok(text);
+}
+
+/** Reads `pulse.txt` (the week check): see `loadCheckText`. */
+export function loadPulseText(dir: string): Result<string, readonly string[]> {
+  return loadCheckText(dir, CHECK_FILES.pulse);
+}
+
+/** The three check texts, by name. */
+export type CheckTexts = Readonly<Record<CheckName, string>>;
+
+/**
+ * Reads `pulse.txt`, `coming-up.txt` and `long-range.txt` (R-018 D10). Every problem of every file is reported, each naming
+ * its file; one bad file gives no texts. Never throws.
+ */
+export function loadCheckTexts(dir: string): Result<CheckTexts, readonly string[]> {
+  const texts: Partial<Record<CheckName, string>> = {};
+  const problems: string[] = [];
+  for (const name of CHECK_NAMES) {
+    const r = loadCheckText(dir, CHECK_FILES[name]);
+    if (r.ok) texts[name] = r.value;
+    else problems.push(...r.error);
+  }
+  return problems.length > 0 ? err(problems) : ok(Object.freeze({ ...texts }) as CheckTexts);
 }

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseServiceConfig } from '../src/service/config.ts';
-import { loadControlsFolder, loadPulseText } from '../src/service/controls-files.ts';
+import { loadCheckTexts, loadControlsFolder, loadPulseText } from '../src/service/controls-files.ts';
 import { shippedFiles } from '../src/llm/testing/shipped-controls.test-util.ts';
 import { createProbes } from './doctor-host.mjs';
 import { LAYOUT } from './layout.mjs';
@@ -67,6 +67,16 @@ describe('the controls probe and the pulse text', () => {
   it('is good with a good pulse file', async () => {
     const { layout, probes } = setup({ deps: { loadPulse: loadPulseText } });
     write(layout, 'Give the circle status.');
+    expect(await probes.controls()).toEqual({ ok: true, dir: layout.controlsDir });
+  });
+  it('with the three check texts, names coming-up.txt or long-range.txt when either is missing', async () => {
+    const { layout, probes } = setup({ deps: { loadPulse: loadCheckTexts } });
+    write(layout, 'Give the circle status.');
+    const r = await probes.controls();
+    expect(r.ok).toBe(false);
+    expect(r.problems).toEqual([expect.stringMatching(/^coming-up\.txt: is missing/), expect.stringMatching(/^long-range\.txt: is missing/)]);
+    writeFileSync(join(layout.controlsDir, 'coming-up.txt'), 'Month?');
+    writeFileSync(join(layout.controlsDir, 'long-range.txt'), 'Year?');
     expect(await probes.controls()).toEqual({ ok: true, dir: layout.controlsDir });
   });
   it('names pulse.txt when it is missing or bad, with the other problems', async () => {

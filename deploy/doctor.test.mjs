@@ -72,7 +72,7 @@ describe('Node', () => {
 describe('the LLM controls', () => {
   it('load: one pass line naming the folder', async () => {
     const r = await doctor();
-    expect(r.results.find((x) => x.name === 'LLM controls')).toMatchObject({ status: 'pass', text: '/opt/caci/app/controls: the six files and the pulse text load and check out' });
+    expect(r.results.find((x) => x.name === 'LLM controls')).toMatchObject({ status: 'pass', text: '/opt/caci/app/controls: the six files and the three check texts load and check out' });
   });
   it('a bad file fails the doctor, names the problems and says how to undo a bad edit', async () => {
     const r = await doctor({ controls: async () => ({ ok: false, dir: '/opt/caci/app/controls', problems: ['status/system.txt: line 2: unknown slot "x"', 'status/settings.json: "maxPoints" is 99, outside 1 to 20'] }) });

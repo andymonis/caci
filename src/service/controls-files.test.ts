@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validFiles } from '../llm/controls/fixtures.test-util.js';
-import { defaultControlsDir, loadControlsFolder, loadPulseText, MAX_PULSE_CHARS } from './controls-files.js';
+import { CHECK_FILES, CHECK_NAMES, defaultControlsDir, loadCheckTexts, loadControlsFolder, loadPulseText, MAX_PULSE_CHARS } from './controls-files.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -139,7 +139,7 @@ describe('loading the pulse text (R-016 D21)', () => {
     expect(loadPulseText(pulseIn('  Provide a status update.\n\n'))).toEqual({ ok: true, value: 'Provide a status update.' });
     const shipped = loadPulseText(defaultControlsDir());
     expect(shipped.ok).toBe(true);
-    if (shipped.ok) expect(shipped.value).toBe('Provide a status update for the circle. Keep the answer factual, stick to the point and be concise.');
+    if (shipped.ok) expect(shipped.value).toBe('What needs my attention this week? Keep it factual and brief, and say so plainly if nothing does.');
   });
 
   it('a missing file, a folder, a link, an empty file and blank text are each refused, naming the file', () => {
@@ -171,5 +171,51 @@ describe('loading the pulse text (R-016 D21)', () => {
   it('never throws, and quotes nothing from the file', () => {
     expect(bad('/no/such/folder')[0]).toMatch(/^pulse\.txt: is missing/);
     expect(bad(pulseIn('secret\nvalue')).join(' ')).not.toContain('secret');
+  });
+});
+
+describe('loading the three check texts (R-018 D10)', () => {
+  const checks = (files: Record<string, string | Buffer | undefined>): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'caci-checks-'));
+    dirs.push(dir);
+    for (const [name, content] of Object.entries(files)) if (content !== undefined) writeFileSync(join(dir, name), content);
+    return dir;
+  };
+  const good = { 'pulse.txt': 'Week?\n', 'coming-up.txt': '  Month?  \n\n', 'long-range.txt': 'Year?' };
+  const problems = (dir: string): readonly string[] => {
+    const r = loadCheckTexts(dir);
+    if (r.ok) throw new Error('expected a refusal');
+    return r.error;
+  };
+
+  it('names the three files and checks', () => {
+    expect(CHECK_FILES).toEqual({ pulse: 'pulse.txt', 'coming-up': 'coming-up.txt', 'long-range': 'long-range.txt' });
+    expect(CHECK_NAMES).toEqual(['pulse', 'coming-up', 'long-range']);
+  });
+
+  it('reads the three texts trimmed, frozen, by name; the shipped folder is good', () => {
+    const r = loadCheckTexts(checks(good));
+    expect(r).toEqual({ ok: true, value: { pulse: 'Week?', 'coming-up': 'Month?', 'long-range': 'Year?' } });
+    expect(r.ok && Object.isFrozen(r.value)).toBe(true);
+    const shipped = loadCheckTexts(defaultControlsDir());
+    expect(shipped.ok).toBe(true);
+  });
+
+  it('reports every bad file at once, each naming its file, and gives no texts for any', () => {
+    expect(problems(checks({ 'pulse.txt': undefined, 'coming-up.txt': '', 'long-range.txt': 'a\nb' }))).toEqual([expect.stringMatching(/^pulse\.txt: is missing/), 'coming-up.txt: is empty', expect.stringContaining('long-range.txt: must be one paragraph')]);
+    expect(problems(checks({ ...good, 'coming-up.txt': undefined }))).toEqual([expect.stringMatching(/^coming-up\.txt: is missing/)]);
+    expect(problems(checks({ ...good, 'long-range.txt': 'x'.repeat(501) }))[0]).toContain('long-range.txt: 501 characters, over the limit of 500');
+    expect(problems(checks({ ...good, 'long-range.txt': Buffer.from([0xff, 0xfe]) }))).toEqual(['long-range.txt: is not valid UTF-8 text']);
+  });
+
+  it('a file that is a folder or a link is refused, and a text never appears in a message', () => {
+    const dir = checks({ ...good, 'coming-up.txt': undefined });
+    mkdirSync(join(dir, 'coming-up.txt'));
+    expect(problems(dir)).toEqual(['coming-up.txt: is not an ordinary file']);
+    expect(problems(checks({ ...good, 'pulse.txt': 'secret\nvalue' })).join(' ')).not.toContain('secret');
+  });
+
+  it('loadPulseText still reads only the pulse file', () => {
+    expect(loadPulseText(checks({ 'pulse.txt': 'Only this.' }))).toEqual({ ok: true, value: 'Only this.' });
   });
 });

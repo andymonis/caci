@@ -597,10 +597,14 @@ describe('the README on the pulse text (R-016 D21)', () => {
     expect(pulseSection).toContain(shipped);
     expect(MAX_PULSE_CHARS).toBe(500);
     expect(pulseSection).toContain(`1 to ${MAX_PULSE_CHARS} characters`);
+    for (const name of ['coming-up', 'long-range']) {
+      expect(pulseSection).toContain(`controls/${name}.txt`);
+      expect(readFileSync(new URL(`../../controls/${name}.txt`, import.meta.url), 'utf8').trim().length).toBeGreaterThan(20);
+    }
   });
 
   it('says the things a reader must not miss', () => {
-    for (const phrase of ['controls/pulse.txt', 'a missing, blank, too long or multi-line file stops the start', 'never the words', 'published with the package and never served', 'npm run doctor']) {
+    for (const phrase of ['controls/pulse.txt', 'controls/coming-up.txt', 'controls/long-range.txt', 'a missing, blank, too long or multi-line file stops the start', 'never the words', 'published with the package and never served', 'npm run doctor', 'worked out by the code']) {
       expect(pulseSection, phrase).toContain(phrase);
     }
   });

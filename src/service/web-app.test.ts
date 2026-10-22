@@ -119,7 +119,7 @@ describe('the running service serves the web app', () => {
 
   it('no controls file is ever served, at any path, and none of the served files contains their wording', async () => {
     const { base } = await start();
-    const paths = ['/pulse.txt', '/controls/pulse.txt', '/controls', '/controls/', '/controls/status/system.txt', '/controls/categorise/system.txt', '/controls/status/frame.txt', '/controls/categorise/settings.json', '/status/system.txt', '/categorise/settings.json', '/system.txt', '/frame.txt', '/settings.json', '/%63ontrols/status/system.txt', '/controls/../controls/status/system.txt', '/web/../controls/status/system.txt'];
+    const paths = ['/pulse.txt', '/coming-up.txt', '/long-range.txt', '/controls/coming-up.txt', '/controls/long-range.txt', '/controls/pulse.txt', '/controls', '/controls/', '/controls/status/system.txt', '/controls/categorise/system.txt', '/controls/status/frame.txt', '/controls/categorise/settings.json', '/status/system.txt', '/categorise/settings.json', '/system.txt', '/frame.txt', '/settings.json', '/%63ontrols/status/system.txt', '/controls/../controls/status/system.txt', '/web/../controls/status/system.txt'];
     for (const path of paths) {
       const res = await fetch(`${base}${path}`);
       expect(res.status, path).toBe(404);
@@ -128,7 +128,7 @@ describe('the running service serves the web app', () => {
     }
     for (const spec of WEB_FILE_SPECS) {
       const res = await fetch(`${base}${spec.path}`);
-      expect(await res.text(), spec.path).not.toMatch(/You are the (status|filing) assistant|maxHeadline|\{\{entriesBlock\}\}|Provide a status update for the circle/);
+      expect(await res.text(), spec.path).not.toMatch(/You are the (status|filing) assistant|maxHeadline|\{\{entriesBlock\}\}|What needs my attention this week|What is coming up in the next month|long-range radar/);
     }
   });
 

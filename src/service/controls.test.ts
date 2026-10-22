@@ -27,7 +27,7 @@ const folder = (change: (files: Record<string, string>) => void = () => {}): str
   change(files);
   const dir = tmp();
   writeControls(dir, files);
-  writeFileSync(join(dir, 'pulse.txt'), readFileSync(new URL('../../controls/pulse.txt', import.meta.url), 'utf8'));
+  for (const name of ['pulse.txt', 'coming-up.txt', 'long-range.txt']) writeFileSync(join(dir, name), readFileSync(new URL(`../../controls/${name}`, import.meta.url), 'utf8'));
   return dir;
 };
 const message = async (promise: Promise<unknown>): Promise<string> => {
@@ -130,10 +130,22 @@ describe('the pulse text (R-016 D21)', () => {
       const data = join(tmp(), 'data');
       const dir = pulseFolder(content);
       const m = await message(startService(baseConfig(data), { controlsDir: dir }));
-      expect(m, String(content)).toContain(`the pulse text in ${dir} is not valid`);
+      expect(m, String(content)).toContain(`the check texts in ${dir} are not valid`);
       expect(m).toContain('pulse.txt');
       expect(existsSync(data)).toBe(false);
     }
+  });
+
+  it('a missing or bad coming-up or long-range file stops the start the same way, naming it, with every bad file listed', async () => {
+    const data = join(tmp(), 'data');
+    const dir = pulseFolder('Fine.');
+    rmSync(join(dir, 'coming-up.txt'));
+    writeFileSync(join(dir, 'long-range.txt'), 'two\nlines');
+    const m = await message(startService(baseConfig(data), { controlsDir: dir }));
+    expect(m).toContain(`the check texts in ${dir} are not valid`);
+    expect(m).toContain('coming-up.txt: is missing');
+    expect(m).toContain('long-range.txt: must be one paragraph');
+    expect(existsSync(data)).toBe(false);
   });
 
   it('a good pulse file starts the service', async () => {

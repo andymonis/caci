@@ -346,6 +346,6 @@ describe('a circle\'s pulse over HTTP (R-016 D19 to D21)', () => {
     dirs.push(dir);
     cpSync(defaultControlsDir(), dir, { recursive: true });
     writeFileSync(join(dir, 'pulse.txt'), '');
-    await expect(startService(config(join(dir, 'data')), { controlsDir: dir })).rejects.toThrow(/pulse text .* is not valid[\s\S]*pulse\.txt: is empty/);
+    await expect(startService(config(join(dir, 'data')), { controlsDir: dir })).rejects.toThrow(/check texts .* are not valid[\s\S]*pulse\.txt: is empty/);
   });
 });

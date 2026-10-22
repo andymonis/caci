@@ -88,7 +88,7 @@ export async function runDoctor({ probes, log }) {
 
   await check('LLM controls', async () => {
     const c = await probes.controls();
-    if (c.ok) return pass('LLM controls', `${c.dir}: the six files and the pulse text load and check out`);
+    if (c.ok) return pass('LLM controls', `${c.dir}: the six files and the three check texts load and check out`);
     return fail('LLM controls', `${c.dir}: ${c.problems.slice(0, 5).join('; ')}${c.problems.length > 5 ? ` (and ${c.problems.length - 5} more)` : ''}`, `Fix the file named above (git diff controls/ in ${c.dir.replace(/\/controls\/?$/, '')} shows what changed), or undo it with git checkout -- controls/, then: sudo systemctl restart caci`);
   });
 
