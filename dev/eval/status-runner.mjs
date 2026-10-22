@@ -13,13 +13,16 @@ export async function runStatusEval({ lib, cases, models, repeat = 1, makeClient
       for (let attempt = 1; attempt <= repeat; attempt++) {
         if (signal?.aborted) return { results, aborted: true };
         const client = makeClient({ caseDef, label: model.label, choice: model.choice });
-        const llm = lib.createLlm({ client, now, ...(controls === undefined ? {} : { controls }) });
+        // a focused case fixes "now" (the window is worked out from it) and asks for its horizon in its own time zone
+        const caseNow = caseDef.now === undefined ? now : () => Date.parse(caseDef.now);
+        const llm = lib.createLlm({ client, now: caseNow, ...(controls === undefined ? {} : { controls }) });
         const trace = [];
         const started = now();
-        const result = await llm.status({ text: caseDef.request, entries: caseDef.entries }, { ...model.choice, timeoutMs, trace: (event) => void trace.push(event) });
+        const result = await llm.status({ text: caseDef.request, entries: caseDef.entries, ...(caseDef.timeZone === undefined ? {} : { timeZone: caseDef.timeZone }), ...(caseDef.horizon === undefined ? {} : { horizon: caseDef.horizon }) }, { ...model.choice, timeoutMs, trace: (event) => void trace.push(event) });
         const latencyMs = now() - started;
         const outcome = result.ok ? { ok: true, answer: result.value } : { ok: false, error: result.error };
-        const verdict = evaluateStatusCase(caseDef, outcome);
+        const window = caseDef.horizon === undefined ? undefined : lib.horizonWindow(Date.parse(caseDef.now), caseDef.timeZone ?? 'UTC', caseDef.horizon);
+        const verdict = evaluateStatusCase(caseDef, outcome, window?.ok ? { window: window.value } : {});
         const record = {
           caseId: caseDef.id,
           model: model.label,

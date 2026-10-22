@@ -11,6 +11,7 @@ const createLlmWithControls = withControls(llm.createLlm, loadControlsOrThrow(co
 export const lib = {
   createLlm: createLlmWithControls,
   DEFAULT_TIERS: llm.DEFAULT_TIERS,
+  horizonWindow: llm.horizonWindow,
   createScriptedModelClient: testing.createScriptedModelClient,
   createAnthropicClient: anthropic.createAnthropicClient,
   readAnthropicKey: anthropic.readAnthropicKey,

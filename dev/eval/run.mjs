@@ -19,6 +19,7 @@ const { withControls } = await import('../shared/controls.mjs');
 const lib = {
   createLlm: withControls(llm.createLlm, controls),
   DEFAULT_TIERS: llm.DEFAULT_TIERS,
+  horizonWindow: llm.horizonWindow,
   createScriptedModelClient: testing.createScriptedModelClient,
   createAnthropicClient: anthropic.createAnthropicClient,
   readAnthropicKey: anthropic.readAnthropicKey,

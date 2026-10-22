@@ -19,7 +19,7 @@ add `--yes`. The key is read once, passed to the client and never printed or sav
 
 | Option | Meaning |
 | --- | --- |
-| `--capability c` | What to evaluate: `categorise` (default) or `status` (R-011) |
+| `--capability c` | What to evaluate: `categorise` (default), `status` (R-011) or `focus` (status checks over a week, a month or a year, R-018) |
 | `--controls DIR` | Try a candidate folder of LLM controls (the six files of `controls/`) instead of the shipped one. It is checked first, with the service's own code; a bad folder stops with every problem listed before any call |
 | `--models a,b,c` | Tiers (`fast`, `balanced`, `deep`) or exact model ids. Default: all three tiers |
 | `--repeat n` | Runs per case and model, 1 to 10. Models are not deterministic, so 3 gives a steadier pass rate |
@@ -83,6 +83,27 @@ loose and each is reported: the call succeeds, the right entries are cited (and 
 that is not in the request or the entries (nothing invented), and a forbidden word (the one the hidden
 instruction asks for) never appears. The default tier for `status` (`balanced`) stays provisional until a
 real run compares the tiers; a real run sends the requests and the notes in the golden set to Anthropic.
+
+## Evaluating `focus` (R-018)
+
+```
+npm run eval -- --capability focus --scripted                      # free: checks the harness
+npm run eval -- --capability focus --models fast,balanced,deep     # plans; sends nothing
+npm run eval -- --capability focus --models fast,balanced,deep --yes
+npm run eval -- --capability focus --controls /tmp/candidate --yes  # try other wording or caps
+```
+
+Eleven invented cases (`status-focus-golden.mjs`), lookalikes of real ones, with a fixed "now" (Thursday 22 October 2026)
+and the horizon asked (week, month or year): a student rent schedule with the first two payments paid (the week and the
+month must be silent, the year must name only the two payments still to come), a family holiday in France in August 2027
+(silent for a week and a month, on the radar for the year), a dentist tomorrow beside far-off rent, an overdue item (still
+shown), nothing at all, eight errands in a week (no more than the cap), and an instruction hidden in a note. The checks
+are rules, never a model: **silent** (one line, `nothing: true`, no points), phrases that **must** be said (`a|b` means
+either), phrases that **must not** be mentioned (what is outside the window, what is already paid), the number of points,
+the length of a point and of the whole answer, no invented number (today's date and the window count as known), and a
+forbidden word. Each case writes down its **ideal** answer, which is what the scripted model says. The real run is the
+comparison to make: the owner's real run of the shipped controls against a candidate folder says whether wording alone is
+enough (R-018 Part A) before dated facts are built. Notes and requests in the set go to Anthropic on a real run.
 
 ## Trying a change to the controls (R-012)
 

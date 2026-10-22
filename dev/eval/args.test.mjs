@@ -15,7 +15,8 @@ describe('parseArgs', () => {
   it('reads the capability, and refuses one that does not exist', () => {
     expect(parse('--capability', 'status').value.capability).toBe('status');
     expect(parse('--capability', 'categorise').value.capability).toBe('categorise');
-    expect(parse('--capability', 'answer')).toEqual({ ok: false, message: '--capability must be one of: categorise, status' });
+    expect(parse('--capability', 'focus').value.capability).toBe('focus');
+    expect(parse('--capability', 'answer')).toEqual({ ok: false, message: '--capability must be one of: categorise, status, focus' });
     expect(parse('--capability')).toEqual({ ok: false, message: '--capability needs a value' });
   });
   it('reads the flags', () => {

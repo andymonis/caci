@@ -1,10 +1,10 @@
 // Command-line arguments for `npm run eval`. Pure.
 
-export const CAPABILITIES = Object.freeze(['categorise', 'status']);
+export const CAPABILITIES = Object.freeze(['categorise', 'status', 'focus']);
 export const DEFAULT_MODELS = Object.freeze(['fast', 'balanced', 'deep']);
 export const USAGE = `Usage: npm run eval -- [options]
 
-  --capability c   what to evaluate: categorise (default) or status
+  --capability c   what to evaluate: categorise (default), status, or focus (status checks over a week, a month or a year: R-018)
   --controls DIR   try a candidate folder of LLM controls (the six files of controls/) instead of the shipped one; it is checked first
   --models a,b,c   tiers (fast, balanced, deep) or exact model ids. Default: fast,balanced,deep
   --repeat n       runs per case and model, 1 to 10 (models are not deterministic). Default: 1

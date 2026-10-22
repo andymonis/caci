@@ -7,6 +7,11 @@ const cut = (text, n) => (text.length <= n ? text : `${text.slice(0, n - 1)}…`
 /** The correct reply: nothing relevant when the case says so, otherwise one point per entry it must cite. */
 export function idealStatusReply(caseDef) {
   const { expect = {}, entries } = caseDef;
+  // a focused case writes its own ideal answer down (R-018), so what 'good' looks like is part of the case
+  if (caseDef.ideal !== undefined) {
+    const points = caseDef.ideal.points.map((p) => ({ text: p.text, refs: [...p.refs] }));
+    return { headline: caseDef.ideal.headline ?? 'Here is what matters right now.', points, nothing: points.length === 0 };
+  }
   if (expect.nothing === true) return { headline: 'Nothing relevant to that.', points: [], nothing: true };
   const cite = (expect.cite ?? []).slice(0, expect.points?.max ?? 5);
   return {

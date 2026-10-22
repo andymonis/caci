@@ -3,6 +3,7 @@
 import { parseArgs, resolveModels, USAGE } from './args.mjs';
 import { validateGolden } from './evaluate.mjs';
 import { validateStatusGolden } from './status-evaluate.mjs';
+import { STATUS_FOCUS_GOLDEN } from './status-focus-golden.mjs';
 import { STATUS_GOLDEN } from './status-golden.mjs';
 import { runStatusEval } from './status-runner.mjs';
 import { idealStatusScript } from './status-scripted.mjs';
@@ -37,9 +38,9 @@ export async function main(io) {
     return 0;
   }
 
-  const status = args.capability === 'status';
+  const status = args.capability === 'status' || args.capability === 'focus';
   const kit = status
-    ? { golden: STATUS_GOLDEN, validate: validateStatusGolden, run: runStatusEval, script: ({ caseDef }) => lib.createScriptedModelClient(idealStatusScript(caseDef)), sends: 'the requests and notes' }
+    ? { golden: args.capability === 'focus' ? STATUS_FOCUS_GOLDEN : STATUS_GOLDEN, validate: validateStatusGolden, run: runStatusEval, script: ({ caseDef }) => lib.createScriptedModelClient(idealStatusScript(caseDef)), sends: 'the requests and notes' }
     : { golden: GOLDEN, validate: validateGolden, run: runEval, script: ({ caseDef, itemId }) => lib.createScriptedModelClient(idealScript(caseDef, itemId)), sends: 'the notes and category names' };
 
   let cases = kit.golden;
@@ -127,7 +128,7 @@ export async function main(io) {
 
   const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
   try {
-    const path = await io.save(args.out, `${stamp}-${status ? 'status-' : ''}${mode}.json`, { capability: args.capability, controls: args.controls ?? null, startedAt: new Date(startedAt).toISOString(), mode, repeat: args.repeat, aborted, models: resolved, cases: cases.map((c) => c.id), results });
+    const path = await io.save(args.out, `${stamp}-${status ? `${args.capability}-` : ''}${mode}.json`, { capability: args.capability, controls: args.controls ?? null, startedAt: new Date(startedAt).toISOString(), mode, repeat: args.repeat, aborted, models: resolved, cases: cases.map((c) => c.id), results });
     stdout(`\nSaved: ${path}\n`);
   } catch (error) {
     stderr(`Could not save the results: ${error.message}\n`);
