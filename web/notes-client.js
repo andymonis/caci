@@ -50,6 +50,8 @@ const MODES = Object.freeze(['demo', 'anthropic']);
 export const isCircleId = (value) => typeof value === 'string' && CIRCLE_ID.test(value);
 
 /** A circle scope, as the page holds it: its id, and optionally the name it was shown with (which is never sent); no other key. */
+/** The three checks and the words the pages show for them. */
+export const CHECK_LABELS = Object.freeze({ pulse: 'Pulse', 'coming-up': 'Coming up', 'long-range': 'Long range' });
 const isCircle = (scope) => isObject(scope) && scope.kind === 'circle' && isCircleId(scope.circleId) && Object.keys(scope).every((k) => k === 'kind' || k === 'circleId' || k === 'circleName');
 
 /** Where something came from: `{ kind: 'personal' }` or a circle with its id and name; anything else is not shaped right. */
@@ -369,6 +371,19 @@ export function createNotesClient({ fetchFn }) {
       if (!isCircle(scope)) return Promise.resolve(badScope());
       const zone = typeof timeZone === 'string' && timeZone !== '' && timeZone.length <= TIME_ZONE_MAX ? timeZone : undefined;
       return call({ method: 'POST', path: () => '/api/status', body: { pulse: true, scope: Object.freeze({ kind: 'circle', circleId: scope.circleId }), ...(zone === undefined ? {} : { timeZone: zone }) }, parse: statusOf, what: 'status', fields: ['pulse', 'scope', 'timeZone'] });
+    },
+    /**
+     * One of the three checks (R-018): `pulse` (a week), `coming-up` (a month) or `long-range` (a year). Only `{ check, scope?, timeZone? }`
+     * is sent: the words come from the service and the window is worked out there, so the page holds neither. The scope is the own
+     * brain, a circle, or left out for every brain the person can read.
+     */
+    check(name, scope, timeZone) {
+      if (typeof name !== 'string' || !Object.hasOwn(CHECK_LABELS, name)) return Promise.resolve(fail({ kind: 'invalid', field: 'check', message: 'Choose Pulse, Coming up or Long range.' }));
+      const target = scope === undefined || (isObject(scope) && scope.kind === 'personal') ? undefined : isCircle(scope) ? Object.freeze({ kind: 'circle', circleId: scope.circleId }) : null;
+      if (target === null) return Promise.resolve(badScope());
+      const zone = typeof timeZone === 'string' && timeZone !== '' && timeZone.length <= TIME_ZONE_MAX ? timeZone : undefined;
+      const personal = isObject(scope) && scope.kind === 'personal';
+      return call({ method: 'POST', path: () => '/api/status', body: { check: name, ...(personal ? { scope: Object.freeze({ kind: 'personal' }) } : target === undefined ? {} : { scope: target }), ...(zone === undefined ? {} : { timeZone: zone }) }, parse: statusOf, what: 'status', fields: ['check', 'scope', 'timeZone'] });
     },
     getProposal: (id) => call({ method: 'GET', proposal: [id], path: (p) => `/api/capture/proposals/${p}`, parse: proposalOf }),
     approve: (id) => call({ method: 'POST', proposal: [id], path: (p) => `/api/capture/proposals/${p}/approve`, parse: writtenOf }),

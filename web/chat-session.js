@@ -13,6 +13,7 @@
 // - Nothing is written to the browser; nothing the person or CaCi wrote is treated as anything but text.
 
 import { formatTime, withWait } from './capture-view.js';
+import { CHECK_LABELS } from './notes-client.js';
 import { sourcesText, STATUS_NOTHING } from './status-view.js';
 import { browserTimeZone } from './status-session.js';
 
@@ -141,7 +142,7 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
   }
 
   /** Puts a status answer (or its failure) in the thread. */
-  function present(r, mine) {
+  function present(r, mine, focused = false) {
     if (mine !== epoch) return DROPPED;
     if (!r.ok) {
       signedOut(r.error);
@@ -150,8 +151,9 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
     }
     const a = r.value;
     const empty = a.nothing || a.points.length === 0;
-    const lines = empty ? [STATUS_NOTHING] : a.points.map((p) => `${p.text}${sourcesText(p.sources) === '' ? '' : ` (${sourcesText(p.sources)})`}`);
-    const lineFacts = empty ? [[]] : a.points.map((p) => (Array.isArray(p.facts) ? p.facts : []));
+    // a focused check that finds nothing is silent: its headline is the whole answer (R-018 D1)
+    const lines = empty ? (focused ? [] : [STATUS_NOTHING]) : a.points.map((p) => `${p.text}${sourcesText(p.sources) === '' ? '' : ` (${sourcesText(p.sources)})`}`);
+    const lineFacts = empty ? (focused ? [] : [[]]) : a.points.map((p) => (Array.isArray(p.facts) ? p.facts : []));
     say('cacci', 'answer', a.headline, { lines, lineFacts });
     return Object.freeze({ ok: true });
   }
@@ -237,13 +239,24 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
         return Object.freeze({ ok: true });
       });
     },
+    /**
+     * One of the three checks (R-018): `pulse`, `coming-up` or `long-range`. On a circle's screen it looks at that circle, on Home at
+     * every brain the person can read. The service holds the words and works out the window; a silent answer is one line.
+     */
+    async check(name) {
+      if (busy) return BUSY;
+      if (typeof name !== 'string' || !Object.hasOwn(CHECK_LABELS, name) || typeof notes.check !== 'function') return Object.freeze({ ok: false, kind: 'invalid', message: 'Choose Pulse, Coming up or Long range.' });
+      if (mode.status !== 'known') return NOT_READY;
+      say('me', 'text', CHECK_LABELS[name]);
+      return exclusive(async (mine) => present(await notes.check(name, place === undefined ? undefined : { kind: 'circle', circleId: place.circleId }, timeZone()), mine, true));
+    },
     /** The Pulse (a circle's screen only): a status of this circle alone, with the predefined text the service holds. */
     async pulse() {
       if (busy) return BUSY;
       if (place === undefined) return Object.freeze({ ok: false, kind: 'invalid', message: 'The Pulse is on a circle\'s screen.' });
       if (mode.status !== 'known') return NOT_READY;
       say('me', 'text', PULSE_LABEL);
-      return exclusive(async (mine) => present(await notes.pulse({ kind: 'circle', circleId: place.circleId }, timeZone()), mine));
+      return exclusive(async (mine) => present(await notes.pulse({ kind: 'circle', circleId: place.circleId }, timeZone()), mine, true));
     },
   });
 }

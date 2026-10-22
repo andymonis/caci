@@ -552,6 +552,47 @@ describe('status updates (R-011)', () => {
     expect(refused.error.field).toBeUndefined(); // 'text' is not a field of a pulse call
   });
 
+  it('check sends only the check, the scope when there is one, and the time zone: never words, never a pulse flag (R-018)', async () => {
+    const { calls, client } = fake(answer);
+    expect((await client.check('pulse')).ok).toBe(true);
+    await client.check('coming-up', undefined, 'Europe/London');
+    await client.check('long-range', { kind: 'circle', circleId: CIRCLE, circleName: 'ignored' }, 'UTC');
+    await client.check('pulse', { kind: 'personal' });
+    await client.check('coming-up', undefined, 5);
+    expect(calls.map((c) => `${c.init.method} ${c.path}`)).toEqual(Array(5).fill('POST /api/status'));
+    expect(calls.map((c) => c.body)).toEqual([
+      { check: 'pulse' },
+      { check: 'coming-up', timeZone: 'Europe/London' },
+      { check: 'long-range', scope: { kind: 'circle', circleId: CIRCLE }, timeZone: 'UTC' },
+      { check: 'pulse', scope: { kind: 'personal' } },
+      { check: 'coming-up' },
+    ]);
+  });
+
+  it('check refuses an unknown or non-text check and a bad scope, naming where, and sends nothing', async () => {
+    const { calls, client } = fake(answer);
+    for (const bad of ['', 'day', 'Pulse', 'toString', '__proto__', 'constructor', 5, null, undefined, {}]) expect((await client.check(bad)).error, String(bad)).toMatchObject({ kind: 'invalid', field: 'check' });
+    for (const scope of ['mine', { kind: 'circle', circleId: 'nope' }, { kind: 'circle' }, { kind: 'other' }, 5, null]) expect((await client.check('pulse', scope)).error, JSON.stringify(scope)).toMatchObject({ kind: 'invalid', field: 'scope' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('check keeps the field a refusal names only when it is a field of a check call', async () => {
+    expect((await fake(err(422, { code: 'INVALID_INPUT', message: 'bad zone', field: 'timeZone' })).client.check('pulse', undefined, 'UTC')).error).toMatchObject({ kind: 'invalid', field: 'timeZone' });
+    expect((await fake(err(422, { code: 'INVALID_INPUT', message: 'bad scope', field: 'scope' })).client.check('pulse')).error).toMatchObject({ field: 'scope' });
+    expect((await fake(err(422, { code: 'INVALID_INPUT', message: 'bad', field: 'check' })).client.check('pulse')).error).toMatchObject({ field: 'check' });
+    expect((await fake(err(422, { code: 'INVALID_INPUT', message: 'no words', field: 'text' })).client.check('pulse')).error.field).toBeUndefined();
+  });
+
+  it('check says the service\'s refusals in the same words as a status, and cuts the answer down the same way', async () => {
+    expect((await fake(err(404, { code: 'NOT_FOUND', message: 'no such circle' })).client.check('pulse', { kind: 'circle', circleId: CIRCLE })).error).toEqual({ kind: 'not-found', what: 'circle', message: 'No such circle, or you are not in it.' });
+    expect((await fake(err(404, { code: 'NOT_FOUND', message: 'the long-range check is not available' })).client.check('long-range')).error.kind).toBe('not-found');
+    expect((await fake(err(429, { code: 'THROTTLED', message: 'slow' }, { 'retry-after': '9' })).client.check('pulse')).error).toMatchObject({ kind: 'limit', retryAfterSeconds: 9 });
+    const silent = { status: 200, body: { status: { ...VIEW, points: [], nothing: true, headline: 'Nothing needs your attention this week.' } } };
+    const r = await fake(silent).client.check('pulse');
+    expect(r.value).toMatchObject({ headline: 'Nothing needs your attention this week.', nothing: true, points: [] });
+    expect(Object.isFrozen(r.value)).toBe(true);
+  });
+
   it('checks the text first: blank, not text, or over 500 characters is refused naming text, and nothing is sent', async () => {
     const { calls, client } = fake(answer);
     for (const bad of ['', '   ', 5, null, undefined, 'x'.repeat(501)]) expect((await client.status(bad)).error, String(bad)).toMatchObject({ kind: 'invalid', field: 'text' });

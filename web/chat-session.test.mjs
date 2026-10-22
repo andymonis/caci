@@ -21,6 +21,7 @@ function fakeNotes(over = {}) {
       propose: rec('propose', () => okv({ id: 'prop-1', summary: SUMMARY() })),
       approve: rec('approve', () => okv({ id: 'prop-1', applied: 3 })),
       reject: rec('reject', () => okv(true)),
+      check: rec('check', (name) => okv({ headline: name === 'pulse' ? 'A quiet week.' : name === 'coming-up' ? 'A quiet month.' : 'A quiet year.', nothing: false, points: [{ text: `Point for ${name}`, sources: [{ kind: 'personal' }], facts: [{ scope: { kind: 'personal' }, id: 'note-9' }] }] })),
       pulse: rec('pulse', () => okv({ headline: 'Circle is quiet.', nothing: false, points: [{ text: 'Bins on Thursday', sources: [{ kind: 'circle', circleId: C1, circleName: 'Parent care' }] }] })),
       status: rec('status', () => okv({ headline: 'A quiet day.', nothing: false, points: [{ text: 'Mum has new tablets.', sources: [{ kind: 'personal' }] }] })),
       ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, rec(k, v)])),
@@ -119,7 +120,7 @@ describe('on a circle\'s screen', () => {
   it('a pulse with nothing relevant, a limit or a missing circle is said in words', async () => {
     const quiet = await inCircle({ pulse: () => okv({ headline: 'Nothing.', nothing: true, points: [] }) });
     await quiet.s.pulse();
-    expect(quiet.s.getState().messages.at(-1).lines).toEqual(['Nothing relevant was found in what you can read.']);
+    expect(quiet.s.getState().messages.at(-1)).toMatchObject({ text: 'Nothing.', lines: [] }); // a silent check is its headline, one line
     const limited = await inCircle({ pulse: () => bad('limit', 'Too many.', { retryAfterSeconds: 60 }) });
     expect(await limited.s.pulse()).toMatchObject({ ok: false, kind: 'limit' });
     expect(texts(limited.s).at(-1)).toBe('cacci:error:Too many. Try again in 60 seconds.');
@@ -491,5 +492,108 @@ describe('showing the source of a fact (R-017)', () => {
     await h.loadMode();
     await h.ask('q');
     expect(h.getState().messages.find((m) => m.kind === 'answer').lineFacts).toEqual([[]]);
+  });
+});
+
+describe('the three checks (R-018)', () => {
+  it('on Home each check asks every brain (no scope), says its label, and shows the answer with its sources and its facts', async () => {
+    const { s, calls } = await make();
+    for (const name of ['pulse', 'coming-up', 'long-range']) expect(await s.check(name), name).toEqual({ ok: true });
+    expect(calls.filter((c) => c[0] === 'check')).toEqual([['check', 'pulse', undefined, 'Europe/London'], ['check', 'coming-up', undefined, 'Europe/London'], ['check', 'long-range', undefined, 'Europe/London']]);
+    expect(texts(s)).toEqual(['me:text:Pulse', 'cacci:answer:A quiet week.', 'me:text:Coming up', 'cacci:answer:A quiet month.', 'me:text:Long range', 'cacci:answer:A quiet year.']);
+    const answer = s.getState().messages.at(-1);
+    expect(answer.lines).toEqual(['Point for long-range (From: your own notes)']);
+    expect(answer.lineFacts).toEqual([[{ scope: { kind: 'personal' }, id: 'note-9' }]]);
+    expect(names({ calls })).not.toContain('status');
+  });
+
+  it('on a circle\'s screen it asks that circle only, for any role', async () => {
+    for (const circle of [CIRCLE, WATCH]) {
+      const { s, calls } = await make({}, { circle });
+      expect(await s.check('coming-up')).toEqual({ ok: true });
+      expect(calls.find((c) => c[0] === 'check')).toEqual(['check', 'coming-up', { kind: 'circle', circleId: circle.circleId }, 'Europe/London']);
+    }
+  });
+
+  it('a silent answer is its headline alone, in the thread, with no lines and no facts', async () => {
+    const { s } = await make({ check: () => okv({ headline: 'Nothing needs your attention this week.', nothing: true, points: [] }) });
+    await s.check('pulse');
+    expect(s.getState().messages.at(-1)).toMatchObject({ kind: 'answer', text: 'Nothing needs your attention this week.', lines: [], lineFacts: [] });
+    expect(s.canShowSource(s.getState().messages.at(-1).id, 0)).toBe(false);
+  });
+
+  it('an ordinary question with nothing relevant still says so on a line, as before', async () => {
+    const { s } = await make({ status: () => okv({ headline: 'Nothing.', nothing: true, points: [] }) });
+    await s.ask('anything?');
+    expect(s.getState().messages.at(-1).lines).toEqual(['Nothing relevant was found in what you can read.']);
+  });
+
+  it('refuses an unknown check, before the model is known, and while busy, sending nothing', async () => {
+    const f = fakeNotes();
+    const s = createChatSession({ notes: f.notes, timeZone: () => 'UTC' });
+    expect(await s.check('pulse')).toMatchObject({ ok: false, kind: 'mode-unknown' });
+    await s.loadMode();
+    for (const bad of ['day', 'Pulse', '', 'toString', '__proto__', 5, null, undefined]) expect(await s.check(bad), String(bad)).toMatchObject({ ok: false, kind: 'invalid' });
+    expect(f.calls.map((c) => c[0])).toEqual(['mode']);
+    const d = deferred();
+    const slow = await make({ check: () => d.promise });
+    const first = slow.s.check('pulse');
+    expect(await slow.s.check('coming-up')).toMatchObject({ ok: false, kind: 'busy' });
+    d.resolve(okv({ headline: 'Done.', nothing: true, points: [] }));
+    await first;
+    expect(slow.calls.filter((c) => c[0] === 'check')).toHaveLength(1);
+  });
+
+  it('a client without check() is refused rather than throwing, and the failure words, the wait and a sign-out are said as for any status', async () => {
+    const f = fakeNotes();
+    delete f.notes.check;
+    const s = createChatSession({ notes: f.notes });
+    await s.loadMode();
+    expect(await s.check('pulse')).toMatchObject({ ok: false, kind: 'invalid' });
+    let told = 0;
+    const limited = await make({ check: () => bad('limit', 'Too many.', { retryAfterSeconds: 60 }) });
+    expect(await limited.s.check('pulse')).toMatchObject({ ok: false, kind: 'limit' });
+    expect(texts(limited.s).at(-1)).toBe('cacci:error:Too many. Try again in 60 seconds.');
+    const out = await make({ check: () => bad('signed-out', 'ended') }, { onSignedOut: () => told++ });
+    await out.s.check('long-range');
+    expect(told).toBe(1);
+  });
+
+  it('a late answer after reset is dropped', async () => {
+    const d = deferred();
+    const { s } = await make({ check: () => d.promise });
+    const first = s.check('pulse');
+    s.reset();
+    d.resolve(okv({ headline: 'Late.', nothing: true, points: [] }));
+    expect(await first).toMatchObject({ kind: 'dropped' });
+    expect(s.getState().messages).toEqual([]);
+  });
+});
+
+describe('the checks against the real service (demo model)', () => {
+  it('a dated note surfaces in the week check and an undated one does not; a far-off one waits for the long range', async () => {
+    const w = await world();
+    const solo = createChatSession({ notes: w.dan.notes });
+    await solo.loadMode();
+    await solo.send('Mum: dentist appointment tomorrow at 9:15.');
+    await solo.send('Mum: passport renewal due 1 Mar 2099.');
+    await solo.send('Mum: likes the blue cushion.');
+    await solo.check('pulse');
+    const week = solo.getState().messages.at(-1);
+    expect(week.lines.join(' ')).toContain('dentist');
+    expect(week.lines.join(' ')).not.toContain('passport');
+    expect(week.lines.join(' ')).not.toContain('cushion');
+  });
+
+  it('with only far-off notes the week and the month are silent, one line each', async () => {
+    const w = await world();
+    const solo = createChatSession({ notes: w.cat.notes });
+    await solo.loadMode();
+    await solo.send('Rent payment due 1 Mar 2099.');
+    await solo.check('pulse');
+    await solo.check('coming-up');
+    const [a, b] = solo.getState().messages.filter((m) => m.kind === 'answer');
+    expect(a).toMatchObject({ text: 'Nothing needs your attention this week.', lines: [] });
+    expect(b).toMatchObject({ text: 'Nothing needs your attention in the next month.', lines: [] });
   });
 });

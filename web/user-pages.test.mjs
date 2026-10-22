@@ -152,6 +152,16 @@ describe('the scripts', () => {
   });
 });
 
+describe('the Home checks', () => {
+  const home = html.slice(html.indexOf('<section id="view-home"'), html.indexOf('<section id="view-circle"'));
+  it('are three buttons in a labelled group beside the update and question boxes, in order', () => {
+    expect(home).toMatch(/<div id="home-checks" class="checks" role="group" aria-label="Checks">/);
+    expect([...home.matchAll(/<button type="button" id="(check-(?:pulse|coming-up|long-range))" class="secondary">([^<]+)<\/button>/g)].map((m) => [m[1], m[2]])).toEqual([['check-pulse', 'Pulse'], ['check-coming-up', 'Coming up'], ['check-long-range', 'Long range']]);
+    expect(home.indexOf('id="home-checks"')).toBeGreaterThan(home.indexOf('id="chat-thread"'));
+    expect(home.indexOf('id="home-checks"')).toBeLessThan(home.indexOf('id="update-form"'));
+  });
+});
+
 describe('the Circle screen', () => {
   const section = html.slice(html.indexOf('<section id="view-circle"'), html.indexOf('<section id="view-settings"'));
   it('has one update box, Send and a Pulse button, and no question field', () => {
@@ -160,6 +170,12 @@ describe('the Circle screen', () => {
     expect(section).toMatch(/<button type="button" id="circle-pulse"[^>]*>Pulse<\/button>/);
     expect(section).toMatch(/<button type="submit" id="circle-update-send">Send<\/button>/);
     expect(section).not.toMatch(/question/i);
+  });
+  it('has the three checks as buttons (R-018): Pulse, Coming up and Long range, in that order', () => {
+    expect([...section.matchAll(/<button type="button" id="(circle-(?:pulse|coming-up|long-range))" class="secondary">([^<]+)<\/button>/g)].map((m) => [m[1], m[2]])).toEqual([['circle-pulse', 'Pulse'], ['circle-coming-up', 'Coming up'], ['circle-long-range', 'Long range']]);
+  });
+  it('holds no words for the checks: the texts and the window live on the server', () => {
+    for (const m of modules) expect(code(read(m)), m).not.toMatch(/what needs my attention|coming up in the next month|long-range radar|one-week check/i);
   });
   it('holds no words for the Pulse: the text lives on the server', () => {
     expect(section).not.toMatch(/status update for the circle/i);

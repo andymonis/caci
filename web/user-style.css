@@ -76,6 +76,7 @@ button.link { min-height: 2.75rem; padding: 0.25rem 0.25rem; color: var(--accent
 .error { color: var(--error); background: var(--error-bg); border-radius: 0.5rem; padding: 0.5rem 0.75rem; margin: 0.25rem 0 0.75rem; }
 .error::before { content: "Problem: "; font-weight: 700; }
 .success { color: var(--ok); background: var(--ok-bg); border-radius: 0.5rem; padding: 0.5rem 0.75rem; margin: 0.25rem 0 0.75rem; }
+.checks { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0 1rem; }
 .actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .actions a { color: var(--accent); }
 

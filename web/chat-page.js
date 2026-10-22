@@ -25,6 +25,7 @@ export function mountChatPage(document, notes, onSignedOut, ledger) {
   const questionText = $('question-text');
   const questionError = $('question-error');
   const questionAsk = $('question-ask');
+  const checks = { pulse: $('check-pulse'), 'coming-up': $('check-coming-up'), 'long-range': $('check-long-range') };
   const msgTemplate = $('msg-template');
   const lineTemplate = $('msg-line-template');
 
@@ -47,6 +48,7 @@ export function mountChatPage(document, notes, onSignedOut, ledger) {
     drawer.draw(state.messages, state.busy);
     updateSend.disabled = !state.canSend;
     questionAsk.disabled = !state.canAsk;
+    for (const button of Object.values(checks)) button.disabled = !state.canAsk;
     updateForm.setAttribute('aria-busy', state.busy ? 'true' : 'false');
     questionForm.setAttribute('aria-busy', state.busy ? 'true' : 'false');
   }
@@ -81,6 +83,13 @@ export function mountChatPage(document, notes, onSignedOut, ledger) {
       questionText.focus();
     }
   });
+  for (const [name, button] of Object.entries(checks)) {
+    button.addEventListener('click', async () => {
+      setError(updateError, '');
+      setError(questionError, '');
+      await chat.check(name); // its failures are in the thread; the buttons are disabled until the model is known
+    });
+  }
   retry.addEventListener('click', () => void chat.loadMode());
   chat.subscribe(render);
   render(chat.getState());

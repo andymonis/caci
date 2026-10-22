@@ -103,6 +103,12 @@
 
         <ol id="chat-thread" class="thread" role="log" aria-live="polite" aria-label="Conversation with CaCi"></ol>
 
+        <div id="home-checks" class="checks" role="group" aria-label="Checks">
+          <button type="button" id="check-pulse" class="secondary">Pulse</button>
+          <button type="button" id="check-coming-up" class="secondary">Coming up</button>
+          <button type="button" id="check-long-range" class="secondary">Long range</button>
+        </div>
+
         <form id="update-form" method="post" novalidate>
           <label for="update-text">Update</label>
           <textarea id="update-text" name="update" rows="2" autocomplete="off" aria-describedby="update-error"></textarea>
@@ -138,6 +144,8 @@
           <p id="circle-update-error" class="error" role="alert" hidden></p>
           <button type="submit" id="circle-update-send">Send</button>
           <button type="button" id="circle-pulse" class="secondary">Pulse</button>
+          <button type="button" id="circle-coming-up" class="secondary">Coming up</button>
+          <button type="button" id="circle-long-range" class="secondary">Long range</button>
         </form>
       </section>
 

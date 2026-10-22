@@ -23,6 +23,8 @@ export function mountCircleChat(document, notes, onSignedOut, ledger) {
   const error = $('circle-update-error');
   const send = $('circle-update-send');
   const pulse = $('circle-pulse');
+  const comingUp = $('circle-coming-up');
+  const longRange = $('circle-long-range');
   const showSource = async (id, index) => {
     if (active === undefined) return;
     const result = await active.showSource(id, index);
@@ -61,6 +63,8 @@ export function mountCircleChat(document, notes, onSignedOut, ledger) {
     text.disabled = !canAdd;
     send.disabled = !state.canSend;
     pulse.disabled = !state.canAsk;
+    comingUp.disabled = !state.canAsk;
+    longRange.disabled = !state.canAsk;
     form.setAttribute('aria-busy', state.busy ? 'true' : 'false');
   }
 
@@ -82,6 +86,13 @@ export function mountCircleChat(document, notes, onSignedOut, ledger) {
     setError('');
     await active.pulse(); // its failures are in the thread; the button is disabled until the model is known
   });
+  for (const [name, button] of [['coming-up', comingUp], ['long-range', longRange]]) {
+    button.addEventListener('click', async () => {
+      if (active === undefined) return;
+      setError('');
+      await active.check(name);
+    });
+  }
   retry.addEventListener('click', () => void active?.loadMode());
 
   return Object.freeze({
