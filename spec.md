@@ -60,6 +60,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-015 | [The Fact-Level Brain — Specification](specs/R-015-fact-level-brain.md) |
 | R-016 | [The Minimal User App — Specification](specs/R-016-user-app.md) |
 | R-017 | [The Input Ledger and the Brain Export — Specification](specs/R-017-input-ledger-and-export.md) |
+| R-018 | [Focused Answers: Horizons, Dated Facts and Follow-up Actions — Specification](specs/R-018-focused-answers.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -120,6 +121,7 @@ Local-only development tools live under `dev/` and are never published: `dev/gra
 - **Done as N2 (T-250 to T-257, R-016 D16 to D22):** from the owner's updated `architecture/user_pwa.md`: Home Send always records against the own brain; each circle gets its own Circle screen at the top of the navigation (Send records against the circle, observers read only, a Pulse button asks for a status of that circle with predefined text from `controls/pulse.txt`); `POST /api/status` gains an optional circle `scope` and `pulse: true`.
 - **Done as L2 (T-258 to T-265, R-017):** the change ledger also keeps the text of each update as sent (readable by everyone who can read that brain's log), shown beside the facts in the back office's change log; an operator command `npm run export-brain` exports a user's or circle's brain from a consistent snapshot as JSON (and as a brain-eval scenario draft), so real brains can be used as test input to improve answers.
 - **Done as L3 (T-266 to T-273, R-017 part 2):** a person can trace a fact to who entered it, when and the exact words (a Show the source button on each point of an answer in the minimal user app; the lookup goes through the ledger's approval ids); the model is not shown the source.
+- **Being built as H1 (T-274 to T-292, R-018):** focused answers: three horizons (a week Pulse, Coming up, Long range) whose window the code computes, silence when nothing needs attention, then (re-confirmed after the owner's real run) dated facts and suggested follow-up actions.
 - **After that, to be planned (decided on the evidence of the real before and after run):** further changes to the brain itself (for example carrying unchanged details into a replacing note); then writing into another brain via approval, relationship labels, invitation notifications.
 - **After that, to be planned:** making the web app installable, M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Each roadmap item in the Backlog needs its own spec first.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
