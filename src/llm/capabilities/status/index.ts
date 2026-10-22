@@ -4,3 +4,5 @@ export { guardStatusReply, inspectStatusReply, statusGuardSettingsOf } from './g
 export type { GuardedStatus, StatusGuardContext, StatusGuardSettings } from './guard.js';
 export { DEFAULT_STATUS_OPTIONS, status } from './status.js';
 export type { StatusAnswer, StatusDeps, StatusInput, StatusOptions } from './status.js';
+export { horizonWindow, HORIZONS, isHorizon } from './window.js';
+export type { Horizon, HorizonWindow } from './window.js';

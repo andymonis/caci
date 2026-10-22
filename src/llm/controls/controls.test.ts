@@ -16,7 +16,7 @@ describe('parseControls', () => {
     expect(Object.isFrozen(r.value) && Object.isFrozen(r.value.categorise) && Object.isFrozen(r.value.status)).toBe(true);
     expect(r.value.categorise.system.slots).toEqual(['itemId', 'maxOps', 'allowedOps']);
     expect(r.value.categorise.frame.slots).toEqual(['contextBlock', 'requestBlock']);
-    expect(r.value.status.system.slots).toEqual(['entryCount', 'now', 'maxHeadline', 'maxPoints', 'maxPointChars', 'maxRefs']);
+    expect(r.value.status.system.slots).toEqual(['entryCount', 'now', 'maxHeadline', 'maxPoints', 'maxPointChars', 'maxRefs', 'horizonSection']);
     expect(r.value.status.settings.maxPoints).toBe(5);
   });
 

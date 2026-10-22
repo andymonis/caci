@@ -305,3 +305,63 @@ describe('createLlm', () => {
     expect(Object.keys(llm)).toEqual(['categorise', 'status']);
   });
 });
+
+
+describe('status: a focused check (R-018)', () => {
+  const TWO = { headline: 'Two things.', points: [{ text: 'One.', refs: [1] }, { text: 'Two.', refs: [2] }], nothing: false };
+  const FOUR = { headline: 'Four things.', points: [1, 2, 3, 4].map((n) => ({ text: `Point ${n}.`, refs: [1] })), nothing: false };
+  const SILENT = { headline: 'Nothing needs your attention this week.', points: [], nothing: true };
+
+  it('states the window it worked out from its own clock, in the person\'s zone, in the system prompt the model is given', async () => {
+    const { client, llm } = setup([reply(TWO)]);
+    const r = await llm.status({ ...INPUT, horizon: 'week' });
+    expect(r.ok).toBe(true);
+    const asked = client.requests[0] as ModelRequest;
+    expect(asked.system).toContain('one-week check. Answer only about Thursday 15 October to Wednesday 21 October 2026 (2026-10-15 to 2026-10-21).');
+    expect(asked.system).toContain('"points": at most 3 points');
+  });
+
+  it('without a horizon the request is as it was: no section and the ordinary cap', async () => {
+    const { client, llm } = setup([reply(TWO)]);
+    await llm.status(INPUT);
+    expect((client.requests[0] as ModelRequest).system).not.toContain('check. Answer only about');
+    expect((client.requests[0] as ModelRequest).system).toContain('"points": at most 5 points');
+  });
+
+  it('the guard holds the model to the cap of the horizon: four points are refused for a week and accepted for a month', async () => {
+    const week = setup([reply(FOUR), reply(FOUR)]);
+    const w = await week.llm.status({ ...INPUT, horizon: 'week' });
+    expect(w.ok).toBe(false);
+    if (!w.ok) expect(w.error.message).toContain('over the limit of 3');
+    const month = setup([reply(FOUR)]);
+    expect((await month.llm.status({ ...INPUT, horizon: 'month' })).ok).toBe(true);
+    const plain = setup([reply(FOUR)]);
+    expect((await plain.llm.status(INPUT)).ok).toBe(true);
+  });
+
+  it('a silent answer is accepted for a focused check', async () => {
+    const { llm } = setup([reply(SILENT)]);
+    const r = await llm.status({ ...INPUT, horizon: 'week' });
+    expect(r.ok && r.value.nothing && r.value.points.length === 0).toBe(true);
+  });
+
+  it('an unknown horizon is a CONFIG error and the model is never asked', async () => {
+    const { client, llm } = setup([reply(TWO)]);
+    for (const bad of ['day', 'Week', '', 3, null]) {
+      const r = await llm.status({ ...INPUT, horizon: bad as never });
+      expect(r.ok, String(bad)).toBe(false);
+      if (!r.ok) expect(r.error.code).toBe('CONFIG');
+    }
+    expect(client.callCount).toBe(0);
+  });
+
+  it('the trace shows the window in the system prompt and the repair keeps it', async () => {
+    const events: TraceEvent[] = [];
+    const { llm } = setup([reply(FOUR), reply(TWO)]);
+    const r = await llm.status({ ...INPUT, horizon: 'week' }, { trace: (e) => void events.push(e) });
+    expect(r.ok && r.value.attempts).toBe(2);
+    const prompt = events.find((e) => e.type === 'prompt') as Extract<TraceEvent, { type: 'prompt' }>;
+    expect(prompt.system).toContain('(2026-10-15 to 2026-10-21)');
+    expect(prompt.parts.controls.system).toBe(prompt.system);
+  });
+});

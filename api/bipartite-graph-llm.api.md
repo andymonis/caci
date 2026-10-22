@@ -178,6 +178,30 @@ export interface ExistingNote {
     readonly title: string;
 }
 
+// @public (undocumented)
+export type Horizon = (typeof HORIZONS)[number];
+
+// @public (undocumented)
+export const HORIZONS: readonly ["week", "month", "year"];
+
+// @public (undocumented)
+export interface HorizonWindow {
+    readonly from: number;
+    readonly fromDay: string;
+    // (undocumented)
+    readonly horizon: Horizon;
+    readonly label: string;
+    readonly to: number;
+    // (undocumented)
+    readonly toDay: string;
+}
+
+// @public
+export function horizonWindow(now: number, timeZone: string, horizon: Horizon): Result<HorizonWindow, LlmError>;
+
+// @public (undocumented)
+export const isHorizon: (value: unknown) => value is Horizon;
+
 // @public
 export function isTimeZone(name: unknown): name is string;
 
@@ -404,6 +428,7 @@ export interface StatusEntry {
 // @public
 export interface StatusInput {
     readonly entries: readonly StatusEntry[];
+    readonly horizon?: Horizon;
     readonly text: string;
     readonly timeZone?: string;
 }
@@ -436,6 +461,8 @@ export interface StatusSettings {
         readonly refs: string;
         readonly nothing: string;
     };
+    // Warning: (ae-forgotten-export) The symbol "StatusHorizonSettings" needs to be exported by the entry point index.d.ts
+    readonly horizons: StatusHorizonSettings;
     // (undocumented)
     readonly maxEntries: number;
     // (undocumented)
@@ -536,7 +563,7 @@ export type TraceEvent =
 
 // Warnings were encountered during analysis:
 //
-// dist/llm/controls/settings.d.ts:43:5 - (ae-forgotten-export) The symbol "Range" needs to be exported by the entry point index.d.ts
+// dist/llm/controls/settings.d.ts:58:5 - (ae-forgotten-export) The symbol "Range" needs to be exported by the entry point index.d.ts
 // dist/llm/model-client.d.ts:46:5 - (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
 // dist/llm/trace.d.ts:26:5 - (ae-forgotten-export) The symbol "PromptParts" needs to be exported by the entry point index.d.ts
 

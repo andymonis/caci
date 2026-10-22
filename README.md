@@ -826,7 +826,7 @@ Exactly these six files are read, and nothing else in the folder:
 | `controls/categorise/system.txt` | The filing assistant's instructions | `{{itemId}}` (required), `{{maxOps}}`, `{{allowedOps}}`, `{{maxReplaces}}`, `{{maxFacts}}`, `{{keyMaxChars}}` |
 | `controls/categorise/frame.txt` | The words around the two blocks in the user message | `{{contextBlock}}` and `{{requestBlock}}`, each exactly once |
 | `controls/categorise/settings.json` | The limits and the descriptions in the reply schema | none |
-| `controls/status/system.txt` | The status assistant's instructions | `{{entryCount}}`, `{{now}}`, `{{maxHeadline}}`, `{{maxPoints}}`, `{{maxPointChars}}`, `{{maxRefs}}` |
+| `controls/status/system.txt` | The status assistant's instructions | `{{entryCount}}`, `{{now}}`, `{{maxHeadline}}`, `{{maxPoints}}`, `{{maxPointChars}}`, `{{maxRefs}}`, `{{horizonSection}}` (a focused check's window and rules; empty for an ordinary status) |
 | `controls/status/frame.txt` | The words around the two blocks in the user message | `{{entriesBlock}}` and `{{requestBlock}}`, each exactly once |
 | `controls/status/settings.json` | The limits and the descriptions in the reply schema | none |
 
@@ -870,7 +870,7 @@ It also holds `descriptions` with `title`, `summary`, `key` and `name` (one line
 | `maxTotalChars` | Most characters of notes sent in all | `30000` | 1 to 200,000 |
 | `maxOutputChars` | Longest reply accepted before it is read | `8000` | 500 to 100,000 |
 
-It also holds `descriptions` with `headline`, `pointText`, `refs` and `nothing`. Some combinations are refused because the guard could never be satisfied: `maxDataBytes` must hold the longest title, summary, key and category name; `maxOps` must be at least twice `maxFacts` (each fact needs an item and a link); `maxOutputChars` must hold `maxFacts` facts; `maxOutputChars` must hold the longest reply the other limits allow; an entry may not be longer than the total; and `maxRefs` may not exceed `maxEntries`.
+It also holds `descriptions` with `headline`, `pointText`, `refs` and `nothing`, and **`horizons`** (R-018): `rules` (the rules every focused check follows, up to 1,000 characters on one line) and, for each of `week`, `month` and `year`, a `maxPoints` (1 to 20, used instead of `maxPoints` for that check) and a `focus` (one line, up to 300 characters). A focused check (the Pulse, *Coming up*, *Long range*) puts its window, which **the code works out** in your time zone, with the focus and the rules into the system prompt through `{{horizonSection}}`; without a horizon that slot is empty and the prompt is unchanged. If you remove the slot from `system.txt`, a focused check is refused rather than sent without its window. Some combinations are refused because the guard could never be satisfied: `maxDataBytes` must hold the longest title, summary, key and category name; `maxOps` must be at least twice `maxFacts` (each fact needs an item and a link); `maxOutputChars` must hold `maxFacts` facts; `maxOutputChars` must hold the longest reply the other limits allow; an entry may not be longer than the total; and `maxRefs` may not exceed `maxEntries`.
 
 ### What stays in code
 

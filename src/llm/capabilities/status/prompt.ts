@@ -6,6 +6,7 @@ import { llmError, type LlmError } from '../../errors.js';
 import type { ModelMessage } from '../../model-client.js';
 import { escapeForBlock } from '../../text-blocks.js';
 import type { PromptParts } from '../../trace.js';
+import { horizonWindow, isHorizon, type Horizon, type HorizonWindow } from './window.js';
 
 // The `status` capability (R-011): the person asks for a short status and the model answers from numbered entries of
 // what they can read. This file builds everything sent to the model; `guard.ts` checks what comes back. Both are pure.
@@ -28,6 +29,8 @@ export interface StatusPromptInput {
   readonly now: number;
   /** An IANA time zone name, for the time shown to the model. */
   readonly timeZone: string;
+  /** A focused check (R-018): the window is worked out here from `now` and the zone and stated to the model. Absent: today's prompt, unchanged. */
+  readonly horizon?: Horizon;
 }
 
 export interface StatusPromptOptions {
@@ -79,9 +82,22 @@ export function describeDay(ms: number, timeZone: string): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-/** The trusted instructions: the controls' `system.txt` with the entry count, the time and the reply limits filled in. */
-export function buildStatusSystemPrompt(controls: StatusControls, entryCount: number, nowText: string): string {
-  const { maxHeadline, maxPoints, maxPointChars, maxRefs } = controls.settings;
+const CHECK_NAMES: Readonly<Record<Horizon, string>> = Object.freeze({ week: 'one-week', month: 'one-month', year: 'one-year' });
+
+/**
+ * The section a focused check adds to the system prompt (R-018 D8, D9): which check it is, the window the code worked out, and the
+ * wording the controls give (the focus of this horizon and the rules every focused check follows). Starts with a line break so that,
+ * with no horizon, the slot is empty and the prompt is exactly what it was.
+ */
+export function horizonSection(controls: StatusControls, window: HorizonWindow): string {
+  const { rules, [window.horizon]: one } = controls.settings.horizons;
+  return `\n7. This is a ${CHECK_NAMES[window.horizon]} check. Answer only about ${window.label} (${window.fromDay} to ${window.toDay}). ${one.focus} ${rules}`;
+}
+
+/** The trusted instructions: the controls' `system.txt` with the entry count, the time, the reply limits and, for a focused check, its window filled in. */
+export function buildStatusSystemPrompt(controls: StatusControls, entryCount: number, nowText: string, window?: HorizonWindow): string {
+  const { maxHeadline, maxPointChars, maxRefs } = controls.settings;
+  const maxPoints = window === undefined ? controls.settings.maxPoints : controls.settings.horizons[window.horizon].maxPoints;
   return renderTemplate(controls.system, {
     entryCount: String(entryCount),
     now: nowText,
@@ -89,6 +105,7 @@ export function buildStatusSystemPrompt(controls: StatusControls, entryCount: nu
     maxPoints: String(maxPoints),
     maxPointChars: String(maxPointChars),
     maxRefs: String(maxRefs),
+    horizonSection: window === undefined ? '' : horizonSection(controls, window),
   });
 }
 
@@ -112,8 +129,9 @@ export function buildStatusUserMessage(controls: StatusControls, entries: readon
 }
 
 /** The JSON Schema the reply must match. */
-export function buildStatusOutputSchema(settings: StatusSettings, entryCount: number): JsonObject {
-  const { maxHeadline, maxPoints, maxPointChars, maxRefs, descriptions } = settings;
+export function buildStatusOutputSchema(settings: StatusSettings, entryCount: number, horizon?: Horizon): JsonObject {
+  const { maxHeadline, maxPointChars, maxRefs, descriptions } = settings;
+  const maxPoints = horizon === undefined ? settings.maxPoints : settings.horizons[horizon].maxPoints;
   return {
     type: 'object',
     properties: {
@@ -140,7 +158,7 @@ export function buildStatusOutputSchema(settings: StatusSettings, entryCount: nu
 
 function check(input: unknown, options: unknown): LlmError | undefined {
   if (!isObject(input)) return llmError('CONFIG', 'prompt input: must be an object like { text, entries, now, timeZone }');
-  const { text, entries, now, timeZone, ...extra } = input;
+  const { text, entries, now, timeZone, horizon, ...extra } = input;
   const unknownField = Object.keys(extra)[0];
   if (unknownField !== undefined) return llmError('CONFIG', `prompt input: unknown field "${unknownField}"`);
   if (typeof text !== 'string') return llmError('CONFIG', 'prompt input.text: must be text');
@@ -155,6 +173,7 @@ function check(input: unknown, options: unknown): LlmError | undefined {
   }
   if (typeof now !== 'number' || !Number.isSafeInteger(now) || now < 0 || now >= 8.64e15) return llmError('CONFIG', 'prompt input.now: must be milliseconds since 1970');
   if (!isTimeZone(timeZone)) return llmError('CONFIG', 'prompt input.timeZone: must be a time zone name such as "Europe/London" or "UTC"');
+  if (horizon !== undefined && !isHorizon(horizon)) return llmError('CONFIG', 'prompt input.horizon: must be "week", "month" or "year"');
   if (options !== undefined) {
     if (!isObject(options)) return llmError('CONFIG', 'prompt options: must be an object');
     for (const [name, value] of Object.entries(options)) {
@@ -187,12 +206,19 @@ export function buildStatusPrompt(controls: StatusControls, input: StatusPromptI
       total += size;
     }
     if (total > settings.maxTotalChars) return bad('prompt input.entries', `${total} characters in all, over the limit of ${settings.maxTotalChars}`);
-    const system = buildStatusSystemPrompt(controls, input.entries.length, describeTime(input.now, input.timeZone));
+    let window: HorizonWindow | undefined;
+    if (input.horizon !== undefined) {
+      if (!controls.system.slots.includes('horizonSection')) return bad('prompt input.horizon', 'the controls\' status/system.txt has no {{horizonSection}} slot, so the window of a focused check cannot be stated');
+      const made = horizonWindow(input.now, input.timeZone, input.horizon);
+      if (!made.ok) return made;
+      window = made.value;
+    }
+    const system = buildStatusSystemPrompt(controls, input.entries.length, describeTime(input.now, input.timeZone), window);
     const blocks = statusBlocks(input.entries, input.text, input.timeZone);
     return ok({
       system,
       messages: [{ role: 'user', content: renderTemplate(controls.frame, blocks) }],
-      outputSchema: buildStatusOutputSchema(controls.settings, input.entries.length),
+      outputSchema: buildStatusOutputSchema(controls.settings, input.entries.length, input.horizon),
       parts: { controls: { system, frame: controls.frame.text }, request: blocks.requestBlock, context: blocks.entriesBlock },
     });
   } catch {

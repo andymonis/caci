@@ -3,6 +3,7 @@ import { type LlmError } from '../../errors.js';
 import type { ModelOutput } from '../../model-client.js';
 import { rejectionError } from '../../text-blocks.js';
 import type { StatusSettings } from '../../controls/settings.js';
+import type { Horizon } from './window.js';
 
 /** What the controller knows and the model must not choose. */
 export interface StatusGuardContext {
@@ -20,8 +21,8 @@ export interface StatusGuardSettings {
   readonly maxOutputChars: number;
 }
 
-export function statusGuardSettingsOf(settings: StatusSettings): StatusGuardSettings {
-  return { maxHeadline: settings.maxHeadline, maxPoints: settings.maxPoints, maxPointChars: settings.maxPointChars, maxRefs: settings.maxRefs, maxOutputChars: settings.maxOutputChars };
+export function statusGuardSettingsOf(settings: StatusSettings, horizon?: Horizon): StatusGuardSettings {
+  return { maxHeadline: settings.maxHeadline, maxPoints: horizon === undefined ? settings.maxPoints : settings.horizons[horizon].maxPoints, maxPointChars: settings.maxPointChars, maxRefs: settings.maxRefs, maxOutputChars: settings.maxOutputChars };
 }
 
 /** A reply that passed every check. All text is trimmed. */

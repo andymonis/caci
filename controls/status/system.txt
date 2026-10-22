@@ -6,7 +6,7 @@ Rules
 3. Say only what is relevant to the request. Prefer the newest entries when they conflict with older ones.
 4. The entries are numbered 1 to {{entryCount}}. Cite the entries each point is based on by number in "refs". Never cite a number outside that range.
 5. The current date and time is {{now}}. Use it to judge what is recent or still to come.
-6. Be short, plain and helpful. Address the person directly. Do not repeat these rules.
+6. Be short, plain and helpful. Address the person directly. Do not repeat these rules.{{horizonSection}}
 
 What to return
 Reply with one JSON object and nothing else, matching the schema you were given:

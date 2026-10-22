@@ -10,11 +10,12 @@ export function validFiles(): Record<string, string> {
       titleMaxChars: 120, summaryMaxChars: 300, categoryNameMaxChars: 60,
       descriptions: { title: 'A short title.', summary: 'One line.', key: 'A short key.', name: 'A short name.' },
     }),
-    'status/system.txt': 'Status. Entries 1 to {{entryCount}}. Now {{now}}. Headline {{maxHeadline}}, {{maxPoints}} points of {{maxPointChars}}, {{maxRefs}} refs.',
+    'status/system.txt': 'Status. Entries 1 to {{entryCount}}. Now {{now}}. Headline {{maxHeadline}}, {{maxPoints}} points of {{maxPointChars}}, {{maxRefs}} refs.{{horizonSection}}',
     'status/frame.txt': 'Data below.\n\n{{entriesBlock}}\n\n{{requestBlock}}\n\nReply with JSON.',
     'status/settings.json': JSON.stringify({
       maxHeadline: 160, maxPoints: 5, maxPointChars: 240, maxRefs: 5, maxRequestChars: 500, maxEntries: 500, maxEntryChars: 1500, maxTotalChars: 30000, maxOutputChars: 8000,
       descriptions: { headline: 'One line.', pointText: 'One short line.', refs: 'Entry numbers.', nothing: 'True only when nothing is relevant.' },
+      horizons: { rules: 'Only the window.', week: { maxPoints: 3, focus: 'A week.' }, month: { maxPoints: 4, focus: 'A month.' }, year: { maxPoints: 5, focus: 'A year.' } },
     }),
   };
 }

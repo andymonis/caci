@@ -13,5 +13,20 @@
     "pointText": "One short line.",
     "refs": "Numbers of the entries this point is based on",
     "nothing": "True only when no entry is relevant and points is empty."
+  },
+  "horizons": {
+    "rules": "Use only entries that fall inside this window, or that are overdue or still open. Say nothing about anything outside it, even if it looks important. Do not retell whole notes: say what, when and what to do, in a few words. If nothing needs attention in this window, give a one-line headline saying so, an empty points list and nothing: true.",
+    "week": {
+      "maxPoints": 3,
+      "focus": "This is the person's Pulse: what needs attention in the coming week."
+    },
+    "month": {
+      "maxPoints": 4,
+      "focus": "This is a look at what is coming up in the next month."
+    },
+    "year": {
+      "maxPoints": 5,
+      "focus": "This is a long-range look at what is on the radar over the coming year, soonest first."
+    }
   }
 }

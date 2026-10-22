@@ -2,8 +2,8 @@
 // Capabilities (categorise, and later others) live in `capabilities/`, one folder each.
 
 export type { CategoriseEvent, CategoriseInput, CategoriseOptions, CategoryEntry, ContextOptions, ExistingNote, Proposal } from './capabilities/categorise/index.js';
-export { isTimeZone } from './capabilities/status/index.js';
-export type { StatusAnswer, StatusEntry, StatusInput, StatusOptions } from './capabilities/status/index.js';
+export { horizonWindow, HORIZONS, isHorizon, isTimeZone } from './capabilities/status/index.js';
+export type { Horizon, HorizonWindow, StatusAnswer, StatusEntry, StatusInput, StatusOptions } from './capabilities/status/index.js';
 export { createLlm } from './create-llm.js';
 export type { TraceEvent } from './trace.js';
 export type { Llm, LlmInit } from './create-llm.js';

@@ -22,7 +22,7 @@ export type ControlFile = (typeof CONTROL_FILES)[number];
 export const SLOT_RULES = Object.freeze({
   'categorise/system.txt': Object.freeze({ allowed: ['itemId', 'maxOps', 'allowedOps', 'maxReplaces', 'maxFacts', 'keyMaxChars'], required: ['itemId'] }),
   'categorise/frame.txt': Object.freeze({ allowed: ['contextBlock', 'requestBlock'], once: ['contextBlock', 'requestBlock'] }),
-  'status/system.txt': Object.freeze({ allowed: ['entryCount', 'now', 'maxHeadline', 'maxPoints', 'maxPointChars', 'maxRefs'] }),
+  'status/system.txt': Object.freeze({ allowed: ['entryCount', 'now', 'maxHeadline', 'maxPoints', 'maxPointChars', 'maxRefs', 'horizonSection'] }),
   'status/frame.txt': Object.freeze({ allowed: ['entriesBlock', 'requestBlock'], once: ['entriesBlock', 'requestBlock'] }),
 });
 

@@ -30,6 +30,23 @@ export interface StatusSettings {
   readonly maxTotalChars: number;
   readonly maxOutputChars: number;
   readonly descriptions: { readonly headline: string; readonly pointText: string; readonly refs: string; readonly nothing: string };
+  /** What a focused check (a week, a month, a year) is told, and how many points each may have (R-018 D8). */
+  readonly horizons: StatusHorizonSettings;
+}
+
+export interface StatusHorizon {
+  /** At most this many points in the answer to this check (instead of `maxPoints`, which still limits an ordinary status). */
+  readonly maxPoints: number;
+  /** One line saying what this check is for. */
+  readonly focus: string;
+}
+
+export interface StatusHorizonSettings {
+  /** The rules every focused check follows: only the window, overdue or open items, silence, no restating. */
+  readonly rules: string;
+  readonly week: StatusHorizon;
+  readonly month: StatusHorizon;
+  readonly year: StatusHorizon;
 }
 
 type Range = readonly [min: number, max: number];
@@ -50,7 +67,7 @@ const CATEGORISE_RANGES: Readonly<Record<Exclude<keyof CategoriseSettings, 'desc
   categoryNameMaxChars: [1, 200],
 });
 
-const STATUS_RANGES: Readonly<Record<Exclude<keyof StatusSettings, 'descriptions'>, Range>> = Object.freeze({
+const STATUS_RANGES: Readonly<Record<Exclude<keyof StatusSettings, 'descriptions' | 'horizons'>, Range>> = Object.freeze({
   maxHeadline: [1, 500],
   maxPoints: [1, 20],
   maxPointChars: [1, 1000],
@@ -68,6 +85,8 @@ export const SETTING_RANGES = Object.freeze({ categorise: CATEGORISE_RANGES, sta
 const CATEGORISE_DESCRIPTIONS = ['title', 'summary', 'key', 'name'] as const;
 const STATUS_DESCRIPTIONS = ['headline', 'pointText', 'refs', 'nothing'] as const;
 export const MAX_DESCRIPTION_CHARS = 300;
+export const MAX_HORIZON_RULES_CHARS = 1000;
+export const HORIZON_NAMES = Object.freeze(['week', 'month', 'year'] as const);
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const quote = (token: string): string => JSON.stringify(token.length > 20 ? `${token.slice(0, 19)}…` : token);
@@ -93,6 +112,35 @@ function readDescriptions(file: string, data: Record<string, unknown>, names: re
     if (typeof value !== 'string') problems.push(`${file}: descriptions."${name}" must be text`);
     else if (value.trim() === '' || value.length > MAX_DESCRIPTION_CHARS) problems.push(`${file}: descriptions."${name}" must be 1 to ${MAX_DESCRIPTION_CHARS} characters`);
     else if (/\p{Cc}/u.test(value)) problems.push(`${file}: descriptions."${name}" must be one line without control characters`);
+  }
+}
+
+/** The `horizons` object of the status settings (R-018): the common rules and, for each horizon, its point cap and its focus. */
+function readHorizons(file: string, data: Record<string, unknown>, problems: string[]): void {
+  const h = data.horizons;
+  if (!isObject(h)) {
+    problems.push(`${file}: "horizons" must be an object with "rules", "week", "month" and "year"`);
+    return;
+  }
+  for (const key of Object.keys(h)) if (key !== 'rules' && !(HORIZON_NAMES as readonly string[]).includes(key)) problems.push(`${file}: "horizons" has an unknown entry ${quote(key)}`);
+  const oneLine = (name: string, value: unknown, max: number): void => {
+    if (typeof value !== 'string') problems.push(`${file}: ${name} must be text`);
+    else if (value.trim() === '' || value.length > max) problems.push(`${file}: ${name} must be 1 to ${max} characters`);
+    else if (/\p{Cc}/u.test(value)) problems.push(`${file}: ${name} must be one line without control characters`);
+  };
+  oneLine('horizons."rules"', h.rules, MAX_HORIZON_RULES_CHARS);
+  for (const name of HORIZON_NAMES) {
+    const one = h[name];
+    if (!isObject(one)) {
+      problems.push(`${file}: horizons."${name}" must be an object with "maxPoints" and "focus"`);
+      continue;
+    }
+    for (const key of Object.keys(one)) if (key !== 'maxPoints' && key !== 'focus') problems.push(`${file}: horizons."${name}" has an unknown entry ${quote(key)}`);
+    const [min, max] = STATUS_RANGES.maxPoints;
+    const cap = one.maxPoints;
+    if (typeof cap !== 'number' || !Number.isSafeInteger(cap)) problems.push(`${file}: horizons."${name}"."maxPoints" must be a whole number`);
+    else if (cap < min || cap > max) problems.push(`${file}: horizons."${name}"."maxPoints" is ${cap}, outside ${min} to ${max}`);
+    oneLine(`horizons."${name}"."focus"`, one.focus, MAX_DESCRIPTION_CHARS);
   }
 }
 
@@ -131,16 +179,19 @@ export function parseCategoriseSettings(file: string, source: unknown): Parsed<C
 }
 
 export function parseStatusSettings(file: string, source: unknown): Parsed<StatusSettings> {
-  const { data, problems } = parseJson(file, source, [...Object.keys(STATUS_RANGES), 'descriptions']);
+  const { data, problems } = parseJson(file, source, [...Object.keys(STATUS_RANGES), 'descriptions', 'horizons']);
   if (data === undefined) return { ok: false, problems };
   readNumbers(file, data, STATUS_RANGES, problems);
   readDescriptions(file, data, STATUS_DESCRIPTIONS, problems);
+  readHorizons(file, data, problems);
   if (problems.length > 0) return { ok: false, problems };
   const s = data as unknown as StatusSettings;
-  const need = s.maxHeadline + s.maxPoints * (s.maxPointChars + 12 * s.maxRefs + 30) + 100;
+  const mostPoints = Math.max(s.maxPoints, ...HORIZON_NAMES.map((name) => s.horizons[name].maxPoints));
+  const need = s.maxHeadline + mostPoints * (s.maxPointChars + 12 * s.maxRefs + 30) + 100;
   if (need > s.maxOutputChars) problems.push(`${file}: "maxOutputChars" (${s.maxOutputChars}) is too small for the longest reply the other limits allow (it needs at least ${need})`);
   if (s.maxEntryChars > s.maxTotalChars) problems.push(`${file}: "maxEntryChars" (${s.maxEntryChars}) is more than "maxTotalChars" (${s.maxTotalChars})`);
   if (s.maxRefs > s.maxEntries) problems.push(`${file}: "maxRefs" (${s.maxRefs}) is more than "maxEntries" (${s.maxEntries})`);
   if (problems.length > 0) return { ok: false, problems };
-  return { ok: true, value: Object.freeze({ ...s, descriptions: Object.freeze({ ...s.descriptions }) }) };
+  const horizons = Object.freeze({ rules: s.horizons.rules, week: Object.freeze({ ...s.horizons.week }), month: Object.freeze({ ...s.horizons.month }), year: Object.freeze({ ...s.horizons.year }) });
+  return { ok: true, value: Object.freeze({ ...s, descriptions: Object.freeze({ ...s.descriptions }), horizons }) };
 }

@@ -8,6 +8,7 @@ import { addUsage, isValidUsage, NO_USAGE, type TokenUsage } from '../../usage.j
 import type { Controls } from '../../controls/controls.js';
 import { inspectStatusReply, statusGuardSettingsOf, type GuardedStatus } from './guard.js';
 import { buildStatusPrompt, isTimeZone, type StatusEntry } from './prompt.js';
+import { isHorizon, type Horizon } from './window.js';
 
 /** What the controller hands over for one status request. */
 export interface StatusInput {
@@ -17,6 +18,8 @@ export interface StatusInput {
   readonly entries: readonly StatusEntry[];
   /** An IANA time zone name for the time the model is told. Default `UTC`. */
   readonly timeZone?: string;
+  /** A focused check (R-018): `week`, `month` or `year`. The window is worked out here and stated to the model. Absent: an ordinary status. */
+  readonly horizon?: Horizon;
 }
 
 export interface StatusOptions {
@@ -62,7 +65,7 @@ export interface StatusDeps {
 
 export const DEFAULT_STATUS_OPTIONS = Object.freeze({ timeoutMs: 30_000, maxOutputTokens: 1000 });
 
-const INPUT_FIELDS: readonly string[] = Object.freeze(['text', 'entries', 'timeZone']);
+const INPUT_FIELDS: readonly string[] = Object.freeze(['text', 'entries', 'timeZone', 'horizon']);
 const OPTION_FIELDS: readonly string[] = Object.freeze(['model', 'tier', 'signal', 'timeoutMs', 'maxOutputTokens', 'maxRequestChars', 'maxEntries', 'maxEntryChars', 'maxTotalChars', 'trace']);
 const NUMBER_OPTIONS: readonly string[] = Object.freeze(['timeoutMs', 'maxOutputTokens', 'maxRequestChars', 'maxEntries', 'maxEntryChars', 'maxTotalChars']);
 const ECHO_LIMIT = 4000;
@@ -88,6 +91,7 @@ function checkInput(input: unknown): LlmError | undefined {
   if (!isObject(input)) return config('status input: must be an object like { text, entries, timeZone }');
   for (const key of Object.keys(input)) if (!INPUT_FIELDS.includes(key)) return config(`status input: unknown field "${key}"`);
   if (input.timeZone !== undefined && !isTimeZone(input.timeZone)) return config('status input.timeZone: must be a time zone name such as "Europe/London" or "UTC"');
+  if (input.horizon !== undefined && !isHorizon(input.horizon)) return config('status input.horizon: must be "week", "month" or "year"');
   return undefined;
 }
 
@@ -138,7 +142,7 @@ async function run(deps: StatusDeps, input: StatusInput, options: StatusOptions 
 
   const prompt = buildStatusPrompt(
     deps.controls.status,
-    { text: input.text, entries: input.entries, now: started, timeZone: input.timeZone ?? 'UTC' },
+    { text: input.text, entries: input.entries, now: started, timeZone: input.timeZone ?? 'UTC', ...(input.horizon === undefined ? {} : { horizon: input.horizon }) },
     {
       ...(options?.maxRequestChars === undefined ? {} : { maxRequestChars: options.maxRequestChars }),
       ...(options?.maxEntries === undefined ? {} : { maxEntries: options.maxEntries }),
@@ -183,7 +187,7 @@ async function run(deps: StatusDeps, input: StatusInput, options: StatusOptions 
       return failed(llmError('MODEL_ERROR', 'the model client returned a reply that is not a valid response'));
     }
     emit({ type: 'response', attempt: number, output: response.output, usage: response.usage, model: response.model, elapsedMs: deps.now() - asked });
-    const verdict = inspectStatusReply(response.output, guardContext, statusGuardSettingsOf(deps.controls.status.settings));
+    const verdict = inspectStatusReply(response.output, guardContext, statusGuardSettingsOf(deps.controls.status.settings, input.horizon));
     emit({ type: 'verdict', attempt: number, accepted: verdict.ok, problems: verdict.ok ? [] : verdict.error });
     return ok({ response, verdict });
   };

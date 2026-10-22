@@ -112,6 +112,56 @@ describe('categorise settings', () => {
   });
 });
 
+describe('the horizons of the status settings (R-018)', () => {
+  const edit = (change: (o: Record<string, any>) => void) => parseStatusSettings('s.json', sta(change)); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const shipped = () => (parseStatusSettings('s.json', sta()) as { ok: true; value: { horizons: any } }).value.horizons; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+  it('are required, and give frozen rules, caps and focus for the week, the month and the year', () => {
+    const h = shipped();
+    expect(h.week.maxPoints).toBe(3);
+    expect(h.month.maxPoints).toBe(4);
+    expect(h.year.maxPoints).toBe(5);
+    expect(h.rules.length).toBeGreaterThan(0);
+    expect(Object.isFrozen(h) && Object.isFrozen(h.week) && Object.isFrozen(h.month) && Object.isFrozen(h.year)).toBe(true);
+    expect(problems(edit((o) => delete o.horizons))[0]).toContain('"horizons" must be an object');
+    expect(problems(edit((o) => (o.horizons = 'x')))[0]).toContain('"horizons" must be an object');
+    expect(problems(edit((o) => (o.horizons = [])))[0]).toContain('"horizons" must be an object');
+  });
+
+  it('refuse an unknown entry, a missing horizon, a stray field and a wrong kind of value, naming where', () => {
+    expect(problems(edit((o) => (o.horizons.day = {})))[0]).toContain('"horizons" has an unknown entry');
+    expect(problems(edit((o) => delete o.horizons.month))[0]).toContain('horizons."month" must be an object');
+    expect(problems(edit((o) => (o.horizons.year.extra = 1)))[0]).toContain('horizons."year" has an unknown entry');
+    expect(problems(edit((o) => (o.horizons.week.maxPoints = '3')))[0]).toContain('horizons."week"."maxPoints" must be a whole number');
+    expect(problems(edit((o) => (o.horizons.week.maxPoints = 2.5)))[0]).toContain('whole number');
+    expect(problems(edit((o) => (o.horizons.week.focus = 5)))[0]).toContain('"focus" must be text');
+    expect(problems(edit((o) => (o.horizons.rules = 5)))[0]).toContain('"rules" must be text');
+  });
+
+  it('keep each cap within 1 to 20, independent of the ordinary cap', () => {
+    expect(problems(edit((o) => (o.horizons.week.maxPoints = 0)))[0]).toContain('outside 1 to 20');
+    expect(problems(edit((o) => (o.horizons.week.maxPoints = 21)))[0]).toContain('outside 1 to 20');
+    expect(edit((o) => { o.horizons.week.maxPoints = 1; o.horizons.year.maxPoints = 20; o.maxPoints = 1; o.maxOutputChars = 100_000; }).ok).toBe(true);
+  });
+
+  it('keep the rules to 1000 characters and the focus to 300, each one line without control characters', () => {
+    expect(edit((o) => (o.horizons.rules = 'x'.repeat(1000))).ok).toBe(true);
+    expect(problems(edit((o) => (o.horizons.rules = 'x'.repeat(1001))))[0]).toContain('1 to 1000 characters');
+    expect(problems(edit((o) => (o.horizons.rules = '  ')))[0]).toContain('1 to 1000 characters');
+    expect(edit((o) => (o.horizons.week.focus = 'x'.repeat(300))).ok).toBe(true);
+    expect(problems(edit((o) => (o.horizons.week.focus = 'x'.repeat(301))))[0]).toContain('1 to 300 characters');
+    expect(problems(edit((o) => (o.horizons.month.focus = 'a\nb')))[0]).toContain('one line');
+    expect(problems(edit((o) => (o.horizons.rules = 'a\tb')))[0]).toContain('one line');
+  });
+
+  it('the reply limit must hold the longest reply of any horizon', () => {
+    const need = (points: number) => 160 + points * (240 + 60 + 30) + 100;
+    expect(edit((o) => { o.maxPoints = 1; o.horizons.year.maxPoints = 8; o.maxOutputChars = need(8); }).ok).toBe(true);
+    expect(problems(edit((o) => { o.maxPoints = 1; o.horizons.year.maxPoints = 8; o.maxOutputChars = need(8) - 1; }))[0]).toContain('needs at least');
+  });
+});
+
+
 describe('status settings', () => {
   it('accept the shipped numbers', () => {
     const r = parseStatusSettings('s.json', sta());
