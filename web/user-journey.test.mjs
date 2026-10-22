@@ -307,4 +307,51 @@ describe('the everyday app, through the pages, against the real service', () => 
     expect((await strangerLedger.source({ kind: 'circle', circleId: club }, removed.subject)).error).toMatchObject({ kind: 'not-found', what: 'circle' });
     expect((await ledger.source({ kind: 'personal' }, removed.subject)).error).toMatchObject({ kind: 'not-found', what: 'item' });
   });
+
+  it('the three checks: a rent schedule with two payments paid is silent for the week and the month and shows only what is left in the long range; a dentist two days away is in the week; a circle\'s checks look at that circle only (R-018)', async () => {
+    await boot();
+    const day = (offset) => new Date(Date.now() + offset * 86_400_000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    const eve = browser();
+    await register(eve, 'eve', 'Eve');
+    await send(eve, `Rent payment 3 of 4,050.71 is due on ${day(100)}`, lastIs(eve, 'Recorded'));
+    await send(eve, 'The first two rent payments have been paid', lastIs(eve, 'Recorded'));
+    const answers = () => thread(eve).filter((m) => m.cls === 'msg cacci' && !m.text.startsWith('Recorded'));
+
+    el(eve, 'check-pulse').fire('click');
+    await waitFor(() => answers().length === 1 && !el(eve, 'check-pulse').disabled, 'the week check');
+    expect(answers()[0]).toMatchObject({ text: 'Nothing needs your attention this week.', lines: [] });
+
+    el(eve, 'check-coming-up').fire('click');
+    await waitFor(() => answers().length === 2 && !el(eve, 'check-pulse').disabled, 'the month check');
+    expect(answers()[1]).toMatchObject({ text: 'Nothing needs your attention in the next month.', lines: [] });
+
+    el(eve, 'check-long-range').fire('click');
+    await waitFor(() => answers().length === 3 && !el(eve, 'check-pulse').disabled, 'the year check');
+    expect(answers()[2].lines.join('\n')).toContain('Rent payment 3');
+    expect(answers()[2].lines.join('\n')).not.toContain('first two');
+
+    await send(eve, `Dentist appointment on ${day(2)} at 9:15`, lastIs(eve, 'Recorded'));
+    el(eve, 'check-pulse').fire('click');
+    await waitFor(() => answers().length === 4 && !el(eve, 'check-pulse').disabled, 'the week check again');
+    expect(answers()[3].lines.join('\n')).toContain('Dentist');
+    expect(answers()[3].lines.join('\n')).not.toContain('Rent');
+    expect(thread(eve).filter((m) => m.cls === 'msg me').map((m) => m.text).slice(-6)).toEqual(['The first two rent payments have been paid', 'Pulse', 'Coming up', 'Long range', `Dentist appointment on ${day(2)} at 9:15`, 'Pulse']);
+
+    // a circle's checks look at that circle only: its own dated note shows in its week check, Eve's dentist does not
+    const circles = createCirclesClient({ fetchFn: eve.fetchFn });
+    const club = (await circles.createCircle({ name: 'Club' })).value.id;
+    eve.go(`#/circle/${club}`);
+    await waitFor(() => circleReady(eve), 'the circle screen');
+    el(eve, 'circle-update-text').value = `Club quiz night on ${day(3)}`;
+    el(eve, 'circle-update-form').fire('submit');
+    await waitFor(() => cthread(eve).at(-1)?.text.startsWith('Recorded against the circle') && circleReady(eve), 'the circle filing');
+    el(eve, 'circle-coming-up').fire('click');
+    await waitFor(() => cthread(eve).at(-1)?.text.includes('to look at in the next month') === true && circleReady(eve), 'the circle month check');
+    const circleAnswer = cthread(eve).at(-1).lines.join('\n');
+    expect(circleAnswer).toContain('quiz');
+    expect(circleAnswer).not.toContain('Dentist');
+    el(eve, 'circle-long-range').fire('click');
+    await waitFor(() => cthread(eve).at(-1)?.text.includes('to look at in the next year') === true && circleReady(eve), 'the circle year check');
+    expect(cthread(eve).at(-1).lines.join('\n')).not.toContain('Rent');
+  });
 });

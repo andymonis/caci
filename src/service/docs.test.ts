@@ -13,6 +13,8 @@ import { parseServiceConfig, VARIABLES } from './config.js';
 import { MAX_PULSE_CHARS } from './controls-files.js';
 import { EXPORT_FORMAT, EXPORT_VERSION } from './brain-export.js';
 import { EXPORT_USAGE } from './export-command.js';
+import { CHECK_FILES, CHECK_NAMES } from './controls-files.js';
+import { horizonWindow } from '../llm/index.js';
 import { WEB_FILE_SPECS } from './web-app.js';
 
 // The README says what the service does. These checks make it fail the build when the README and the
@@ -668,5 +670,54 @@ describe('the README on tracing a fact to its words (R-017)', () => {
 
   it('the user app section mentions the button', () => {
     expect(section('The minimal user app')).toContain('**Show the source** button');
+  });
+});
+
+describe('the README on the three checks (R-018)', () => {
+  const sec = section('Asking for a status update');
+  const checks = sec.slice(sec.indexOf('### The three checks'), sec.indexOf('### What is not protected, and what is not done'));
+
+  it('names its specification, which exists, and the three text files, which exist and are the ones the loader reads', () => {
+    expect(checks).toContain('specs/R-018-focused-answers.md');
+    expect(existsSync(new URL('../../specs/R-018-focused-answers.md', import.meta.url))).toBe(true);
+    for (const file of Object.values(CHECK_FILES)) {
+      expect(checks, file).toContain(`controls/${file}`);
+      expect(existsSync(new URL(`../../controls/${file}`, import.meta.url)), file).toBe(true);
+    }
+    expect([...CHECK_NAMES]).toEqual(['pulse', 'coming-up', 'long-range']);
+    expect(checks).toContain('{ check: "pulse" | "coming-up" | "long-range", scope?, timeZone? }');
+  });
+
+  it('states the windows in the code: a week is today and six days, a month today and thirty, a year the same date on', () => {
+    const w = (h: 'week' | 'month' | 'year') => {
+      const r = horizonWindow(Date.UTC(2026, 9, 22, 9), 'UTC', h);
+      if (!r.ok) throw new Error('window');
+      return r.value;
+    };
+    expect([w('week').fromDay, w('week').toDay]).toEqual(['2026-10-22', '2026-10-28']);
+    expect(w('month').toDay).toBe('2026-11-21');
+    expect(w('year').toDay).toBe('2027-10-22');
+    expect(checks).toContain('today and the next six days');
+    expect(checks).toContain('today and the next thirty days');
+    expect(checks).toContain('to the same date a year on');
+  });
+
+  it('the command it shows is a real option of the evaluation, and the cases and caps it names are the shipped ones', () => {
+    expect(pkg.scripts.eval).toBeDefined();
+    expect(checks).toContain('npm run eval -- --capability focus --controls DIR');
+    expect([...readFileSync(new URL('../../dev/eval/status-focus-golden.mjs', import.meta.url), 'utf8').matchAll(/^ {2}focus\('/gm)]).toHaveLength(11);
+    expect(checks).toContain('eleven invented cases');
+    const settings = JSON.parse(readFileSync(new URL('../../controls/status/settings.json', import.meta.url), 'utf8')) as { horizons: { week: { maxPoints: number }; month: { maxPoints: number }; year: { maxPoints: number } } };
+    expect([settings.horizons.week.maxPoints, settings.horizons.month.maxPoints, settings.horizons.year.maxPoints]).toEqual([3, 4, 5]);
+  });
+
+  it('says the things a reader must not miss', () => {
+    for (const phrase of ['The code works the window out', 'nothing a note says can widen it', 'the answer is silent', 'no points and no "next" line', 'with **no text**', 'the server holds the words of each check', 'every brain you can read', 'that circle only', 'observers may ask', 'a note with no date is never surfaced by the demo model', 'Parts B and C', 'does not suggest follow-ups']) {
+      expect(checks.toLowerCase().replace(/\*\*/g, ''), phrase).toContain(phrase.toLowerCase().replace(/\*\*/g, ''));
+    }
+  });
+
+  it('the user app section mentions the three buttons', () => {
+    expect(section('The minimal user app')).toContain('**Pulse**, **Coming up** and **Long range**');
   });
 });

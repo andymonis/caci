@@ -25,6 +25,7 @@ const SPECS = [
   { name: 'R-015', file: 'specs/R-015-fact-level-brain.md', minReferences: 25, minThreats: 6, criteria: 12, prefix: 'FL-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
   { name: 'R-016', file: 'specs/R-016-user-app.md', minReferences: 60, minThreats: 11, criteria: 18, prefix: 'UP-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 11 },
   { name: 'R-017', file: 'specs/R-017-input-ledger-and-export.md', minReferences: 60, minThreats: 11, criteria: 16, prefix: 'LX-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 12 },
+  { name: 'R-018', file: 'specs/R-018-focused-answers.md', minReferences: 25, minThreats: 5, criteria: 8, prefix: 'FA-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
 ] as const;
 
 for (const info of SPECS) {
