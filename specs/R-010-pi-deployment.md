@@ -2,7 +2,7 @@
 
 Oct 11, 2026 · @Andy
 
-**Status: built as D1 (T-171 to T-180); the use of the Pi away from home through Tailscale (D13 to D19, T-293 to T-296) is amended in on 2026-10-23 and the owner's hand run on a tailnet is pending. Running on the owner's Pi (confirmed 2026-10-13): used over the home Wi-Fi by the owner and their wife.** An internal family test: the service runs on a Raspberry Pi in the house, family members use it from phones and laptops on the home Wi-Fi, and the owner updates it with one command over SSH.
+**Status: built as D1 (T-171 to T-180); the use of the Pi away from home through Tailscale (D13 to D19, T-293 to T-296) is built as T1 (2026-10-23): a doctor line, a settings-example block and runbook step 13; the owner's hand run on a real tailnet is pending. Running on the owner's Pi (confirmed 2026-10-13): used over the home Wi-Fi by the owner and their wife.** An internal family test: the service runs on a Raspberry Pi in the house, family members use it from phones and laptops on the home Wi-Fi, and the owner updates it with one command over SSH.
 
 ## Overview
 

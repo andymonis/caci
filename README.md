@@ -1023,6 +1023,8 @@ sudo ufw allow from 192.168.1.0/24 to any port 8080 proto tcp
 sudo ufw enable
 ```
 
+(To reach it away from home, step 13 adds one more rule, for the Tailscale interface only; the home rule stays.)
+
 ### 9. The first accounts
 
 Open `http://192.168.1.50:8080/admin` on your phone (the back office; `/` is the everyday app). **Register yourself first**: the first account becomes the administrator. Then let the family register. When everyone has an account, set `CACI_ALLOW_REGISTRATION=false` in `/etc/caci/caci.env` and run `sudo systemctl restart caci`. The app is a plain web page, not an installable app: bookmark it.
@@ -1080,6 +1082,41 @@ The file holds **real notes**: keep it out of the repository and delete the copy
 
 After a power cut the Pi starts the service by itself (SQLite recovers its own write-ahead log). Shut down with `sudo shutdown -h now` rather than pulling the plug. If the card dies: new card, repeat steps 1 to 6, then restore a copied snapshot. If the administrator forgets their password, run this on the Pi (it asks twice, without showing what you type, and signs that account out everywhere): `sudo -u caci env CACI_DATA_DIR=/var/lib/caci node /opt/caci/app/scripts/users.mjs recover-admin <username>`.
 
+### 13. Using it away from home with Tailscale
+
+To try the service away from home without exposing the Pi to the internet, use **Tailscale**, a private network between your own devices (specified in `specs/R-010-pi-deployment.md`, D13 to D19). **No router port is opened**: only devices signed in to your tailnet can reach the Pi at all. The service stays exactly as at home (plain HTTP on the Pi, `CACI_BIND=0.0.0.0`, non-Secure cookies); Tailscale encrypts the traffic between your phone and the Pi, and the home Wi-Fi keeps working for the family without Tailscale. This is for **you only** for now. **Never use Tailscale Funnel**: it publishes a service to the whole internet.
+
+1. **The account is the front door.** Sign up at tailscale.com with an identity account you already use, and turn on a **second sign-in step** (two-step verification) at that provider, with a recovery method, before you go further. Anyone who can sign in to it can reach your Pi.
+2. **Install Tailscale on the Pi**, from its official script, **fetched, read and then run** (do not pipe a download into a shell):
+
+   ```
+   curl -fsSL https://tailscale.com/install.sh -o ~/tailscale-install.sh
+   less ~/tailscale-install.sh
+   sudo sh ~/tailscale-install.sh
+   sudo tailscale up
+   ```
+
+   Open the link `tailscale up` prints and sign in. Then `tailscale status` shows the Pi's name, something like `pi.your-tailnet.ts.net`. In the admin console (login.tailscale.com) check that **MagicDNS** is on, and for the Pi you may turn off **key expiry** so it does not drop off the tailnet after a few months.
+3. **Tell the service the new name.** The service refuses any `Host` that is not listed, so add the tailnet name and the port beside the home names: edit `/etc/caci/caci.env` (`sudo -e /etc/caci/caci.env`), use the commented line under `CACI_ALLOWED_HOSTS` as the model (for example `CACI_ALLOWED_HOSTS=pi.local:8080,192.168.1.50:8080,pi.your-tailnet.ts.net:8080`), then `sudo systemctl restart caci`. Nothing else in the file changes.
+4. **Let the tailnet through the firewall**, that interface and that port only (keep the home rule from step 8):
+
+   ```
+   sudo ufw allow in on tailscale0 to any port 8080 proto tcp
+   ```
+
+5. **Phone and laptop:** install the Tailscale app, sign in with the same account, and open `http://pi.your-tailnet.ts.net:8080/` (your own name from `tailscale status`). The browser says **Not secure** because the page is plain HTTP: that is expected, the traffic is encrypted by Tailscale on the way.
+6. **Check it with the doctor** (step 7). Its **Tailscale** line shows the name and address and the URL to open, **warns if the name is missing from `CACI_ALLOWED_HOSTS`** (with the exact line to set) and **fails if Funnel is on**. If you ever see that failure, run `sudo tailscale serve reset`.
+
+**Turning it off:** `sudo tailscale down` (and `sudo tailscale logout` to remove the Pi from the tailnet), take the tailnet name out of `CACI_ALLOWED_HOSTS` and restart, and `sudo ufw delete allow in on tailscale0 to any port 8080 proto tcp`.
+
+**Adding someone later:** invite them to the tailnet in the admin console (or share the Pi), and for their CaCi account set `CACI_ALLOW_REGISTRATION=true` briefly, restart, let them register, then set it back to `false`. Remember that every account's notes go to Anthropic, unanonymised, and that the release gates stand for anything beyond your own test.
+
+**The HTTPS alternative, not set up here:** `tailscale serve` can put real HTTPS in front of the service (it would need `CACI_BIND=127.0.0.1`, `CACI_COOKIE_SECURE=true` and `CACI_TRUSTED_PROXIES=1`, and then everyone, at home too, would use the tailnet name). It is not the default because it would put the machine and tailnet names in public certificate logs, the family at home would need Tailscale too, and whether it passes on each client's address (the login throttle counts by it) has not been checked. The doctor warns when something is being served.
+
+**The risks:** the identity account behind the tailnet is the front door (step 1); Tailscale's company sees which devices talk to each other and when, but not the content; a lost phone or laptop signed in to the tailnet can reach the Pi until you remove it in the admin console; and the notes still go to Anthropic as before.
+
+**Nothing in this step has been run on a real Pi or tailnet.** After your first try, keep the output of `npm run doctor` and say whether the page opened on mobile data: that is the evidence.
+
 ### What goes where, and what leaves the house
 
 | Thing | Where | Who can read it |
@@ -1089,13 +1126,14 @@ After a power cut the Pi starts the service by itself (SQLite recovers its own w
 | Settings and the Anthropic key | `/etc/caci/caci.env` | root and the `caci` account |
 | Logs | the journal (`journalctl -u caci`) | root; they hold no notes, passwords or key |
 
-**Every account's notes, and the names of its categories, are sent to Anthropic, unanonymised, whenever a note is filed** (`CACI_LLM=anthropic`). Session cookies and everything else cross your Wi-Fi in plain HTTP. This is set up for an internal family test; the release gates in **Shared circle brains** and **The shared circle brain** (pseudonymisation, a data processing agreement, a lawful basis, a risk assessment and a statement of who may use the service) stand for anything wider, and **HTTPS and remote access are not part of this setup**.
+**Every account's notes, and the names of its categories, are sent to Anthropic, unanonymised, whenever a note is filed** (`CACI_LLM=anthropic`). Session cookies and everything else cross your Wi-Fi in plain HTTP. This is set up for an internal family test; the release gates in **Shared circle brains** and **The shared circle brain** (pseudonymisation, a data processing agreement, a lawful basis, a risk assessment and a statement of who may use the service) stand for anything wider, and **HTTPS is not part of this setup, and the only remote access is a private Tailscale network (step 13), never a port opened to the internet**.
 
 ### Troubleshooting
 
 | Symptom | What to look at |
 |---|---|
 | The service will not start | `sudo journalctl -u caci -n 50`: usually a missing `ANTHROPIC_API_KEY` or a setting the service refuses (the doctor names it) |
+| Works at home, not away from home | the doctor's Tailscale line (is it running, is the name in `CACI_ALLOWED_HOSTS`); the firewall rule for `tailscale0`; that Tailscale is on, and signed in to the same account, on the phone |
 | A phone cannot connect | the doctor's "Reachable on the network" and "Host" lines; the firewall; that the address typed is exactly one in `CACI_ALLOWED_HOSTS` |
 | The page says forbidden or shows nothing for one name only | that name is not in `CACI_ALLOWED_HOSTS` (an Android phone may need the numeric address) |
 | Everything is slow | the doctor's password-hash line; a Pi 3 or a busy card |
