@@ -158,6 +158,23 @@ describe('the example settings file', () => {
       expect(line, line).toMatch(/^[A-Z_]+=[^\s"']*$/);
     }
   });
+  it('holds a commented tailnet block: uncommented, it is valid and lists the home names and the tailnet name, each with its port (R-010 D14, D-AC-12)', () => {
+    const block = text.split('\n').find((l) => /^#\s*CACI_ALLOWED_HOSTS=.*ts\.net/.test(l));
+    expect(block).toBeDefined();
+    const uncommented = text.split('\n').map((l) => (l === block ? l.replace(/^#\s*/, '') : l.startsWith('CACI_ALLOWED_HOSTS=') ? `# ${l}` : l)).join('\n');
+    const parsed = parseServiceConfig({ ...parseEnvFile(uncommented), ANTHROPIC_API_KEY: KEY });
+    expect(parsed.ok, JSON.stringify(parsed)).toBe(true);
+    expect(parsed.value.allowedHosts).toEqual(['pi.local:8080', '192.168.1.50:8080', 'pi.your-tailnet.ts.net:8080']);
+    expect(parsed.value).toMatchObject({ port: 8080, bind: '0.0.0.0', cookieSecure: false, trustedProxies: 0, allowInsecure: true });
+    for (const host of parsed.value.allowedHosts) expect(host).toMatch(/^[a-z0-9.-]+:8080$/);
+  });
+  it('the tailnet block says nothing else changes, names the restart, the runbook step and that Funnel is never used', () => {
+    for (const phrase of ['Away from home with Tailscale (runbook step 13)', 'sudo systemctl restart caci', 'Nothing else changes', 'Never use Tailscale Funnel']) expect(text, phrase).toContain(phrase);
+    expect(text.split('\n').filter((l) => /^CACI_ALLOWED_HOSTS=/.test(l))).toHaveLength(1);
+    expect(settings.CACI_ALLOWED_HOSTS).toBe('pi.local:8080,192.168.1.50:8080');
+    expect(settings.CACI_BIND).toBe('0.0.0.0');
+    expect(settings.CACI_COOKIE_SECURE).toBe('false');
+  });
   it('says plainly what leaves the house and what to change', () => {
     expect(text).toContain('go to Anthropic, unanonymised');
     expect(text).toContain('CHANGE THESE');
