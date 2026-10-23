@@ -2,7 +2,7 @@
 
 Oct 11, 2026 · @Andy
 
-**Status: built as D1 (T-171 to T-180) and running on the owner's Pi (confirmed 2026-10-13): used over the home Wi-Fi by the owner and their wife.** An internal family test: the service runs on a Raspberry Pi in the house, family members use it from phones and laptops on the home Wi-Fi, and the owner updates it with one command over SSH.
+**Status: built as D1 (T-171 to T-180); the use of the Pi away from home through Tailscale (D13 to D19, T-293 to T-296) is amended in on 2026-10-23 and the owner's hand run on a tailnet is pending. Running on the owner's Pi (confirmed 2026-10-13): used over the home Wi-Fi by the owner and their wife.** An internal family test: the service runs on a Raspberry Pi in the house, family members use it from phones and laptops on the home Wi-Fi, and the owner updates it with one command over SSH.
 
 ## Overview
 
@@ -24,6 +24,13 @@ The service already runs anywhere Node 22.13 or later runs (`npm run serve`). Th
 | D10 | Snapshots use **`VACUUM INTO`**, then verify the copy. Rotation keeps the last 14 complete snapshots. A snapshot is a folder holding `graphs.db` and `users.db`, created owner-only. | Consistent while the service runs; no need to stop it. |
 | D11 | `CACI_ALLOWED_HOSTS` lists the **exact** names and addresses (port included) the family uses; the service then refuses any other `Host`. Registration stays open until the family has accounts, then is switched off. The first account created is the administrator, so the owner registers first. | DNS-rebinding protection on a LAN service; an open door only as long as needed. |
 | D12 | The only things the deploy tooling reads from the environment are its own settings; **the key is never printed, logged or put in a command line**. The doctor reports only that it is present. | A key in a process list or log is a leak. |
+| D13 | **Owner (2026-10-23):** to use the Pi **away from home** without exposing it to the internet, use **Tailscale**, a private WireGuard network: **no router port is opened** and only devices signed in to the owner's tailnet can reach the Pi. (ZeroTier was considered: the same shape, but no names or built-in HTTPS.) | Testing outside the house, free, controllable, nothing public. |
+| D14 | **Owner:** the route keeps **plain HTTP** as at home. The service stays on `0.0.0.0` with non-Secure cookies as now; the **tailnet name and address, each with the port, are added to `CACI_ALLOWED_HOSTS`**; the firewall lets the `tailscale0` interface through to the service port. Home Wi-Fi keeps working for the family without Tailscale. Tailscale's own encryption protects the traffic away from home; browsers will say "Not secure". | The smallest change that works; nothing about home use changes. |
+| D15 | **Owner:** it is **for the owner only for now**: one tailnet account with their own phone and laptop. Adding people later is a paragraph in the runbook, not a feature. | No other person's data is reachable from outside yet. |
+| D16 | **Tailscale Funnel is never used** (it publishes a service to the whole internet), and **the doctor fails** if the Pi's Tailscale is serving anything publicly. | The one switch that would undo the point. |
+| D17 | The doctor gains a **Tailscale** line: not installed is a pass ("only needed away from home"); installed but not running is a warning; running shows the tailnet name and address and the URL to open, and **warns when the tailnet name or address is missing from `CACI_ALLOWED_HOSTS`**, with the exact line to add; Funnel on is a fail. The "reachable on the network" check also tries the Tailscale address. The doctor never runs `tailscale up`, never changes a setting, and a missing `tailscale` program is "not installed", never a crash. | A wrong allowed-hosts list is the usual reason it does not work, and it is invisible from the phone. |
+| D18 | **Tailscale is installed from its official script, fetched, read and then run, never piped into a shell** (as Node is). The runbook step is step 13. | The same rule as everything else the runbook installs. |
+| D19 | The **HTTPS route through `tailscale serve`** (service on `127.0.0.1`, Secure cookies, `CACI_TRUSTED_PROXIES=1`, the family at home also on the tailnet name, a real certificate) is **described in the runbook as a later alternative and not built or checked**: it would put the machine and tailnet names in public certificate logs, make the family at home need Tailscale too, and its client address handling is unverified. | Not needed for an owner-only test; named so it is not forgotten. |
 
 ## Goals and non-goals
 
@@ -69,6 +76,9 @@ Non-goals: HTTPS, a reverse proxy, remote access, automatic updates, snapshots c
 | D-FR-06 | The install script is idempotent, never overwrites the env file or data, never downloads and runs anything, and has a dry-run mode. |
 | D-FR-07 | The doctor reports one line per check with pass, warn or fail and what to do, and exits non-zero on any fail. |
 | D-FR-08 | The example env file parses with the service's own configuration parser and contains no secret. |
+| D-FR-09 | The doctor's Tailscale line follows D17 for every state (not installed, stopped, running and listed, running and not listed, Funnel on), and a probe that fails or a missing program never crashes it. |
+| D-FR-10 | The example env file holds a commented block showing the tailnet name and address added to `CACI_ALLOWED_HOSTS` with their port, and the example with that block uncommented is accepted by the service's own parser. |
+| D-FR-11 | The runbook's step 13 names only commands, settings and files that exist and agree with the code, never pipes a download into a shell, never recommends Funnel, and says what to paste back. |
 
 ## Threats and controls
 
@@ -80,8 +90,12 @@ Non-goals: HTTPS, a reverse proxy, remote access, automatic updates, snapshots c
 | Power loss or SD-card failure | SQLite with a write-ahead log survives power loss; systemd restarts at boot; nightly snapshots are on the same card (residual risk: a dead card loses both). |
 | A command injected through the deploy ref | The ref has a strict shape and commands run without a shell, as argument arrays. |
 | A restore overwrites good data with a bad snapshot | Verification first, the current files copied aside, `--yes` required. |
+| The Pi is published to the internet by Tailscale Funnel | D16: the runbook says never; the doctor fails when anything is served publicly. |
+| The tailnet account is taken over | The identity account behind the tailnet is the front door: the runbook says to use a second sign-in step there; the service's own login still applies behind it. |
+| A stale allowed-hosts list makes the route fail, or tempts someone to remove the list | The doctor names the missing host and the exact line to add (D17); the list is never emptied. |
+| The firewall is opened too wide for Tailscale | The runbook allows the one interface and the one port (`ufw allow in on tailscale0 to any port 8080`), not the port for everyone. |
 
-Each threat's covering tests are named in the milestone's tasks (T-172 to T-180); this milestone does not extend `review.test.ts`, because it adds no feature to the product.
+Each threat's covering tests are named in the milestone's tasks (T-172 to T-180, and T-294 to T-296 for the tailnet); this milestone does not extend `review.test.ts`, because it adds no feature to the product.
 
 ## Residual risks
 
@@ -91,6 +105,11 @@ Each threat's covering tests are named in the milestone's tasks (T-172 to T-180)
 4. **A Pi's clock** can start in the past without a battery; sessions and expiries depend on it (the doctor checks).
 5. **Scrypt is slow on a Pi** and the service has no cap on concurrent hashing (the doctor times one hash).
 6. **I could not run any of this on a real Pi.** The tooling is tested here with stubs; the owner's hand run is the proof, and is recorded as pending until done.
+7. **The identity account behind the tailnet is the front door** to the Pi. Its sign-in security is the owner's to keep (a second step, a recovery method).
+8. **Tailscale's company sees connection metadata** (which devices talk, when), not the content, which is end-to-end encrypted; its coordination service must be trusted to hand out the right keys.
+9. **A lost or stolen laptop or phone** that is signed in to the tailnet can reach the Pi until the device is removed in the Tailscale console; keys also expire.
+10. **The HTTPS alternative is unverified**: its certificate publishes the names in public logs, and whether `tailscale serve` passes the client's address on (for throttling) is not known here.
+11. **Nothing in this part has been run on a real Pi or tailnet**; the doctor output the owner pastes back is the evidence.
 
 ## Acceptance criteria
 
@@ -106,3 +125,6 @@ Each threat's covering tests are named in the milestone's tasks (T-172 to T-180)
 | D-AC-08 | Given the install script run twice, when the second run ends, then nothing changed and no existing env file or data was touched. |
 | D-AC-09 | Given any combination of check outcomes, when the doctor runs, then each is one line, the key is never printed, and the exit code is non-zero exactly when a check fails. |
 | D-AC-10 | Given the runbook, when its commands, paths, units and settings are compared with the code, then they all exist and agree. |
+| D-AC-11 | Given the Tailscale line of the doctor, when each state is tried (not installed, stopped, running and listed, running and not listed, Funnel on, a failing probe), then each is one line, only Funnel on and a probe that cannot run are failures or warnings as D17 says, and nothing is changed. |
+| D-AC-12 | Given the example env file with the tailnet block uncommented, when it is parsed, then it is valid configuration and lists the home names and the tailnet names with their ports. |
+| D-AC-13 | Given the runbook, when step 13 is compared with the code, then every command, setting and file it names exists, it never pipes a download into a shell or recommends Funnel, and it names what to paste back. |
