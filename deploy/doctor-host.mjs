@@ -82,6 +82,38 @@ export function createProbes({
       const enabled = await run('systemctl', ['is-enabled', unit]);
       return { active: active.ok && active.stdout.trim() === 'active', enabled: enabled.ok };
     },
+    tailscale: async () => {
+      const status = await run('tailscale', ['status', '--json'], { timeoutMs: 10_000 });
+      if (!status.ok) {
+        const said = `${status.stderr} ${status.stdout} ${status.detail}`;
+        if (status.code === null && /ENOENT|could not be run|not found/i.test(said)) return { state: 'not-installed' };
+        if (/access denied|permission denied|operator|must be root|sudo/i.test(said)) return { state: 'unreadable' };
+        return { state: 'stopped' };
+      }
+      let data;
+      try {
+        data = JSON.parse(status.stdout);
+      } catch {
+        return { state: 'stopped' };
+      }
+      if (data === null || typeof data !== 'object' || data.BackendState !== 'Running') return { state: 'stopped' };
+      const self = data.Self ?? {};
+      const addresses = Array.isArray(self.TailscaleIPs) ? self.TailscaleIPs.filter((a) => typeof a === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(a)) : [];
+      const result = { state: 'running', dnsName: typeof self.DNSName === 'string' ? self.DNSName : '', addresses, serving: false, funnel: false };
+      // what is served, and whether Funnel makes any of it public (`serve status` prints {} when nothing is set up)
+      const serve = await run('tailscale', ['serve', 'status', '--json'], { timeoutMs: 10_000 });
+      if (serve.ok) {
+        try {
+          const s = JSON.parse(serve.stdout.trim() === '' ? '{}' : serve.stdout);
+          const count = (o) => (o !== null && typeof o === 'object' ? Object.keys(o).length : 0);
+          result.serving = count(s?.TCP) + count(s?.Web) > 0;
+          result.funnel = s?.AllowFunnel !== null && typeof s?.AllowFunnel === 'object' && Object.values(s.AllowFunnel).some((v) => v === true);
+        } catch {
+          // unreadable serve status: treated as nothing served
+        }
+      }
+      return result;
+    },
     addresses: async () => Object.values(interfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i.address),
     get: (request) => get(request),
     snapshots: async () => {

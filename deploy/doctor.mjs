@@ -24,6 +24,36 @@ export function snapshotTime(name) {
 
 const ago = (ms) => (ms < 3600_000 ? `${Math.max(1, Math.round(ms / 60_000))} minutes` : ms < 48 * 3600_000 ? `${Math.round(ms / 3600_000)} hours` : `${Math.round(ms / 86_400_000)} days`);
 
+/**
+ * The Tailscale line(s) for what the probe saw (`state`: `not-installed`, `unreadable`, `stopped` or `running`, with the tailnet `dnsName`,
+ * the IPv4 `addresses`, and whether anything is `serving` and whether `funnel` publishes it) and the service's settings, if they could be read.
+ * Pure: it only judges; it never changes anything.
+ */
+export function judgeTailscale(ts, settings) {
+  if (ts === undefined || ts === null || ts.state === 'not-installed') return pass('Tailscale', 'not installed: only needed to use the service away from home (runbook step 13)');
+  if (ts.state === 'unreadable') return warn('Tailscale', 'is installed but this account cannot read its status', 'Run the doctor with sudo, or once: sudo tailscale set --operator=$USER');
+  if (ts.state === 'stopped') return warn('Tailscale', 'is installed but not running: the service cannot be reached away from home', 'sudo tailscale up');
+  if (ts.state !== 'running') return warn('Tailscale', `is in a state this doctor does not know (${String(ts.state).slice(0, 40)})`, 'Run: tailscale status');
+  const out = [];
+  const name = typeof ts.dnsName === 'string' && ts.dnsName !== '' ? ts.dnsName.replace(/\.$/, '') : undefined;
+  const addresses = Array.isArray(ts.addresses) ? ts.addresses.filter((a) => typeof a === 'string' && a !== '') : [];
+  const who = [name, ...addresses].filter((x) => x !== undefined).join(', ');
+  if (settings === undefined) {
+    out.push(pass('Tailscale', `running${who === '' ? '' : ` as ${who}`} (the settings could not be read, so the allowed hosts were not compared)`));
+  } else {
+    const port = settings.port;
+    const wanted = name !== undefined ? `${name}:${port}` : addresses[0] === undefined ? undefined : `${addresses[0]}:${port}`;
+    const listed = settings.allowedHosts?.map((h) => h.toLowerCase());
+    if (wanted === undefined) out.push(warn('Tailscale', 'is running but has no name or address to use', 'Run: tailscale status'));
+    else if (listed !== undefined && !listed.includes(wanted.toLowerCase())) {
+      out.push(warn('Tailscale', `running as ${who}, but ${wanted} is not in CACI_ALLOWED_HOSTS: the service would refuse it`, `In /etc/caci/caci.env set CACI_ALLOWED_HOSTS=${[...settings.allowedHosts, wanted].join(',')} then sudo systemctl restart caci`));
+    } else out.push(pass('Tailscale', `running as ${who}; away from home open http://${wanted}/`));
+  }
+  if (ts.funnel === true) out.push(fail('Tailscale Funnel', 'is on: it publishes the service to the whole internet', 'sudo tailscale serve reset  (never use Funnel for this service: runbook step 13)'));
+  else if (ts.serving === true) out.push(warn('Tailscale serve', 'is serving something (the HTTPS alternative, which this doctor does not check)', 'See runbook step 13; the plain route needs no serve configuration: sudo tailscale serve reset'));
+  return out;
+}
+
 export async function runDoctor({ probes, log }) {
   const results = [];
   /** Runs one check; a probe that throws is a failed check, never a crash. */
@@ -150,6 +180,13 @@ export async function runDoctor({ probes, log }) {
       out.push(other.ok && other.status === 403 ? pass('Other hosts refused', 'a Host that is not listed gets 403') : warn('Other hosts refused', `a Host that is not listed was not refused (${other.ok ? `status ${other.status}` : other.reason})`, 'Check CACI_ALLOWED_HOSTS.'));
     }
     return out;
+  });
+
+  // Tailscale (R-010 D13 to D19): only needed away from home, so "not installed" is a pass; Funnel on is the one failure
+  await check('Tailscale', async () => {
+    const ts = typeof probes.tailscale === 'function' ? await probes.tailscale() : { state: 'not-installed' };
+    const settings = s !== undefined && s.exists && s.readable && s.config.ok ? s.config.value : undefined;
+    return judgeTailscale(ts, settings);
   });
 
   await check('Snapshots', async () => {

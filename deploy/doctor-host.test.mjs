@@ -210,3 +210,62 @@ describe('programs and time', () => {
     expect(await setup({ deps: { now: () => 42 } }).probes.nowMs()).toBe(42);
   });
 });
+
+describe('the Tailscale probe (R-010)', () => {
+  const RUN = (table) => async (file, args) => {
+    const key = [file, ...args].join(' ');
+    const entry = table[key];
+    if (entry === undefined) return { ok: false, code: null, stdout: '', stderr: '', detail: `${file} could not be run (ENOENT)` };
+    return entry;
+  };
+  const STATUS = JSON.stringify({ BackendState: 'Running', Self: { DNSName: 'pi.tail1234.ts.net.', TailscaleIPs: ['100.64.0.5', 'fd7a:115c:a1e0::1'] } });
+  const probe = async (table) => setup({ run: RUN(table) }).probes.tailscale();
+
+  it('no tailscale program is not installed, never a crash', async () => {
+    expect(await probe({})).toEqual({ state: 'not-installed' });
+  });
+
+  it('the program failing to talk to its daemon is stopped; a permission message is unreadable', async () => {
+    expect(await probe({ 'tailscale status --json': { ok: false, code: 1, stdout: '', stderr: 'failed to connect to local tailscaled', detail: 'x' } })).toEqual({ state: 'stopped' });
+    expect(await probe({ 'tailscale status --json': { ok: false, code: 1, stdout: '', stderr: 'Access denied: status access denied', detail: 'x' } })).toEqual({ state: 'unreadable' });
+    expect(await probe({ 'tailscale status --json': { ok: false, code: 1, stdout: '', stderr: 'use sudo tailscale', detail: 'x' } })).toEqual({ state: 'unreadable' });
+  });
+
+  it('a status that is not JSON, or is not Running, is stopped', async () => {
+    expect(await probe({ 'tailscale status --json': OK('not json') })).toEqual({ state: 'stopped' });
+    expect(await probe({ 'tailscale status --json': OK(JSON.stringify({ BackendState: 'Stopped' })) })).toEqual({ state: 'stopped' });
+    expect(await probe({ 'tailscale status --json': OK('null') })).toEqual({ state: 'stopped' });
+    expect(await probe({ 'tailscale status --json': OK('[]') })).toEqual({ state: 'stopped' });
+  });
+
+  it('running gives the name and only the IPv4 addresses, with nothing served when serve status is empty or fails', async () => {
+    const empty = await probe({ 'tailscale status --json': OK(STATUS), 'tailscale serve status --json': OK('{}') });
+    expect(empty).toEqual({ state: 'running', dnsName: 'pi.tail1234.ts.net.', addresses: ['100.64.0.5'], serving: false, funnel: false });
+    expect(await probe({ 'tailscale status --json': OK(STATUS), 'tailscale serve status --json': OK('') })).toMatchObject({ serving: false, funnel: false });
+    expect(await probe({ 'tailscale status --json': OK(STATUS) })).toMatchObject({ serving: false, funnel: false });
+    expect(await probe({ 'tailscale status --json': OK(STATUS), 'tailscale serve status --json': OK('garbage') })).toMatchObject({ serving: false, funnel: false });
+    expect(await probe({ 'tailscale status --json': OK(JSON.stringify({ BackendState: 'Running' })) })).toMatchObject({ dnsName: '', addresses: [] });
+  });
+
+  it('serving is true when TCP or Web handlers exist, and funnel only when AllowFunnel has a true', async () => {
+    const serve = (o) => ({ 'tailscale status --json': OK(STATUS), 'tailscale serve status --json': OK(JSON.stringify(o)) });
+    expect(await probe(serve({ TCP: { 443: { HTTPS: true } }, Web: { 'pi.tail1234.ts.net:443': {} } }))).toMatchObject({ serving: true, funnel: false });
+    expect(await probe(serve({ Web: { 'pi.tail1234.ts.net:443': {} } }))).toMatchObject({ serving: true, funnel: false });
+    expect(await probe(serve({ TCP: { 443: {} }, AllowFunnel: { 'pi.tail1234.ts.net:443': true } }))).toMatchObject({ serving: true, funnel: true });
+    expect(await probe(serve({ TCP: { 443: {} }, AllowFunnel: { 'pi.tail1234.ts.net:443': false } }))).toMatchObject({ serving: true, funnel: false });
+    expect(await probe(serve({ AllowFunnel: null }))).toMatchObject({ serving: false, funnel: false });
+  });
+
+  it('asks only status and serve status, with no shell and a time limit, and changes nothing', async () => {
+    const calls = [];
+    const run = async (file, args, options) => {
+      calls.push([file, ...args, options?.timeoutMs]);
+      return { ok: false, code: null, stdout: '', stderr: '', detail: 'tailscale could not be run' };
+    };
+    await setup({ run }).probes.tailscale();
+    expect(calls).toEqual([['tailscale', 'status', '--json', 10_000]]);
+    const calls2 = [];
+    await setup({ run: async (file, args, options) => (calls2.push([file, ...args, options?.timeoutMs]), file === 'tailscale' && args[0] === 'status' ? OK(STATUS) : OK('{}')) }).probes.tailscale();
+    expect(calls2).toEqual([['tailscale', 'status', '--json', 10_000], ['tailscale', 'serve', 'status', '--json', 10_000]]);
+  });
+});

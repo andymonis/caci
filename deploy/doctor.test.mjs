@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EXAMPLE_HOSTS, runDoctor, snapshotTime } from './doctor.mjs';
+import { EXAMPLE_HOSTS, judgeTailscale, runDoctor, snapshotTime } from './doctor.mjs';
 
 const NOW = Date.UTC(2026, 9, 11, 12, 0, 0);
 const PAGE = { status: 200, headers: { 'content-type': 'text/html' } };
@@ -298,5 +298,90 @@ describe('robustness and secrecy', () => {
     expect(one.lines.at(-1)).toMatch(/1 warning, 0 failed/);
     const two = await doctor({ freeBytes: async () => 100 * 1024 ** 2, hashMs: async () => 5000 });
     expect(two.lines.at(-1)).toMatch(/2 warnings/);
+  });
+});
+
+describe('Tailscale (R-010 D13 to D19)', () => {
+  const RUNNING = { state: 'running', dnsName: 'pi.tail1234.ts.net.', addresses: ['100.64.0.5'], serving: false, funnel: false };
+  const withHosts = (...hosts) => ({ settings: async () => ({ exists: true, readable: true, path: '/etc/caci/caci.env', mode: 0o640, uid: 0, config: config({ allowedHosts: hosts }), keyPresent: true }) });
+  const line = (r) => r.results.filter((x) => x.name === 'Tailscale');
+
+  it('not installed is a pass that says it is only needed away from home; a doctor with no probe for it says the same', async () => {
+    const r = await doctor({ tailscale: async () => ({ state: 'not-installed' }) });
+    expect(line(r)).toEqual([{ status: 'pass', name: 'Tailscale', text: expect.stringContaining('only needed to use the service away from home') }]);
+    expect(r.code).toBe(0);
+    const none = await doctor({ tailscale: undefined });
+    expect(statusOf(none, 'Tailscale')).toBe('pass');
+  });
+
+  it('installed but stopped is a warning with the command; unreadable is a warning with two ways to fix it; an unknown state is a warning', async () => {
+    const stopped = await doctor({ tailscale: async () => ({ state: 'stopped' }) });
+    expect(line(stopped)[0]).toMatchObject({ status: 'warn', fix: 'sudo tailscale up' });
+    expect(stopped.code).toBe(0);
+    const unreadable = await doctor({ tailscale: async () => ({ state: 'unreadable' }) });
+    expect(line(unreadable)[0]).toMatchObject({ status: 'warn' });
+    expect(line(unreadable)[0].fix).toContain('sudo tailscale set --operator');
+    const odd = await doctor({ tailscale: async () => ({ state: 'weird' }) });
+    expect(line(odd)[0]).toMatchObject({ status: 'warn' });
+  });
+
+  it('running and listed is a pass naming the name, the address and the URL to open, port included', async () => {
+    const r = await doctor({ ...withHosts('kitchen.local:8080', 'pi.tail1234.ts.net:8080'), tailscale: async () => RUNNING });
+    expect(line(r)).toEqual([{ status: 'pass', name: 'Tailscale', text: 'running as pi.tail1234.ts.net, 100.64.0.5; away from home open http://pi.tail1234.ts.net:8080/' }]);
+    expect(r.code).toBe(0);
+  });
+
+  it('the host match is exact on the name and port, without regard to case, and a missing host is a warning with the exact line to add', async () => {
+    expect(statusOf(await doctor({ ...withHosts('PI.TAIL1234.TS.NET:8080'), tailscale: async () => RUNNING }), 'Tailscale')).toBe('pass');
+    for (const hosts of [['kitchen.local:8080'], ['pi.tail1234.ts.net'], ['pi.tail1234.ts.net:9090'], ['pi.tail1234.ts.net.evil:8080'], ['100.64.0.5:8080']]) {
+      const r = await doctor({ ...withHosts(...hosts), tailscale: async () => RUNNING });
+      expect(line(r)[0], hosts.join()).toMatchObject({ status: 'warn' });
+      expect(line(r)[0].fix).toBe(`In /etc/caci/caci.env set CACI_ALLOWED_HOSTS=${[...hosts, 'pi.tail1234.ts.net:8080'].join(',')} then sudo systemctl restart caci`);
+    }
+  });
+
+  it('with no allowed-hosts list every Host is accepted, so it passes; with no name the address is used; with neither it warns', async () => {
+    const noList = await doctor({ settings: async () => ({ exists: true, readable: true, path: '/etc/caci/caci.env', mode: 0o640, uid: 0, config: { ok: true, value: { port: 8080, bind: '0.0.0.0', llm: 'anthropic', allowRegistration: false } }, keyPresent: true }), tailscale: async () => RUNNING });
+    expect(line(noList)[0].status).toBe('pass');
+    const noName = await doctor({ ...withHosts('100.64.0.5:8080'), tailscale: async () => ({ ...RUNNING, dnsName: '' }) });
+    expect(line(noName)[0]).toMatchObject({ status: 'pass', text: expect.stringContaining('http://100.64.0.5:8080/') });
+    const neither = await doctor({ tailscale: async () => ({ ...RUNNING, dnsName: '', addresses: [] }) });
+    expect(line(neither)[0]).toMatchObject({ status: 'warn' });
+  });
+
+  it('when the settings could not be read it still says it is running, and that the hosts were not compared', async () => {
+    const r = await doctor({ settings: async () => ({ exists: false, path: '/etc/caci/caci.env' }), tailscale: async () => RUNNING });
+    expect(line(r)[0]).toMatchObject({ status: 'pass', text: expect.stringContaining('allowed hosts were not compared') });
+  });
+
+  it('Funnel on is a failure that makes the doctor exit 1 and says how to turn it off; serving without Funnel is a warning', async () => {
+    const r = await doctor({ ...withHosts('pi.tail1234.ts.net:8080'), tailscale: async () => ({ ...RUNNING, serving: true, funnel: true }) });
+    const funnel = r.results.find((x) => x.name === 'Tailscale Funnel');
+    expect(funnel).toMatchObject({ status: 'fail', text: expect.stringContaining('whole internet'), fix: expect.stringContaining('sudo tailscale serve reset') });
+    expect(r.code).toBe(1);
+    expect(r.text).toContain('[FAIL] Tailscale Funnel');
+    const served = await doctor({ ...withHosts('pi.tail1234.ts.net:8080'), tailscale: async () => ({ ...RUNNING, serving: true, funnel: false }) });
+    expect(served.results.find((x) => x.name === 'Tailscale serve')).toMatchObject({ status: 'warn' });
+    expect(served.code).toBe(0);
+    expect(r.results.filter((x) => x.name.startsWith('Tailscale')).length).toBe(2);
+  });
+
+  it('a probe that throws is one failed line, never a crash, and the key is never printed', async () => {
+    const r = await doctor({ tailscale: async () => { throw new Error('boom sk-ant-api03-SECRETSECRET1234'); } });
+    expect(line(r)[0]).toMatchObject({ status: 'fail' });
+    expect(r.code).toBe(1);
+    expect(r.text).not.toContain('SECRETSECRET');
+  });
+
+  it('judges without changing anything: the same input gives the same lines, and nothing is mutated', () => {
+    const ts = Object.freeze({ ...RUNNING, addresses: Object.freeze(['100.64.0.5']) });
+    const settings = Object.freeze({ port: 8080, allowedHosts: Object.freeze(['a:8080']) });
+    expect(judgeTailscale(ts, settings)).toEqual(judgeTailscale(ts, settings));
+  });
+
+  it('the network check already tries the tailnet address, as every address besides loopback', async () => {
+    const r = await doctor({ addresses: async () => ['192.168.1.60', '100.64.0.5'], tailscale: async () => RUNNING });
+    expect(r.asked.map((a) => a.address)).toContain('100.64.0.5');
+    expect(r.results.filter((x) => x.name === 'Reachable on the network').map((x) => x.text)).toEqual(['192.168.1.60:8080 answers', '100.64.0.5:8080 answers']);
   });
 });
