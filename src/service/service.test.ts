@@ -19,7 +19,7 @@ const tmp = (): string => {
   dirs.push(dir);
   return dir;
 };
-const config = (dataDir: string, extra: Partial<ServiceConfig> = {}): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, statusPerHour: 20, ledgerDays: 90, ...extra });
+const config = (dataDir: string, extra: Partial<ServiceConfig> = {}): ServiceConfig => ({ port: 0, bind: '127.0.0.1', dataDir, allowRegistration: true, cookieSecure: false, trustedProxies: 0, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, statusPerHour: 20, ledgerDays: 90, sessionIdleDays: 7, sessionDays: 30, ...extra });
 async function start(dataDir: string, extra: Partial<ServiceConfig> = {}): Promise<RunningService> {
   const service = await startService(config(dataDir, extra));
   running.push(service);
@@ -50,7 +50,7 @@ describe('the running service', () => {
     expect((await web.call('POST', '/api/register', { username: 'ann', displayName: 'Ann', password: PW })).status).toBe(201);
     const login = await web.call('POST', '/api/login', { username: 'ann', password: PW });
     expect(login.status).toBe(200);
-    expect(login.setCookie).toMatch(/^caci_session=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=604800$/);
+    expect(login.setCookie).toMatch(/^caci_session=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=2592000$/);
     const me = await web.call('GET', '/api/me');
     expect(me.json.user).toMatchObject({ username: 'ann', role: 'admin' });
     expect(me.json.graphId).toBe(`user-${me.json.user.id}`);

@@ -720,4 +720,17 @@ describe('the README on the three checks (R-018)', () => {
   it('the user app section mentions the three buttons', () => {
     expect(section('The minimal user app')).toContain('**Pulse**, **Coming up** and **Long range**');
   });
+
+describe('README: staying signed in', () => {
+  it('names both settings with the defaults and the range the code has', () => {
+    const defaults = parseServiceConfig({});
+    expect(defaults.ok ? [defaults.value.sessionIdleDays, defaults.value.sessionDays] : []).toEqual([7, 30]);
+    expect(readme).toMatch(/\| `CACI_SESSION_IDLE_DAYS` \|[^|]*\| `7` \|/);
+    expect(readme).toMatch(/\| `CACI_SESSION_DAYS` \|[^|]*\| `30` \|/);
+    expect(readme).toContain('### Staying signed in');
+    for (const phrase of ['7 by default', '30 by default', 'a longer window for a lost phone', 'Max-Age', 'ends your other logins']) expect(readme, phrase).toContain(phrase);
+    expect(parseServiceConfig({ CACI_SESSION_DAYS: '365', CACI_SESSION_IDLE_DAYS: '365' }).ok).toBe(true);
+    expect(parseServiceConfig({ CACI_SESSION_DAYS: '366' }).ok).toBe(false);
+  });
+});
 });

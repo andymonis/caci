@@ -40,7 +40,7 @@ It changes the earlier statement in `spec.md` §4 that the host application "own
 - **User id**: `u` followed by 16 lower-case characters from `[a-z0-9]`, random, never reused.
 - **Username**: 3 to 32 characters of `[a-z0-9._-]`, stored lower-cased (input is lower-cased first), unique. `Ann` and `ann` are one account.
 - **User graph id**: derived deterministically from the user id (`user-` + the user id), so it satisfies R-001's graph id rules (1 to 128 characters of `[a-z0-9_-]`).
-- **Session**: a login. Identified by a token of 256 random bits, base64url. Lives until logout, until the idle timeout (default 30 minutes since last use) or the absolute lifetime (default 7 days since login), whichever is first, or until it is revoked.
+- **Session**: a login. Identified by a token of 256 random bits, base64url. Lives until logout, until the idle timeout or the absolute lifetime, whichever is first (the store's own defaults are 30 minutes since last use and 7 days since login; **the service sets them from `CACI_SESSION_IDLE_DAYS`, default 7, and `CACI_SESSION_DAYS`, default 30**, changed 2026-10-31 so a family phone stays signed in; a longer life is a longer window for a lost phone, which password change, reset, deletion and sign-out still close at once), whichever is first, or until it is revoked.
 
 ## Functional requirements
 

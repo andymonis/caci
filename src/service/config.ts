@@ -38,6 +38,10 @@ export interface ServiceConfig {
   readonly maxBrainScopes: number;
   /** `CACI_STATUS_PER_HOUR`: how many status updates one account may ask for in an hour, 1 to 1000. Default 20. */
   readonly statusPerHour: number;
+  /** `CACI_SESSION_IDLE_DAYS`: a login ends after this many days without use (R-002), 1 to 365. Default 7. */
+  readonly sessionIdleDays: number;
+  /** `CACI_SESSION_DAYS`: a login ends this many days after it began whatever its use (also the cookie's lifetime), 1 to 365, not less than the idle days. Default 30. */
+  readonly sessionDays: number;
   /** `CACI_LEDGER_DAYS`: how long the change log keeps an entry (R-014), 1 to 3650. Default 90. */
   readonly ledgerDays: number;
 }
@@ -66,6 +70,8 @@ export const VARIABLES: readonly string[] = Object.freeze([
   'CACI_MAX_BRAIN_SCOPES',
   'CACI_STATUS_PER_HOUR',
   'CACI_LEDGER_DAYS',
+  'CACI_SESSION_IDLE_DAYS',
+  'CACI_SESSION_DAYS',
 ]);
 
 const IPV4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
@@ -135,6 +141,9 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
   const maxBrainScopes = whole('CACI_MAX_BRAIN_SCOPES', 25, 2, 100);
   const statusPerHour = whole('CACI_STATUS_PER_HOUR', 20, 1, 1000);
   const ledgerDays = whole('CACI_LEDGER_DAYS', 90, 1, 3650);
+  const sessionIdleDays = whole('CACI_SESSION_IDLE_DAYS', 7, 1, 365);
+  const sessionDays = whole('CACI_SESSION_DAYS', 30, 1, 365);
+  if (sessionIdleDays > sessionDays) bad('CACI_SESSION_IDLE_DAYS', 'must not be more than CACI_SESSION_DAYS');
 
   let llm: 'demo' | 'anthropic' = 'demo';
   const llmGiven = text('CACI_LLM');
@@ -160,5 +169,5 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
     bad('CACI_COOKIE_SECURE', 'must be true when CACI_BIND is not a loopback address (put HTTPS in front), or set CACI_ALLOW_INSECURE=true to accept sending session cookies in the clear');
   }
   if (errors.length > 0) return err(errors);
-  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser, maxCirclesPerUser, maxMembersPerCircle, invitationDays, maxBrainScopes, statusPerHour, ledgerDays });
+  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser, maxCirclesPerUser, maxMembersPerCircle, invitationDays, maxBrainScopes, statusPerHour, ledgerDays, sessionIdleDays, sessionDays });
 }

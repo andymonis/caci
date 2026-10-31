@@ -294,6 +294,8 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_INVITATION_DAYS` | How long an invitation to a circle stays open (1 to 365) | `7` |
 | `CACI_MAX_BRAIN_SCOPES` | Most brains My Brain may combine: your own plus circles (2 to 100) | `25` |
 | `CACI_LEDGER_DAYS` | How long the change log keeps its entries (1 to 3650), see [The current-view brain and its change log](#the-current-view-brain-and-its-change-log) | `90` |
+| `CACI_SESSION_IDLE_DAYS` | Days without use after which a login ends (1 to 365, not more than `CACI_SESSION_DAYS`), see [Staying signed in](#staying-signed-in) | `7` |
+| `CACI_SESSION_DAYS` | Days after which a login ends whatever its use, and how long the cookie lives (1 to 365) | `30` |
 | `CACI_STATUS_PER_HOUR` | Status updates one account may ask for in an hour (1 to 1,000), see [Asking for a status update](#asking-for-a-status-update) | `20` |
 
 Listening on anything but this machine (`CACI_BIND=0.0.0.0`, say) is refused unless `CACI_COOKIE_SECURE=true`, or you also set `CACI_ALLOW_INSECURE=true` to say you accept that session cookies cross the network in the clear.
@@ -328,6 +330,10 @@ Usernames are 3 to 32 of `a-z 0-9 . _ -` (any case is lower-cased). Passwords ar
 - **No HTTPS here.** Put a reverse proxy that speaks HTTPS in front, bind this service to `127.0.0.1`, and set `CACI_COOKIE_SECURE=true`, `CACI_TRUSTED_PROXIES=1` (so the client address is the one the proxy saw) and `CACI_ALLOWED_HOSTS` to the public name.
 
 ### Forgotten passwords
+
+### Staying signed in
+
+A login (session) ends when it has gone **`CACI_SESSION_IDLE_DAYS` days (7 by default) without use**, or **`CACI_SESSION_DAYS` days (30 by default) after it began**, whichever comes first; the cookie's `Max-Age` follows the second. A phone that is opened at least weekly therefore stays signed in for a month, then asks once for the password. Use renews the idle clock at most once a minute. These are the shipped defaults for a family service; shorten them (down to 1 day) on a shared or exposed machine. **A longer login is a longer window for a lost phone**: changing a password, an administrator's reset, deleting an account and signing out still end sessions at once (changing your password ends your other logins), and the pages handle a login that has ended by showing the sign-in form. The restart of the service keeps logins; they are stored (as fingerprints, never the token) in `users.db`.
 
 There is no emailed reset. An admin resets anyone's password with `POST /api/users/:id/password` (that ends all of that person's sessions). If **no admin** can sign in, run this on the machine that holds the data, with the same `CACI_DATA_DIR` as the service:
 

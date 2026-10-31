@@ -100,7 +100,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     closers.push(() => graphs.close());
     const users = createSqliteUserStore({ path: join(dataDir, 'users.db') });
     closers.push(() => users.close());
-    const sessions = createSqliteSessionStore({ path: join(dataDir, 'users.db') });
+    const sessions = createSqliteSessionStore({ path: join(dataDir, 'users.db'), idleMs: config.sessionIdleDays * 86_400_000, absoluteMs: config.sessionDays * 86_400_000 });
     closers.push(() => sessions.close());
     const circleStore = createSqliteCircleStore({ path: join(dataDir, 'users.db') }); // circles live beside the accounts, so deleting an account can remove its places in the same transaction
     closers.push(() => circleStore.close());
@@ -130,7 +130,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
         // an observer must not stop the service
       }
     };
-    const baseUsers = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration } });
+    const baseUsers = createUserController({ users, sessions, graphAdapter: graphs, config: { allowRegistration: config.allowRegistration }, clock });
     const controller = afterAccountDeletion(baseUsers, reconcile); // deleting an account can dissolve a circle, which leaves its graph behind
     const llm = createLlm({ client, controls: controls.value }); // one model component for filing notes and for status updates
     const capture = createController({ adapter: graphs, llm, now: clock, onWarning: warn, candidates: controls.value.categorise.settings.maxReplaces > 0 ? {} : false });
@@ -158,7 +158,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     await reconcile(); // circles made before circle graphs existed get theirs, and graphs of circles that are gone are dropped
     const sharing = createSharing({ users: controller, directory: users, store: circleStore, graphAdapter: graphs });
     const routes = [
-      ...createAccountRoutes({ controller, secureCookies: config.cookieSecure }),
+      ...createAccountRoutes({ controller, secureCookies: config.cookieSecure, cookieMaxAgeSeconds: config.sessionDays * 86_400 }),
       ...createCaptureRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createReadRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createBrainRoutes({ caci, secureCookies: config.cookieSecure }),

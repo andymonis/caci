@@ -299,6 +299,8 @@ export interface ServiceConfig {
     readonly maxPendingPerUser: number;
     readonly port: number;
     readonly proposalsPerHour: number;
+    readonly sessionDays: number;
+    readonly sessionIdleDays: number;
     readonly statusPerHour: number;
     readonly trustedProxies: number;
 }
