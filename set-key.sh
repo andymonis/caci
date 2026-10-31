@@ -6,6 +6,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 fi
 
 key_file='../../vault/claude.key'
+echo "Reading key from $key_file"
 
 if [[ ! -r "$key_file" ]]; then
 	printf 'Cannot read key file: %s\n' "$key_file" >&2
@@ -15,6 +16,8 @@ fi
 ANTHROPIC_API_KEY=$(<"$key_file")
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY%$'\n'}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY%$'\r'}
+
+echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
 
 if [[ -z "$ANTHROPIC_API_KEY" ]]; then
 	printf 'Key file is empty: %s\n' "$key_file" >&2
