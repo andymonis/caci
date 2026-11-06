@@ -39,6 +39,7 @@ What already exists and is reused, not rebuilt:
 | D14 | **Owner: token management is in the user app's Settings.** Creating, listing and revoking tokens uses the **session cookie** (never a token): `POST|GET /api/me/agent-tokens`, `DELETE /api/me/agent-tokens/:id`. The list shows name, scopes, created, expires and last used, never the token. Creating one says plainly that **anything the agent reads is sent to that agent's provider**. | The person must know where their brain's text goes once an agent has it. |
 | D15 | Revoking a token, deleting the account and changing the password end tokens: revoke and account deletion at once; a password change ends **all tokens** of that person (as it ends other sessions). | A reset of access must reach agents too. |
 | D16 | The release gates of R-008 and R-009 apply: pseudonymisation and the legal groundwork before anyone outside the owner's family test, and a token's data leaving to a third-party agent is a new data flow needing its own review. Owner only at first. | An agent provider is a new recipient. |
+| D17 | **The server kit gets an opt-in `bearer` field** (found while planning, 2026-11-06: route handlers receive no headers today, `src/api/server.ts`). A route declares `bearer: true`; only then does the kit parse `Authorization: Bearer <token>` strictly (the exact scheme, one space, a token of the exact `cpat_` shape and length, no repeats) and hand the token to the handler; for every other route the header is still not looked at. `/mcp` is the only route that opts in. A notification (no reply expected) is answered `202` with no body. | Keeps R-002's rule that the cookie is the only credential everywhere else, and makes `/mcp` the single place a token is read. |
 
 ## Goals and non-goals
 
@@ -71,7 +72,7 @@ What already exists and is reused, not rebuilt:
 |----|-------------|
 | AG-FR-01 | With `CACI_AGENT_ACCESS` off, the token routes and `/mcp` answer as if they did not exist. |
 | AG-FR-02 | Tokens: create (shown once), list, revoke, expire; limits per D5; only the hash is stored; malformed tokens never reach the store. |
-| AG-FR-03 | `/mcp` accepts only a Bearer token; the cookie, a `?token=` and a body token do nothing; other routes ignore a Bearer token. |
+| AG-FR-03 | `/mcp` (the only route with `bearer: true`, D17) accepts only a Bearer token; the cookie, a `?token=` and a body token do nothing; other routes ignore a Bearer token. |
 | AG-FR-04 | Each tool call resolves token → person → scope, re-reading membership and role; a scope outside the token's list or no longer readable is the one no-such-circle answer. |
 | AG-FR-05 | The tools of D9 exist with the output of D11; none calls a model. |
 | AG-FR-06 | `pulse`/`scan` exist only for tokens with `checks: true` and respect the status limit. |
