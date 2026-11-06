@@ -138,6 +138,9 @@ export function createInvitationRoutes(options: CircleRoutesOptions): readonly R
 export function createLedgerRoutes(options: LedgerRoutesOptions): readonly Route[];
 
 // @public
+export function createMcpRoutes(options: McpRoutesOptions): readonly Route[];
+
+// @public
 export function createReadRoutes(options: ReadRoutesOptions): readonly Route[];
 
 // @public
@@ -209,6 +212,17 @@ export type Match = {
 
 // @public
 export function matchRoute(routes: readonly Route[], method: string, path: string): Match;
+
+// @public
+export const MCP_PROTOCOL_VERSIONS: readonly string[];
+
+// @public (undocumented)
+export interface McpRoutesOptions {
+    readonly badTokensPerHour?: number;
+    readonly clock?: () => number;
+    // Warning: (ae-forgotten-export) The symbol "AgentTools" needs to be exported by the entry point index.d.ts
+    readonly tools: AgentTools;
+}
 
 // @public (undocumented)
 export type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';

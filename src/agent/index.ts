@@ -3,3 +3,5 @@
 
 export { createAgentView } from './view.js';
 export type { AgentReadApi, AgentView, AgentViewInit } from './view.js';
+export { createAgentTools, MAX_TOOL_RESULT_CHARS } from './tools.js';
+export type { AgentToolInfo, AgentToolOutcome, AgentToolResult, AgentTools } from './tools.js';

@@ -9,6 +9,44 @@
 // @public
 export type AgentReadApi = Pick<CaciController, 'brainScopes' | 'mineSummary' | 'mineCategories' | 'mineCategoryItems' | 'mineItem' | 'summary' | 'categories' | 'categoryItems' | 'item' | 'ledger' | 'source' | 'searchFacts' | 'changes' | 'status'>;
 
+// @public
+export interface AgentToolInfo {
+    // (undocumented)
+    readonly description: string;
+    readonly inputSchema: Readonly<Record<string, unknown>>;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export type AgentToolOutcome = {
+    readonly kind: 'unauthenticated';
+} | {
+    readonly kind: 'unknown-tool';
+} | {
+    readonly kind: 'result';
+    readonly result: AgentToolResult;
+};
+
+// @public
+export interface AgentToolResult {
+    // (undocumented)
+    readonly data: unknown;
+    // (undocumented)
+    readonly isError: boolean;
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public (undocumented)
+export interface AgentTools {
+    // (undocumented)
+    call(bearer: unknown, name: unknown, args: unknown): Promise<AgentToolOutcome>;
+    list(bearer: unknown): Promise<readonly AgentToolInfo[] | undefined>;
+}
+
 // @public (undocumented)
 export interface AgentView {
     // Warning: (ae-forgotten-export) The symbol "AgentTokenAccess" needs to be exported by the entry point index.d.ts
@@ -59,7 +97,13 @@ export interface AgentViewInit {
 }
 
 // @public
+export function createAgentTools(view: AgentView): AgentTools;
+
+// @public
 export function createAgentView(init: AgentViewInit): AgentView;
+
+// @public
+export const MAX_TOOL_RESULT_CHARS = 100000;
 
 // (No @packageDocumentation comment for this package)
 

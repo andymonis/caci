@@ -9,6 +9,8 @@ export type { ApiResponse, DocumentBody, DocumentKind, Match, Method, Route, Rou
 export { createApiServer } from './server.js';
 export type { ApiServer, ApiServerOptions } from './server.js';
 export { createAgentTokenRoutes } from './agent-token-routes.js';
+export { createMcpRoutes, MCP_PROTOCOL_VERSIONS } from './mcp-routes.js';
+export type { McpRoutesOptions } from './mcp-routes.js';
 export type { AgentTokenRoutesOptions } from './agent-token-routes.js';
 export { createAccountRoutes, errorResponse, STATUS_OF } from './routes.js';
 export type { AccountRoutesOptions } from './routes.js';

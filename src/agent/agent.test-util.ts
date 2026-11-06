@@ -1,7 +1,7 @@
 import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';
 import { createGraph, write, type StorageAdapter } from '../graph_store/index.js';
 import { createMemoryCircleStore, type CircleRole, type CircleStore } from '../circles/index.js';
-import { createMemoryLedgerStore } from '../ledger/index.js';
+import { createMemoryLedgerStore, type LedgerStore } from '../ledger/index.js';
 import { circleGraphId } from '../scopes/index.js';
 import { createMemoryAgentTokenStore, createMemorySessionStore, createMemoryUserStore, createPasswordHasher, createUserController, type AgentTokenStore, type User, type UserController, type UserStore } from '../users/index.js';
 import { createAgentView, type AgentView, type AgentViewInit } from './view.js';
@@ -18,6 +18,7 @@ export interface AgentWorld {
   graphs: StorageAdapter;
   circles: CircleStore;
   tokens: AgentTokenStore;
+  ledger: LedgerStore;
   view: AgentView;
   now: { value: number };
   /** Every graph-store write primitive the view's reads ever called (there should be none). */
@@ -57,7 +58,8 @@ export function agentWorld(extra: Partial<AgentViewInit> = {}): AgentWorld {
   const tokens = createMemoryAgentTokenStore();
   const now = { value: T0 };
   const controller = createUserController({ users, sessions: createMemorySessionStore(), agentTokens: tokens, graphAdapter: graphs, hasher: createPasswordHasher({ params: { N: 16, r: 1, p: 1 } }), clock: () => now.value });
-  const view = createAgentView({ tokens, users, circles, graphAdapter: graphs, ledger: createMemoryLedgerStore(), mode: 'demo', clock: () => now.value, ...extra });
+  const ledger = createMemoryLedgerStore();
+  const view = createAgentView({ tokens, users, circles, graphAdapter: graphs, ledger, directory: { get: async (id) => { const u = await users.get(id); return u === undefined ? undefined : { username: u.username, displayName: u.displayName }; } }, mode: 'demo', clock: () => now.value, ...extra });
   let invitations = 0;
   const w: AgentWorld = {
     users,
@@ -65,6 +67,7 @@ export function agentWorld(extra: Partial<AgentViewInit> = {}): AgentWorld {
     graphs,
     circles,
     tokens,
+    ledger,
     view,
     now,
     writes,
