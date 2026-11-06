@@ -3,6 +3,7 @@ C4Container
 
     Person(user, "User", "A person with an account: keeps their own brain graph and may belong to circles.")
     System_Ext(System_llm, "LLM", "Answers questions and categorises information using CaCi context.")
+    System_Ext(person_agent, "Person's Agent", "An assistant that works for the person (for example in Claude Desktop or Claude Code). It decides what deserves attention; CaCi is the brain it reads.")
 
     Enterprise_Boundary(caci_platform, "CaCi Platform") {
         Container(web_app, "Web App", "HTML, CSS, JavaScript", "A small browser app, served by the API from the same address: register, sign in and out, and a temporary home page. No build step and no dependency; builds its screens from text only under a strict Content-Security-Policy. Code: web/.")
@@ -13,6 +14,7 @@ C4Container
         Container(caci_controller, "CaCi Controller", "TypeScript", "Binds capture and browsing to the signed-in person: proposal ownership, per-account limits, the graph always from the session. Code: src/caci.")
         Container(circle_controller, "Circle Controller", "TypeScript", "Circles: groups of people with fixed roles (owner, manager, member, observer), invitations that must be accepted, and the rules for who may invite, remove and change roles. Membership only: it shares no graph data yet. Code: src/circles.")
         Container(scopes, "Scopes", "TypeScript", "Where a person's requests are pointed: the personal brain or one circle brain, the read and capture rules per role, the resolver and the reconcile of circle records and circle graphs. Code: src/scopes.")
+        Container(agent_access, "Agent Access", "TypeScript", "A person's own agent reads their brains through a personal access token over MCP: read only, limited to the brains named on the token, with the same rules as the person. Off unless the operator switches it on. Code: src/agent.")
         Container(ledger, "Ledger", "TypeScript", "The change log: what was added, removed and updated in a brain, by whom and when, for review (not history), and the words typed for each update (R-017). A small store of its own in the user database. Code: src/ledger.")
         Container(sharing, "Sharing", "TypeScript", "What a person shares of their own brain with another member of a circle: read-only, by chosen category, withdrawable at any time, ended by leaving the circle. Joins grants (circle store) to graph reads; nothing here writes to a graph. Code: src/sharing.")
         Container(caci_app, "CaCi Application", "TypeScript", "The capture controller: reads context, asks the categoriser, shows a preview, writes only after approval. Code: src/app.")
@@ -34,6 +36,11 @@ C4Container
     Rel(api, caci_controller, "Capture and browse")
     Rel(api, circle_controller, "Circles, members, roles and invitations")
     Rel(api, sharing, "Grants and shared reads")
+    Rel(person_agent, api, "Calls /mcp with a Bearer access key (read only)")
+    Rel(api, agent_access, "Tools over the agent view")
+    Rel(agent_access, caci_controller, "Reads through the same controller, limited to the key's scopes")
+    Rel(agent_access, users_db, "Looks up personal access keys (their fingerprints)")
+    Rel(user, person_agent, "Owns and gives a key to")
     Rel(caci_controller, scopes, "Resolves the scope of every capture and browse")
     Rel(caci_controller, ledger, "Records every change after an approved write; reads the log for review")
     Rel(scopes, circle_controller, "Uses the circle store: current role")
