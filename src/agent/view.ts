@@ -12,7 +12,7 @@ import { userGraphId } from '../users/index.js';
  * The only methods of the CaCi controller an agent can reach (R-022 D7, D13): everything that reads, nothing that writes. `status`
  * (the model-using checks) is wrapped so that it is refused unless the token was made with the checks flag.
  */
-export type AgentReadApi = Pick<CaciController, 'brainScopes' | 'mineSummary' | 'mineCategories' | 'mineCategoryItems' | 'mineItem' | 'summary' | 'categories' | 'categoryItems' | 'item' | 'ledger' | 'source' | 'status'>;
+export type AgentReadApi = Pick<CaciController, 'brainScopes' | 'mineSummary' | 'mineCategories' | 'mineCategoryItems' | 'mineItem' | 'summary' | 'categories' | 'categoryItems' | 'item' | 'ledger' | 'source' | 'searchFacts' | 'changes' | 'status'>;
 
 export interface AgentViewInit {
   readonly tokens: Pick<AgentTokenStore, 'resolve'>;
@@ -126,6 +126,7 @@ export function createAgentView(init: AgentViewInit): AgentView {
     return access !== undefined && !access.scopes.includes('personal');
   };
   const refScope = (ref: unknown): unknown => (typeof ref === 'object' && ref !== null ? (ref as { scope?: unknown }).scope : undefined);
+  const inputScope = refScope;
 
   const read: AgentReadApi = Object.freeze({
     brainScopes: (t) => caci.brainScopes(t),
@@ -139,6 +140,8 @@ export function createAgentView(init: AgentViewInit): AgentView {
     item: async (t, id, scope) => ((await blocked(t, scope)) ? noCircle : caci.item(t, id, scope)),
     ledger: async (t, scope, page) => ((await blocked(t, scope)) ? noCircle : caci.ledger(t, scope, page)),
     source: async (t, ref) => ((await blocked(t, refScope(ref))) ? noCircle : caci.source(t, ref)),
+    searchFacts: async (t, input) => ((await blocked(t, inputScope(input))) ? noCircle : caci.searchFacts(t, input)),
+    changes: async (t, input) => ((await blocked(t, inputScope(input))) ? noCircle : caci.changes(t, input)),
     status: async (t, input) => {
       const access = await accessOf(t);
       if (access !== undefined && !access.checks) return { ok: false, error: { source: 'caci', error: { code: 'NOT_FOUND', message: 'this token cannot run checks' } } };

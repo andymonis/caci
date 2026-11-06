@@ -50,6 +50,7 @@ export interface CaciController {
     }, CaciError>>;
     categories(token: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryPage, CaciError>>;
     categoryItems(token: unknown, categoryId: unknown, page?: PageInput, scope?: unknown): Promise<Result<CategoryItemsPage, CaciError>>;
+    changes(token: unknown, input: unknown): Promise<Result<ChangesView, CaciError>>;
     get(token: unknown, proposalId: unknown): Promise<Result<ProposalView, CaciError>>;
     item(token: unknown, itemId: unknown, scope?: unknown): Promise<Result<ItemDetail, CaciError>>;
     ledger(token: unknown, scope?: unknown, page?: PageInput): Promise<Result<LedgerView, CaciError>>;
@@ -68,6 +69,7 @@ export interface CaciController {
     reject(token: unknown, proposalId: unknown): Promise<Result<{
         readonly id: string;
     }, CaciError>>;
+    searchFacts(token: unknown, input: unknown): Promise<Result<SearchView, CaciError>>;
     source(token: unknown, ref: unknown): Promise<Result<SourceView, CaciError>>;
     status(token: unknown, input: {
         readonly text?: unknown;
@@ -186,6 +188,17 @@ export interface CategoryView {
     readonly name?: string;
 }
 
+// @public
+export interface ChangesView {
+    // (undocumented)
+    readonly items: readonly LedgerEntryView[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+    // (undocumented)
+    readonly scope?: Provenance;
+    readonly since: number;
+}
+
 // @public (undocumented)
 export type Check = (typeof CHECKS)[number];
 
@@ -203,6 +216,9 @@ export function createCaciController(init: CaciControllerInit): CaciController;
 // @public (undocumented)
 export const DEFAULT_PAGE = 50;
 
+// @public
+export const DEFAULT_SEARCH_RESULTS = 20;
+
 // @public (undocumented)
 export const DEFAULT_STATUS_CONTEXT_LIMITS: Readonly<{
     maxTotalChars: 12000;
@@ -211,6 +227,22 @@ export const DEFAULT_STATUS_CONTEXT_LIMITS: Readonly<{
     maxReadPerScope: 2000;
     maxConcurrentReads: 4;
 }>;
+
+// @public (undocumented)
+export interface FactHit {
+    readonly at?: number;
+    readonly by?: {
+        readonly username: string;
+        readonly displayName: string;
+    };
+    // (undocumented)
+    readonly id: string;
+    readonly key?: string;
+    // (undocumented)
+    readonly summary: string;
+    // (undocumented)
+    readonly title: string;
+}
 
 // @public (undocumented)
 export interface GraphSummary {
@@ -286,6 +318,9 @@ export const MAX_NOTE_CHARS = 8000;
 // @public (undocumented)
 export const MAX_PAGE = 100;
 
+// @public (undocumented)
+export const MAX_SEARCH_RESULTS = 50;
+
 // @public
 export const MAX_STATUS_REQUEST_CHARS = 500;
 
@@ -360,6 +395,14 @@ export interface ProposalView {
     // (undocumented)
     readonly summary: ProposalSummary;
     readonly text: string;
+}
+
+// @public
+export interface SearchView {
+    // (undocumented)
+    readonly items: readonly FactHit[];
+    // (undocumented)
+    readonly scope?: Provenance;
 }
 
 // @public

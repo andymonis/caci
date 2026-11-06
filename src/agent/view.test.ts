@@ -90,6 +90,10 @@ describe('the agent view reads the brains a token lists, as the person could', (
       () => w.view.read.source(t, { scope: personal, id: 'n-own' }),
       () => w.view.read.mineItem(t, { scope: personal, id: 'n-own' }),
       () => w.view.read.mineCategoryItems(t, { scope: personal, id: 'health' }),
+      () => w.view.read.searchFacts(t, { text: 'dentist' }),
+      () => w.view.read.searchFacts(t, { text: 'dentist', scope: personal }),
+      () => w.view.read.changes(t, { since: 0 }),
+      () => w.view.read.changes(t, { since: 0, scope: personal }),
     ]) expect(await call()).toEqual(byOmission);
     // and the combined view does not include it either
     expect(await w.view.read.mineSummary(t)).toMatchObject({ ok: true, value: { itemCount: 1 } }); // only Club's note
@@ -110,6 +114,29 @@ describe('the agent view reads the brains a token lists, as the person could', (
     expect(await w.view.read.summary(t, circle(club))).toMatchObject(NO_CIRCLE);
     expect(await w.view.read.summary(t)).toMatchObject({ ok: true });
     expect(await w.view.read.mineSummary(t)).toMatchObject({ ok: true, value: { itemCount: 0 } });
+  });
+});
+
+describe('the search and changes tools', () => {
+  it('search the token\'s scopes only: a listed circle finds its facts, an unlisted one is the one not-found answer', async () => {
+    const { w, ann, club, other } = await setup();
+    const t = await w.bearer(ann, ['personal', `circle:${club}`]);
+    expect(await w.view.read.searchFacts(t, { text: 'dentist tuesday' })).toMatchObject({ ok: true, value: { items: [{ id: 'n-own' }] } });
+    expect(await w.view.read.searchFacts(t, { text: 'club meets', scope: circle(club) })).toMatchObject({ ok: true, value: { items: [{ id: 'n-club' }], scope: { circleName: 'Circle 1' } } });
+    const outside = await w.view.read.searchFacts(t, { text: 'secret', scope: circle(other) });
+    expect(outside).toMatchObject(NO_CIRCLE);
+    expect(await w.view.read.changes(t, { since: 0, scope: circle(other) })).toEqual(outside);
+    expect(await w.view.read.searchFacts(t, { text: 'secret', scope: circle(cid(99)) })).toEqual(outside);
+  });
+
+  it('are not signed in for a bad token, and write nothing', async () => {
+    const { w, ann } = await setup();
+    expect(await w.view.read.searchFacts('cpat_' + 'A'.repeat(43), { text: 'x' })).toMatchObject(NOT_SIGNED_IN);
+    expect(await w.view.read.changes(undefined, { since: 0 })).toMatchObject(NOT_SIGNED_IN);
+    const t = await w.bearer(ann, ['personal']);
+    await w.view.read.searchFacts(t, { text: 'dentist' });
+    await w.view.read.changes(t, { since: 0 });
+    expect(w.writes).toEqual([]);
   });
 });
 
@@ -153,7 +180,7 @@ describe('who a token is', () => {
 describe('the agent view cannot write', () => {
   it('exposes only reading methods, none of the capture ones', async () => {
     const { w } = await setup();
-    expect(Object.keys(w.view.read).sort()).toEqual(['brainScopes', 'categories', 'categoryItems', 'item', 'ledger', 'mineCategories', 'mineCategoryItems', 'mineItem', 'mineSummary', 'source', 'status', 'summary'].sort());
+    expect(Object.keys(w.view.read).sort()).toEqual(['brainScopes', 'categories', 'categoryItems', 'item', 'ledger', 'mineCategories', 'mineCategoryItems', 'mineItem', 'mineSummary', 'searchFacts', 'changes', 'source', 'status', 'summary'].sort());
     for (const writer of ['propose', 'approve', 'reject', 'get', 'mode']) expect(writer in w.view.read, writer).toBe(false);
     expect(Object.isFrozen(w.view.read)).toBe(true);
     expect(Object.isFrozen(w.view)).toBe(true);

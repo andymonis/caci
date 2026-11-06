@@ -7,7 +7,7 @@
 // Warning: (ae-forgotten-export) The symbol "CaciController" needs to be exported by the entry point index.d.ts
 //
 // @public
-export type AgentReadApi = Pick<CaciController, 'brainScopes' | 'mineSummary' | 'mineCategories' | 'mineCategoryItems' | 'mineItem' | 'summary' | 'categories' | 'categoryItems' | 'item' | 'ledger' | 'source' | 'status'>;
+export type AgentReadApi = Pick<CaciController, 'brainScopes' | 'mineSummary' | 'mineCategories' | 'mineCategoryItems' | 'mineItem' | 'summary' | 'categories' | 'categoryItems' | 'item' | 'ledger' | 'source' | 'searchFacts' | 'changes' | 'status'>;
 
 // @public (undocumented)
 export interface AgentView {

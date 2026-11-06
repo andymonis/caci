@@ -5,6 +5,7 @@ import { parseScope, PERSONAL, type Provenance, type ResolvedScope, type ScopeRe
 import { createBrain, type BrainLimits, type BrainScope, type MineCategoryItemsPage, type MineCategoryPage, type MineItemDetail, type MineSummary } from './brain.js';
 import { createBrowser, pageOf, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
+import { DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS, searchFacts, type FactHit } from './search.js';
 import { createStatusContext, type StatusContextLimits } from './status-context.js';
 import { capText, newLedgerId, SUMMARY_MAX, TITLE_MAX, type LedgerEntry, type LedgerScope, type LedgerStore } from '../ledger/index.js';
 import type { Horizon, Llm } from '../llm/index.js';
@@ -69,6 +70,23 @@ export interface ProposalView {
   /** Where it will be written, for a circle proposal (the circle's name and id). Absent for a personal one, as before R-009. */
   readonly scope?: Provenance;
 }
+
+/** Facts found by words (R-022). */
+export interface SearchView {
+  readonly items: readonly FactHit[];
+  readonly scope?: Provenance;
+}
+
+/** The change log since a time (R-022). */
+export interface ChangesView {
+  readonly items: readonly LedgerEntryView[];
+  readonly nextCursor: string | null;
+  /** The time asked for, in milliseconds since 1970. */
+  readonly since: number;
+  readonly scope?: Provenance;
+}
+
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
 
 /** One line of the change log, as a person is allowed to see it (R-014): no graph id, no proposal id, no user id. */
 export interface LedgerEntryView {
@@ -204,6 +222,10 @@ export interface CaciController {
    * review log of what was added, removed and updated, not a history of the notes. A stranger gets the made-up-circle answer.
    */
   ledger(token: unknown, scope?: unknown, page?: PageInput): Promise<Result<LedgerView, CaciError>>;
+  /** The facts of one brain that share words with some text, most relevant first, with when and who entered each where the brain says (R-022). `{ text, scope?, limit? }`. */
+  searchFacts(token: unknown, input: unknown): Promise<Result<SearchView, CaciError>>;
+  /** The change log newer than a time, newest first, a page at a time (R-022): `{ scope?, since, limit?, cursor? }`. A pull, so nothing is pushed. */
+  changes(token: unknown, input: unknown): Promise<Result<ChangesView, CaciError>>;
   /** Where one fact came from (R-017): the change log's scope and not-found rules; `ref` is `{ scope?, id }`. */
   source(token: unknown, ref: unknown): Promise<Result<SourceView, CaciError>>;
   /** Discards the owner's pending proposal. Nothing is written. */
@@ -425,6 +447,84 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     return undefined;
   };
 
+  async function ledgerView(token: unknown, scope?: unknown, page?: PageInput): Promise<Result<LedgerView, CaciError>> {
+      const me = await whoIs(token);
+      if (!me.ok) return me;
+      const store = init.ledger;
+      if (store === undefined) return err(caciError('NOT_FOUND', 'the change log is not available'));
+      const parsed = parseScope(scope);
+      if (!parsed.ok) return err(scopeProblem(parsed.error));
+      let which: LedgerScope;
+      let provenance: Provenance | undefined;
+      if (parsed.value.kind === 'personal') which = { kind: 'personal', userId: me.value.user.id };
+      else {
+        if (scopes === undefined) return err(noCircle());
+        const resolved = await scopes.resolve(token, parsed.value, 'read');
+        if (!resolved.ok) return err(scopeProblem(resolved.error));
+        which = { kind: 'circle', circleId: parsed.value.circleId };
+        provenance = resolved.value.provenance;
+      }
+      const paged = pageOf(page);
+      if (!paged.ok) return paged;
+      let listed;
+      try {
+        listed = await store.list(which, paged.value);
+      } catch (cause) {
+        if (cause instanceof RangeError) return err(caciError('INVALID_INPUT', 'cursor is not one this service gave for this request', { field: 'cursor' }));
+        return err(storage());
+      }
+      const names = new Map<string, { username: string; displayName: string } | undefined>();
+      const who = async (id: string) => {
+        if (!names.has(id)) {
+          try {
+            const u = await init.directory?.get(id);
+            names.set(id, u === undefined ? undefined : { username: u.username, displayName: u.displayName });
+          } catch {
+            names.set(id, undefined);
+          }
+        }
+        return names.get(id);
+      };
+      const items: LedgerEntryView[] = [];
+      for (const e of listed.items) {
+        const by = await who(e.actor);
+        items.push(Object.freeze({ id: e.id, at: e.at, action: e.action, kind: e.kind, ...(e.kind === 'input' ? {} : { subject: e.subject }), ...(e.title === undefined ? {} : { title: e.title }), ...(e.summary === undefined ? {} : { summary: e.summary }), ...(e.text === undefined ? {} : { text: e.text }), ...(by === undefined ? {} : { by: Object.freeze(by) }) }));
+      }
+      return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor, ...(provenance === undefined ? {} : { scope: provenance }) }));
+    
+  }
+
+  /** The facts of one brain that share words with some text (R-022): most relevant first, with when and who where the brain says. */
+  async function searchFactsOf(token: unknown, input: unknown): Promise<Result<SearchView, CaciError>> {
+    const me = await whoIs(token);
+    if (!me.ok) return me;
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) return err(caciError('INVALID_INPUT', 'name what to look for as { text }', { field: 'text' }));
+    for (const key of Object.keys(input)) if (key !== 'text' && key !== 'scope' && key !== 'limit') return err(caciError('INVALID_INPUT', `${key.slice(0, 40)} is not accepted here`, { field: key }));
+    const { text, scope, limit } = input as { text?: unknown; scope?: unknown; limit?: unknown };
+    if (typeof text !== 'string' || text.trim() === '') return err(caciError('INVALID_INPUT', 'text must be some words to look for', { field: 'text' }));
+    if ([...text].length > MAX_STATUS_REQUEST_CHARS) return err(caciError('INVALID_INPUT', `text is over the limit of ${MAX_STATUS_REQUEST_CHARS} characters`, { field: 'text' }));
+    if (limit !== undefined && (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > MAX_SEARCH_RESULTS)) return err(caciError('INVALID_INPUT', `limit must be a whole number from 1 to ${MAX_SEARCH_RESULTS}`, { field: 'limit' }));
+    const where = await readable(token, scope);
+    if (!where.ok) return where;
+    const found = await searchFacts(graphAdapter, where.value.graphId, text, limit ?? DEFAULT_SEARCH_RESULTS, init.directory);
+    if (!found.ok) return err(found.error);
+    return ok(Object.freeze({ items: found.value, ...(where.value.provenance === undefined ? {} : { scope: where.value.provenance }) }));
+  }
+
+  /** The change log newer than a time (R-022): a pull for an agent. The change log's own scope rules, newest first, a page at a time. */
+  async function changesOf(token: unknown, input: unknown): Promise<Result<ChangesView, CaciError>> {
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) return err(caciError('INVALID_INPUT', 'name the time as { since }', { field: 'since' }));
+    for (const key of Object.keys(input)) if (!['scope', 'since', 'limit', 'cursor'].includes(key)) return err(caciError('INVALID_INPUT', `${key.slice(0, 40)} is not accepted here`, { field: key }));
+    const { scope, since, limit, cursor } = input as { scope?: unknown; since?: unknown; limit?: unknown; cursor?: unknown };
+    const sinceMs = typeof since === 'number' ? since : typeof since === 'string' && ISO_TIME.test(since) ? Date.parse(since) : Number.NaN;
+    if (!Number.isSafeInteger(sinceMs) || sinceMs < 0) return err(caciError('INVALID_INPUT', 'since must be a time: milliseconds since 1970 or an ISO 8601 date and time', { field: 'since' }));
+    const page = await ledgerView(token, scope, { ...(limit === undefined ? {} : { limit }), ...(cursor === undefined ? {} : { cursor }) } as PageInput);
+    if (!page.ok) return page;
+    const recent = page.value.items.filter((e) => e.at > sinceMs);
+    const reachedOlder = recent.length < page.value.items.length; // newest first: once an old entry appears, nothing after it is newer
+    return ok(Object.freeze({ items: Object.freeze(recent), nextCursor: reachedOlder ? null : page.value.nextCursor, since: sinceMs, ...(page.value.scope === undefined ? {} : { scope: page.value.scope }) }));
+  }
+
   return {
     async status(token, input) {
       const me = await whoIs(token);
@@ -595,51 +695,11 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       return ok(viewOf(proposal, mode, mine.value.held.circle?.provenance));
     },
 
-    async ledger(token, scope, page) {
-      const me = await whoIs(token);
-      if (!me.ok) return me;
-      const store = init.ledger;
-      if (store === undefined) return err(caciError('NOT_FOUND', 'the change log is not available'));
-      const parsed = parseScope(scope);
-      if (!parsed.ok) return err(scopeProblem(parsed.error));
-      let which: LedgerScope;
-      let provenance: Provenance | undefined;
-      if (parsed.value.kind === 'personal') which = { kind: 'personal', userId: me.value.user.id };
-      else {
-        if (scopes === undefined) return err(noCircle());
-        const resolved = await scopes.resolve(token, parsed.value, 'read');
-        if (!resolved.ok) return err(scopeProblem(resolved.error));
-        which = { kind: 'circle', circleId: parsed.value.circleId };
-        provenance = resolved.value.provenance;
-      }
-      const paged = pageOf(page);
-      if (!paged.ok) return paged;
-      let listed;
-      try {
-        listed = await store.list(which, paged.value);
-      } catch (cause) {
-        if (cause instanceof RangeError) return err(caciError('INVALID_INPUT', 'cursor is not one this service gave for this request', { field: 'cursor' }));
-        return err(storage());
-      }
-      const names = new Map<string, { username: string; displayName: string } | undefined>();
-      const who = async (id: string) => {
-        if (!names.has(id)) {
-          try {
-            const u = await init.directory?.get(id);
-            names.set(id, u === undefined ? undefined : { username: u.username, displayName: u.displayName });
-          } catch {
-            names.set(id, undefined);
-          }
-        }
-        return names.get(id);
-      };
-      const items: LedgerEntryView[] = [];
-      for (const e of listed.items) {
-        const by = await who(e.actor);
-        items.push(Object.freeze({ id: e.id, at: e.at, action: e.action, kind: e.kind, ...(e.kind === 'input' ? {} : { subject: e.subject }), ...(e.title === undefined ? {} : { title: e.title }), ...(e.summary === undefined ? {} : { summary: e.summary }), ...(e.text === undefined ? {} : { text: e.text }), ...(by === undefined ? {} : { by: Object.freeze(by) }) }));
-      }
-      return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor, ...(provenance === undefined ? {} : { scope: provenance }) }));
-    },
+    ledger: ledgerView,
+
+    searchFacts: (token, input) => searchFactsOf(token, input),
+
+    changes: (token, input) => changesOf(token, input),
 
     async source(token, ref) {
       const me = await whoIs(token);
