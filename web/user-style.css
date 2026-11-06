@@ -92,3 +92,13 @@ button.link { min-height: 2.75rem; padding: 0.25rem 0.25rem; color: var(--accent
 .lines { margin: 0.25rem 0 0; padding-left: 1.25rem; }
 .choices { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
 .choices[hidden], .lines[hidden] { display: none; }
+
+/* Agent access (R-022) */
+fieldset.field { border: 0; padding: 0; margin: 0 0 1rem; }
+fieldset.field legend { font-weight: 600; margin-bottom: 0.25rem; }
+label.check { display: flex; gap: 0.5rem; align-items: center; min-height: 2.75rem; }
+#agent-created-token { width: 100%; font-family: ui-monospace, monospace; }
+#agent-list { list-style: none; padding: 0; margin: 0 0 1rem; }
+#agent-list li.key { border-top: 1px solid #ddd; padding: 0.5rem 0; }
+.warning { font-weight: 600; }
+.notice { border: 1px solid #ccc; border-radius: 0.5rem; padding: 0.75rem; margin: 1rem 0; }

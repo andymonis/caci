@@ -23,7 +23,7 @@ function code(text) {
 
 describe('the files', () => {
   it('are exactly these, which the service will list', () => {
-    expect(files.sort()).toEqual(['api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circle-chat-page.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'ledger-client.js', 'ledger-page.js', 'ledger-session.js', 'ledger-view.js', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'scope-session.js', 'session.js', 'settings-session.js', 'share-page.js', 'shared-page.js', 'shared-session.js', 'sharing-client.js', 'status-page.js', 'status-session.js', 'status-view.js', 'style.css', 'thread-view.js', 'user-app.js', 'user-circles.js', 'user-hooks.js', 'user-mount.js', 'user-style.css', 'user.html', 'view.js']);
+    expect(files.sort()).toEqual(['agent-access-page.js', 'agent-access-session.js', 'agent-tokens-client.js', 'api-client.js', 'app.js', 'brain-page.js', 'brain-session.js', 'brain-view.js', 'capture-page.js', 'capture-session.js', 'capture-view.js', 'chat-page.js', 'chat-session.js', 'chat-view.js', 'circle-chat-page.js', 'circle-page.js', 'circle-session.js', 'circles-client.js', 'circles-pages.js', 'circles-session.js', 'circles-view.js', 'forms.js', 'grants-session.js', 'index.html', 'ledger-client.js', 'ledger-page.js', 'ledger-session.js', 'ledger-view.js', 'mount.js', 'notes-client.js', 'permissions.js', 'router.js', 'scope-session.js', 'session.js', 'settings-session.js', 'share-page.js', 'shared-page.js', 'shared-session.js', 'sharing-client.js', 'status-page.js', 'status-session.js', 'status-view.js', 'style.css', 'thread-view.js', 'user-app.js', 'user-circles.js', 'user-hooks.js', 'user-mount.js', 'user-style.css', 'user.html', 'view.js']);
   });
 
   it('all the scripts import only each other, by name, from the same folder', () => {
@@ -88,42 +88,7 @@ describe('nothing is kept in the browser and nothing is sent anywhere else', () 
   it('the only requests are to the account, circle and invitation routes, by path', () => {
     const paths = new Set();
     for (const name of scripts) for (const m of code(read(name)).matchAll(/['"`](\/[^'"`\s]*)['"`]/g)) paths.add(m[1]);
-    expect([...paths].sort()).toEqual([
-      '/api/brain',
-      '/api/brain/categories',
-      '/api/brain/category',
-      '/api/brain/item',
-      '/api/brain/scopes',
-      '/api/capture/mode',
-      '/api/capture/proposals/${p}',
-      '/api/capture/proposals/${p}/approve',
-      '/api/capture/proposals/${p}/reject',
-      '/api/capture/propose',
-      '/api/circles',
-      '/api/circles/${c}',
-      '/api/circles/${c}/grants',
-      '/api/circles/${c}/grants/${u}',
-      '/api/circles/${c}/invitations',
-      '/api/circles/${c}/invitations/${i}',
-      '/api/circles/${c}/leave',
-      '/api/circles/${c}/members',
-      '/api/circles/${c}/members/${u}',
-      '/api/circles/${c}/shared',
-      '/api/circles/${c}/shared/${u}/categories',
-      '/api/circles/${c}/shared/${u}/category',
-      '/api/circles/${c}/shared/${u}/item',
-      '/api/graph/categories',
-      '/api/graph/category',
-      '/api/graph/item',
-      '/api/invitations',
-      '/api/invitations/${i}/accept',
-      '/api/invitations/${i}/decline', '/api/ledger${q.text}', '/api/ledger/source?scope=${text}&id=${encodeURIComponent(id)}',
-      '/api/login',
-      '/api/logout',
-      '/api/me', '/api/me/password',
-      '/api/register',
-      '/api/status',
-    ]);
+    expect([...paths].sort()).toEqual(['/api/brain', '/api/brain/categories', '/api/brain/category', '/api/brain/item', '/api/brain/scopes', '/api/capture/mode', '/api/capture/proposals/${p}', '/api/capture/proposals/${p}/approve', '/api/capture/proposals/${p}/reject', '/api/capture/propose', '/api/circles', '/api/circles/${c}', '/api/circles/${c}/grants', '/api/circles/${c}/grants/${u}', '/api/circles/${c}/invitations', '/api/circles/${c}/invitations/${i}', '/api/circles/${c}/leave', '/api/circles/${c}/members', '/api/circles/${c}/members/${u}', '/api/circles/${c}/shared', '/api/circles/${c}/shared/${u}/categories', '/api/circles/${c}/shared/${u}/category', '/api/circles/${c}/shared/${u}/item', '/api/graph/categories', '/api/graph/category', '/api/graph/item', '/api/invitations', '/api/invitations/${i}/accept', '/api/invitations/${i}/decline', '/api/ledger${q.text}', '/api/ledger/source?scope=${text}&id=${encodeURIComponent(id)}', '/api/login', '/api/logout', '/api/me', '/api/me/agent-tokens', '/api/me/agent-tokens/${id}', '/api/me/password', '/api/register', '/api/status']);
   });
 });
 

@@ -21,6 +21,7 @@ function service(initial) {
     if (key === 'GET /api/me') reply = { status: 200, body: { user: USER, graphId: 'x' } };
     else if (key === 'GET /api/capture/mode') reply = { status: 200, body: { mode: 'demo' } };
     else if (key === 'POST /api/logout') reply = { status: 204 };
+    else if (path.startsWith('/api/me/agent-tokens')) reply = { status: 404, body: { error: { code: 'NOT_FOUND', message: 'not found' } } }; // agent access is off here (R-022)
     else if (key === 'GET /api/brain/scopes') {
       state.scopeCalls += 1;
       const mine = state.hold;
