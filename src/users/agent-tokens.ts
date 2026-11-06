@@ -115,6 +115,7 @@ export function checkAgentTokenInput(input: AgentTokenInput, now: number): Resul
   const length = [...name].length;
   if (length < 1 || length > MAX_AGENT_TOKEN_NAME) return bad('name', `the name must be 1 to ${MAX_AGENT_TOKEN_NAME} characters`);
   if (CONTROL.test(name)) return bad('name', 'the name must not contain control characters');
+  if (Buffer.from(name, 'utf8').toString('utf8') !== name) return bad('name', 'the name must be valid text'); // a lone surrogate would not survive being stored
   if (!Array.isArray(input.scopes) || input.scopes.length < 1 || input.scopes.length > MAX_AGENT_TOKEN_SCOPES) return bad('scopes', `a token needs 1 to ${MAX_AGENT_TOKEN_SCOPES} scopes`);
   const seen = new Set<string>();
   for (const scope of input.scopes as unknown[]) {

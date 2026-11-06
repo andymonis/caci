@@ -107,7 +107,7 @@ export function agentTokenCases(): readonly AgentTokenCase[] {
             assert.equal(r.error.field, 'name');
           }
         };
-        for (const bad of ['', '   ', 'x'.repeat(MAX_AGENT_TOKEN_NAME + 1), 'a\nb', 'a\u0000b', `a${String.fromCharCode(0x2028)}b`, 5, null, undefined]) await refused(bad);
+        for (const bad of ['', '   ', 'x'.repeat(MAX_AGENT_TOKEN_NAME + 1), 'a\nb', `a${String.fromCharCode(0xd800)}b`, `${String.fromCharCode(0xdc00)}`, 'a\u0000b', `a${String.fromCharCode(0x2028)}b`, 5, null, undefined]) await refused(bad);
         await made(store, { name: 'x'.repeat(MAX_AGENT_TOKEN_NAME) });
         await made(store, { name: '😀'.repeat(MAX_AGENT_TOKEN_NAME) }); // counted by character, not by UTF-16 unit
         const r = await store.create(input({ name: '😀'.repeat(MAX_AGENT_TOKEN_NAME + 1) }), T0);

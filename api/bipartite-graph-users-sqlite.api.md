@@ -8,6 +8,9 @@ import type { SQLInputValue } from 'node:sqlite';
 import type { SQLOutputValue } from 'node:sqlite';
 
 // @public
+export function createSqliteAgentTokenStore(options?: SqliteAgentTokenStoreOptions): SqliteAgentTokenStore;
+
+// @public
 export function createSqliteSessionStore(options?: SqliteSessionStoreOptions): SqliteSessionStore;
 
 // @public
@@ -43,6 +46,22 @@ export type DbErrorCode =
 // @public (undocumented)
 export function prepareUsersDatabase(db: Db): PrepareResult;
 
+// Warning: (ae-forgotten-export) The symbol "AgentTokenStore" needs to be exported by the entry point index.d.ts
+//
+// @public
+export interface SqliteAgentTokenStore extends AgentTokenStore {
+    // (undocumented)
+    close(): void;
+}
+
+// Warning: (ae-forgotten-export) The symbol "AgentTokenOptions" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export interface SqliteAgentTokenStoreOptions extends AgentTokenOptions {
+    readonly busyTimeoutMs?: number;
+    readonly path?: string;
+}
+
 // Warning: (ae-forgotten-export) The symbol "SessionStore" needs to be exported by the entry point index.d.ts
 //
 // @public
@@ -77,7 +96,7 @@ export interface SqliteUserStoreOptions {
 export const USERS_APPLICATION_ID = 1130452339;
 
 // @public
-export const USERS_SCHEMA_VERSION = 7;
+export const USERS_SCHEMA_VERSION = 8;
 
 // (No @packageDocumentation comment for this package)
 

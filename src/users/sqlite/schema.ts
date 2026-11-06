@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 7;
+export const USERS_SCHEMA_VERSION = 8;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -238,7 +238,36 @@ const V7: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7]);
+/**
+ * Version 8: agent tokens (R-022). Only the SHA-256 of a token is stored, as for sessions. The scopes are a JSON array (checked to
+ * be valid JSON; their shape is the store's rule). A trigger removes a person's tokens when the user row goes, whoever deletes it;
+ * like sessions, tokens have no foreign key, so the store works without a user row.
+ */
+const V8: Migration = Object.freeze({
+  to: 8,
+  creates: Object.freeze(['agent_tokens']),
+  sql: Object.freeze([
+    `CREATE TABLE agent_tokens (
+       token_hash TEXT NOT NULL PRIMARY KEY,
+       id TEXT NOT NULL UNIQUE,
+       user_id TEXT NOT NULL,
+       name TEXT NOT NULL CHECK (name <> ''),
+       scopes TEXT NOT NULL CHECK (json_valid(scopes) AND json_type(scopes) = 'array'),
+       checks INTEGER NOT NULL CHECK (checks IN (0, 1)),
+       created_at INTEGER NOT NULL,
+       expires_at INTEGER NOT NULL CHECK (expires_at > created_at),
+       last_used_at INTEGER
+     ) WITHOUT ROWID`,
+    'CREATE INDEX agent_tokens_by_user ON agent_tokens (user_id, created_at DESC, id DESC)',
+    'CREATE INDEX agent_tokens_by_expiry ON agent_tokens (expires_at)',
+    `CREATE TRIGGER agent_tokens_end_with_user AFTER DELETE ON users
+     BEGIN
+       DELETE FROM agent_tokens WHERE user_id = old.id;
+     END`,
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });

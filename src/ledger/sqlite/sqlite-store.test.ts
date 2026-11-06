@@ -71,13 +71,13 @@ runLedgerStoreConformance(() => createSqliteLedgerStore(), { describe, it }, { d
 }
 
 describe('the schema', () => {
-  it('is version 7 with the table, its indexes and the two triggers', () => {
+  it('is version 8 with the table, its indexes and the two triggers', () => {
     const dir = tmp();
     openAt(join(dir, 'users.db'));
     const db = openDb({ path: join(dir, 'users.db') });
     stores.push(db);
-    expect(USERS_SCHEMA_VERSION).toBe(7);
-    expect(db.pragma('user_version')).toBe(7);
+    expect(USERS_SCHEMA_VERSION).toBe(8);
+    expect(db.pragma('user_version')).toBe(8);
     expect(db.pragma('application_id')).toBe(USERS_APPLICATION_ID);
     const names = (type: string): string[] => db.all<{ name: string }>('SELECT name FROM sqlite_master WHERE type = ? ORDER BY name', type).map((r) => r.name);
     expect(names('table')).toContain('ledger');
@@ -98,7 +98,7 @@ describe('the schema', () => {
     expect(await listAll(store, P1)).toEqual([]);
     const db = openDb({ path });
     stores.push(db);
-    expect(db.pragma('user_version')).toBe(7);
+    expect(db.pragma('user_version')).toBe(8);
     expect(db.get<{ n: number }>('SELECT count(*) AS n FROM users')?.n).toBe(1);
     expect(db.get<{ n: number }>('SELECT count(*) AS n FROM circles')?.n).toBe(1);
   });
@@ -122,7 +122,7 @@ describe('the schema', () => {
     expect(codeOf(() => createSqliteLedgerStore({ path: join(dir, 'graphs.db') }))).toBe('NOT_A_USERS_DATABASE');
     const newer = openDb({ path: join(dir, 'newer.db') });
     prepareSchema(newer, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });
-    newer.exec('PRAGMA user_version = 8');
+    newer.exec('PRAGMA user_version = 9');
     newer.close();
     expect(codeOf(() => createSqliteLedgerStore({ path: join(dir, 'newer.db') }))).toBeDefined();
   });
@@ -150,7 +150,7 @@ describe('upgrading from version 6 (R-017)', () => {
     expect((await listAll(ledger, P1)).find((e) => e.kind === 'input')?.text).toBe(`typed ${lone} words`);
     const db = openDb({ path });
     stores.push(db);
-    expect(db.pragma('user_version')).toBe(7);
+    expect(db.pragma('user_version')).toBe(8);
     expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'ledger_%' ORDER BY name").map((r) => r.name)).toEqual(['ledger_ends_with_circle', 'ledger_ends_with_user']);
     expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'ledger_by_%' ORDER BY name").map((r) => r.name)).toEqual(['ledger_by_scope', 'ledger_by_time']);
     expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE name LIKE 'ledger_v7%'")).toEqual([]);
