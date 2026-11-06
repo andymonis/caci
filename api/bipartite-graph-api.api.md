@@ -234,6 +234,7 @@ export interface ReadRoutesOptions {
 
 // @public (undocumented)
 export interface Route {
+    readonly bearer?: boolean;
     // (undocumented)
     readonly handler: (context: RouteContext) => Promise<ApiResponse> | ApiResponse;
     // (undocumented)
@@ -243,6 +244,7 @@ export interface Route {
 
 // @public
 export interface RouteContext {
+    readonly bearer?: string;
     readonly body: Readonly<Record<string, JsonValue>> | undefined;
     readonly clientKey: string;
     // (undocumented)

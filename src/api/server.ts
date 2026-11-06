@@ -148,6 +148,15 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
     res.end(hasBody ? JSON.stringify(response.body) : undefined);
   }
 
+  /** The Bearer token of a request, when its one Authorization header is exactly `Bearer <token>`; otherwise nothing (and never a throw). */
+  function bearerOf(req: IncomingMessage): { readonly bearer: string } | Record<string, never> {
+    let headers = 0;
+    for (let i = 0; i < req.rawHeaders.length; i += 2) if ((req.rawHeaders[i] ?? '').toLowerCase() === 'authorization') headers++;
+    if (headers !== 1) return {};
+    const match = /^[Bb][Ee][Aa][Rr][Ee][Rr] ([A-Za-z0-9_-]{1,128})$/.exec(req.headers.authorization ?? '');
+    return match === null ? {} : { bearer: match[1] as string };
+  }
+
   const fail = (res: ServerResponse, status: number, message: string, extra: { allow?: readonly Method[] } = {}): void => send(res, { status, body: errorBody(status, message), ...extra });
 
   async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -194,6 +203,7 @@ export function createApiServer(options: ApiServerOptions): ApiServer {
       query: Object.freeze(query),
       body: body as never,
       cookies: parseCookies(req.headers.cookie),
+      ...(found.route.bearer === true ? bearerOf(req) : {}),
       clientKey: clientKey(req),
     });
     send(res, response);

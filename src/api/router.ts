@@ -14,6 +14,12 @@ export interface RouteContext {
   /** The parsed JSON body (always an object), or `undefined` when the request had none. */
   readonly body: Readonly<Record<string, JsonValue>> | undefined;
   readonly cookies: Readonly<Record<string, string>>;
+  /**
+   * The token of an `Authorization: Bearer <token>` header, only for a route that declared `bearer: true` (R-022 D17), and only when
+   * the header is exactly that (one header, the scheme, one space, then 1 to 128 characters of letters, digits, `_` and `-`).
+   * The key is absent on every other route, and for a header that is not exactly that. The kit never checks what the token means.
+   */
+  readonly bearer?: string;
   /** Who is asking, as far as throttling is concerned: the socket address, or the address a trusted proxy reported. */
   readonly clientKey: string;
 }
@@ -91,6 +97,8 @@ export interface Route {
   /** A path like `/api/users/:id`: literal segments, and `:name` for one segment of letters, digits, `_`, `-` and `.`. */
   readonly path: string;
   readonly handler: (context: RouteContext) => Promise<ApiResponse> | ApiResponse;
+  /** Read a Bearer token from the `Authorization` header for this route (R-022 D17). Default `false`: the header is not even looked at. */
+  readonly bearer?: boolean;
 }
 
 export type Match =
