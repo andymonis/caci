@@ -2,7 +2,7 @@
 
 Nov 6, 2026 · @Andy
 
-**Status: draft, planned as G2.** Part E of the withdrawn `R-020`, reshaped by the owner's decision of 2026-11-06. D1 to D3 are the owner's. On 2026-11-06 the owner also confirmed **D12 (a hand-written MCP layer, no new dependency)**, **read-only access for now (D13)** and **token management in the user app's Settings (D14)**. The rest are proposed by me and stand unless the owner changes them.
+**Status: built as G2 (T-305 to T-314 and T-323; T-315, the write tool, was dropped by the owner); a real agent has not yet connected to it (the owner's hand run).** Part E of the withdrawn `R-020`, reshaped by the owner's decision of 2026-11-06. D1 to D3 are the owner's. On 2026-11-06 the owner also confirmed **D12 (a hand-written MCP layer, no new dependency)**, **read-only access for now (D13)** and **token management in the user app's Settings (D14)**. The rest are proposed by me and stand unless the owner changes them.
 
 ## Overview
 
@@ -87,18 +87,18 @@ What already exists and is reused, not rebuilt:
 
 ## Threats and controls
 
-| Threat | Control |
-|--------|---------|
-| A leaked token reads a brain | D5 scope, expiry, revoke; D6 one place only; D14 list shows last use. |
-| A token used on the normal routes or a cookie used on `/mcp` | D6, AG-FR-03, tested both ways. |
-| An agent reads a circle the person has left, or a role since demoted | D7: membership and role re-read every call. |
-| An agent reads another person's brain or an item of it | D7: the resolver, the same not-found answer. |
-| An agent writes into a brain | D13: there is no write path at all; AG-FR-07 and AG-AC-08 prove it. |
-| Prompt injection: text from another source in the agent's context asks it to file or exfiltrate | There is no write path (D13), so the damage is limited to disclosure of what the token may read; scopes and expiry (D5); the data-leaves warning (D14). |
-| Guessing tokens | 256 bits, hashed at rest, throttled misses (AG-NFR-03). |
-| Token or brain text in a log or error | D11 and AG-NFR-02: no tokens or ids in responses or logs; the request log keeps only method, path and status. |
-| The agent's provider receives brain text | D14 warning, D16 release gate; not preventable by CaCi. |
-| A flood of tool calls | Result caps, request limits, the status limit for model tools. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| A leaked token reads a brain | D5 scope, expiry, revoke; D6 one place only; D14 list shows last use. | `src/users/sqlite/sqlite-agent-token-store.test.ts` — "never write the token itself anywhere in the file"; `src/agent/view.test.ts` — "a revoked token, an expired one and a token of a deleted account stop working at once"; `src/service/agent-end-to-end.test.ts` — "revoking a token, changing the password and a token" |
+| A token used on the normal routes or a cookie used on `/mcp` | D6, AG-FR-03, tested both ways. | `src/service/agent-end-to-end.test.ts` — "a session cookie is not accepted on /mcp"; `src/service/agent-tokens.test.ts` — "changing the password ends every token, and an agent token is not a credential on any route"; `src/api/agent-token-routes.test.ts` — "ignore an Authorization header, a token in the URL and a token in the body"; `src/api/bearer.test.ts` — "is not even looked at on a route that did not ask for it: no key at all" |
+| An agent reads a circle the person has left, or a role since demoted | D7: membership and role re-read every call. | `src/agent/view.test.ts` — "removal from the circle takes effect on the next call, and the other circles still work"; `src/service/agent-end-to-end.test.ts` — "an observer" |
+| An agent reads another person's brain or an item of it | D7: the resolver, the same not-found answer. | `src/agent/view.test.ts` — "a circle outside the token, a made-up circle and a circle the person is not in are the one no-such-circle answer"; `src/service/agent-end-to-end.test.ts` — "a stranger" |
+| An agent writes into a brain | D13: there is no write path at all; AG-FR-07 and AG-AC-08 prove it. | `src/agent/view.test.ts` — "exposes only reading methods, none of the capture ones"; `src/agent/view.test.ts` — "every tool, over every scope, calls no write primitive and leaves every graph as it was"; `src/service/agent-end-to-end.test.ts` — "an agent can write nothing" |
+| Prompt injection: text from another source in the agent's context asks it to file or exfiltrate | There is no write path (D13), so the damage is limited to disclosure of what the token may read; scopes and expiry (D5); the data-leaves warning (D14). | `src/agent/tools.test.ts` — "every tool has a name, a title, a description and a closed object schema, and no tool writes"; `src/service/agent-end-to-end.test.ts` — "an agent can write nothing"; `src/agent/tools.test.ts` — "a failure of a store or a model, however it is reported, is never repeated" |
+| Guessing tokens | 256 bits, hashed at rest, throttled misses (AG-NFR-03). | `src/api/mcp-routes.test.ts` — "counts bad tokens per client: after the limit even a good token is turned away"; `src/users/sqlite/sqlite-agent-token-store.test.ts` — "a stolen copy of the database cannot be used: the stored hash is not a token"; `src/service/agent-end-to-end.test.ts` — "keeps working across a restart, and a flood of bad tokens" |
+| Token or brain text in a log or error | D11 and AG-NFR-02: no tokens or ids in responses or logs; the request log keeps only method, path and status. | `src/agent/tools.test.ts` — "never put a graph id, a user id or a token in any result"; `src/api/mcp-routes.test.ts` — "never logs the token, and sets the usual no-store and nosniff headers"; `src/service/agent-end-to-end.test.ts` — "nothing an agent was told holds a token" |
+| The agent's provider receives brain text | D14 warning, D16 release gate; not preventable by CaCi. | `web/agent-access-page.test.mjs` — "say what it is, that it is one way, and that what the agent reads leaves CaCi"; `web/agent-access-journey.test.mjs` — "the person makes a key for their own notes and a circle, an agent uses it, the person stops it, and it stops working" |
+| A flood of tool calls | Result caps, request limits, the status limit for model tools. | `src/agent/tools.test.ts` — "shortens nothing silently and refuses to send more than a safe amount at once"; `src/service/agent-end-to-end.test.ts` — "pulse needs the checks flag"; `src/api/mcp-routes.test.ts` — "a good token is never counted" |
 
 ## Acceptance criteria
 
@@ -117,7 +117,26 @@ What already exists and is reused, not rebuilt:
 | AG-AC-11 | Given a bad JSON-RPC request, an unknown method, an oversized body or a malformed token, then the answer is a JSON-RPC or HTTP error with fixed words and nothing internal. |
 | AG-AC-12 | Given a `pulse` call without `checks: true`, then it is not in `tools/list` and is refused. |
 
-## Residual risks
+### Where each criterion is checked (T-314)
+
+| ID | Tests |
+|----|-------|
+| AG-AC-01 | `src/service/agent-tokens.test.ts` — "are off by default: the routes do not exist"; `src/service/agent-end-to-end.test.ts` — "is off by default: /mcp is a plain 404" |
+| AG-AC-02 | `src/api/agent-token-routes.test.ts` — "make a token (201, shown once), list it (never the token), and end it (204)"; `src/users/sqlite/sqlite-agent-token-store.test.ts` — "never write the token itself anywhere in the file"; `src/service/agent-tokens.test.ts` — "are kept across a restart, and the file holds only the hash of the token" |
+| AG-AC-03 | `src/agent/view.test.ts` — "a circle outside the token, a made-up circle and a circle the person is not in are the one no-such-circle answer"; `src/service/agent-end-to-end.test.ts` — "a token sees only what it lists"; `src/agent/tools.test.ts` — "finds facts in one brain, with the brain named, and who entered them in a circle" |
+| AG-AC-04 | `src/agent/view.test.ts` — "removal from the circle takes effect on the next call"; `src/service/agent-end-to-end.test.ts` — "an observer" |
+| AG-AC-05 | `src/service/agent-end-to-end.test.ts` — "revoking a token, changing the password and a token"; `src/agent/view.test.ts` — "a token ends at its expiry time" |
+| AG-AC-06 | `src/service/agent-end-to-end.test.ts` — "a session cookie is not accepted on /mcp"; `src/api/mcp-routes.test.ts` — "is a plain 401 for no token, a wrong one, a malformed header and a cookie" |
+| AG-AC-07 | `src/agent/tools.test.ts` — "works for a fact that was replaced: what it said, that it is not current, and that it was replaced later"; `src/service/agent-end-to-end.test.ts` — "an agent connects, sees five read tools" |
+| AG-AC-08 | `src/agent/tools.test.ts` — "every tool has a name, a title, a description and a closed object schema, and no tool writes"; `src/service/agent-end-to-end.test.ts` — "an agent can write nothing" |
+| AG-AC-09 | `src/caci/controller-agent-tools.test.ts` — "lists the change log entries newer than a time, newest first, and none at or before it"; `src/agent/tools.test.ts` — "lists what changed after a time, newest first" |
+| AG-AC-10 | `src/users/controller-agent-tokens.test.ts` — "changing your password ends ALL your agent tokens"; `src/service/agent-tokens.test.ts` — "changing the password ends every token" |
+| AG-AC-11 | `src/api/mcp-routes.test.ts` — "refuses a request that is not JSON-RPC 2.0 with 400 and a null id"; `src/api/mcp-routes.test.ts` — "refuses what it does not speak with a fixed JSON-RPC error"; `src/api/mcp-routes.test.ts` — "turns a tool that throws into a fixed internal error" |
+| AG-AC-12 | `src/agent/tools.test.ts` — "a call to pulse without the flag, and to a tool that does not exist"; `src/service/agent-end-to-end.test.ts` — "pulse needs the checks flag" |
+
+A hand check in Chrome of the Settings part (T-313) was **not** made in this task: the page is exercised through the real page code against the real service (`web/agent-access-journey.test.mjs`), and **connecting a real agent (Claude Desktop or Claude Code) is the owner's hand run**.
+
+### Residual risks (not covered, with the reason)
 
 1. **Anything an agent reads leaves CaCi's control.** The person's agent provider sees it; the warning is a notice, not a protection.
 2. **A hand-written MCP layer can drift from the protocol** as it evolves; the transport-neutral tools allow swapping in the official SDK later.
@@ -126,6 +145,10 @@ What already exists and is reused, not rebuilt:
 5. **`changes` is limited by the change log's retention** (`CACI_LEDGER_DAYS`); an agent that polls less often than that can miss older changes.
 6. **Until R-018 Part B / R-019 exist, facts have no structured dates**; an agent must read the text for them.
 7. **Tokens are bearer credentials**: anyone who holds one has its access until it expires or is revoked.
+8. **The MCP layer is hand-written and has been exercised only by tests and a stand-in client**: no real agent has connected to it yet. It speaks `initialize`, `ping`, notifications, `tools/list` and `tools/call` over one JSON `POST`; a client that insists on streaming, sessions or another method will not work until it is extended or the official SDK is used (D12 left the tools transport-neutral for that).
+9. **An agent's checks have their own hourly allowance.** The `pulse` tool counts against `CACI_STATUS_PER_HOUR` in the agent surface's own count, so a person who uses the app and an agent can ask up to twice that many checks an hour. Spending is still bounded per account.
+10. **Bad tokens are counted per client address**, so many people behind one address share an allowance of 30 bad requests an hour, and an attacker can lock a household's agents out for the rest of the hour by sending bad tokens from their address (a good token from that address is refused too). The cost of keeping guessing slow.
+11. **A token's scopes are an allow-list of brains, not of facts**: within a brain the agent reads everything the person may read there, including the words typed (`changes`), which may mention people.
 
 ## Open questions
 

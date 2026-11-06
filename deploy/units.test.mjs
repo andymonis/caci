@@ -143,6 +143,14 @@ describe('the example settings file', () => {
     expect(parsed.ok).toBe(false);
     expect(JSON.stringify(parsed.error)).toContain('ANTHROPIC_API_KEY');
   });
+  it('leaves agent access off: the line is only a comment, and the example enabled is accepted and says what leaves', () => {
+    expect(settings).not.toHaveProperty('CACI_AGENT_ACCESS');
+    expect(parseServiceConfig({ ...settings, ANTHROPIC_API_KEY: KEY }).value.agentAccess).toBe(false);
+    expect(text).toContain('# CACI_AGENT_ACCESS=false');
+    expect(text).toContain("sent to that agent's provider");
+    const enabled = parseServiceConfig({ ...settings, CACI_AGENT_ACCESS: 'true', ANTHROPIC_API_KEY: KEY });
+    expect(enabled.ok && enabled.value.agentAccess).toBe(true);
+  });
   it('holds no secret: the key line is empty and nothing looks like a key', () => {
     expect(settings.ANTHROPIC_API_KEY).toBe('');
     expect(text).not.toMatch(/sk-ant-[A-Za-z0-9_-]{8,}/);

@@ -115,6 +115,10 @@ describe('the Pi runbook in the README', () => {
       'the `controls/` folder of the checkout',
       'A bad file stops the service from starting',
       'says which file to fix',
+      'letting an agent read it (optional, off by default)',
+      'CACI_AGENT_ACCESS=true',
+      'what an agent reads leaves your control and goes to its provider',
+      'keys are rows in `users.db` and are in every snapshot',
     ]) expect(lower, phrase).toContain(phrase.toLowerCase());
   });
 

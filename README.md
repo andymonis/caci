@@ -294,6 +294,7 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_INVITATION_DAYS` | How long an invitation to a circle stays open (1 to 365) | `7` |
 | `CACI_MAX_BRAIN_SCOPES` | Most brains My Brain may combine: your own plus circles (2 to 100) | `25` |
 | `CACI_LEDGER_DAYS` | How long the change log keeps its entries (1 to 3650), see [The current-view brain and its change log](#the-current-view-brain-and-its-change-log) | `90` |
+| `CACI_AGENT_ACCESS` | `true` lets people make personal access keys for their own agent and serves `/mcp` (read only), see [Letting an agent read your brain](#letting-an-agent-read-your-brain) | `false` |
 | `CACI_SESSION_IDLE_DAYS` | Days without use after which a login ends (1 to 365, not more than `CACI_SESSION_DAYS`), see [Staying signed in](#staying-signed-in) | `7` |
 | `CACI_SESSION_DAYS` | Days after which a login ends whatever its use, and how long the cookie lives (1 to 365) | `30` |
 | `CACI_STATUS_PER_HOUR` | Status updates one account may ask for in an hour (1 to 1,000), see [Asking for a status update](#asking-for-a-status-update) | `20` |
@@ -831,6 +832,59 @@ The buttons are on **Home** (they look at every brain you can read) and on each 
 - **A request already running when a member is removed** may still use what they could read when it started.
 - **Not built:** location, weather or calendars as context, restricting a status to one circle, a history, free questions beyond a status, notices to other people.
 
+## Letting an agent read your brain
+
+CaCi is **the brain, not a reminder engine**: deciding when something deserves your attention is the job of an agent that works for you (your own assistant, which knows your calendar and habits). CaCi's part is to be a trusted, current and concise source that your agent can read, with where each fact came from. This is specified in `specs/R-022-agent-access.md`; **it is off unless the operator switches it on** (`CACI_AGENT_ACCESS=true`), and **it is read only: an agent can never file, change or delete anything**.
+
+### Making a key
+
+In the everyday app, **Settings > Agent access** (it is there only when the service has agent access switched on). You give a key a **name**, choose **which notes it may read** (your own notes, and each circle you are in), choose whether it may also ask CaCi for **attention checks** (this spends CaCi's model and your hourly allowance, see below), and choose how long it lasts (30 days, 90 days or a year). The key is shown **once**, in the page, with the words *Anything your agent reads is sent to your agent's provider, the company that runs it. CaCi cannot take it back.* CaCi stores only a fingerprint of it, so it cannot be shown again: make another. Each person may have at most **10 live keys**; each lasts at most **365 days**; you can stop one at any time (it asks first), and changing your password, an administrator resetting it, or deleting your account **ends all of your keys at once**.
+
+A key looks like `cpat_` followed by 43 characters. It is a credential like a password: whoever holds it can read what it names until it expires or is stopped. It is accepted **in one place only** (`/mcp`), as `Authorization: Bearer <key>`, and **never** as the session cookie; the session cookie is not accepted on `/mcp`, and a key is no credential on any other route (an `Authorization` header or a token in an address does nothing there).
+
+### Connecting an agent
+
+An agent that speaks MCP (the Model Context Protocol) connects to `http://HOST:PORT/mcp` (the address the app is served from, with `/mcp`) and sends the key as a Bearer header; for example, with Claude Code: `claude mcp add --transport http caci http://pi.local:8080/mcp --header "Authorization: Bearer cpat_..."`. The server is a small hand-written one: one JSON `POST` per request (`initialize`, `ping`, notifications, `tools/list` and `tools/call`), JSON answers, no streaming (`GET` is 405), and it needs no new software. **No real agent has connected to it yet**; a client that insists on streaming or other parts of the protocol will not work until they are added.
+
+### The tools
+
+Every tool takes a `scope`: `personal` or `circle:<id>` (`list_brains` shows what the key covers). Every answer names the **brain** it came from and, for a fact, **who entered it and when** where the brain records that. Facts are given as structured data without any call to CaCi's model, so nothing is sent to the model provider just because an agent asked.
+
+| Tool | What it gives |
+|---|---|
+| `list_brains` | The brains the key covers, with your role in each circle |
+| `search_facts` | The facts in one brain that share words with some text, most relevant first (at most 50) |
+| `get_fact` | One fact: what it says, the categories it is filed under, and where it came from (who, when, and the words as typed while the change log still holds them); it works for a fact that was replaced later |
+| `browse` | The categories of a brain with their counts, or the facts in one category, a page at a time |
+| `changes` | What changed in a brain after a time (an ISO 8601 date or date and time), newest first: facts added, replaced or removed, and the words typed; a pull, nothing is pushed |
+| `pulse` | Only for a key made with the checks flag: CaCi's own short, focused check (`pulse` this week, `coming-up` this month, `long-range` this year), silent when nothing needs attention |
+
+Results are capped (`limit` is at most 50 or 100, and a result over 100,000 characters is refused with advice to ask for less). The keys of internal records (a person's id, a graph id) are never in a result; who entered a fact is a username and display name.
+
+### The routes
+
+| Route | What it does |
+|---|---|
+| `POST /api/me/agent-tokens` | Session cookie. `name`, `scopes`, `checks`, `days` only. Makes a key and shows it **once** |
+| `GET /api/me/agent-tokens` | Session cookie. Your live keys: name, what each reads, when it ends and when it was last used, never the key |
+| `DELETE /api/me/agent-tokens/:id` | Session cookie. Stops one of your keys |
+| `POST /mcp` | A Bearer key only. JSON-RPC 2.0 (see above) |
+
+Without the switch, these routes do not exist (they are plain 404s).
+
+### What it can read, and what it cannot
+
+A call is resolved the same way the app resolves yours: the key names a person, and a scope is allowed only if **the key lists it and you may still read it now** (your membership and role are read afresh on every call). A circle outside the key, a circle you have left, a made-up circle and the personal brain on a key that does not list it are all the same *no such circle* answer a stranger gets. The platform administrator has no more reach through a key than any member. The change log is read as you could read it in the app, newest first, and only as far back as `CACI_LEDGER_DAYS` (90 by default).
+
+### What is not protected, and what is not done
+
+- **Anything an agent reads leaves CaCi's control.** Your agent's provider sees it, and CaCi cannot take it back. The page says so when a key is made. **The release gates still stand** (pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, a statement of who may use the service): do not give an agent a key to a brain that holds other people's data until they are met.
+- **A key is a bearer credential.** Anyone who holds it has its access until it expires or is stopped. Keys are stored only as fingerprints; a stolen copy of the database cannot be used as a key.
+- **Bad keys are counted per client address**: after 30 bad requests an hour the address is turned away for the rest of the hour (a good key from it too). Many people behind one address share that allowance.
+- **An agent's checks have their own hourly allowance** of the size of `CACI_STATUS_PER_HOUR`, separate from the app's, so a person using both can ask up to twice that many an hour.
+- **Prompt injection reaches your agent, not CaCi.** Because an agent cannot write, the harm it can do through CaCi is limited to reading what its key names.
+- **Not built:** writing through an agent (a `file_note` tool is on the Backlog and would need its own specification), pushing anything to an agent, OAuth for third-party agents, a list of what an agent read, streaming responses.
+
 ## Controlling what the model is told
 
 Every message CaCi sends to a language model is made of **three separate parts**: (1) **the request** (what the person typed, or what the system is doing), (2) **the context** (the combined brain context: the existing categories, or the numbered notes a person can read) and (3) **the controls** (the instructions, guardrails and definitions that steer the exchange). The first two are data and come from people and their brains. **The controls are plain text files in the `controls/` folder of the repository**, read once when the service starts, so they can be adjusted and maintained on their own without touching the code. It is specified in `specs/R-012-controllable-llm.md`, which holds its threat table, its residual risks and its acceptance checks.
@@ -1125,6 +1179,10 @@ To try the service away from home without exposing the Pi to the internet, use *
 **The risks:** the identity account behind the tailnet is the front door (step 1); Tailscale's company sees which devices talk to each other and when, but not the content; a lost phone or laptop signed in to the tailnet can reach the Pi until you remove it in the admin console; and the notes still go to Anthropic as before.
 
 **Nothing in this step has been run on a real Pi or tailnet.** After your first try, keep the output of `npm run doctor` and say whether the page opened on mobile data: that is the evidence.
+
+### Letting an agent read it (optional, off by default)
+
+Agent access (see [Letting an agent read your brain](#letting-an-agent-read-your-brain)) is **off** in the settings file. To try it, set `CACI_AGENT_ACCESS=true` in `/etc/caci/caci.env` and `sudo systemctl restart caci`; each person then makes keys in **Settings > Agent access**, and an agent connects to `http://<name>:8080/mcp` with the key as a Bearer header (over the tailnet from away from home: the tailnet name must be in `CACI_ALLOWED_HOSTS`). **What an agent reads leaves your control and goes to its provider**, so use it for your own notes first; `npm run doctor` shows a warning for as long as it is on, so you remember to switch it off with `CACI_AGENT_ACCESS=false` and a restart. Nothing in the deploy, backup or restore changes: keys are rows in `users.db` and are in every snapshot.
 
 ### What goes where, and what leaves the house
 

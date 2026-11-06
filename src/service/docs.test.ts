@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CIRCLE_STATUS_OF, createAccountRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
+import { createAgentTools, MAX_TOOL_RESULT_CHARS } from '../agent/index.js';
+import { CIRCLE_STATUS_OF, createAccountRoutes, createAgentTokenRoutes, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
 import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
-import { CACI_ERROR_CODES, caciError, DEFAULT_STATUS_CONTEXT_LIMITS, MAX_STATUS_REQUEST_CHARS, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
+import { CACI_ERROR_CODES, caciError, DEFAULT_STATUS_CONTEXT_LIMITS, MAX_SEARCH_RESULTS, MAX_STATUS_REQUEST_CHARS, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CANDIDATE_OPTIONS, DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { createLedgerRoutes } from '../api/index.js';
-import { DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
+import { AGENT_TOKEN_PREFIX, DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, MAX_AGENT_TOKEN_LIFETIME_MS, MAX_AGENT_TOKENS_PER_USER, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
 import { DEFAULT_GRANT_LIMITS } from '../sharing/index.js';
 import { CONTROL_FILES, SETTING_RANGES, SLOT_RULES } from '../llm/index.js';
 import { authoriseBrain } from '../scopes/index.js';
@@ -32,7 +33,7 @@ function section(title: string): string {
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
 /** Settings the service reads that the README does not describe yet (emptied by the README task, T-194). */
-const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_AGENT_ACCESS']; // read and tested; the README describes it at T-314
+const NOT_DOCUMENTED_YET: readonly string[] = [];
 const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
 
 describe('the user accounts section of the README', () => {
@@ -733,4 +734,67 @@ describe('README: staying signed in', () => {
     expect(parseServiceConfig({ CACI_SESSION_DAYS: '366' }).ok).toBe(false);
   });
 });
+});
+
+const agentSection = section('Letting an agent read your brain');
+
+describe('the agent access section of the README', () => {
+  it('lists exactly the routes the server has for keys and for /mcp', () => {
+    const real = [...createAgentTokenRoutes({ controller: {} as never }), ...createMcpRoutes({ tools: {} as never })].map((r) => `${r.method} ${r.path}`);
+    const documented = [...agentSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/[^`]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented.sort()).toEqual([...real].sort());
+    expect(real).toHaveLength(4);
+  });
+
+  it('lists exactly the tools an agent is offered, pulse among them only for a key with the checks flag', async () => {
+    const view = { access: async () => ({ checks: true }), read: {} } as never;
+    const offered = ((await createAgentTools(view).list('x')) ?? []).map((t) => t.name);
+    const documented = [...agentSection.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented.sort()).toEqual([...offered].sort());
+    expect(offered).toHaveLength(6);
+    expect(agentSection).toMatch(/\| `pulse` \| Only for a key made with the checks flag/);
+    const without = (await createAgentTools({ access: async () => ({ checks: false }), read: {} } as never).list('x')) ?? [];
+    expect(without.map((t) => t.name)).not.toContain('pulse');
+  });
+
+  it('prints the numbers the code uses and the one setting, off by default', () => {
+    expect(agentSection).toContain(`at most **${MAX_AGENT_TOKENS_PER_USER} live keys**`);
+    expect(agentSection).toContain(`at most **${MAX_AGENT_TOKEN_LIFETIME_MS / 86_400_000} days**`);
+    expect(agentSection).toContain(`${AGENT_TOKEN_PREFIX}\` followed by 43 characters`);
+    expect(agentSection).toContain(`${MAX_TOOL_RESULT_CHARS.toLocaleString('en-GB')} characters`);
+    expect(agentSection).toContain(`(at most ${MAX_SEARCH_RESULTS})`);
+    expect(defaults.ok ? defaults.value.agentAccess : undefined).toBe(false);
+    expect(readme).toMatch(/\| `CACI_AGENT_ACCESS` \|[^|]*\| `false` \|/);
+    expect(parseServiceConfig({ CACI_AGENT_ACCESS: 'true' }).ok).toBe(true);
+    expect(parseServiceConfig({ CACI_AGENT_ACCESS: 'yes' }).ok).toBe(false);
+  });
+
+  it('names the specification, and every setting it names exists', () => {
+    expect(agentSection).toContain('specs/R-022-agent-access.md');
+    expect(existsSync(new URL('../../specs/R-022-agent-access.md', import.meta.url))).toBe(true);
+    for (const v of agentSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+  });
+
+  it('says the things a reader must not miss', () => {
+    const text = agentSection.replace(/[*`]+/g, '');
+    for (const phrase of [
+      'CaCi is the brain, not a reminder engine',
+      'it is off unless the operator switches it on',
+      'it is read only: an agent can never file, change or delete anything',
+      'Anything your agent reads is sent to your agent\'s provider',
+      'shown once',
+      'CaCi stores only a fingerprint',
+      'changing your password, an administrator resetting it, or deleting your account ends all of your keys at once',
+      'accepted in one place only',
+      'never as the session cookie',
+      'No real agent has connected to it yet',
+      'without any call to CaCi\'s model',
+      'the same no such circle answer a stranger gets',
+      'The platform administrator has no more reach through a key than any member',
+      'The release gates still stand',
+      'A key is a bearer credential',
+      'Prompt injection reaches your agent, not CaCi',
+      'a file_note tool is on the Backlog',
+    ]) expect(text, phrase).toContain(phrase);
+  });
 });
