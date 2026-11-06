@@ -61,6 +61,11 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-016 | [The Minimal User App — Specification](specs/R-016-user-app.md) |
 | R-017 | [The Input Ledger and the Brain Export — Specification](specs/R-017-input-ledger-and-export.md) |
 | R-018 | [Focused Answers: Horizons, Dated Facts and Follow-up Actions — Specification](specs/R-018-focused-answers.md) |
+| R-019 | [Horizon Scan — Requirements](specs/R-019-horizon-scan-requirements.md) (draft: the better, non-verbose long-term view; not yet planned) |
+| R-020 | [Shared Brains for Groups — Specification](specs/R-020-shared-brains-for-groups.md) (**withdrawn 2026-11-06**; Parts A, E and F continue as R-021 to R-023) |
+| R-021 | [Relevant Category Context — Specification](specs/R-021-relevant-category-context.md) |
+| R-022 | [Agent Access: the Brain as a Source an Agent Can Use — Specification](specs/R-022-agent-access.md) |
+| R-023 | [Joining a Circle by Link — Specification](specs/R-023-join-links.md) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
@@ -126,6 +131,7 @@ Local-only development tools live under `dev/` and are never published: `dev/gra
 - **After that, to be planned (decided on the evidence of the real before and after run):** further changes to the brain itself (for example carrying unchanged details into a replacing note); then writing into another brain via approval, relationship labels, invitation notifications.
 - **After that, to be planned:** making the web app installable, M4b matching and presets (with SQL push-down), picture and voice input, question answering, M7 packaging and release. Deferred: the M5 file adapter. Each roadmap item in the Backlog needs its own spec first.
 - **Principle:** model output is never written without a human preview and approval, and only the operations the guardrails allow can reach the graph.
+- **Planned (2026-11-06, owner's direction: CaCi is the brain, not a reminder engine; reminders and attention belong to an agent acting for the person):** G1 relevant category context (R-021, T-298 to T-304), G2 agent access: tokens and a read-only MCP server (R-022, T-305 to T-315) and G3 joining a circle by link (R-023, T-316 to T-322). `R-020` is withdrawn; `R-019` (a better, non-verbose long-term view) is linked as the view the agent surface should serve and is not yet planned.
 
 GSD planning reference: [Bipartite Graph Store library specification](specs/R-001:%20Bipartite%20Graph%20Store%20%E2%80%94%20Library%20Specification.md#suggested-gsd-phase-breakdown).
 

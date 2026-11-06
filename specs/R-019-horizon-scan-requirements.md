@@ -1,6 +1,6 @@
 # Horizon Scan — Requirements
 
-> Status: Draft v0.1 · 25 Oct 2026
+> Status: Draft v0.1 · 25 Oct 2026. **Linked from `spec.md` on 2026-11-06 as the better, non-verbose long-term view** (the owner's direction: CaCi is the brain; reminders and attention belong to an agent acting for the person). Not yet reconciled with the data model (items and categories) or planned; its natural first step is `R-018` Part B (dated facts), and `R-022` (agent access) is the door through which an agent would read this view.
 > Scope: Redesign of the horizon scan query over the shared brain (personal space + circles)
 > Related: Pulse (1-week focused view), bipartite brain graph (entities ↔ facts)
 
