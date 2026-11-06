@@ -1,6 +1,7 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createAccountRoutes, createAgentTokenRoutes, createApiServer, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
+import { createAgentTools, createAgentView } from '../agent/index.js';
+import { createAccountRoutes, createAgentTokenRoutes, createApiServer, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
 import { createCaciController, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
@@ -155,6 +156,12 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       clock,
       onLedgerFailure: warn,
     });
+    // the agent surface (R-022): only when the operator switched it on. It is the same CaCi controller over a token-based lookup,
+    // limited to the token's scopes and reading only; its checks have their own hourly allowance of the same size.
+    const mcp = agentTokens === undefined ? [] : createMcpRoutes({
+      tools: createAgentTools(createAgentView({ tokens: agentTokens, users, circles: circleStore, graphAdapter: graphs, ledger, directory: users, llm, checkTexts: checks.value, pulseText: checks.value.pulse, mode: config.llm, limits: { statusPerHour: config.statusPerHour }, maxScopes: config.maxBrainScopes, clock })),
+      clock,
+    });
     const circles = withCircleGraphs(createCircleController({
       users: controller,
       directory: users,
@@ -174,6 +181,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       ...createCircleRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createInvitationRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createSharingRoutes({ sharing, secureCookies: config.cookieSecure }),
+      ...mcp,
       ...createWebRoutes({ files: webFiles }),
     ];
     const api = createApiServer({

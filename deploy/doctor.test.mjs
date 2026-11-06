@@ -145,6 +145,14 @@ describe('the settings file', () => {
     expect(statusOf(await doctor({ settings: s({ config: config({ allowRegistration: true }) }) }), 'Registration')).toBe('warn');
     expect(statusOf(await doctor(), 'Registration')).toBe('pass');
   });
+  it('agent access on is a reminder that says what leaves and how to turn it off; off (or unset) passes', async () => {
+    const on = await doctor({ settings: s({ config: config({ agentAccess: true }) }) });
+    expect(statusOf(on, 'Agent access')).toBe('warn');
+    expect(on.text).toContain("sent to that agent's provider");
+    expect(on.text).toContain('CACI_AGENT_ACCESS=false');
+    expect(statusOf(await doctor({ settings: s({ config: config({ agentAccess: false }) }) }), 'Agent access')).toBe('pass');
+    expect(statusOf(await doctor(), 'Agent access')).toBe('pass'); // not mentioned in the settings: off
+  });
 });
 
 describe('the data folder', () => {

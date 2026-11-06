@@ -113,6 +113,7 @@ export async function runDoctor({ probes, log }) {
     else if (c.allowedHosts.join(',') === EXAMPLE_HOSTS) out.push(warn('Allowed hosts', 'still the example values (pi.local and 192.168.1.50)', 'Set CACI_ALLOWED_HOSTS to your Pi\'s real name and fixed address, each with its port.'));
     else out.push(pass('Allowed hosts', c.allowedHosts.join(', ')));
     out.push(c.allowRegistration ? warn('Registration', 'open: anyone who can reach the service can make an account', 'When the family has accounts: CACI_ALLOW_REGISTRATION=false, then sudo systemctl restart caci.') : pass('Registration', 'closed'));
+    out.push(c.agentAccess === true ? warn('Agent access', 'on: people can make tokens that let their own agent read their brains (read only); what an agent reads is sent to that agent\'s provider', 'Leave it on only while it is used: CACI_AGENT_ACCESS=false, then sudo systemctl restart caci.') : pass('Agent access', 'off'));
     return out;
   });
 
