@@ -5,10 +5,21 @@
 ```ts
 
 // @public (undocumented)
+export interface AgentTokenConformanceOptions {
+    // Warning: (ae-forgotten-export) The symbol "AgentTokenStore" needs to be exported by the entry point index.d.ts
+    dispose?: (store: AgentTokenStore) => Promise<void> | void;
+}
+
+// @public (undocumented)
 export interface ConformanceOptions {
     // Warning: (ae-forgotten-export) The symbol "UserStore" needs to be exported by the entry point index.d.ts
     dispose?: (store: UserStore) => Promise<void> | void;
 }
+
+// Warning: (ae-forgotten-export) The symbol "AgentTokenOptions" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type MakeAgentTokenStore = (options?: AgentTokenOptions) => Promise<AgentTokenStore> | AgentTokenStore;
 
 // Warning: (ae-forgotten-export) The symbol "SessionOptions" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "SessionStore" needs to be exported by the entry point index.d.ts
@@ -18,6 +29,9 @@ export type MakeSessionStore = (options: SessionOptions) => Promise<SessionStore
 
 // @public
 export type MakeUserStore = () => Promise<UserStore> | UserStore;
+
+// @public
+export function runAgentTokenStoreConformance(makeStore: MakeAgentTokenStore, testApi: TestApi, options?: AgentTokenConformanceOptions): void;
 
 // @public
 export function runSessionStoreConformance(makeStore: MakeSessionStore, testApi: TestApi, options?: SessionConformanceOptions): void;

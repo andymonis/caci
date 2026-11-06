@@ -13,6 +13,9 @@ export type { Derive, PasswordHasher, PasswordHasherOptions, ScryptParams } from
 export { createMemoryUserStore } from './memory-store.js';
 export type { Credential, CreateOptions, GuardOptions, UserList, UserPage, UserPatch, UserRecord, UserStore } from './store.js';
 export { createMemorySessionStore } from './memory-session-store.js';
+export { createMemoryAgentTokenStore } from './memory-agent-token-store.js';
+export { AGENT_TOKEN_PREFIX, AGENT_TOKEN_RENEW_MS, MAX_AGENT_TOKEN_LIFETIME_MS, MAX_AGENT_TOKEN_NAME, MAX_AGENT_TOKEN_SCOPES, MAX_AGENT_TOKENS_PER_USER, isAgentTokenId, isWellFormedAgentToken } from './agent-tokens.js';
+export type { AgentTokenAccess, AgentTokenCreated, AgentTokenInfo, AgentTokenInput, AgentTokenOptions, AgentTokenStore } from './agent-tokens.js';
 export { DEFAULT_SESSION_OPTIONS, resolveSessionOptions } from './session-store.js';
 export type { ResolvedSessionOptions, SessionOptions, SessionStore } from './session-store.js';
 export { hashToken, isWellFormedToken, newSessionToken } from './tokens.js';

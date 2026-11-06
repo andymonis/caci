@@ -1,3 +1,4 @@
+import type { AgentTokenOptions, AgentTokenStore } from '../agent-tokens.js';
 import type { SessionOptions, SessionStore } from '../session-store.js';
 import type { UserStore } from '../store.js';
 
@@ -28,3 +29,11 @@ export interface SessionConformanceOptions {
 
 /** Creates a fresh, empty session store with the given settings, sharing nothing with any other one it has made. */
 export type MakeSessionStore = (options: SessionOptions) => Promise<SessionStore> | SessionStore;
+
+export interface AgentTokenConformanceOptions {
+  /** Called after every test with each store it used. */
+  dispose?: (store: AgentTokenStore) => Promise<void> | void;
+}
+
+/** Creates a fresh, empty agent token store, sharing nothing with any other one it has made. */
+export type MakeAgentTokenStore = (options?: AgentTokenOptions) => Promise<AgentTokenStore> | AgentTokenStore;

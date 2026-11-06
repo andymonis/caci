@@ -19,6 +19,77 @@ export interface Actor {
 }
 
 // @public
+export const AGENT_TOKEN_PREFIX = "cpat_";
+
+// @public
+export const AGENT_TOKEN_RENEW_MS = 60000;
+
+// @public
+export interface AgentTokenAccess {
+    // (undocumented)
+    readonly checks: boolean;
+    // (undocumented)
+    readonly scopes: readonly string[];
+    // (undocumented)
+    readonly tokenId: string;
+    // (undocumented)
+    readonly userId: string;
+}
+
+// @public (undocumented)
+export interface AgentTokenCreated {
+    // (undocumented)
+    readonly info: AgentTokenInfo;
+    readonly token: string;
+}
+
+// @public
+export interface AgentTokenInfo {
+    // (undocumented)
+    readonly checks: boolean;
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lastUsedAt: number | null;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly scopes: readonly string[];
+    // (undocumented)
+    readonly userId: string;
+}
+
+// @public (undocumented)
+export interface AgentTokenInput {
+    readonly checks: boolean;
+    readonly expiresAt: number;
+    readonly name: string;
+    readonly scopes: readonly string[];
+    // (undocumented)
+    readonly userId: string;
+}
+
+// @public (undocumented)
+export interface AgentTokenOptions {
+    readonly randomBytes?: RandomBytes;
+}
+
+// @public (undocumented)
+export interface AgentTokenStore {
+    // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
+    create(input: AgentTokenInput, now: number): Promise<Result<AgentTokenCreated, UsersError>>;
+    list(userId: string, now: number): Promise<readonly AgentTokenInfo[]>;
+    purgeExpired(now: number): Promise<number>;
+    resolve(token: string, now: number): Promise<AgentTokenAccess | undefined>;
+    revoke(userId: string, id: string): Promise<boolean>;
+    revokeAllFor(userId: string): Promise<number>;
+}
+
+// @public
 export interface Authenticated {
     // (undocumented)
     readonly graphId: string;
@@ -42,6 +113,9 @@ export const COMMON_PASSWORDS: readonly string[];
 
 // @public
 export function createLoginThrottle(options?: LoginThrottleOptions): LoginThrottle;
+
+// @public
+export function createMemoryAgentTokenStore(options?: AgentTokenOptions): AgentTokenStore;
 
 // @public
 export function createMemorySessionStore(options?: SessionOptions): SessionStore;
@@ -112,7 +186,13 @@ export interface GuardOptions {
 export const hashToken: (token: string) => string;
 
 // @public (undocumented)
+export const isAgentTokenId: (value: unknown) => value is string;
+
+// @public (undocumented)
 export const isUserId: (value: unknown) => value is string;
+
+// @public
+export const isWellFormedAgentToken: (value: unknown) => value is string;
 
 // @public
 export const isWellFormedToken: (value: unknown) => value is string;
@@ -160,14 +240,24 @@ export interface LoginThrottleOptions {
     readonly perUsername?: Partial<LockRule>;
 }
 
+// @public
+export const MAX_AGENT_TOKEN_LIFETIME_MS: number;
+
+// @public (undocumented)
+export const MAX_AGENT_TOKEN_NAME = 60;
+
+// @public
+export const MAX_AGENT_TOKEN_SCOPES = 20;
+
+// @public
+export const MAX_AGENT_TOKENS_PER_USER = 10;
+
 // @public (undocumented)
 export function newSessionToken(random?: RandomBytes): string;
 
 // @public
 export function newUserId(random?: (length: number) => Uint8Array): string;
 
-// Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
-//
 // @public
 export function parseDisplayName(raw: unknown): Result<string, UsersError>;
 

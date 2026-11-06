@@ -1,10 +1,12 @@
+import type { AgentTokenStore } from '../agent-tokens.js';
 import type { SessionOptions, SessionStore } from '../session-store.js';
 import type { UserStore } from '../store.js';
+import { agentTokenCases } from './agent-token-cases.js';
 import { userStoreCases } from './cases.js';
 import { SUITE_OPTIONS, sessionCases } from './session-cases.js';
-import type { ConformanceOptions, MakeSessionStore, MakeUserStore, SessionConformanceOptions, TestApi } from './types.js';
+import type { AgentTokenConformanceOptions, ConformanceOptions, MakeAgentTokenStore, MakeSessionStore, MakeUserStore, SessionConformanceOptions, TestApi } from './types.js';
 
-export type { ConformanceOptions, MakeSessionStore, MakeUserStore, SessionConformanceOptions, TestApi, UserStoreCase } from './types.js';
+export type { AgentTokenConformanceOptions, ConformanceOptions, MakeAgentTokenStore, MakeSessionStore, MakeUserStore, SessionConformanceOptions, TestApi, UserStoreCase } from './types.js';
 
 /**
  * Registers the user store conformance suite with your test runner. Every `UserStore` must pass it.
@@ -50,6 +52,30 @@ export function runSessionStoreConformance(makeStore: MakeSessionStore, testApi:
         const made: SessionStore[] = [];
         const makeOne = async (settings: SessionOptions = SUITE_OPTIONS): Promise<SessionStore> => {
           const store = await makeStore(settings);
+          made.push(store);
+          return store;
+        };
+        try {
+          await testCase.run(await makeOne(), makeOne);
+        } finally {
+          for (const store of made) await options.dispose?.(store);
+        }
+      });
+    }
+  });
+}
+
+/**
+ * Registers the agent token store conformance suite with your test runner (R-022). Every `AgentTokenStore` must pass it.
+ * `makeStore` must return a fresh, empty store each time, sharing nothing with the others.
+ */
+export function runAgentTokenStoreConformance(makeStore: MakeAgentTokenStore, testApi: TestApi, options: AgentTokenConformanceOptions = {}): void {
+  testApi.describe('agent token store conformance', () => {
+    for (const testCase of agentTokenCases()) {
+      testApi.it(testCase.name, async () => {
+        const made: AgentTokenStore[] = [];
+        const makeOne = async (): Promise<AgentTokenStore> => {
+          const store = await makeStore();
           made.push(store);
           return store;
         };
