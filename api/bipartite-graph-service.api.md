@@ -284,6 +284,7 @@ export type ServeResult = {
 
 // @public (undocumented)
 export interface ServiceConfig {
+    readonly agentAccess: boolean;
     readonly allowedHosts?: readonly string[];
     readonly allowInsecure: boolean;
     readonly allowRegistration: boolean;

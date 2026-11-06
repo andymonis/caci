@@ -32,7 +32,7 @@ function section(title: string): string {
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
 /** Settings the service reads that the README does not describe yet (emptied by the README task, T-194). */
-const NOT_DOCUMENTED_YET: readonly string[] = [];
+const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_AGENT_ACCESS']; // read and tested; the README describes it at T-314
 const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
 
 describe('the user accounts section of the README', () => {

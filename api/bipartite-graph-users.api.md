@@ -90,6 +90,9 @@ export interface AgentTokenStore {
 }
 
 // @public
+export type AgentTokenView = Omit<AgentTokenInfo, 'userId'>;
+
+// @public
 export interface Authenticated {
     // (undocumented)
     readonly graphId: string;
@@ -110,6 +113,17 @@ export interface ChangePasswordInput {
 
 // @public
 export const COMMON_PASSWORDS: readonly string[];
+
+// @public
+export interface CreateAgentTokenInput {
+    // (undocumented)
+    readonly checks?: unknown;
+    readonly days?: unknown;
+    // (undocumented)
+    readonly name?: unknown;
+    // (undocumented)
+    readonly scopes?: unknown;
+}
 
 // @public
 export function createLoginThrottle(options?: LoginThrottleOptions): LoginThrottle;
@@ -437,17 +451,25 @@ export const USER_ID_PATTERN: RegExp;
 // @public
 export interface UserController {
     changePassword(token: unknown, input: ChangePasswordInput, context: RequestContext): Promise<Result<User, UsersError>>;
+    createAgentToken(token: unknown, input: CreateAgentTokenInput): Promise<Result<{
+        readonly token: string;
+        readonly agentToken: AgentTokenView;
+    }, UsersError>>;
     deleteMe(token: unknown, input: DeleteMeInput, context: RequestContext): Promise<Result<true, UsersError>>;
     deleteUser(token: unknown, userId: unknown): Promise<Result<true, UsersError>>;
     getMe(token: unknown): Promise<Result<Authenticated, UsersError>>;
     getUser(token: unknown, userId: unknown): Promise<Result<User, UsersError>>;
     graphIdOf(user: Pick<User, 'id'>): string;
+    listAgentTokens(token: unknown): Promise<Result<{
+        readonly items: readonly AgentTokenView[];
+    }, UsersError>>;
     listUsers(token: unknown, input?: ListUsersInput): Promise<Result<UserList, UsersError>>;
     login(input: LoginInput, context: RequestContext): Promise<Result<LoggedIn, UsersError>>;
     logout(token: unknown): Promise<Result<true, UsersError>>;
     register(input: RegisterInput, context: RequestContext): Promise<Result<User, UsersError>>;
     resetPassword(token: unknown, userId: unknown, input: ResetPasswordInput): Promise<Result<User, UsersError>>;
     resolve(token: unknown): Promise<Result<Authenticated, UsersError>>;
+    revokeAgentToken(token: unknown, id: unknown): Promise<Result<true, UsersError>>;
     updateMe(token: unknown, input: UpdateMeInput): Promise<Result<User, UsersError>>;
     updateUser(token: unknown, userId: unknown, input: UpdateUserInput): Promise<Result<User, UsersError>>;
 }
@@ -459,6 +481,7 @@ export interface UserControllerConfig {
 
 // @public (undocumented)
 export interface UserControllerInit {
+    readonly agentTokens?: AgentTokenStore;
     readonly clock?: () => number;
     // (undocumented)
     readonly config?: UserControllerConfig;

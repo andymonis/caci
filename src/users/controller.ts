@@ -1,4 +1,5 @@
 import { createGraph, dropGraph, err, ok, type Result, type StorageAdapter } from '../graph_store/index.js';
+import type { AgentTokenInfo, AgentTokenStore } from './agent-tokens.js';
 import { usersError, type UsersError } from './errors.js';
 import { newUserId, userGraphId } from './ids.js';
 import { authorise } from './authorise.js';
@@ -18,6 +19,8 @@ export interface UserControllerConfig {
 export interface UserControllerInit {
   readonly users: UserStore;
   readonly sessions: SessionStore;
+  /** Where agent tokens live (R-022). Without it the token methods answer `NOT_FOUND`, and nothing about tokens is ended by a password change. */
+  readonly agentTokens?: AgentTokenStore;
   /** Where user graphs live. The controller creates a graph for each account and drops it with the account. */
   readonly graphAdapter: StorageAdapter;
   readonly hasher?: PasswordHasher;
@@ -52,6 +55,18 @@ export interface UpdateMeInput {
   readonly displayName?: unknown;
   readonly email?: unknown;
 }
+
+/** What a person may ask for when making an agent token (R-022). Anything else is refused by name. */
+export interface CreateAgentTokenInput {
+  readonly name?: unknown;
+  readonly scopes?: unknown;
+  readonly checks?: unknown;
+  /** 1 to 365. Default 90. */
+  readonly days?: unknown;
+}
+
+/** A token as the person sees it in a list: never the token, never their own id. */
+export type AgentTokenView = Omit<AgentTokenInfo, 'userId'>;
 
 export interface ChangePasswordInput {
   readonly currentPassword: unknown;
@@ -112,6 +127,12 @@ export interface UserController {
   changePassword(token: unknown, input: ChangePasswordInput, context: RequestContext): Promise<Result<User, UsersError>>;
   /** Needs the password. Deletes the caller's graph, then the account and its sessions. If the graph cannot be deleted the account is kept, and the error says so. */
   deleteMe(token: unknown, input: DeleteMeInput, context: RequestContext): Promise<Result<true, UsersError>>;
+  /** Makes an agent token for the caller (R-022). The token is in the answer **once**; only its hash is kept. */
+  createAgentToken(token: unknown, input: CreateAgentTokenInput): Promise<Result<{ readonly token: string; readonly agentToken: AgentTokenView }, UsersError>>;
+  /** The caller's live agent tokens, newest first. Never the tokens themselves. */
+  listAgentTokens(token: unknown): Promise<Result<{ readonly items: readonly AgentTokenView[] }, UsersError>>;
+  /** Ends one of the caller's agent tokens. `NOT_FOUND` if the caller has no such live token. */
+  revokeAgentToken(token: unknown, id: unknown): Promise<Result<true, UsersError>>;
   /** Admin only: every account, by username, a page at a time. */
   listUsers(token: unknown, input?: ListUsersInput): Promise<Result<UserList, UsersError>>;
   /** An admin may read anyone; a user only themselves (asking about anyone else is `FORBIDDEN`, whether or not that account exists). */
@@ -127,11 +148,13 @@ export interface UserController {
 }
 
 const STORAGE_MESSAGE = 'the user service could not complete the request';
+const DAY_MS = 86_400_000;
+const agentView = (info: AgentTokenInfo): AgentTokenView => Object.freeze({ id: info.id, name: info.name, scopes: info.scopes, checks: info.checks, createdAt: info.createdAt, expiresAt: info.expiresAt, lastUsedAt: info.lastUsedAt });
 const unauthenticated = (): UsersError => usersError('UNAUTHENTICATED', 'invalid username or password');
 const storageError = (): UsersError => usersError('STORAGE_ERROR', STORAGE_MESSAGE);
 
 export function createUserController(init: UserControllerInit): UserController {
-  const { users, sessions, graphAdapter } = init;
+  const { users, sessions, graphAdapter, agentTokens } = init;
   if (users === undefined || sessions === undefined || graphAdapter === undefined) throw new TypeError('createUserController needs users, sessions and graphAdapter');
   const hasher = init.hasher ?? createPasswordHasher();
   const loginThrottle = init.loginThrottle ?? createLoginThrottle();
@@ -211,6 +234,7 @@ export function createUserController(init: UserControllerInit): UserController {
       return removed.error;
     }
     await sessions.revokeAllFor(user.id).catch(() => undefined); // and a lingering session would fail at its next use anyway
+    await agentTokens?.revokeAllFor(user.id).catch(() => undefined); // (the database removes a deleted person's tokens itself; this is for the other stores)
     return undefined;
   }
 
@@ -300,8 +324,9 @@ export function createUserController(init: UserControllerInit): UserController {
         try {
           // everything they were signed in on ends; an admin resetting their own password keeps the session they are using
           await sessions.revokeAllFor(target.id, target.id === me.value.id && typeof token === 'string' ? { except: token } : {});
+          await agentTokens?.revokeAllFor(target.id); // an agent holds access too, and a reset must reach it
         } catch {
-          return err(usersError('STORAGE_ERROR', 'the password was changed, but the sessions could not be ended'));
+          return err(usersError('STORAGE_ERROR', 'the password was changed, but the sessions could not be ended (and agent tokens may remain)'));
         }
         return updated;
       }),
@@ -358,8 +383,9 @@ export function createUserController(init: UserControllerInit): UserController {
         if (!updated.ok) return updated;
         try {
           await sessions.revokeAllFor(me.value.user.id, { except: token as string });
+          await agentTokens?.revokeAllFor(me.value.user.id);
         } catch {
-          return err(usersError('STORAGE_ERROR', 'the password was changed, but your other sessions could not be ended'));
+          return err(usersError('STORAGE_ERROR', 'the password was changed, but your other sessions could not be ended (and agent tokens may remain)'));
         }
         return updated;
       }),
@@ -442,6 +468,40 @@ export function createUserController(init: UserControllerInit): UserController {
         if (!(await ensureGraph(credential.user.id))) return err(storageError());
         const token = await sessions.create(credential.user.id, now);
         return ok({ user: credential.user, graphId: userGraphId(credential.user.id), token });
+      }),
+
+    createAgentToken: (token, input) =>
+      guarded(async () => {
+        const me = await whoIs(token);
+        if (!me.ok) return me;
+        if (agentTokens === undefined) return err(usersError('NOT_FOUND', 'agent access is not available'));
+        if (typeof input !== 'object' || input === null || Array.isArray(input)) return err(usersError('INVALID_INPUT', 'a token needs a name and scopes', { field: 'token' }));
+        for (const key of Object.keys(input)) {
+          if (!['name', 'scopes', 'checks', 'days'].includes(key)) return err(usersError('INVALID_INPUT', `${key.slice(0, 40)} is not accepted here`, { field: 'token' }));
+        }
+        const days = input.days === undefined ? 90 : input.days;
+        if (typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > 365) return err(usersError('INVALID_INPUT', 'days must be a whole number from 1 to 365', { field: 'days' }));
+        const now = clock();
+        const made = await agentTokens.create({ userId: me.value.user.id, name: input.name as string, scopes: input.scopes as string[], checks: (input.checks === undefined ? false : input.checks) as boolean, expiresAt: now + days * DAY_MS }, now);
+        if (!made.ok) return made;
+        return ok({ token: made.value.token, agentToken: agentView(made.value.info) });
+      }),
+
+    listAgentTokens: (token) =>
+      guarded(async () => {
+        const me = await whoIs(token);
+        if (!me.ok) return me;
+        if (agentTokens === undefined) return err(usersError('NOT_FOUND', 'agent access is not available'));
+        return ok({ items: Object.freeze((await agentTokens.list(me.value.user.id, clock())).map(agentView)) });
+      }),
+
+    revokeAgentToken: (token, id) =>
+      guarded(async () => {
+        const me = await whoIs(token);
+        if (!me.ok) return me;
+        if (agentTokens === undefined) return err(usersError('NOT_FOUND', 'agent access is not available'));
+        if (typeof id !== 'string' || !(await agentTokens.revoke(me.value.user.id, id))) return err(usersError('NOT_FOUND', 'no such agent token'));
+        return ok(true as const);
       }),
 
     logout: (token) =>

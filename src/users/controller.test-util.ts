@@ -1,6 +1,8 @@
 import { createMemoryAdapter } from '../graph_store/adapters/memory/index.js';
 import { listGraphs, type StorageAdapter } from '../graph_store/index.js';
+import type { AgentTokenStore } from './agent-tokens.js';
 import { createUserController, type UserController } from './controller.js';
+import { createMemoryAgentTokenStore } from './memory-agent-token-store.js';
 import { createMemorySessionStore } from './memory-session-store.js';
 import { createMemoryUserStore } from './memory-store.js';
 import { createPasswordHasher, type Derive } from './password.js';
@@ -15,16 +17,18 @@ export const T0 = 1_700_000_000_000;
 export interface World {
   users: UserStore;
   sessions: SessionStore;
+  agentTokens: AgentTokenStore;
   graphs: StorageAdapter;
   controller: UserController;
   now: { value: number };
   derived: string[];
 }
 
-export function world(extra: { users?: UserStore; graphs?: StorageAdapter; config?: { allowRegistration?: boolean }; hasherParams?: { N: number; r: number; p: number }; reuse?: Pick<World, 'users' | 'sessions' | 'graphs'> } = {}): World {
+export function world(extra: { users?: UserStore; graphs?: StorageAdapter; config?: { allowRegistration?: boolean }; hasherParams?: { N: number; r: number; p: number }; reuse?: Pick<World, 'users' | 'sessions' | 'graphs'>; agentTokens?: AgentTokenStore | false } = {}): World {
   const users = extra.reuse?.users ?? extra.users ?? createMemoryUserStore();
   const sessions = extra.reuse?.sessions ?? createMemorySessionStore();
   const graphs = extra.reuse?.graphs ?? extra.graphs ?? createMemoryAdapter();
+  const agentTokens = extra.agentTokens === false ? undefined : (extra.agentTokens ?? createMemoryAgentTokenStore());
   const now = { value: T0 };
   const derived: string[] = [];
   const derive: Derive = async (password, salt, params, bytes) => {
@@ -35,6 +39,7 @@ export function world(extra: { users?: UserStore; graphs?: StorageAdapter; confi
   const controller = createUserController({
     users,
     sessions,
+    ...(agentTokens === undefined ? {} : { agentTokens }),
     graphAdapter: graphs,
     hasher: createPasswordHasher({ params: extra.hasherParams ?? { N: 16, r: 1, p: 1 }, derive, randomBytes: (len) => new Uint8Array(len).fill(++n % 250) }),
     loginThrottle: createLoginThrottle(),
@@ -46,7 +51,7 @@ export function world(extra: { users?: UserStore; graphs?: StorageAdapter; confi
       return () => `u${String(++id).padStart(16, '0')}`;
     })(),
   });
-  return { users, sessions, graphs, controller, now, derived };
+  return { users, sessions, agentTokens: agentTokens ?? createMemoryAgentTokenStore(), graphs, controller, now, derived };
 }
 export const reg = (controller: UserController, name: string, extra: object = {}, ctx = CTX) => controller.register({ username: name, displayName: `Display ${name}`, password: PW, ...extra }, ctx);
 export const must = async <T>(promise: Promise<{ ok: boolean; value?: T; error?: unknown }>): Promise<T> => {

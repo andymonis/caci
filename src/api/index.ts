@@ -8,6 +8,8 @@ export { DOCUMENT_TYPES, documentResponse, matchRoute, policyProblem } from './r
 export type { ApiResponse, DocumentBody, DocumentKind, Match, Method, Route, RouteContext } from './router.js';
 export { createApiServer } from './server.js';
 export type { ApiServer, ApiServerOptions } from './server.js';
+export { createAgentTokenRoutes } from './agent-token-routes.js';
+export type { AgentTokenRoutesOptions } from './agent-token-routes.js';
 export { createAccountRoutes, errorResponse, STATUS_OF } from './routes.js';
 export type { AccountRoutesOptions } from './routes.js';
 export { createCaptureRoutes, mapCaciError } from './capture-routes.js';

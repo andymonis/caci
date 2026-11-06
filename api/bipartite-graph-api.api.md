@@ -17,6 +17,15 @@ export interface AccountRoutesOptions {
     readonly secureCookies?: boolean;
 }
 
+// @public (undocumented)
+export interface AgentTokenRoutesOptions {
+    // (undocumented)
+    readonly controller: UserController;
+    readonly cookieName?: string;
+    // (undocumented)
+    readonly secureCookies?: boolean;
+}
+
 // @public
 export interface ApiResponse {
     // Warning: (ae-forgotten-export) The symbol "JsonValue" needs to be exported by the entry point index.d.ts
@@ -106,6 +115,9 @@ export interface CookieOptions {
 
 // @public
 export function createAccountRoutes(options: AccountRoutesOptions): readonly Route[];
+
+// @public
+export function createAgentTokenRoutes(options: AgentTokenRoutesOptions): readonly Route[];
 
 // @public
 export function createApiServer(options: ApiServerOptions): ApiServer;
