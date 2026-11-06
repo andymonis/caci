@@ -2,7 +2,7 @@
 
 Nov 6, 2026 · @Andy
 
-**Status: draft, planned as G2.** Part E of the withdrawn `R-020`, reshaped by the owner's decision of 2026-11-06. D1 to D3 are the owner's; the rest are proposed by me and stand unless the owner changes them. The write path (E2, D13) needs the owner's explicit confirmation before it is built.
+**Status: draft, planned as G2.** Part E of the withdrawn `R-020`, reshaped by the owner's decision of 2026-11-06. D1 to D3 are the owner's. On 2026-11-06 the owner also confirmed **D12 (a hand-written MCP layer, no new dependency)**, **read-only access for now (D13)** and **token management in the user app's Settings (D14)**. The rest are proposed by me and stand unless the owner changes them.
 
 ## Overview
 
@@ -27,7 +27,7 @@ What already exists and is reused, not rebuilt:
 | D2 | **Owner:** `R-020` is withdrawn; its Parts A, E and F continue as `R-021`, `R-022` and `R-023`; Parts B to D are not pursued here. `R-019` (a better, non-verbose long-term view) is linked in `spec.md` as the view this surface should serve. | Keeps the scope on what only the brain can do. |
 | D3 | **Owner:** the access is **for the person's own agent**, under the person's own rules; there is no separate "agent user" and no wider rights than the person has. | One authorisation path. |
 | D4 | **Agent access is off by default** (`CACI_AGENT_ACCESS=false`). Switched on, a person can create tokens in Settings. | A new door into the brain must be a deliberate act, as for the real model. |
-| D5 | A **personal access token** is a credential separate from the session: `cpat_` plus 43 random base64url characters, **shown once** at creation, **only its SHA-256 stored** (as for sessions, R-002). It belongs to one person, has a name, a **mode** (`read`, later `write`), a list of **scopes** (`personal`, `circle:<id>`; at most 20), an **expiry** (default 90 days, at most 365) and can be **revoked**; at most 10 live tokens per person. | An agent must never hold a password or a session cookie, and a leaked token must be limited and revocable. |
+| D5 | A **personal access token** is a credential separate from the session: `cpat_` plus 43 random base64url characters, **shown once** at creation, **only its SHA-256 stored** (as for sessions, R-002). It is **read-only**, belongs to one person, has a name, a list of **scopes** (`personal`, `circle:<id>`; at most 20), an **expiry** (default 90 days, at most 365) and can be **revoked**; at most 10 live tokens per person. | An agent must never hold a password or a session cookie, and a leaked token must be limited and revocable. |
 | D6 | A token is accepted **only** as `Authorization: Bearer <token>` on the agent surface (`/mcp`, and nothing else). The agent surface **never** accepts the session cookie. All other routes still ignore an `Authorization` header and a token in a URL or body (R-002). | A token works in one place only; the existing "the cookie is the only credential" rule is unchanged. |
 | D7 | **The agent surface is the same CaCi controller, built over a token-based `users.resolve` and a token-scoped scope resolver.** A call resolves the token to its person, then to the scopes the token lists **and the person may still read now** (membership and role are re-read every call). Anything else is the same not-found answer as for a stranger. It adds **no new read rules**. | One authorisation path, tested once. |
 | D8 | **Tools return structured, concise data, and make no model call by default.** The agent's own model does the reasoning; CaCi's model is not spent, and no brain text is sent to CaCi's provider because an agent asked. | "CaCi is just the brain": cheap, private by default and easy to reason about. |
@@ -35,8 +35,8 @@ What already exists and is reused, not rebuilt:
 | D10 | `pulse(scope?, check)` (the R-018 checks) is offered as an **extra** tool, off unless the token has `checks: true`, because it **does** call CaCi's model, counts against `CACI_STATUS_PER_HOUR` and, in `anthropic` mode, sends brain text to Anthropic. Once `R-019` exists, a `scan` tool serves its non-verbose view in the same way. | The cost and privacy difference must be a visible choice. |
 | D11 | **Every result carries provenance**: the brain it came from (own or the circle's name), and for a fact who entered it and when, where known. Results are **capped** (`limit` default 20, at most 50; text cut as the browse routes cut it; no graph ids, user ids or ledger plumbing). | Provenance must survive inside an agent's answer, and the view must stay short. |
 | D12 | **The MCP server is hand-written and small, with no new dependency**: Streamable HTTP's single `POST /mcp` carrying JSON-RPC 2.0 (`initialize`, `ping`, `notifications/initialized`, `tools/list`, `tools/call`), JSON responses only (no streaming, `GET` is 405). The tools are written once in a transport-neutral module so a different transport or the official SDK can replace the adapter later. | A new dependency needs your say; the subset an agent needs is small. The risk is protocol drift, recorded below. |
-| D13 | **E2 (outline, needs confirmation):** a `file_note(scope, text)` tool, only for a token whose mode is `write` and whose scope allows capture. It files **as the person would with Send** (propose then approve in one step, R-016), shares the hourly limit, and records in the change log that the note came **through an agent token** (name only). Read mode never sees the tool. | The first non-human writer to the brain: it must be explicit, limited and visible. |
-| D14 | Creating, listing and revoking tokens uses the **session cookie** (never a token): `POST|GET /api/me/agent-tokens`, `DELETE /api/me/agent-tokens/:id`. The list shows name, mode, scopes, created, expires and last used, never the token. Creating one says plainly that **anything the agent reads is sent to that agent's provider**. | The person must know where their brain's text goes once an agent has it. |
+| D13 | **Owner (2026-11-06): read-only for now.** There is **no write tool and no write mode**: an agent cannot file, change or delete anything through CaCi. A `file_note` tool is a possible later step (Backlog) and would need its own specification and the owner's confirmation. | Keeps the first agent door safe; the brain stays written only by the person. |
+| D14 | **Owner: token management is in the user app's Settings.** Creating, listing and revoking tokens uses the **session cookie** (never a token): `POST|GET /api/me/agent-tokens`, `DELETE /api/me/agent-tokens/:id`. The list shows name, scopes, created, expires and last used, never the token. Creating one says plainly that **anything the agent reads is sent to that agent's provider**. | The person must know where their brain's text goes once an agent has it. |
 | D15 | Revoking a token, deleting the account and changing the password end tokens: revoke and account deletion at once; a password change ends **all tokens** of that person (as it ends other sessions). | A reset of access must reach agents too. |
 | D16 | The release gates of R-008 and R-009 apply: pseudonymisation and the legal groundwork before anyone outside the owner's family test, and a token's data leaving to a third-party agent is a new data flow needing its own review. Owner only at first. | An agent provider is a new recipient. |
 
@@ -46,7 +46,7 @@ What already exists and is reused, not rebuilt:
 
 1. A person's own agent can find, read and check facts in their brains, under the same rules as the person.
 2. Every answer names where it came from and, for a fact, who entered it and when.
-3. A leaked token is limited (scope, mode, expiry) and revocable.
+3. A leaked token is limited (scope, expiry) and revocable.
 4. No notification, reminder or attention logic in CaCi.
 
 **Non-goals**
@@ -62,7 +62,7 @@ What already exists and is reused, not rebuilt:
 - **Agent**: software acting for a person, such as their own assistant, that calls CaCi's tools.
 - **MCP**: Model Context Protocol, a standard way for an agent to list and call tools.
 - **Token**: the personal access token of D5.
-- **Mode**: `read` (tools of D9, and D10 if allowed) or `write` (adds D13).
+- **Checks flag**: whether a token may also call the model-using `pulse` tool (D10).
 - **Scopes of a token**: the allow-list of brains it may touch; the person's current access is applied on top.
 
 ## Requirements
@@ -75,7 +75,7 @@ What already exists and is reused, not rebuilt:
 | AG-FR-04 | Each tool call resolves token → person → scope, re-reading membership and role; a scope outside the token's list or no longer readable is the one no-such-circle answer. |
 | AG-FR-05 | The tools of D9 exist with the output of D11; none calls a model. |
 | AG-FR-06 | `pulse`/`scan` exist only for tokens with `checks: true` and respect the status limit. |
-| AG-FR-07 | A read token cannot reach any write: no tool writes, and the controller view refuses capture for it. |
+| AG-FR-07 | No token can reach any write: no tool writes, the controller view refuses the capture action for every token, and no writing method of the controller is reachable through `/mcp`. |
 | AG-FR-08 | `changes` reads the change log only as far as the person could read it in the app, newest first, paged, never beyond the retention. |
 | AG-FR-09 | The MCP layer is strict: known methods only, bounded request and response sizes, JSON-RPC errors for bad input, no stack or internal text in any error. |
 | AG-FR-10 | Token management in the user app's Settings: create, show once, list, revoke, with the data-leaves warning. |
@@ -92,8 +92,8 @@ What already exists and is reused, not rebuilt:
 | A token used on the normal routes or a cookie used on `/mcp` | D6, AG-FR-03, tested both ways. |
 | An agent reads a circle the person has left, or a role since demoted | D7: membership and role re-read every call. |
 | An agent reads another person's brain or an item of it | D7: the resolver, the same not-found answer. |
-| An agent writes into a brain | D9 has no write; D13 only in `write` mode with a capturing scope; AG-FR-07. |
-| Prompt injection: text from another source in the agent's context asks it to file or exfiltrate | Read mode cannot write; `write` mode is explicit, limited and logged with the token's name (D13); the data-leaves warning (D14). |
+| An agent writes into a brain | D13: there is no write path at all; AG-FR-07 and AG-AC-08 prove it. |
+| Prompt injection: text from another source in the agent's context asks it to file or exfiltrate | There is no write path (D13), so the damage is limited to disclosure of what the token may read; scopes and expiry (D5); the data-leaves warning (D14). |
 | Guessing tokens | 256 bits, hashed at rest, throttled misses (AG-NFR-03). |
 | Token or brain text in a log or error | D11 and AG-NFR-02: no tokens or ids in responses or logs; the request log keeps only method, path and status. |
 | The agent's provider receives brain text | D14 warning, D16 release gate; not preventable by CaCi. |
@@ -105,12 +105,12 @@ What already exists and is reused, not rebuilt:
 |----|---------------------|
 | AG-AC-01 | Given `CACI_AGENT_ACCESS` unset, then `/mcp` and the token routes are plain 404s. |
 | AG-AC-02 | Given a created token, then it is shown once, the list never shows it, and the stored form is only its hash (searched in the file). |
-| AG-AC-03 | Given a token scoped to one circle in read mode, when its agent calls `search_facts` on that circle, then it gets facts with the circle's name and who entered them; calls on another circle, on a made-up circle and on the personal brain all give the one not-found answer. |
+| AG-AC-03 | Given a token scoped to one circle, when its agent calls `search_facts` on that circle, then it gets facts with the circle's name and who entered them; calls on another circle, on a made-up circle and on the personal brain all give the one not-found answer. |
 | AG-AC-04 | Given the person is removed from the circle, then the next call is not-found. |
 | AG-AC-05 | Given the token is revoked or expired, then every call is refused with the same answer as a made-up token. |
 | AG-AC-06 | Given the session cookie sent to `/mcp`, or a token sent to `/api/me`, then both are refused. |
 | AG-AC-07 | Given `get_fact` for a replaced fact, then the result says it was replaced later and gives what it said, and says plainly when the words are no longer kept. |
-| AG-AC-08 | Given a read token, then `tools/list` shows no write tool and a call to one is refused. |
+| AG-AC-08 | Given any token, then `tools/list` shows no write tool and a call to a write method is refused; the graph is byte-identical before and after every tool has been called. |
 | AG-AC-09 | Given `changes` since a time, then only entries newer than it come back, newest first, paged, with a cursor bound to the scope. |
 | AG-AC-10 | Given the person changes their password, then all their tokens stop working. |
 | AG-AC-11 | Given a bad JSON-RPC request, an unknown method, an oversized body or a malformed token, then the answer is a JSON-RPC or HTTP error with fixed words and nothing internal. |
@@ -120,7 +120,7 @@ What already exists and is reused, not rebuilt:
 
 1. **Anything an agent reads leaves CaCi's control.** The person's agent provider sees it; the warning is a notice, not a protection.
 2. **A hand-written MCP layer can drift from the protocol** as it evolves; the transport-neutral tools allow swapping in the official SDK later.
-3. **Prompt injection reaches the agent, not CaCi**; read mode limits the damage to disclosure, and `write` mode needs separate review.
+3. **Prompt injection reaches the agent, not CaCi**; with no write path the damage is limited to disclosure.
 4. **Facts still describe people with no account** and are now machine-readable; the R-008/R-009 release gates stand.
 5. **`changes` is limited by the change log's retention** (`CACI_LEDGER_DAYS`); an agent that polls less often than that can miss older changes.
 6. **Until R-018 Part B / R-019 exist, facts have no structured dates**; an agent must read the text for them.
@@ -128,8 +128,8 @@ What already exists and is reused, not rebuilt:
 
 ## Open questions
 
-1. Token management in the user app's Settings, or in the back office first?
-2. Should `write` mode (E2) require each filed note to wait for the person's approval (an inbox), or file at once as Send does?
+1. (Answered 2026-11-06: the user app's Settings.)
+2. (Answered 2026-11-06: read-only, no write mode.)
 3. Is a plain JSON mirror of the tools (for agents that do not speak MCP) wanted, or MCP only?
 4. Should a token be able to cover "all my brains" (a wildcard), or must scopes be listed one by one?
 5. Should the person be able to see **what an agent read** (an access log), beyond "last used"?
