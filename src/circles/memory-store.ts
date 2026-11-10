@@ -2,13 +2,14 @@ import { circlesError, type CirclesError } from './errors.js';
 import { normaliseCategories, SELF_GRANT } from './grants.js';
 import { pageOf } from './cursor.js';
 import { err, ok, type Result } from './result.js';
-import type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from './store.js';
+import type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, JoinLink, JoinLinkLimits, JoinLinkRecord, JoinOutcome, Listing, Membership, RemoveUserOutcome } from './store.js';
 import type { Circle, CircleRole } from './types.js';
 
 const copyCircle = (c: Circle): Circle => ({ ...c });
 const copyMember = (m: Membership): Membership => ({ ...m });
 const copyInvitation = (i: Invitation): Invitation => ({ ...i });
 const copyGrant = (g: Grant): Grant => ({ ...g, categories: [...g.categories] });
+const HASH = /^[0-9a-f]{64}$/;
 const RANK: Readonly<Record<CircleRole, number>> = { owner: 0, manager: 1, member: 2, observer: 3 };
 const notFound = (what: string): CirclesError => circlesError('NOT_FOUND', `no such ${what}`);
 
@@ -21,6 +22,11 @@ export function createMemoryCircleStore(): CircleStore {
   const members = new Map<string, Map<string, Membership>>();
   const invitations = new Map<string, Invitation>();
   const grants = new Map<string, Grant>();
+  /** Join links by id, each with the hash it is found by (never given back). */
+  const links = new Map<string, JoinLink & { readonly tokenHash: string }>();
+  const liveLink = (l: JoinLink, now: number): boolean => now < l.expiresAt && l.uses < l.maxUses && circles.has(l.circleId);
+  const linkOut = (l: JoinLink & { readonly tokenHash: string }): JoinLink => ({ id: l.id, circleId: l.circleId, role: l.role, label: l.label, createdBy: l.createdBy, createdAt: l.createdAt, expiresAt: l.expiresAt, maxUses: l.maxUses, uses: l.uses, approval: l.approval });
+  const byHash = (tokenHash: string): (JoinLink & { readonly tokenHash: string }) | undefined => [...links.values()].find((l) => l.tokenHash === tokenHash);
   const grantKey = (circleId: string, ownerId: string, granteeId: string): string => `${circleId}|${ownerId}|${granteeId}`;
 
   const circlesOfUser = (userId: string): string[] => [...members.entries()].filter(([, m]) => m.has(userId)).map(([id]) => id).sort();
@@ -31,6 +37,7 @@ export function createMemoryCircleStore(): CircleStore {
     members.delete(id);
     for (const [invitationId, i] of invitations) if (i.circleId === id) invitations.delete(invitationId);
     for (const [key, g] of grants) if (g.circleId === id) grants.delete(key);
+    for (const [linkId, l] of links) if (l.circleId === id) links.delete(linkId);
   };
   /** A grant never outlives a membership: when a person goes from a circle, every grant they made or hold there goes too. */
   const dropGrantsOf = (circleId: string, userId: string): void => {
@@ -160,6 +167,45 @@ export function createMemoryCircleStore(): CircleStore {
       here.set(userId, membership);
       invitations.delete(invitationId);
       return ok(copyMember(membership));
+    },
+
+    createJoinLink: async (record: JoinLinkRecord, limits: JoinLinkLimits, now: number): Promise<Result<JoinLink, CirclesError>> => {
+      if (!circles.has(record.circleId)) return err(notFound('circle'));
+      if (record.role !== 'member' && record.role !== 'observer') return err(circlesError('INVALID_INPUT', 'a join link can only offer member or observer', { field: 'role' }));
+      if (typeof record.tokenHash !== 'string' || !HASH.test(record.tokenHash)) return err(circlesError('INVALID_INPUT', 'bad token hash', { field: 'tokenHash' }));
+      if (!Number.isInteger(record.maxUses) || record.maxUses < 1 || record.maxUses > 100) return err(circlesError('INVALID_INPUT', 'a link allows 1 to 100 uses', { field: 'uses' }));
+      for (const [id, l] of links) if (l.circleId === record.circleId && !liveLink(l, now)) links.delete(id);
+      if (links.has(record.id) || byHash(record.tokenHash) !== undefined) return err(circlesError('CONFLICT', 'that join link already exists', { field: 'id' }));
+      const live = [...links.values()].filter((l) => l.circleId === record.circleId).length;
+      if (live >= limits.maxLiveLinksPerCircle) return err(circlesError('LIMIT_REACHED', `a circle may have at most ${limits.maxLiveLinksPerCircle} live join links`));
+      const link = { id: record.id, circleId: record.circleId, tokenHash: record.tokenHash, role: record.role, label: record.label, createdBy: record.createdBy, createdAt: record.createdAt, expiresAt: record.expiresAt, maxUses: record.maxUses, uses: 0, approval: record.approval };
+      links.set(link.id, link);
+      return ok(linkOut(link));
+    },
+    getJoinLinkByHash: async (tokenHash, now) => {
+      const l = typeof tokenHash === 'string' ? byHash(tokenHash) : undefined;
+      return l === undefined || !liveLink(l, now) ? undefined : linkOut(l);
+    },
+    listJoinLinks: async (circleId, now, p) => page([...links.values()].filter((l) => l.circleId === circleId && liveLink(l, now)).sort((a, b) => (a.id < b.id ? -1 : 1)).map(linkOut), (r) => r.id, p),
+    revokeJoinLink: async (linkId, circleId, now) => {
+      const l = links.get(linkId);
+      if (l === undefined || l.circleId !== circleId) return false;
+      links.delete(linkId);
+      return liveLink(l, now);
+    },
+    joinWithLink: async (tokenHash: string, userId: string, now: number, limits: AcceptLimits): Promise<Result<JoinOutcome, CirclesError>> => {
+      const l = typeof tokenHash === 'string' ? byHash(tokenHash) : undefined;
+      if (l === undefined || !liveLink(l, now)) return err(notFound('join link'));
+      if (l.approval) return err(circlesError('CONFLICT', 'this join link needs approval'));
+      const here = members.get(l.circleId) as Map<string, Membership>;
+      const existing = here.get(userId);
+      if (existing !== undefined) return ok({ membership: copyMember(existing), joined: false });
+      if (here.size >= limits.maxMembersPerCircle) return err(circlesError('LIMIT_REACHED', `a circle may have at most ${limits.maxMembersPerCircle} people`));
+      if (circlesOfUser(userId).length >= limits.maxCirclesPerUser) return err(circlesError('LIMIT_REACHED', `a person may be in at most ${limits.maxCirclesPerUser} circles`));
+      const membership: Membership = { circleId: l.circleId, userId, role: l.role, joinedAt: now };
+      here.set(userId, membership);
+      links.set(l.id, { ...l, uses: l.uses + 1 });
+      return ok({ membership: copyMember(membership), joined: true });
     },
 
     removeUser: async (userId: string, username: string): Promise<RemoveUserOutcome> => {

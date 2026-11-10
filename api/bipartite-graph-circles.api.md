@@ -161,6 +161,7 @@ export interface CircleStore {
     changeRole(circleId: string, userId: string, role: CircleRole): Promise<Result<Membership, CirclesError>>;
     createCircle(record: CircleRecord, ownerId: string, limits: CreateCircleLimits): Promise<Result<Circle, CirclesError>>;
     createInvitation(record: InvitationRecord, limits: InviteLimits, now: number): Promise<Result<Invitation, CirclesError>>;
+    createJoinLink(record: JoinLinkRecord, limits: JoinLinkLimits, now: number): Promise<Result<JoinLink, CirclesError>>;
     declineInvitation(invitationId: string, username: string, now: number): Promise<boolean>;
     deleteCircle(id: string): Promise<boolean>;
     // (undocumented)
@@ -169,12 +170,15 @@ export interface CircleStore {
     getGrant(circleId: string, ownerId: string, granteeId: string): Promise<Grant | undefined>;
     // (undocumented)
     getInvitation(id: string): Promise<Invitation | undefined>;
+    getJoinLinkByHash(tokenHash: string, now: number): Promise<JoinLink | undefined>;
+    joinWithLink(tokenHash: string, userId: string, now: number, limits: AcceptLimits): Promise<Result<JoinOutcome, CirclesError>>;
     listCircleIds(page: CirclePage): Promise<Listing<string>>;
     listCirclesOf(userId: string, page: CirclePage): Promise<Listing<CircleSummary>>;
     listGrantsBy(circleId: string, ownerId: string, page: CirclePage): Promise<Listing<Grant>>;
     listGrantsTo(circleId: string, granteeId: string, page: CirclePage): Promise<Listing<Grant>>;
     listInvitationsFor(username: string, now: number, page: CirclePage): Promise<Listing<Invitation>>;
     listInvitationsOfCircle(circleId: string, now: number, page: CirclePage): Promise<Listing<Invitation>>;
+    listJoinLinks(circleId: string, now: number, page: CirclePage): Promise<Listing<JoinLink>>;
     listMembers(circleId: string, page: CirclePage): Promise<Listing<Membership>>;
     // (undocumented)
     membershipOf(circleId: string, userId: string): Promise<Membership | undefined>;
@@ -182,6 +186,7 @@ export interface CircleStore {
     removeMember(circleId: string, userId: string): Promise<Result<boolean, CirclesError>>;
     removeUser(userId: string, username: string): Promise<RemoveUserOutcome>;
     revokeInvitation(invitationId: string, circleId: string, now: number): Promise<boolean>;
+    revokeJoinLink(linkId: string, circleId: string, now: number): Promise<boolean>;
     setGrant(circleId: string, ownerId: string, granteeId: string, categories: readonly string[], now: number, limits: GrantLimits): Promise<Result<Grant | undefined, CirclesError>>;
     updateCircle(id: string, patch: CirclePatch): Promise<Result<Circle, CirclesError>>;
     withdrawGrant(circleId: string, ownerId: string, granteeId: string): Promise<boolean>;
@@ -335,6 +340,66 @@ export const isCircleRole: (value: unknown) => value is CircleRole;
 
 // @public (undocumented)
 export const isInvitationId: (value: unknown) => value is string;
+
+// @public
+export interface JoinLink {
+    // (undocumented)
+    readonly approval: boolean;
+    // (undocumented)
+    readonly circleId: string;
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly createdBy: string;
+    // (undocumented)
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    readonly maxUses: number;
+    // (undocumented)
+    readonly role: JoinLinkRole;
+    // (undocumented)
+    readonly uses: number;
+}
+
+// @public (undocumented)
+export interface JoinLinkLimits {
+    readonly maxLiveLinksPerCircle: number;
+}
+
+// @public
+export interface JoinLinkRecord {
+    readonly approval: boolean;
+    // (undocumented)
+    readonly circleId: string;
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly createdBy: string;
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    readonly label: string;
+    readonly maxUses: number;
+    // (undocumented)
+    readonly role: JoinLinkRole;
+    // (undocumented)
+    readonly tokenHash: string;
+}
+
+// @public
+export type JoinLinkRole = 'member' | 'observer';
+
+// @public
+export interface JoinOutcome {
+    // (undocumented)
+    readonly joined: boolean;
+    // (undocumented)
+    readonly membership: Membership;
+}
 
 // @public (undocumented)
 export interface Listing<T> {

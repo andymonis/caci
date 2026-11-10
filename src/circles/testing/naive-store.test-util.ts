@@ -1,7 +1,7 @@
 import { circlesError, type CirclesError } from '../errors.js';
 import { pageOf } from '../cursor.js';
 import { err, ok, type Result } from '../result.js';
-import type { AcceptLimits, CirclePage, CircleStore, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, Listing, Membership, RemoveUserOutcome } from '../store.js';
+import type { AcceptLimits, CirclePage, CircleStore, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, JoinLink, JoinLinkLimits, JoinLinkRecord, JoinOutcome, Listing, Membership, RemoveUserOutcome } from '../store.js';
 import type { Circle, CircleRole } from '../types.js';
 
 /**
@@ -65,6 +65,28 @@ export const DEFECTS = [
   'grant-lists-other-circles',
   'grant-racy-set',
   'grant-racy-last-writer-merges',
+  'link-role-escalation',
+  'link-uses-not-counted',
+  'link-over-limit',
+  'link-racy-join',
+  'link-miss-differs',
+  'link-returns-hash',
+  'link-ignores-approval',
+  'link-member-costs-a-use',
+  'link-member-overwritten',
+  'link-ignores-member-cap',
+  'link-ignores-circle-cap',
+  'link-limit-consumes-use',
+  'link-ignores-expiry',
+  'link-revoke-ignores-circle',
+  'link-survives-circle-delete',
+  'link-creator-leave-revokes',
+  'link-no-copies',
+  'link-dead-count',
+  'link-lists-dead',
+  'link-duplicate-hash',
+  'link-uses-unchecked',
+  'link-wrong-role',
 ] as const;
 export type Defect = (typeof DEFECTS)[number];
 
@@ -78,6 +100,14 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
   const circles = d('shared-state') ? SHARED.circles : new Map<string, Circle>();
   const members = d('shared-state') ? SHARED.members : new Map<string, Map<string, Membership>>();
   const invitations = d('shared-state') ? SHARED.invitations : new Map<string, Invitation>();
+  type StoredLink = JoinLink & { readonly tokenHash: string };
+  const links = new Map<string, StoredLink>();
+  const linkLive = (l: StoredLink, now: number): boolean => (d('link-ignores-expiry') || now < l.expiresAt) && (d('link-uses-unchecked') || (d('link-over-limit') ? l.uses <= l.maxUses : l.uses < l.maxUses)) && circles.has(l.circleId);
+  const linkOut = (l: StoredLink): JoinLink => {
+    if (d('link-returns-hash')) return { ...l } as JoinLink;
+    return d('link-no-copies') ? (l as unknown as JoinLink) : { id: l.id, circleId: l.circleId, role: l.role, label: l.label, createdBy: l.createdBy, createdAt: l.createdAt, expiresAt: l.expiresAt, maxUses: l.maxUses, uses: l.uses, approval: l.approval };
+  };
+  const linkByHash = (h: string): StoredLink | undefined => [...links.values()].find((l) => l.tokenHash === h);
   const grants = new Map<string, Grant>();
   const gk = (c: string, o: string, g: string): string => `${c}|${o}|${g}`;
   const grantOut = (g: Grant): Grant => (d('grant-no-copies') ? g : { ...g, categories: [...g.categories] });
@@ -97,6 +127,7 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
   const circlesOf = (u: string): string[] => [...members.entries()].filter(([, m]) => m.has(u)).map(([id]) => id).sort();
   const drop = (id: string): void => {
     circles.delete(id);
+    if (!d('link-survives-circle-delete')) for (const [k, l] of links) if (l.circleId === id) links.delete(k);
     if (!d('grant-survives-circle-delete')) for (const [k, g] of grants) if (g.circleId === id) grants.delete(k);
     if (!d('delete-keeps-members')) members.delete(id);
     if (!d('delete-keeps-invitations')) for (const [k, i] of invitations) if (i.circleId === id) invitations.delete(k);
@@ -164,6 +195,7 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
       if (!d('no-last-owner-on-remove') && m.role === 'owner' && (d('racy-remove') ? only : owners(c) === 1)) return err(circlesError('LAST_OWNER', 'owner'));
       members.get(c)?.delete(u);
       dropGrants(c, u);
+      if (d('link-creator-leave-revokes')) for (const [k, l] of links) if (l.createdBy === u) links.delete(k);
       return ok(true);
     },
 
@@ -231,6 +263,56 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
       return ok(out(m));
     },
 
+    createJoinLink: async (record: JoinLinkRecord, limits: JoinLinkLimits, now: number): Promise<Result<JoinLink, CirclesError>> => {
+      if (!circles.has(record.circleId)) return err(nf('circle'));
+      if (!d('link-role-escalation') && record.role !== 'member' && record.role !== 'observer') return err(circlesError('INVALID_INPUT', 'role', { field: 'role' }));
+      if (!/^[0-9a-f]{64}$/.test(record.tokenHash)) return err(circlesError('INVALID_INPUT', 'hash', { field: 'tokenHash' }));
+      if (!Number.isInteger(record.maxUses) || record.maxUses < 1 || record.maxUses > 100) return err(circlesError('INVALID_INPUT', 'uses', { field: 'uses' }));
+      if (!d('link-dead-count')) for (const [k, l] of links) if (l.circleId === record.circleId && !linkLive(l, now)) links.delete(k);
+      if (links.has(record.id) || (!d('link-duplicate-hash') && linkByHash(record.tokenHash) !== undefined)) return err(circlesError('CONFLICT', 'exists'));
+      if ([...links.values()].filter((l) => l.circleId === record.circleId).length >= limits.maxLiveLinksPerCircle) return err(circlesError('LIMIT_REACHED', 'many links'));
+      const link: StoredLink = { id: record.id, circleId: record.circleId, tokenHash: record.tokenHash, role: record.role, label: record.label, createdBy: record.createdBy, createdAt: record.createdAt, expiresAt: record.expiresAt, maxUses: record.maxUses, uses: 0, approval: record.approval };
+      links.set(link.id, link);
+      return ok(linkOut(link));
+    },
+    getJoinLinkByHash: async (hash, now) => {
+      const l = linkByHash(hash);
+      return l === undefined || !linkLive(l, now) ? undefined : linkOut(l);
+    },
+    listJoinLinks: async (c, now, p) => page([...links.values()].filter((l) => l.circleId === c && (d('link-lists-dead') || linkLive(l, now))).sort((a, b) => cmp(a.id, b.id)).map(linkOut), (r) => r.id, p),
+    revokeJoinLink: async (id, c, now) => {
+      const l = links.get(id);
+      if (l === undefined || (!d('link-revoke-ignores-circle') && l.circleId !== c)) return false;
+      links.delete(id);
+      return linkLive(l, now);
+    },
+    joinWithLink: async (hash: string, userId: string, now: number, limits: AcceptLimits): Promise<Result<JoinOutcome, CirclesError>> => {
+      const l = linkByHash(hash);
+      if (l === undefined || !linkLive(l, now)) return err(d('link-miss-differs') && l !== undefined ? circlesError('NOT_FOUND', 'that link has expired') : nf('join link'));
+      if (l.approval && !d('link-ignores-approval')) return err(circlesError('CONFLICT', 'needs approval'));
+      const here = members.get(l.circleId) as Map<string, Membership>;
+      const existing = here.get(userId);
+      if (existing !== undefined) {
+        if (d('link-member-costs-a-use')) links.set(l.id, { ...l, uses: l.uses + 1 });
+        if (d('link-member-overwritten')) {
+          const next = { ...existing, role: l.role };
+          here.set(userId, next);
+          return ok({ membership: out(next), joined: false });
+        }
+        return ok({ membership: out(existing), joined: false });
+      }
+      const full = here.size >= limits.maxMembersPerCircle;
+      const crowded = circlesOf(userId).length >= limits.maxCirclesPerUser;
+      if (d('link-racy-join')) await Promise.resolve();
+      if (d('link-limit-consumes-use') && (full || crowded)) links.set(l.id, { ...l, uses: l.uses + 1 });
+      if (full && !d('link-ignores-member-cap')) return err(circlesError('LIMIT_REACHED', 'full'));
+      if (crowded && !d('link-ignores-circle-cap')) return err(circlesError('LIMIT_REACHED', 'busy'));
+      const membership: Membership = { circleId: l.circleId, userId, role: d('link-wrong-role') ? 'member' : l.role, joinedAt: now };
+      here.set(userId, membership);
+      if (!d('link-uses-not-counted') && !d('link-racy-join')) links.set(l.id, { ...l, uses: l.uses + 1 });
+      if (d('link-racy-join')) links.set(l.id, { ...l, uses: l.uses + 1 });
+      return ok({ membership: out(membership), joined: true });
+    },
     removeUser: async (userId, username): Promise<RemoveUserOutcome> => {
       const handedOver: string[] = [];
       const dissolved: string[] = [];

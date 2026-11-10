@@ -48,7 +48,9 @@ const codeOf = (fn: () => unknown): string | undefined => {
 };
 
 // The whole circle store contract: on a private in-memory database per test, and again on a real file per test.
-runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { dispose: (store) => (store as SqliteCircleStore).close() });
+// The `joinlinks` group waits for schema version 9 (R-023, T-318), which removes this restriction.
+const WITHOUT_JOIN_LINKS = ['core', 'grants'] as const;
+runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { dispose: (store) => (store as SqliteCircleStore).close(), groups: WITHOUT_JOIN_LINKS });
 {
   const homes = new Map<CircleStore, string>();
   describe('on a file', () => {
@@ -61,6 +63,7 @@ runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { d
       },
       { describe, it },
       {
+        groups: WITHOUT_JOIN_LINKS,
         dispose: (store) => {
           (store as SqliteCircleStore).close();
           const dir = homes.get(store);

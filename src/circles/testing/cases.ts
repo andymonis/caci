@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { CirclesError } from '../errors.js';
 import type { Result } from '../result.js';
-import type { CircleStore, Invitation, InvitationRecord, Membership } from '../store.js';
+import type { CircleStore, Invitation, InvitationRecord, JoinLinkRecord, Membership } from '../store.js';
 import type { CircleRole } from '../types.js';
 import type { CircleStoreCase } from './types.js';
 
@@ -704,6 +704,7 @@ export function circleStoreCases(): readonly CircleStoreCase[] {
       },
     },
     ...grantCases(),
+    ...joinLinkCases(),
   ];
 }
 
@@ -971,6 +972,294 @@ function grantCases(): readonly CircleStoreCase[] {
       await trio(other);
       await give(store, 1, 2, 3, ['a']);
       assert.equal(await grantOf(other, 1, 2, 3), undefined);
+    }),
+  ];
+}
+
+// ---- join links (R-023)
+
+const hashOf = (n: number | string): string => String(n).padStart(64, '0').replace(/[^0-9a-f]/g, 'a').slice(-64);
+const lid = (n: number | string): string => `j${pad(n)}`;
+const JOIN_LIMITS = { maxLiveLinksPerCircle: 20 };
+const joinRecord = (n: number | string, circle: number | string = 1, extra: Partial<JoinLinkRecord> = {}): JoinLinkRecord => ({ id: lid(n), circleId: cid(circle), tokenHash: hashOf(n), role: 'member', label: `Link ${n}`, createdBy: uid(1), createdAt: NOW, expiresAt: NOW + 7 * DAY, maxUses: 1, approval: false, ...extra });
+const makeLink = async (store: CircleStore, n: number | string, circle: number | string = 1, extra: Partial<JoinLinkRecord> = {}, now = NOW) => must(await store.createJoinLink(joinRecord(n, circle, extra), JOIN_LIMITS, now));
+const joinBy = (store: CircleStore, n: number | string, user: number, now = NOW + 10, limits: { maxCirclesPerUser: number; maxMembersPerCircle: number } = LIMITS) => store.joinWithLink(hashOf(n), uid(user), now, limits);
+const linksOf = (store: CircleStore, circle: number | string = 1, now = NOW + 10) => allPages((p) => store.listJoinLinks(cid(circle), now, p));
+const usesOf = async (store: CircleStore, n: number | string, circle: number | string = 1): Promise<number | undefined> => (await linksOf(store, circle)).find((l) => l.id === lid(n))?.uses;
+const MISS = 'no such join link';
+
+function joinLinkCases(): readonly CircleStoreCase[] {
+  const J = (name: string, run: CircleStoreCase['run']): CircleStoreCase => ({ name: `join links: ${name}`, group: 'joinlinks', run });
+  return [
+    J('a link round-trips every field with no uses yet, and never carries its hash', async (store) => {
+      await circleWith(store, 1);
+      const made = await makeLink(store, 1, 1, { role: 'observer', label: 'For the club', maxUses: 5, approval: true, createdAt: NOW + 3, expiresAt: NOW + 50 });
+      const expected = { id: lid(1), circleId: cid(1), role: 'observer', label: 'For the club', createdBy: uid(1), createdAt: NOW + 3, expiresAt: NOW + 50, maxUses: 5, uses: 0, approval: true };
+      assert.deepEqual(made, expected);
+      assert.deepEqual(await store.getJoinLinkByHash(hashOf(1), NOW + 4), expected);
+      assert.deepEqual(await linksOf(store), [expected]);
+      for (const shown of [made, await store.getJoinLinkByHash(hashOf(1), NOW + 4), ...(await linksOf(store))]) assert.equal(JSON.stringify(shown).includes(hashOf(1)), false);
+      assert.equal('tokenHash' in (made as object), false);
+    }),
+    J('a link for a missing circle is not found, and a link may offer only member or observer', async (store) => {
+      assert.equal(code(await store.createJoinLink(joinRecord(1, 9), JOIN_LIMITS, NOW)), 'NOT_FOUND');
+      await circleWith(store, 1);
+      for (const role of ['owner', 'manager', 'admin', '', 'OBSERVER'] as const) {
+        const refused = await store.createJoinLink(joinRecord(2, 1, { role: role as 'member' }), JOIN_LIMITS, NOW);
+        assert.equal(code(refused), 'INVALID_INPUT', role);
+        assert.equal((refused as { error: { field?: string } }).error.field, 'role');
+      }
+      assert.deepEqual(await linksOf(store), []);
+      assert.equal((await makeLink(store, 3, 1, { role: 'member' })).role, 'member');
+      assert.equal((await makeLink(store, 4, 1, { role: 'observer' })).role, 'observer');
+    }),
+    J('the number of uses must be a whole number from 1 to 100', async (store) => {
+      await circleWith(store, 1);
+      for (const maxUses of [0, -1, 101, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+        const refused = await store.createJoinLink(joinRecord(1, 1, { maxUses }), JOIN_LIMITS, NOW);
+        assert.equal(code(refused), 'INVALID_INPUT', String(maxUses));
+        assert.equal((refused as { error: { field?: string } }).error.field, 'uses');
+      }
+      assert.equal((await makeLink(store, 2, 1, { maxUses: 1 })).maxUses, 1);
+      assert.equal((await makeLink(store, 3, 1, { maxUses: 100 })).maxUses, 100);
+    }),
+    J('a hash must be 64 lower-case hex characters, and an id or hash cannot be used twice', async (store) => {
+      await circleWith(store, 1);
+      for (const tokenHash of ['', 'abc', 'A'.repeat(64), 'g'.repeat(64), 'a'.repeat(63), 'a'.repeat(65)]) assert.equal(code(await store.createJoinLink(joinRecord(1, 1, { tokenHash }), JOIN_LIMITS, NOW)), 'INVALID_INPUT', tokenHash);
+      await makeLink(store, 1);
+      assert.equal(code(await store.createJoinLink(joinRecord(1, 1, { tokenHash: hashOf(2) }), JOIN_LIMITS, NOW)), 'CONFLICT');
+      assert.equal(code(await store.createJoinLink({ ...joinRecord(2), tokenHash: hashOf(1) }, JOIN_LIMITS, NOW)), 'CONFLICT');
+      await circleWith(store, 2);
+      assert.equal(code(await store.createJoinLink({ ...joinRecord(3, 2), tokenHash: hashOf(1) }, JOIN_LIMITS, NOW)), 'CONFLICT');
+      assert.equal((await linksOf(store)).length, 1);
+    }),
+    J('a link is live while now is before its expiry, and a miss is the same whatever the reason', async (store) => {
+      await circleWith(store, 1, ['member', 'member']);
+      await makeLink(store, 1, 1, { expiresAt: NOW + 100 });
+      assert.notEqual(await store.getJoinLinkByHash(hashOf(1), NOW + 99), undefined);
+      assert.equal(await store.getJoinLinkByHash(hashOf(1), NOW + 100), undefined);
+      assert.equal(await store.getJoinLinkByHash(hashOf(1), NOW + 5000), undefined);
+      assert.equal(await store.getJoinLinkByHash(hashOf('nobody'), NOW), undefined);
+      assert.equal(await store.getJoinLinkByHash('', NOW), undefined);
+      assert.deepEqual(await linksOf(store, 1, NOW + 100), []);
+    }),
+    J('every kind of miss when joining is the same not-found answer', async (store) => {
+      await circleWith(store, 1);
+      await circleWith(store, 2);
+      await makeLink(store, 1, 1, { expiresAt: NOW + 100 }); // expires
+      await makeLink(store, 2, 1); // revoked below
+      await makeLink(store, 3, 1); // used up below
+      await makeLink(store, 4, 2); // circle deleted below
+      assert.equal(await store.revokeJoinLink(lid(2), cid(1), NOW), true);
+      must(await joinBy(store, 3, 20, NOW + 1));
+      await store.deleteCircle(cid(2));
+      const answers = [await joinBy(store, 'unknown', 21, NOW + 200), await joinBy(store, 1, 21, NOW + 200), await joinBy(store, 2, 21, NOW + 200), await joinBy(store, 3, 21, NOW + 200), await joinBy(store, 4, 21, NOW + 200)];
+      for (const a of answers) {
+        assert.equal(code(a), 'NOT_FOUND');
+        assert.deepEqual(a, answers[0]);
+      }
+      assert.equal((answers[0] as { error: { message: string } }).error.message, MISS);
+      assert.equal(await store.membershipOf(cid(1), uid(21)), undefined);
+    }),
+    J('listing shows only live links of that circle, by id, in pages, never another circle\'s', async (store) => {
+      await circleWith(store, 1);
+      await circleWith(store, 2);
+      for (const n of [5, 3, 9, 1, 7]) await makeLink(store, n);
+      await makeLink(store, 20, 2);
+      await makeLink(store, 21, 1, { expiresAt: NOW + 5 });
+      assert.deepEqual((await linksOf(store)).map((l) => l.id), [1, 3, 5, 7, 9].map(lid));
+      assert.deepEqual((await linksOf(store, 2)).map((l) => l.id), [lid(20)]);
+      assert.deepEqual(await linksOf(store, 9), []);
+      const first = await store.listJoinLinks(cid(1), NOW + 10, { limit: 5, cursor: null });
+      assert.equal(first.nextCursor, null);
+      assert.equal(first.items.length, 5);
+    }),
+    J('revoking removes a live link of that circle only, and says whether there was one', async (store) => {
+      await circleWith(store, 1);
+      await circleWith(store, 2);
+      await makeLink(store, 1);
+      await makeLink(store, 2, 2);
+      assert.equal(await store.revokeJoinLink(lid(1), cid(2), NOW), false);
+      assert.notEqual(await store.getJoinLinkByHash(hashOf(1), NOW), undefined);
+      assert.equal(await store.revokeJoinLink(lid(1), cid(1), NOW), true);
+      assert.equal(await store.revokeJoinLink(lid(1), cid(1), NOW), false);
+      assert.equal(await store.getJoinLinkByHash(hashOf(1), NOW), undefined);
+      assert.equal(code(await joinBy(store, 1, 5)), 'NOT_FOUND');
+      assert.notEqual(await store.getJoinLinkByHash(hashOf(2), NOW), undefined);
+      await makeLink(store, 3, 1, { expiresAt: NOW + 5 });
+      assert.equal(await store.revokeJoinLink(lid(3), cid(1), NOW + 5), false);
+    }),
+    J('the circle may have only so many live links, and dead ones never count and are cleared', async (store) => {
+      await circleWith(store, 1);
+      const two = { maxLiveLinksPerCircle: 2 };
+      must(await store.createJoinLink(joinRecord(1, 1, { expiresAt: NOW + 50 }), two, NOW));
+      must(await store.createJoinLink(joinRecord(2), two, NOW));
+      assert.equal(code(await store.createJoinLink(joinRecord(3), two, NOW)), 'LIMIT_REACHED');
+      assert.equal((await linksOf(store)).length, 2);
+      must(await store.createJoinLink(joinRecord(3), two, NOW + 60)); // link 1 has expired and does not count
+      assert.deepEqual((await linksOf(store, 1, NOW + 60)).map((l) => l.id), [lid(2), lid(3)]);
+      must(await joinBy(store, 2, 7, NOW + 61)); // link 2 is used up and does not count either
+      must(await store.createJoinLink(joinRecord(4), two, NOW + 62));
+      assert.deepEqual((await linksOf(store, 1, NOW + 62)).map((l) => l.id), [lid(3), lid(4)]);
+      await circleWith(store, 2);
+      must(await store.createJoinLink(joinRecord(5, 2), two, NOW)); // another circle has its own count
+    }),
+    J('joining adds a member at the link\'s role at that time, and counts one use', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1, 1, { role: 'observer', maxUses: 3 });
+      const outcome = must(await joinBy(store, 1, 5, NOW + 77));
+      assert.equal(outcome.joined, true);
+      assert.deepEqual(outcome.membership, { circleId: cid(1), userId: uid(5), role: 'observer', joinedAt: NOW + 77 });
+      assert.deepEqual(await store.membershipOf(cid(1), uid(5)), outcome.membership);
+      assert.equal(await usesOf(store, 1), 1);
+      await makeLink(store, 2, 1, { role: 'member' });
+      assert.equal(must(await joinBy(store, 2, 6)).membership.role, 'member');
+    }),
+    J('a link that needs approval adds nobody and counts nothing when used to join directly', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1, 1, { approval: true, maxUses: 2 });
+      const refused = await joinBy(store, 1, 5);
+      assert.equal(code(refused), 'CONFLICT');
+      assert.equal(await store.membershipOf(cid(1), uid(5)), undefined);
+      assert.equal(await usesOf(store, 1), 0);
+    }),
+    J('someone already in keeps their role and costs no use, even through an observer link', async (store) => {
+      await circleWith(store, 1, ['manager']);
+      await makeLink(store, 1, 1, { role: 'observer' });
+      for (const user of [1, 2]) {
+        const outcome = must(await joinBy(store, 1, user));
+        assert.equal(outcome.joined, false);
+      }
+      assert.equal(await roleOf(store, 1, 1), 'owner');
+      assert.equal(await roleOf(store, 1, 2), 'manager');
+      assert.equal(await usesOf(store, 1), 0);
+      assert.equal(must(await joinBy(store, 1, 5)).joined, true); // the one use is still there
+    }),
+    J('a one-use link makes one member; the next person gets the same miss as for a made-up link', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1);
+      must(await joinBy(store, 1, 5));
+      const second = await joinBy(store, 1, 6);
+      assert.equal(code(second), 'NOT_FOUND');
+      assert.deepEqual(second, await joinBy(store, 'unknown', 6));
+      assert.equal(await store.membershipOf(cid(1), uid(6)), undefined);
+      assert.equal(await store.getJoinLinkByHash(hashOf(1), NOW + 10), undefined);
+    }),
+    J('a link with several uses allows exactly that many different people', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1, 1, { maxUses: 3 });
+      for (const user of [5, 6, 7]) must(await joinBy(store, 1, user));
+      assert.equal(code(await joinBy(store, 1, 8)), 'NOT_FOUND');
+      assert.equal((await rolesOf(store, 1)).length, 4);
+    }),
+    J('a link is not usable at its expiry time, and is at the moment before', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1, 1, { expiresAt: NOW + 100, maxUses: 2 });
+      must(await joinBy(store, 1, 5, NOW + 99));
+      assert.equal(code(await joinBy(store, 1, 6, NOW + 100)), 'NOT_FOUND');
+    }),
+    J('a full circle or a person in the most circles allowed is a limit, and no use is consumed', async (store) => {
+      await circleWith(store, 1, ['member']);
+      await makeLink(store, 1, 1, { maxUses: 2 });
+      const tight = { maxCirclesPerUser: 20, maxMembersPerCircle: 2 };
+      assert.equal(code(await joinBy(store, 1, 5, NOW + 10, tight)), 'LIMIT_REACHED');
+      assert.equal(await store.membershipOf(cid(1), uid(5)), undefined);
+      assert.equal(await usesOf(store, 1), 0);
+      assert.equal(must(await joinBy(store, 1, 2, NOW + 10, tight)).joined, false); // already in a full circle: fine
+      assert.equal(await usesOf(store, 1), 0);
+      await circleWith(store, 2);
+      await circleWith(store, 3);
+      await store.createJoinLink(joinRecord(9, 3), JOIN_LIMITS, NOW);
+      const crowded = { maxCirclesPerUser: 1, maxMembersPerCircle: 50 };
+      assert.equal(code(await joinBy(store, 9, 1, NOW + 10, { maxCirclesPerUser: 2, maxMembersPerCircle: 50 })), undefined); // user 1 is in circles 1, 2, 3 already
+      await makeLink(store, 10, 1, { maxUses: 1 });
+      assert.equal(code(await joinBy(store, 10, 7, NOW + 10, crowded)), undefined); // user 7 has no circle yet, so one is fine
+      await circleWith(store, 4);
+      await makeLink(store, 11, 4);
+      assert.equal(code(await joinBy(store, 11, 7, NOW + 10, crowded)), 'LIMIT_REACHED');
+      assert.equal(await usesOf(store, 11, 4), 0);
+      assert.equal(await store.membershipOf(cid(4), uid(7)), undefined);
+    }),
+    J('eight people joining at once by a one-use link make exactly one member', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1);
+      const results = await Promise.all([10, 11, 12, 13, 14, 15, 16, 17].map((user) => joinBy(store, 1, user)));
+      assert.equal(results.filter((r) => r.ok).length, 1);
+      assert.equal(results.filter((r) => code(r) === 'NOT_FOUND').length, 7);
+      assert.equal((await rolesOf(store, 1)).length, 2);
+      assert.equal(await store.getJoinLinkByHash(hashOf(1), NOW + 10), undefined);
+    }),
+    J('eight people at once by a three-use link make exactly three members', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1, 1, { maxUses: 3 });
+      const results = await Promise.all([10, 11, 12, 13, 14, 15, 16, 17].map((user) => joinBy(store, 1, user)));
+      assert.equal(results.filter((r) => r.ok).length, 3);
+      assert.equal((await rolesOf(store, 1)).length, 4);
+    }),
+    J('the same person joining six times at once is one member and one use', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1, 1, { maxUses: 5 });
+      const results = await Promise.all([0, 1, 2, 3, 4, 5].map(() => joinBy(store, 1, 5)));
+      assert.equal(results.filter((r) => r.ok && r.value.joined).length, 1);
+      assert.equal(results.filter((r) => r.ok).length, 6);
+      assert.equal(await usesOf(store, 1), 1);
+    }),
+    J('five people at once for the last place of a circle fill it once, and only that join is counted', async (store) => {
+      await circleWith(store, 1, ['member']);
+      await makeLink(store, 1, 1, { maxUses: 10 });
+      const results = await Promise.all([10, 11, 12, 13, 14].map((user) => joinBy(store, 1, user, NOW + 10, { maxCirclesPerUser: 20, maxMembersPerCircle: 3 })));
+      assert.equal(results.filter((r) => r.ok).length, 1);
+      assert.equal(results.filter((r) => code(r) === 'LIMIT_REACHED').length, 4);
+      assert.equal((await rolesOf(store, 1)).length, 3);
+      assert.equal(await usesOf(store, 1), 1);
+    }),
+    J('deleting the circle removes its links, and the link then misses', async (store) => {
+      await circleWith(store, 1);
+      await circleWith(store, 2);
+      await makeLink(store, 1, 1, { maxUses: 5 });
+      await makeLink(store, 2, 2);
+      await store.deleteCircle(cid(1));
+      assert.equal(await store.getJoinLinkByHash(hashOf(1), NOW), undefined);
+      assert.deepEqual(await linksOf(store, 1), []);
+      assert.equal(code(await joinBy(store, 1, 5)), 'NOT_FOUND');
+      assert.notEqual(await store.getJoinLinkByHash(hashOf(2), NOW), undefined);
+      await circleWith(store, 1); // the same id again is a new circle with no links
+      assert.deepEqual(await linksOf(store, 1), []);
+      assert.equal(await store.getJoinLinkByHash(hashOf(1), NOW), undefined);
+    }),
+    J('the creator leaving, being removed or their account going does not revoke their links', async (store) => {
+      await circleWith(store, 1, ['manager', 'owner']);
+      await makeLink(store, 1, 1, { createdBy: uid(2), maxUses: 5 });
+      must(await store.removeMember(cid(1), uid(2)));
+      assert.equal(must(await joinBy(store, 1, 5)).joined, true);
+      await makeLink(store, 2, 1, { createdBy: uid(3), maxUses: 5 });
+      await store.removeUser(uid(3), 'user3');
+      assert.equal(must(await joinBy(store, 2, 6)).joined, true);
+      assert.equal((await linksOf(store)).length, 2);
+    }),
+    J('what the store gives back is a copy, and changing it changes nothing', async (store) => {
+      await circleWith(store, 1);
+      const made = await makeLink(store, 1, 1, { maxUses: 2 });
+      (made as { label: string }).label = 'changed';
+      (made as { uses: number }).uses = 99;
+      const found = (await store.getJoinLinkByHash(hashOf(1), NOW)) as { label: string; uses: number };
+      assert.equal(found.label, 'Link 1');
+      assert.equal(found.uses, 0);
+      found.uses = 50;
+      const listed = await linksOf(store);
+      (listed[0] as { uses: number }).uses = 70;
+      assert.equal(await usesOf(store, 1), 0);
+      const joined = must(await joinBy(store, 1, 5));
+      (joined.membership as { role: string }).role = 'owner';
+      assert.equal(await roleOf(store, 1, 5), 'member');
+    }),
+    J('two stores share no join links', async (store, makeAnother) => {
+      const other = await makeAnother();
+      await circleWith(store, 1);
+      await circleWith(other, 1);
+      await makeLink(store, 1);
+      assert.equal(await other.getJoinLinkByHash(hashOf(1), NOW), undefined);
+      assert.equal(code(await joinBy(other, 1, 5)), 'NOT_FOUND');
     }),
   ];
 }

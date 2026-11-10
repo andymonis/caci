@@ -364,6 +364,12 @@ export function createSqliteCircleStore(options: SqliteCircleStoreOptions = {}):
         grantOf,
       ),
     withdrawGrant: async (circleId, ownerId, granteeId) => db.run('DELETE FROM circle_grants WHERE circle_id = ? AND owner_id = ? AND grantee_id = ?', circleId, ownerId, granteeId) > 0,
+    // Join links (R-023) arrive with schema version 9 (T-318); until then the database keeps none.
+    createJoinLink: async () => err(circlesError('STORAGE_ERROR', 'join links are not stored by this database yet')),
+    getJoinLinkByHash: async () => undefined,
+    listJoinLinks: async () => ({ items: [], nextCursor: null }),
+    revokeJoinLink: async () => false,
+    joinWithLink: async () => err(circlesError('STORAGE_ERROR', 'join links are not stored by this database yet')),
     close: () => db.close(),
   };
 }

@@ -70,6 +70,52 @@ export interface InviteLimits {
   readonly maxOpenInvitationsPerCircle: number;
 }
 
+/** What a join link may offer: never `owner` or `manager` (R-023 D4), whoever makes it. */
+export type JoinLinkRole = 'member' | 'observer';
+
+/**
+ * What `createJoinLink` is given (R-023). The store never sees the token, only its SHA-256 in lower-case hex (`tokenHash`),
+ * and never returns it: lookups go by hash and nothing the store gives back carries it.
+ */
+export interface JoinLinkRecord {
+  readonly id: string;
+  readonly circleId: string;
+  readonly tokenHash: string;
+  readonly role: JoinLinkRole;
+  /** The creator's note, kept as given. */
+  readonly label: string;
+  readonly createdBy: string;
+  readonly createdAt: number;
+  /** Live while `now < expiresAt`. */
+  readonly expiresAt: number;
+  /** 1 to 100: how many joins (or, with approval, requests) the link allows. */
+  readonly maxUses: number;
+  /** With approval on, a use makes a request for an owner or manager to approve; with it off, a use joins at once. */
+  readonly approval: boolean;
+}
+/** A link as the store gives it back: the record without its hash, and how many uses have been counted. */
+export interface JoinLink {
+  readonly id: string;
+  readonly circleId: string;
+  readonly role: JoinLinkRole;
+  readonly label: string;
+  readonly createdBy: string;
+  readonly createdAt: number;
+  readonly expiresAt: number;
+  readonly maxUses: number;
+  readonly uses: number;
+  readonly approval: boolean;
+}
+export interface JoinLinkLimits {
+  /** The most live links one circle may have; dead ones (expired or used up) never count and are removed on the next creation. */
+  readonly maxLiveLinksPerCircle: number;
+}
+/** What joining by a link did: the membership, and whether this call made it (`false` for someone already in, who keeps their role and costs no use). */
+export interface JoinOutcome {
+  readonly membership: Membership;
+  readonly joined: boolean;
+}
+
 export interface GrantLimits {
   /** The most categories one grant may name. */
   readonly maxCategoriesPerGrant: number;
@@ -155,6 +201,26 @@ export interface CircleStore {
    * invitation open. Someone already in the circle keeps their role and the invitation is closed.
    */
   acceptInvitation(invitationId: string, userId: string, username: string, now: number, limits: AcceptLimits): Promise<Result<Membership, CirclesError>>;
+
+  /**
+   * Makes a join link (R-023). `NOT_FOUND` for a missing circle; `INVALID_INPUT` for a role other than `member` or `observer`
+   * (field `role`), a `tokenHash` that is not 64 lower-case hex characters (field `tokenHash`) or `maxUses` outside 1 to 100 (field `uses`);
+   * `CONFLICT` for an id or hash already used; `LIMIT_REACHED` at `maxLiveLinksPerCircle` live links. Removes the circle's dead links first.
+   */
+  createJoinLink(record: JoinLinkRecord, limits: JoinLinkLimits, now: number): Promise<Result<JoinLink, CirclesError>>;
+  /** The live link with this hash (not expired, uses left, circle there), else `undefined`: every kind of miss is the same. Never carries the hash. */
+  getJoinLinkByHash(tokenHash: string, now: number): Promise<JoinLink | undefined>;
+  /** A circle's live links, by link id; nothing for a missing circle. */
+  listJoinLinks(circleId: string, now: number, page: CirclePage): Promise<Listing<JoinLink>>;
+  /** Removes a live link of this circle. `false` if there is none (wrong circle, gone, expired or used up). */
+  revokeJoinLink(linkId: string, circleId: string, now: number): Promise<boolean>;
+  /**
+   * Joins by a link that needs no approval, atomically: checks the link is live, then that the person is not already in the circle
+   * (then `joined: false`, their role unchanged, no use counted), then the circle's member cap and the person's circle cap
+   * (`LIMIT_REACHED`, nothing counted), then adds the membership at the link's role and counts the use.
+   * Every miss is the same `NOT_FOUND`. A link that needs approval is `CONFLICT` and adds nothing (approval cannot be bypassed here).
+   */
+  joinWithLink(tokenHash: string, userId: string, now: number, limits: AcceptLimits): Promise<Result<JoinOutcome, CirclesError>>;
 
   /**
    * A person is gone: remove them from every circle, passing a circle they solely owned to its
