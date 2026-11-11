@@ -340,3 +340,81 @@ export function createJoinLinksSession({ client, onSignedOut, onChanged }) {
     },
   });
 }
+
+/**
+ * A person's own waiting requests (the Invitations screen): nothing is requested until `open`; one page of 100 holds all anyone can
+ * have in practice (each circle holds at most 20 waiting, and a person asks into few). A service with join links off says so.
+ */
+export function createMyRequestsSession({ client, onSignedOut }) {
+  if (!client || typeof client.myRequests !== 'function') throw new TypeError('createMyRequestsSession needs a join client');
+  let epoch = 0;
+  let busy = false;
+  let status = 'idle'; // idle | loading | loaded | unavailable | error
+  let message = null;
+  let items = [];
+  const listeners = new Set();
+  const snapshot = () => Object.freeze({ status, message, items: Object.freeze([...items]), busy });
+  function notify() {
+    const view = snapshot();
+    for (const listener of [...listeners]) {
+      try {
+        listener(view);
+      } catch {
+        // a broken listener must not stop the others
+      }
+    }
+  }
+  async function load() {
+    if (busy) return BUSY;
+    busy = true;
+    status = 'loading';
+    message = null;
+    const token = epoch;
+    notify();
+    try {
+      const r = await client.myRequests({ limit: PAGE });
+      if (token !== epoch) return DROPPED;
+      if (!r.ok) {
+        items = [];
+        message = r.error.message;
+        status = r.error.kind === 'unavailable' ? 'unavailable' : 'error';
+        if (r.error.kind === 'signed-out' && typeof onSignedOut === 'function') {
+          try {
+            onSignedOut();
+          } catch {
+            // ignored
+          }
+        }
+        return failed(r.error);
+      }
+      items = [...r.value.items];
+      status = 'loaded';
+      return { ok: true };
+    } finally {
+      if (token === epoch) busy = false;
+      notify();
+    }
+  }
+  return Object.freeze({
+    getState: snapshot,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    /** Loads (or reloads) the person's waiting requests. */
+    open() {
+      epoch++;
+      busy = false;
+      return load();
+    },
+    /** Signed out, or off this screen: forget everything. */
+    reset() {
+      epoch++;
+      busy = false;
+      status = 'idle';
+      message = null;
+      items = [];
+      notify();
+    },
+  });
+}

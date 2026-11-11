@@ -151,3 +151,53 @@ export function sharedOwnerWords(person) {
     readonly: `Read-only. You can see only the categories ${who} chose to share with you, and the items filed under them.`,
   });
 }
+
+// Join links (R-023): the words for the Join links and Waiting to join parts of a circle's screen, and for a person's own waiting
+// requests on the Invitations screen.
+
+export const JOIN_NOTE = "A join link lets anyone you give it to ask to join this circle, or join at once if you turn approval off. Whoever joins can then read everything this circle holds and see everyone's username and display name. A link is shown only once, when you make it, and anyone who has it can pass it on: give it only to people you would let in.";
+export const JOIN_NO_LINKS = 'There are no live join links.';
+export const JOIN_NO_REQUESTS = 'Nobody is waiting to join.';
+export const JOIN_CREATED_WORDS = 'Copy this link now and send it to the people you want to join. It is not shown again and cannot be recovered: if you lose it, make another.';
+export const MY_REQUESTS_NOTE = 'When you ask to join a circle with a link that needs approval, an owner or manager of that circle decides. Your waiting requests are listed here.';
+export const MY_REQUESTS_NONE = 'You have no requests waiting.';
+
+const plural = (n, one, many) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
+const personName = (person) => (person && typeof person.displayName === 'string' && person.displayName !== '' ? person.displayName : 'Someone');
+
+/** The address a person opens to use a link: the user app's join screen, the token in the part of the address a server never sees. */
+export const joinUrl = (origin, token) => `${typeof origin === 'string' ? origin : ''}/#/join/${token}`;
+
+/** What a row of a circle's live links says. */
+export function joinLinkRow(link) {
+  const ends = formatDate(link.expiresAt);
+  return Object.freeze({
+    title: link.label,
+    meta: [`Offers: ${roleName(link.role)}`, `${link.uses} of ${plural(link.maxUses, 'use', 'uses')} used`, link.approval ? 'each person needs approval' : 'joins at once', ends === '' ? '' : `ends ${ends}`].filter((part) => part !== '').join(' · '),
+    revokeLabel: `Withdraw the link ${link.label}`,
+    askText: `Withdraw the link "${link.label}"? It stops working at once. Requests already made stay waiting.`,
+  });
+}
+
+/** What a row of the waiting requests says: who by display name only, the role asked, and when it was made and lapses. */
+export function joinRequestRow(request) {
+  const made = formatDate(request.createdAt);
+  const lapses = formatDate(request.expiresAt);
+  const name = personName(request.person);
+  return Object.freeze({
+    title: name,
+    meta: [`Wants to join as: ${roleName(request.role)}`, made === '' ? '' : `asked ${made}`, lapses === '' ? '' : `lapses ${lapses}`].filter((part) => part !== '').join(' · '),
+    approveLabel: `Approve ${name}`,
+    declineLabel: `Decline ${name}`,
+  });
+}
+
+/** What a row of a person's own waiting requests says: the circle by name, the role asked, and when it lapses. */
+export function myRequestRow(request) {
+  const made = formatDate(request.createdAt);
+  const lapses = formatDate(request.expiresAt);
+  return Object.freeze({
+    title: request.circle.name,
+    meta: [`You asked to join as: ${roleName(request.role)}`, made === '' ? '' : `asked ${made}`, lapses === '' ? '' : `lapses ${lapses}`].filter((part) => part !== '').join(' · '),
+  });
+}

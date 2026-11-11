@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { circleInvitationRow, circleRow, countText, DELETE_TEXT, LEAVE_TEXT, memberRow, EMPTY_CIRCLES, EMPTY_INVITATIONS, formatDate, headingIdFor, invitationRow, navFor, peopleText, roleName, titleFor } from './circles-view.js';
+import { circleInvitationRow, circleRow, countText, DELETE_TEXT, LEAVE_TEXT, memberRow, EMPTY_CIRCLES, EMPTY_INVITATIONS, formatDate, headingIdFor, invitationRow, navFor, peopleText, roleName, titleFor, JOIN_CREATED_WORDS, JOIN_NO_LINKS, JOIN_NO_REQUESTS, JOIN_NOTE, joinLinkRow, joinRequestRow, joinUrl, MY_REQUESTS_NONE, MY_REQUESTS_NOTE, myRequestRow } from './circles-view.js';
 import { ROLE_WORDS } from './permissions.js';
 
 const C = 'c0123456789abcdef';
@@ -164,3 +164,49 @@ describe('the words for what is shared with you', () => {
   });
 });
 
+
+describe('join links (R-023)', () => {
+  const link = { id: 'j0000000000000001', role: 'member', label: 'Club chat', createdBy: { userId: 'u1' }, createdAt: Date.UTC(2026, 0, 1), expiresAt: Date.UTC(2026, 0, 8), maxUses: 3, uses: 1, approval: true };
+
+  it('the sentences a person must not miss are there', () => {
+    expect(JOIN_NOTE).toContain('A link is shown only once');
+    expect(JOIN_NOTE).toContain('anyone who has it can pass it on');
+    expect(JOIN_NOTE).toContain('read everything this circle holds');
+    expect(JOIN_CREATED_WORDS).toContain('It is not shown again and cannot be recovered');
+    expect(JOIN_NO_LINKS).toBe('There are no live join links.');
+    expect(JOIN_NO_REQUESTS).toBe('Nobody is waiting to join.');
+    expect(MY_REQUESTS_NOTE).toContain('an owner or manager of that circle decides');
+    expect(MY_REQUESTS_NONE).toBe('You have no requests waiting.');
+  });
+
+  it('the address is the user app\'s join screen with the token after the #, and no origin gives a plain path', () => {
+    expect(joinUrl('https://caci.example', 'cjoin_x')).toBe('https://caci.example/#/join/cjoin_x');
+    expect(joinUrl('', 'cjoin_x')).toBe('/#/join/cjoin_x');
+    for (const odd of [undefined, null, 5, {}]) expect(joinUrl(odd, 'cjoin_x')).toBe('/#/join/cjoin_x');
+  });
+
+  it('a link row says what it offers, how much is used, whether approval is needed and when it ends', () => {
+    expect(joinLinkRow(link)).toEqual({
+      title: 'Club chat',
+      meta: 'Offers: Member · 1 of 3 uses used · each person needs approval · ends 2026-01-08',
+      revokeLabel: 'Withdraw the link Club chat',
+      askText: 'Withdraw the link "Club chat"? It stops working at once. Requests already made stay waiting.',
+    });
+    expect(joinLinkRow({ ...link, role: 'observer', approval: false, maxUses: 1, uses: 0 }).meta).toBe('Offers: Observer · 0 of 1 use used · joins at once · ends 2026-01-08');
+    expect(joinLinkRow({ ...link, expiresAt: 'x' }).meta).toBe('Offers: Member · 1 of 3 uses used · each person needs approval');
+    expect(Object.isFrozen(joinLinkRow(link))).toBe(true);
+  });
+
+  it('a request row names the person by display name, the role asked and the dates', () => {
+    const request = { id: 'r0000000000000001', person: { displayName: 'Eve E' }, role: 'observer', createdAt: Date.UTC(2026, 0, 2), expiresAt: Date.UTC(2026, 0, 9) };
+    expect(joinRequestRow(request)).toEqual({ title: 'Eve E', meta: 'Wants to join as: Observer · asked 2026-01-02 · lapses 2026-01-09', approveLabel: 'Approve Eve E', declineLabel: 'Decline Eve E' });
+    for (const person of [{}, { displayName: '' }, null, undefined]) expect(joinRequestRow({ ...request, person }).title).toBe('Someone');
+    expect(joinRequestRow({ ...request, createdAt: 'x', expiresAt: -1 }).meta).toBe('Wants to join as: Observer');
+  });
+
+  it('a person\'s own request names the circle and the role, and when it lapses', () => {
+    const request = { id: 'r0000000000000001', circle: { name: 'Team' }, role: 'member', createdAt: Date.UTC(2026, 0, 2), expiresAt: Date.UTC(2026, 0, 9) };
+    expect(myRequestRow(request)).toEqual({ title: 'Team', meta: 'You asked to join as: Member · asked 2026-01-02 · lapses 2026-01-09' });
+    expect(myRequestRow({ ...request, createdAt: 'x', expiresAt: 'y' }).meta).toBe('You asked to join as: Member');
+  });
+});

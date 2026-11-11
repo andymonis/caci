@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkJoinLink, CREATED_NOTICE, createJoinLinksSession } from './join-links-session.js';
+import { checkJoinLink, CREATED_NOTICE, createJoinLinksSession, createMyRequestsSession } from './join-links-session.js';
 
 const C = 'c0123456789abcdef';
 const U = 'u0123456789abcdef';
@@ -431,5 +431,99 @@ describe('one at a time, late answers, sign-out', () => {
     f.fails.listLinks = { ok: false, error: { kind: 'signed-out', message: 'Your session has ended.' } };
     await s.open(C);
     expect(out).toBe(1);
+  });
+});
+
+describe('a person\'s own waiting requests', () => {
+  const mine = (n) => ({ id: `r${String(n).padStart(16, '0')}`, circle: { name: `Circle ${n}` }, role: 'member', createdAt: 1, expiresAt: 2 });
+  const clientOf = (answer) => ({ calls: [], myRequests(...a) { this.calls.push(a); return Promise.resolve(typeof answer === 'function' ? answer() : answer); } });
+
+  it('asks nothing until opened, then loads one page of 100', async () => {
+    const client = clientOf(page([mine(1), mine(2)]));
+    const s = createMyRequestsSession({ client });
+    expect(client.calls).toEqual([]);
+    expect(s.getState()).toMatchObject({ status: 'idle', items: [], message: null, busy: false });
+    expect(await s.open()).toEqual({ ok: true });
+    expect(client.calls).toEqual([[{ limit: 100 }]]);
+    expect(s.getState()).toMatchObject({ status: 'loaded', busy: false });
+    expect(s.getState().items).toHaveLength(2);
+    expect(Object.isFrozen(s.getState()) && Object.isFrozen(s.getState().items)).toBe(true);
+  });
+
+  it('says when join links are off, and shows the service\'s words on any other failure, with nothing listed', async () => {
+    for (const [error, status] of [[{ kind: 'unavailable', message: 'Not switched on.' }, 'unavailable'], [{ kind: 'server', message: 'Broke.' }, 'error']]) {
+      const s = createMyRequestsSession({ client: clientOf({ ok: false, error }) });
+      expect((await s.open()).ok).toBe(false);
+      expect(s.getState()).toMatchObject({ status, message: error.message, items: [] });
+    }
+  });
+
+  it('a reload that fails does not leave the old list', async () => {
+    let answer = page([mine(1)]);
+    const s = createMyRequestsSession({ client: clientOf(() => answer) });
+    await s.open();
+    answer = { ok: false, error: { kind: 'server', message: 'Broke.' } };
+    await s.open();
+    expect(s.getState()).toMatchObject({ status: 'error', items: [] });
+  });
+
+  it('one at a time; a second open while one is out is refused as busy and the answer after a reset is dropped', async () => {
+    let release;
+    const hold = new Promise((r) => (release = r));
+    const client = clientOf(() => hold.then(() => page([mine(1)])));
+    const s = createMyRequestsSession({ client });
+    const first = s.open();
+    expect(s.getState()).toMatchObject({ status: 'loading', busy: true });
+    s.reset();
+    release();
+    expect(await first).toMatchObject({ ok: false, kind: 'dropped' });
+    expect(s.getState()).toMatchObject({ status: 'idle', items: [], busy: false });
+  });
+
+  it('asking again while an earlier ask is out starts over, and only the newer answer counts', async () => {
+    let release;
+    const hold = new Promise((r) => (release = r));
+    let n = 0;
+    const client = clientOf(() => (++n === 1 ? hold.then(() => page([mine(9)])) : page([mine(1)])));
+    const s = createMyRequestsSession({ client });
+    const first = s.open();
+    expect(await s.open()).toEqual({ ok: true });
+    release();
+    expect(await first).toMatchObject({ kind: 'dropped' });
+    expect(s.getState().items.map((i) => i.circle.name)).toEqual(['Circle 1']);
+    expect(s.getState().busy).toBe(false);
+  });
+
+  it('a late answer after a reset does not clear a newer request\'s busy mark, and sign-out is reported once', async () => {
+    let release;
+    const hold = new Promise((r) => (release = r));
+    let n = 0;
+    const client = clientOf(() => (++n === 1 ? hold.then(() => page([])) : new Promise(() => {})));
+    const s = createMyRequestsSession({ client });
+    const old = s.open();
+    s.reset();
+    void s.open();
+    expect(s.getState().busy).toBe(true);
+    release();
+    await old;
+    expect(s.getState().busy).toBe(true);
+    let out = 0;
+    const gone = createMyRequestsSession({ client: clientOf({ ok: false, error: { kind: 'signed-out', message: 'x' } }), onSignedOut: () => out++ });
+    await gone.open();
+    expect(out).toBe(1);
+  });
+
+  it('a broken listener does not matter, and reset forgets', async () => {
+    const s = createMyRequestsSession({ client: clientOf(page([mine(1)])) });
+    let heard = 0;
+    s.subscribe(() => {
+      throw new Error('broken');
+    });
+    const off = s.subscribe(() => heard++);
+    await s.open();
+    expect(heard).toBeGreaterThan(0);
+    off();
+    s.reset();
+    expect(s.getState()).toMatchObject({ status: 'idle', items: [] });
   });
 });

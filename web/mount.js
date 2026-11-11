@@ -5,7 +5,9 @@
 
 import { createApiClient } from './api-client.js';
 import { mountBrainPage } from './brain-page.js';
+import { createJoinClient } from './join-client.js';
 import { createLedgerClient } from './ledger-client.js';
+import { mountJoinLinksPage, mountMyRequestsPage } from './join-links-page.js';
 import { mountLedgerPage } from './ledger-page.js';
 import { mountCapturePage } from './capture-page.js';
 import { mountStatusPage } from './status-page.js';
@@ -51,6 +53,11 @@ export function mount(document, fetchFn, env = NO_ENV) {
   const sharingClient = createSharingClient({ fetchFn });
   const sharePage = mountSharePage(document, { sharing: sharingClient, circles: circlesClient, notes: notesClient, onSignedOut: recheck });
   const sharedPage = mountSharedPage(document, { client: sharingClient, onSignedOut: recheck });
+  const joinClient = createJoinClient({ fetchFn });
+  const joinPage = mountJoinLinksPage(document, { client: joinClient, onSignedOut: recheck, onChanged: () => void circlePage.session.refresh(), origin: typeof env.getOrigin === 'function' ? env.getOrigin() : '' });
+  const myRequestsPage = mountMyRequestsPage(document, { client: joinClient, onSignedOut: recheck });
+  // owners and managers see the join links (a hint from the circle's own state: the service decides)
+  circlePage.session.subscribe((state) => joinPage.setAllowed(state.status === 'loaded' && state.controls.invite === true));
   let shown = null; // the address of the signed-in screen being shown
   let rechecked = false;
   /** A circle request says the session ended: ask the service once who is signed in. Once only per sign-in, so a service that contradicts itself cannot make a loop. */
@@ -123,6 +130,8 @@ export function mount(document, fetchFn, env = NO_ENV) {
         circlePage.reset();
         sharePage.reset();
         sharedPage.reset();
+        joinPage.reset();
+        myRequestsPage.reset();
         capturePage.reset();
         brainPage.reset();
         ledgerPage.reset();
@@ -150,6 +159,10 @@ export function mount(document, fetchFn, env = NO_ENV) {
     else sharePage.reset();
     if (route.name === 'circle') sharedPage.show(route.id);
     else sharedPage.reset();
+    if (route.name === 'circle') joinPage.show(route.id);
+    else joinPage.reset();
+    if (route.name === 'invitations') myRequestsPage.show();
+    else myRequestsPage.reset();
     if (route.name === 'status') statusPage.show();
     else statusPage.reset();
     if (route.name === 'capture') capturePage.show();

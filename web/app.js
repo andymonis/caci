@@ -3,6 +3,7 @@ import { mount } from './mount.js';
 
 mount(document, (...args) => window.fetch(...args), {
   getHash: () => window.location.hash,
+  getOrigin: () => window.location.origin,
   setHash: (hash) => {
     window.location.hash = hash;
   },

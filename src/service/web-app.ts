@@ -30,6 +30,7 @@ export const WEB_FILE_SPECS: readonly WebFileSpec[] = Object.freeze([
   { path: '/brain-page.js', file: 'brain-page.js', kind: 'js' },
   { path: '/brain-session.js', file: 'brain-session.js', kind: 'js' },
   { path: '/join-client.js', file: 'join-client.js', kind: 'js' },
+  { path: '/join-links-page.js', file: 'join-links-page.js', kind: 'js' },
   { path: '/join-links-session.js', file: 'join-links-session.js', kind: 'js' },
   { path: '/ledger-client.js', file: 'ledger-client.js', kind: 'js' },
   { path: '/ledger-page.js', file: 'ledger-page.js', kind: 'js' },

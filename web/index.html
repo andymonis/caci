@@ -262,6 +262,72 @@
             <button type="button" id="circle-invitations-more" hidden>Show more</button>
           </section>
 
+          <section id="join-section" hidden>
+            <h3 id="join-heading" tabindex="-1">Join links</h3>
+            <p id="join-note" class="note"></p>
+            <p><button type="button" id="join-load" class="secondary">Show join links</button></p>
+            <p id="join-status" role="status" hidden></p>
+            <p id="join-error" class="error" role="alert" tabindex="-1" hidden></p>
+            <p id="join-notice" role="status" tabindex="-1" hidden></p>
+
+            <div id="join-body" hidden>
+              <form id="join-form" method="post" novalidate>
+                <p id="join-form-error" class="error" role="alert" tabindex="-1" hidden></p>
+                <div class="field">
+                  <label for="join-label">Name for this link</label>
+                  <input id="join-label" name="label" type="text" autocomplete="off" aria-describedby="join-label-hint join-label-error" required>
+                  <p id="join-label-hint" class="hint">Only you and the other owners and managers see it. Up to 80 characters.</p>
+                  <p id="join-label-error" class="error" hidden></p>
+                </div>
+                <div class="field">
+                  <label for="join-role">Role it offers</label>
+                  <select id="join-role" name="role" aria-describedby="join-role-error">
+                    <option value="observer">Observer</option>
+                    <option value="member">Member</option>
+                  </select>
+                  <p id="join-role-error" class="error" hidden></p>
+                </div>
+                <div class="field">
+                  <label for="join-days">Days it works</label>
+                  <input id="join-days" name="days" type="text" inputmode="numeric" autocomplete="off" aria-describedby="join-days-hint join-days-error" value="7">
+                  <p id="join-days-hint" class="hint">1 to 30.</p>
+                  <p id="join-days-error" class="error" hidden></p>
+                </div>
+                <div class="field">
+                  <label for="join-uses">How many people may use it</label>
+                  <input id="join-uses" name="uses" type="text" inputmode="numeric" autocomplete="off" aria-describedby="join-uses-hint join-uses-error" value="1">
+                  <p id="join-uses-hint" class="hint">1 to 100. A use is spent when someone asks to join, not when you approve.</p>
+                  <p id="join-uses-error" class="error" hidden></p>
+                </div>
+                <div class="field">
+                  <label for="join-approval">Does each person need approval?</label>
+                  <select id="join-approval" name="approval" aria-describedby="join-approval-error">
+                    <option value="yes">Yes: an owner or manager approves each person</option>
+                    <option value="no">No: anyone with the link joins at once</option>
+                  </select>
+                  <p id="join-approval-error" class="error" hidden></p>
+                </div>
+                <button type="submit" id="join-submit">Make the link</button>
+              </form>
+
+              <div id="join-created" class="notice" hidden>
+                <p id="join-created-words"></p>
+                <p><code id="join-created-url" tabindex="-1"></code></p>
+                <p><button type="button" id="join-created-done" class="secondary">I have copied it</button></p>
+              </div>
+
+              <h4 id="join-links-heading">Live links</h4>
+              <p id="join-links-empty" hidden></p>
+              <ul id="join-links-list" class="rows" hidden></ul>
+
+              <h4 id="join-requests-heading" tabindex="-1">Waiting to join</h4>
+              <p id="join-requests-empty" hidden></p>
+              <ul id="join-requests-list" class="rows" hidden></ul>
+
+              <p><button type="button" id="join-refresh" class="link">Refresh the links and requests</button></p>
+            </div>
+          </section>
+
           <section>
             <h3>Leave or delete</h3>
             <p><button type="button" id="leave-button" class="secondary">Leave this circle</button></p>
@@ -441,6 +507,16 @@
         <p id="invitations-empty" hidden></p>
         <ul id="invitations-list" class="rows" hidden></ul>
         <button type="button" id="invitations-more" hidden>Show more</button>
+
+        <section id="my-requests-section">
+          <h3 id="my-requests-heading" tabindex="-1">Waiting to join</h3>
+          <p id="my-requests-note" class="note"></p>
+          <p><button type="button" id="my-requests-load" class="secondary">Show my waiting requests</button></p>
+          <p id="my-requests-status" role="status" hidden></p>
+          <p id="my-requests-error" class="error" role="alert" tabindex="-1" hidden></p>
+          <p id="my-requests-empty" hidden></p>
+          <ul id="my-requests-list" class="rows" hidden></ul>
+        </section>
       </section>
     </section>
 
@@ -510,6 +586,41 @@
           <button type="button" data-slot="removeYes">Yes, remove</button>
           <button type="button" data-slot="removeNo" class="secondary">Cancel</button>
         </div>
+      </li>
+    </template>
+
+    <template id="join-link-row-template">
+      <li class="row">
+        <span data-slot="title" class="row-title"></span>
+        <span data-slot="meta" class="meta"></span>
+        <div class="actions">
+          <button type="button" data-slot="revoke" class="secondary">Withdraw</button>
+        </div>
+        <div data-slot="ask" class="notice" hidden>
+          <p data-slot="askText"></p>
+          <div class="actions">
+            <button type="button" data-slot="yes">Yes, withdraw it</button>
+            <button type="button" data-slot="no" class="secondary">Cancel</button>
+          </div>
+        </div>
+      </li>
+    </template>
+
+    <template id="join-request-row-template">
+      <li class="row">
+        <span data-slot="title" class="row-title"></span>
+        <span data-slot="meta" class="meta"></span>
+        <div class="actions">
+          <button type="button" data-slot="approve">Approve</button>
+          <button type="button" data-slot="decline" class="secondary">Decline</button>
+        </div>
+      </li>
+    </template>
+
+    <template id="my-request-row-template">
+      <li class="row">
+        <span data-slot="title" class="row-title"></span>
+        <span data-slot="meta" class="meta"></span>
       </li>
     </template>
 
