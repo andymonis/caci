@@ -1,7 +1,7 @@
 import { circlesError, type CirclesError } from '../errors.js';
 import { pageOf } from '../cursor.js';
 import { err, ok, type Result } from '../result.js';
-import type { AcceptLimits, CirclePage, CircleStore, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, JoinLink, JoinLinkLimits, JoinLinkRecord, JoinOutcome, Listing, Membership, RemoveUserOutcome } from '../store.js';
+import type { AcceptLimits, CirclePage, CircleStore, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, JoinLink, JoinLinkLimits, JoinLinkRecord, JoinOutcome, JoinRequest, JoinRequestLimits, Listing, Membership, RemoveUserOutcome, RequestOutcome } from '../store.js';
 import type { Circle, CircleRole } from '../types.js';
 
 /**
@@ -87,6 +87,33 @@ export const DEFECTS = [
   'link-duplicate-hash',
   'link-uses-unchecked',
   'link-wrong-role',
+  'req-adds-member-at-once',
+  'req-approve-ignores-member-cap',
+  'req-approve-ignores-circle-cap',
+  'req-second-pending',
+  'req-use-counted-twice',
+  'req-lapsed-approvable',
+  'req-waiting-costs-use',
+  'req-member-costs-use',
+  'req-pending-cap-off',
+  'req-lapsed-counts',
+  'req-racy-approve',
+  'req-racy-ask',
+  'req-approve-ignores-circle',
+  'req-limit-drops-request',
+  'req-survives-circle-delete',
+  'req-survives-remove-user',
+  'req-decline-ignores-circle',
+  'req-lists-lapsed',
+  'req-ignores-approval',
+  'req-no-copies',
+  'req-needs-live-link',
+  'req-wait-extends',
+  'req-member-overwritten',
+  'req-use-not-counted',
+  'req-duplicate-id',
+  'req-wrong-role',
+  'req-limit-spends-use',
 ] as const;
 export type Defect = (typeof DEFECTS)[number];
 
@@ -108,6 +135,9 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
     return d('link-no-copies') ? (l as unknown as JoinLink) : { id: l.id, circleId: l.circleId, role: l.role, label: l.label, createdBy: l.createdBy, createdAt: l.createdAt, expiresAt: l.expiresAt, maxUses: l.maxUses, uses: l.uses, approval: l.approval };
   };
   const linkByHash = (h: string): StoredLink | undefined => [...links.values()].find((l) => l.tokenHash === h);
+  const requests = new Map<string, JoinRequest>();
+  const reqLive = (r: JoinRequest, now: number): boolean => (d('req-lapsed-approvable') || d('req-lists-lapsed') || now < r.expiresAt) && circles.has(r.circleId);
+  const reqOut = (r: JoinRequest): JoinRequest => (d('req-no-copies') ? r : { ...r });
   const grants = new Map<string, Grant>();
   const gk = (c: string, o: string, g: string): string => `${c}|${o}|${g}`;
   const grantOut = (g: Grant): Grant => (d('grant-no-copies') ? g : { ...g, categories: [...g.categories] });
@@ -127,6 +157,7 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
   const circlesOf = (u: string): string[] => [...members.entries()].filter(([, m]) => m.has(u)).map(([id]) => id).sort();
   const drop = (id: string): void => {
     circles.delete(id);
+    if (!d('req-survives-circle-delete')) for (const [k, r] of requests) if (r.circleId === id) requests.delete(k);
     if (!d('link-survives-circle-delete')) for (const [k, l] of links) if (l.circleId === id) links.delete(k);
     if (!d('grant-survives-circle-delete')) for (const [k, g] of grants) if (g.circleId === id) grants.delete(k);
     if (!d('delete-keeps-members')) members.delete(id);
@@ -313,7 +344,77 @@ export function createNaiveCircleStore(defect?: Defect): CircleStore {
       if (d('link-racy-join')) links.set(l.id, { ...l, uses: l.uses + 1 });
       return ok({ membership: out(membership), joined: true });
     },
+    requestJoin: async (hash: string, requestId: string, userId: string, now: number, limits: JoinRequestLimits): Promise<Result<RequestOutcome, CirclesError>> => {
+      const l = linkByHash(hash);
+      if (l === undefined || !linkLive(l, now)) return err(nf('join link'));
+      if (!l.approval && !d('req-ignores-approval')) return err(circlesError('CONFLICT', 'no approval'));
+      const here = members.get(l.circleId) as Map<string, Membership>;
+      const existing = here.get(userId);
+      if (existing !== undefined) {
+        if (d('req-member-costs-use')) links.set(l.id, { ...l, uses: l.uses + 1 });
+        if (d('req-member-overwritten')) {
+          const next = { ...existing, role: l.role };
+          here.set(userId, next);
+          return ok({ state: 'member', membership: out(next) });
+        }
+        return ok({ state: 'member', membership: out(existing) });
+      }
+      if (!d('req-lapsed-counts')) for (const [k, r] of requests) if (r.circleId === l.circleId && now >= r.expiresAt) requests.delete(k);
+      const earlier = [...requests.values()].find((r) => r.circleId === l.circleId && r.userId === userId);
+      if (earlier !== undefined && !d('req-second-pending')) {
+        if (d('req-waiting-costs-use')) links.set(l.id, { ...l, uses: l.uses + 1 });
+        if (d('req-wait-extends')) {
+          const next = { ...earlier, expiresAt: now + limits.ttlMs };
+          requests.set(earlier.id, next);
+          return ok({ state: 'waiting', request: reqOut(next) });
+        }
+        return ok({ state: 'waiting', request: reqOut(earlier) });
+      }
+      if (requests.has(requestId) && !d('req-duplicate-id')) return err(circlesError('CONFLICT', 'exists'));
+      const count = [...requests.values()].filter((r) => r.circleId === l.circleId).length;
+      if (d('req-racy-ask')) await Promise.resolve();
+      if (!d('req-pending-cap-off') && count >= limits.maxPendingPerCircle) {
+        if (d('req-limit-spends-use')) links.set(l.id, { ...l, uses: l.uses + 1 });
+        return err(circlesError('LIMIT_REACHED', 'many requests'));
+      }
+      const request: JoinRequest = { id: requestId, circleId: l.circleId, userId, role: d('req-wrong-role') ? 'member' : l.role, createdAt: now, expiresAt: now + limits.ttlMs };
+      requests.set(request.id, request);
+      if (d('req-adds-member-at-once')) here.set(userId, { circleId: l.circleId, userId, role: l.role, joinedAt: now });
+      if (!d('req-use-not-counted')) links.set(l.id, { ...(links.get(l.id) as StoredLink), uses: (d('req-racy-ask') ? l.uses : (links.get(l.id) as StoredLink).uses) + (d('req-use-counted-twice') ? 2 : 1) });
+      return ok({ state: 'requested', request: reqOut(request) });
+    },
+    listJoinRequests: async (c, now, p) => page([...requests.values()].filter((r) => r.circleId === c && reqLive(r, now) && (d('req-lists-lapsed') || now < r.expiresAt)).sort((a, b) => cmp(a.id, b.id)).map(reqOut), (r) => r.id, p),
+    listJoinRequestsBy: async (u, now, p) => page([...requests.values()].filter((r) => r.userId === u && reqLive(r, now) && (d('req-lists-lapsed') || now < r.expiresAt)).sort((a, b) => cmp(a.id, b.id)).map(reqOut), (r) => r.id, p),
+    approveJoinRequest: async (requestId: string, circleId: string, now: number, limits: AcceptLimits): Promise<Result<Membership, CirclesError>> => {
+      const r = requests.get(requestId);
+      if (r === undefined || (!d('req-approve-ignores-circle') && r.circleId !== circleId) || !reqLive(r, now)) return err(nf('join request'));
+      if (d('req-needs-live-link') && ![...links.values()].some((l) => l.circleId === r.circleId)) return err(nf('join request'));
+      const here = members.get(r.circleId) as Map<string, Membership>;
+      const existing = here.get(r.userId);
+      if (existing !== undefined) {
+        requests.delete(requestId);
+        return ok(out(existing));
+      }
+      const full = here.size >= limits.maxMembersPerCircle;
+      const crowded = circlesOf(r.userId).length >= limits.maxCirclesPerUser;
+      if (d('req-racy-approve')) await Promise.resolve();
+      if ((full && !d('req-approve-ignores-member-cap')) || (crowded && !d('req-approve-ignores-circle-cap'))) {
+        if (d('req-limit-drops-request')) requests.delete(requestId);
+        return err(circlesError('LIMIT_REACHED', 'limit'));
+      }
+      const m: Membership = { circleId: r.circleId, userId: r.userId, role: r.role, joinedAt: now };
+      here.set(r.userId, m);
+      requests.delete(requestId);
+      return ok(out(m));
+    },
+    declineJoinRequest: async (requestId, circleId, now) => {
+      const r = requests.get(requestId);
+      if (r === undefined || (!d('req-decline-ignores-circle') && r.circleId !== circleId)) return false;
+      requests.delete(requestId);
+      return reqLive(r, now);
+    },
     removeUser: async (userId, username): Promise<RemoveUserOutcome> => {
+      if (!d('req-survives-remove-user')) for (const [k, r] of requests) if (r.userId === userId) requests.delete(k);
       const handedOver: string[] = [];
       const dissolved: string[] = [];
       const mine = circlesOf(userId);

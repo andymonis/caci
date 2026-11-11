@@ -16,14 +16,14 @@ export interface ConformanceOptions {
   groups?: readonly CaseGroup[];
 }
 
-export type CaseGroup = 'core' | 'grants' | 'joinlinks';
+export type CaseGroup = 'core' | 'grants' | 'joinlinks' | 'joinrequests';
 
 /** Creates a fresh, empty store that shares nothing with any other one it has made. Called at least once per test. */
 export type MakeCircleStore = () => Promise<CircleStore> | CircleStore;
 
 export interface CircleStoreCase {
   readonly name: string;
-  /** `core` (the default), `grants` or `joinlinks`. */
+  /** `core` (the default), `grants`, `joinlinks` or `joinrequests`. */
   readonly group?: CaseGroup;
   /** Throws (an assertion error) when the store does not behave. `makeAnother` gives a further fresh store. */
   readonly run: (store: CircleStore, makeAnother: () => Promise<CircleStore>) => Promise<void>;

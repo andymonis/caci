@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import type { CirclesError } from '../errors.js';
 import type { Result } from '../result.js';
-import type { CircleStore, Invitation, InvitationRecord, JoinLinkRecord, Membership } from '../store.js';
+import type { CircleStore, Invitation, InvitationRecord, JoinLinkRecord, JoinRequest, Membership } from '../store.js';
 import type { CircleRole } from '../types.js';
 import type { CircleStoreCase } from './types.js';
 
@@ -705,6 +705,7 @@ export function circleStoreCases(): readonly CircleStoreCase[] {
     },
     ...grantCases(),
     ...joinLinkCases(),
+    ...joinRequestCases(),
   ];
 }
 
@@ -1260,6 +1261,294 @@ function joinLinkCases(): readonly CircleStoreCase[] {
       await makeLink(store, 1);
       assert.equal(await other.getJoinLinkByHash(hashOf(1), NOW), undefined);
       assert.equal(code(await joinBy(other, 1, 5)), 'NOT_FOUND');
+    }),
+  ];
+}
+
+// ---- join requests (R-023 D13)
+
+const rid = (n: number | string): string => `r${pad(n)}`;
+const REQ_LIMITS = { maxPendingPerCircle: 20, ttlMs: 7 * DAY };
+const approvalLink = (store: CircleStore, n: number | string, circle: number | string = 1, extra: Partial<JoinLinkRecord> = {}) => makeLink(store, n, circle, { approval: true, ...extra });
+const ask = (store: CircleStore, link: number | string, user: number, request: number | string = `${link}-${user}`, now = NOW + 10, limits: { maxPendingPerCircle: number; ttlMs: number } = REQ_LIMITS) => store.requestJoin(hashOf(link), rid(request), uid(user), now, limits);
+const pending = (store: CircleStore, circle: number | string = 1, now = NOW + 10) => allPages((p) => store.listJoinRequests(cid(circle), now, p));
+const approve = (store: CircleStore, request: number | string, circle: number | string = 1, now = NOW + 20, limits: { maxCirclesPerUser: number; maxMembersPerCircle: number } = LIMITS) => store.approveJoinRequest(rid(request), cid(circle), now, limits);
+const asked = <T extends { state: string }>(result: Result<T, CirclesError>): T => must(result);
+
+function joinRequestCases(): readonly CircleStoreCase[] {
+  const R = (name: string, run: CircleStoreCase['run']): CircleStoreCase => ({ name: `join requests: ${name}`, group: 'joinrequests', run });
+  return [
+    R('asking makes one waiting request at the link\'s role, counts the use, and adds nobody', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { role: 'observer', maxUses: 3 });
+      const outcome = asked(await ask(store, 1, 5, 'x', NOW + 10));
+      assert.equal(outcome.state, 'requested');
+      const expected: JoinRequest = { id: rid('x'), circleId: cid(1), userId: uid(5), role: 'observer', createdAt: NOW + 10, expiresAt: NOW + 10 + 7 * DAY };
+      assert.deepEqual((outcome as { request: JoinRequest }).request, expected);
+      assert.equal(await store.membershipOf(cid(1), uid(5)), undefined);
+      assert.deepEqual(await pending(store), [expected]);
+      assert.equal(await usesOf(store, 1), 1);
+    }),
+    R('a link that needs no approval cannot be used to ask, and counts nothing', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1, 1, { approval: false });
+      assert.equal(code(await ask(store, 1, 5)), 'CONFLICT');
+      assert.deepEqual(await pending(store), []);
+      assert.equal(await usesOf(store, 1), 0);
+    }),
+    R('every kind of miss when asking is the same not-found answer', async (store) => {
+      await circleWith(store, 1);
+      await circleWith(store, 2);
+      await approvalLink(store, 1, 1, { expiresAt: NOW + 100 });
+      await approvalLink(store, 2);
+      await approvalLink(store, 3);
+      await approvalLink(store, 4, 2);
+      assert.equal(await store.revokeJoinLink(lid(2), cid(1), NOW), true);
+      must(await ask(store, 3, 20, 'used', NOW + 1));
+      await store.deleteCircle(cid(2));
+      const answers = [await ask(store, 'unknown', 21, 'a', NOW + 200), await ask(store, 1, 21, 'b', NOW + 200), await ask(store, 2, 21, 'c', NOW + 200), await ask(store, 3, 21, 'd', NOW + 200), await ask(store, 4, 21, 'e', NOW + 200)];
+      for (const a of answers) {
+        assert.equal(code(a), 'NOT_FOUND');
+        assert.deepEqual(a, answers[0]);
+      }
+      assert.equal((answers[0] as { error: { message: string } }).error.message, MISS);
+      assert.deepEqual((await pending(store, 1, NOW + 200)).map((r) => r.id), [rid('used')]); // only the one real request exists
+    }),
+    R('someone already in the circle is told so: no request and no use', async (store) => {
+      await circleWith(store, 1, ['observer']);
+      await approvalLink(store, 1, 1, { maxUses: 2 });
+      for (const user of [1, 2]) {
+        const outcome = asked(await ask(store, 1, user));
+        assert.equal(outcome.state, 'member');
+      }
+      assert.equal(await roleOf(store, 1, 2), 'observer');
+      assert.deepEqual(await pending(store), []);
+      assert.equal(await usesOf(store, 1), 0);
+    }),
+    R('asking again while waiting gives the same request back and counts nothing, nor extends the wait', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { maxUses: 2 });
+      const first = asked(await ask(store, 1, 5, 'first', NOW + 10)) as { request: JoinRequest };
+      const again = asked(await ask(store, 1, 5, 'second', NOW + 5000));
+      assert.equal(again.state, 'waiting');
+      assert.deepEqual((again as { request: JoinRequest }).request, first.request);
+      assert.equal((await pending(store, 1, NOW + 5000)).length, 1);
+      assert.equal(await usesOf(store, 1, 1), 1);
+    }),
+    R('the use is counted when asking: a one-use link serves one person, the next gets the miss', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1);
+      must(await ask(store, 1, 5));
+      const second = await ask(store, 1, 6);
+      assert.equal(code(second), 'NOT_FOUND');
+      assert.deepEqual(second, await ask(store, 'unknown', 6));
+      assert.equal((await pending(store)).length, 1);
+    }),
+    R('a circle holds only so many waiting requests; lapsed ones do not count and are cleared; no use is spent on a refusal', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { maxUses: 10 });
+      const two = { maxPendingPerCircle: 2, ttlMs: 100 };
+      must(await ask(store, 1, 5, 'a', NOW + 10, two));
+      must(await ask(store, 1, 6, 'b', NOW + 50, two));
+      assert.equal(code(await ask(store, 1, 7, 'c', NOW + 60, two)), 'LIMIT_REACHED');
+      assert.equal(await usesOf(store, 1), 2);
+      must(await ask(store, 1, 7, 'c', NOW + 115, two)); // request a has lapsed (10 + 100)
+      assert.deepEqual((await pending(store, 1, NOW + 115)).map((r) => r.id), [rid('b'), rid('c')]);
+      await circleWith(store, 2);
+      await approvalLink(store, 2, 2, { maxUses: 10 });
+      must(await ask(store, 2, 5, 'd', NOW + 10, two)); // another circle has its own count
+    }),
+    R('a request waits while now is before its expiry and then lapses: it is not listed, cannot be approved, and the person may ask again', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { maxUses: 3 });
+      const short = { maxPendingPerCircle: 20, ttlMs: 100 };
+      must(await ask(store, 1, 5, 'a', NOW + 10, short));
+      assert.equal((await pending(store, 1, NOW + 109)).length, 1);
+      assert.equal((await pending(store, 1, NOW + 110)).length, 0);
+      assert.equal((await store.listJoinRequestsBy(uid(5), NOW + 110, { limit: 5, cursor: null })).items.length, 0);
+      const late = await approve(store, 'a', 1, NOW + 110);
+      assert.equal(code(late), 'NOT_FOUND');
+      assert.equal(await store.membershipOf(cid(1), uid(5)), undefined);
+      const again = asked(await ask(store, 1, 5, 'b', NOW + 120, short));
+      assert.equal(again.state, 'requested');
+      assert.equal(await usesOf(store, 1), 2);
+    }),
+    R('a circle\'s waiting requests are listed by id in pages, and a person\'s own across circles', async (store) => {
+      await circleWith(store, 1);
+      await circleWith(store, 2);
+      await approvalLink(store, 1, 1, { maxUses: 10 });
+      await approvalLink(store, 2, 2, { maxUses: 10 });
+      for (const [n, user] of [[5, 15], [3, 16], [9, 17], [1, 18], [7, 19]] as const) must(await ask(store, 1, user, n));
+      must(await ask(store, 2, 15, 4));
+      assert.deepEqual((await pending(store)).map((r) => r.id), [1, 3, 5, 7, 9].map(rid));
+      assert.deepEqual((await pending(store, 2)).map((r) => r.id), [rid(4)]);
+      assert.deepEqual(await pending(store, 9), []);
+      assert.deepEqual((await allPages((p) => store.listJoinRequestsBy(uid(15), NOW + 10, p))).map((r) => r.id), [rid(4), rid(5)]);
+      assert.deepEqual(await allPages((p) => store.listJoinRequestsBy(uid(99), NOW + 10, p)), []);
+    }),
+    R('approving adds the member at the request\'s role at that time, closes the request, and spends no further use', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { role: 'observer', maxUses: 2 });
+      must(await ask(store, 1, 5, 'a'));
+      const membership = must(await approve(store, 'a', 1, NOW + 33));
+      assert.deepEqual(membership, { circleId: cid(1), userId: uid(5), role: 'observer', joinedAt: NOW + 33 });
+      assert.deepEqual(await store.membershipOf(cid(1), uid(5)), membership);
+      assert.deepEqual(await pending(store), []);
+      assert.equal(await usesOf(store, 1), 1);
+      assert.equal(code(await approve(store, 'a')), 'NOT_FOUND');
+    }),
+    R('only the request\'s own circle can approve or decline it, and the answer is the one not-found', async (store) => {
+      await circleWith(store, 1);
+      await circleWith(store, 2);
+      await approvalLink(store, 1);
+      must(await ask(store, 1, 5, 'a'));
+      const wrong = await approve(store, 'a', 2);
+      assert.equal(code(wrong), 'NOT_FOUND');
+      assert.deepEqual(wrong, await approve(store, 'nothing', 1));
+      assert.equal((wrong as { error: { message: string } }).error.message, 'no such join request');
+      assert.equal(await store.declineJoinRequest(rid('a'), cid(2), NOW + 20), false);
+      assert.equal((await pending(store)).length, 1);
+      assert.equal(await store.membershipOf(cid(2), uid(5)), undefined);
+    }),
+    R('a full circle or a person in the most circles allowed leaves the request waiting, then it can be approved', async (store) => {
+      await circleWith(store, 1, ['member']);
+      await approvalLink(store, 1, 1, { maxUses: 3 });
+      must(await ask(store, 1, 5, 'a'));
+      const tight = { maxCirclesPerUser: 20, maxMembersPerCircle: 2 };
+      assert.equal(code(await approve(store, 'a', 1, NOW + 20, tight)), 'LIMIT_REACHED');
+      assert.equal(await store.membershipOf(cid(1), uid(5)), undefined);
+      assert.equal((await pending(store)).length, 1);
+      assert.equal(must(await approve(store, 'a', 1, NOW + 21)).userId, uid(5));
+      await circleWith(store, 2);
+      await circleWith(store, 3);
+      await approvalLink(store, 7, 3);
+      must(await ask(store, 7, 2, 'b'));
+      const crowded = { maxCirclesPerUser: 2, maxMembersPerCircle: 50 };
+      assert.equal(code(await approve(store, 'b', 3, NOW + 20, crowded)), undefined); // user 2 is in circle 1 and 3 is their second
+      await circleWith(store, 4);
+      await approvalLink(store, 8, 4);
+      must(await ask(store, 8, 2, 'c'));
+      assert.equal(code(await approve(store, 'c', 4, NOW + 20, crowded)), 'LIMIT_REACHED');
+      assert.equal((await pending(store, 4)).length, 1);
+    }),
+    R('someone who has joined another way meanwhile keeps their role, and the request is closed', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1);
+      must(await ask(store, 1, 5, 'a'));
+      must(await store.createInvitation(invitation(7, 1, 'user5', 'manager'), LIMITS, NOW));
+      must(await store.acceptInvitation(iid(7), uid(5), 'user5', NOW + 11, LIMITS));
+      const result = must(await approve(store, 'a'));
+      assert.equal(result.role, 'manager');
+      assert.equal(await roleOf(store, 1, 5), 'manager');
+      assert.deepEqual(await pending(store), []);
+    }),
+    R('declining removes a waiting request, says whether there was one, and does not give the use back', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { maxUses: 2 });
+      must(await ask(store, 1, 5, 'a', NOW + 10, { maxPendingPerCircle: 20, ttlMs: 100 }));
+      assert.equal(await store.declineJoinRequest(rid('a'), cid(1), NOW + 20), true);
+      assert.equal(await store.declineJoinRequest(rid('a'), cid(1), NOW + 20), false);
+      assert.deepEqual(await pending(store), []);
+      assert.equal(await store.membershipOf(cid(1), uid(5)), undefined);
+      assert.equal(await usesOf(store, 1), 1);
+      must(await ask(store, 1, 6, 'b', NOW + 10, { maxPendingPerCircle: 20, ttlMs: 100 }));
+      assert.equal(await store.declineJoinRequest(rid('b'), cid(1), NOW + 110), false); // lapsed
+    }),
+    R('eight approvals of one request at once add exactly one member', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1);
+      must(await ask(store, 1, 5, 'a'));
+      const results = await Promise.all([1, 2, 3, 4, 5, 6, 7, 8].map(() => approve(store, 'a')));
+      assert.equal(results.filter((r) => r.ok).length, 1);
+      assert.equal(results.filter((r) => code(r) === 'NOT_FOUND').length, 7);
+      assert.equal((await rolesOf(store, 1)).length, 2);
+    }),
+    R('approving and declining at once give one winner', async (store) => {
+      for (let round = 0; round < 6; round++) {
+        const c = 10 + round;
+        await circleWith(store, c);
+        await approvalLink(store, c, c);
+        must(await ask(store, c, 5, `r${c}`));
+        const [a, d] = await Promise.all([approve(store, `r${c}`, c), store.declineJoinRequest(rid(`r${c}`), cid(c), NOW + 20)]);
+        const added = (await store.membershipOf(cid(c), uid(5))) !== undefined;
+        assert.equal(a.ok, added, `round ${round}`);
+        assert.equal(a.ok !== d, true, `round ${round}`);
+      }
+    }),
+    R('the same person asking six times at once makes one request and counts one use', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { maxUses: 5 });
+      const results = await Promise.all([0, 1, 2, 3, 4, 5].map((n) => ask(store, 1, 5, `a${n}`)));
+      assert.equal(results.filter((r) => r.ok && r.value.state === 'requested').length, 1);
+      assert.equal(results.filter((r) => r.ok && r.value.state === 'waiting').length, 5);
+      assert.equal((await pending(store)).length, 1);
+      assert.equal(await usesOf(store, 1), 1);
+    }),
+    R('eight people asking at once on a one-use link make exactly one request', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1);
+      const results = await Promise.all([10, 11, 12, 13, 14, 15, 16, 17].map((user) => ask(store, 1, user)));
+      assert.equal(results.filter((r) => r.ok).length, 1);
+      assert.equal(results.filter((r) => code(r) === 'NOT_FOUND').length, 7);
+      assert.equal((await pending(store)).length, 1);
+    }),
+    R('a request id cannot be used twice', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { maxUses: 3 });
+      must(await ask(store, 1, 5, 'dup'));
+      assert.equal(code(await ask(store, 1, 6, 'dup')), 'CONFLICT');
+      assert.equal(await usesOf(store, 1), 1);
+      assert.equal((await pending(store)).length, 1);
+    }),
+    R('revoking the link leaves the requests already made, at their role', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { role: 'observer', maxUses: 3 });
+      must(await ask(store, 1, 5, 'a'));
+      assert.equal(await store.revokeJoinLink(lid(1), cid(1), NOW), true);
+      assert.equal((await pending(store)).length, 1);
+      assert.equal(must(await approve(store, 'a')).role, 'observer');
+    }),
+    R('deleting the circle removes its requests, and a person\'s account going removes theirs only', async (store) => {
+      await circleWith(store, 1);
+      await circleWith(store, 2);
+      await approvalLink(store, 1, 1, { maxUses: 5 });
+      await approvalLink(store, 2, 2, { maxUses: 5 });
+      must(await ask(store, 1, 5, 'a'));
+      must(await ask(store, 1, 6, 'b'));
+      must(await ask(store, 2, 5, 'c'));
+      await store.removeUser(uid(5), 'user5');
+      assert.deepEqual((await pending(store, 1)).map((r) => r.id), [rid('b')]);
+      assert.deepEqual(await pending(store, 2), []);
+      assert.deepEqual(await allPages((p) => store.listJoinRequestsBy(uid(5), NOW + 10, p)), []);
+      await store.deleteCircle(cid(1));
+      assert.deepEqual(await pending(store, 1), []);
+      assert.deepEqual(await allPages((p) => store.listJoinRequestsBy(uid(6), NOW + 10, p)), []);
+      await circleWith(store, 1); // the same id again is a new circle: nothing of the old one comes back
+      assert.deepEqual(await pending(store, 1), []);
+      assert.deepEqual(await allPages((p) => store.listJoinRequestsBy(uid(6), NOW + 10, p)), []);
+      assert.equal(code(await approve(store, 'b')), 'NOT_FOUND');
+      assert.equal(await store.membershipOf(cid(1), uid(6)), undefined);
+    }),
+    R('what the store gives back is a copy, and changing it changes nothing', async (store) => {
+      await circleWith(store, 1);
+      await approvalLink(store, 1, 1, { maxUses: 3 });
+      const made = asked(await ask(store, 1, 5, 'a')) as { request: { role: string } };
+      made.request.role = 'owner';
+      const listed = await pending(store);
+      (listed[0] as { role: string }).role = 'owner';
+      const waitingAgain = asked(await ask(store, 1, 5, 'b')) as { request: { role: string } };
+      waitingAgain.request.role = 'owner';
+      assert.equal(must(await approve(store, 'a')).role, 'member');
+    }),
+    R('two stores share no requests', async (store, makeAnother) => {
+      const other = await makeAnother();
+      await circleWith(store, 1);
+      await circleWith(other, 1);
+      await approvalLink(store, 1);
+      await approvalLink(other, 1);
+      must(await ask(store, 1, 5, 'a'));
+      assert.deepEqual(await pending(other), []);
+      assert.equal(code(await approve(other, 'a')), 'NOT_FOUND');
     }),
   ];
 }

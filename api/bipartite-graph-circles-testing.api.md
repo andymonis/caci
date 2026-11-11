@@ -5,7 +5,7 @@
 ```ts
 
 // @public (undocumented)
-export type CaseGroup = 'core' | 'grants' | 'joinlinks';
+export type CaseGroup = 'core' | 'grants' | 'joinlinks' | 'joinrequests';
 
 // @public (undocumented)
 export interface CircleStoreCase {

@@ -369,6 +369,11 @@ export function createSqliteCircleStore(options: SqliteCircleStoreOptions = {}):
     getJoinLinkByHash: async () => undefined,
     listJoinLinks: async () => ({ items: [], nextCursor: null }),
     revokeJoinLink: async () => false,
+    requestJoin: async () => err(circlesError('STORAGE_ERROR', 'join requests are not stored by this database yet')),
+    listJoinRequests: async () => ({ items: [], nextCursor: null }),
+    listJoinRequestsBy: async () => ({ items: [], nextCursor: null }),
+    approveJoinRequest: async () => err(circlesError('STORAGE_ERROR', 'join requests are not stored by this database yet')),
+    declineJoinRequest: async () => false,
     joinWithLink: async () => err(circlesError('STORAGE_ERROR', 'join links are not stored by this database yet')),
     close: () => db.close(),
   };

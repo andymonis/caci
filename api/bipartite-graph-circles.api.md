@@ -158,11 +158,13 @@ export type CirclesErrorCode = (typeof CIRCLES_ERROR_CODES)[number];
 // @public
 export interface CircleStore {
     acceptInvitation(invitationId: string, userId: string, username: string, now: number, limits: AcceptLimits): Promise<Result<Membership, CirclesError>>;
+    approveJoinRequest(requestId: string, circleId: string, now: number, limits: AcceptLimits): Promise<Result<Membership, CirclesError>>;
     changeRole(circleId: string, userId: string, role: CircleRole): Promise<Result<Membership, CirclesError>>;
     createCircle(record: CircleRecord, ownerId: string, limits: CreateCircleLimits): Promise<Result<Circle, CirclesError>>;
     createInvitation(record: InvitationRecord, limits: InviteLimits, now: number): Promise<Result<Invitation, CirclesError>>;
     createJoinLink(record: JoinLinkRecord, limits: JoinLinkLimits, now: number): Promise<Result<JoinLink, CirclesError>>;
     declineInvitation(invitationId: string, username: string, now: number): Promise<boolean>;
+    declineJoinRequest(requestId: string, circleId: string, now: number): Promise<boolean>;
     deleteCircle(id: string): Promise<boolean>;
     // (undocumented)
     getCircle(id: string): Promise<Circle | undefined>;
@@ -179,12 +181,15 @@ export interface CircleStore {
     listInvitationsFor(username: string, now: number, page: CirclePage): Promise<Listing<Invitation>>;
     listInvitationsOfCircle(circleId: string, now: number, page: CirclePage): Promise<Listing<Invitation>>;
     listJoinLinks(circleId: string, now: number, page: CirclePage): Promise<Listing<JoinLink>>;
+    listJoinRequests(circleId: string, now: number, page: CirclePage): Promise<Listing<JoinRequest>>;
+    listJoinRequestsBy(userId: string, now: number, page: CirclePage): Promise<Listing<JoinRequest>>;
     listMembers(circleId: string, page: CirclePage): Promise<Listing<Membership>>;
     // (undocumented)
     membershipOf(circleId: string, userId: string): Promise<Membership | undefined>;
     purgeExpired(now: number): Promise<number>;
     removeMember(circleId: string, userId: string): Promise<Result<boolean, CirclesError>>;
     removeUser(userId: string, username: string): Promise<RemoveUserOutcome>;
+    requestJoin(tokenHash: string, requestId: string, userId: string, now: number, limits: JoinRequestLimits): Promise<Result<RequestOutcome, CirclesError>>;
     revokeInvitation(invitationId: string, circleId: string, now: number): Promise<boolean>;
     revokeJoinLink(linkId: string, circleId: string, now: number): Promise<boolean>;
     setGrant(circleId: string, ownerId: string, granteeId: string, categories: readonly string[], now: number, limits: GrantLimits): Promise<Result<Grant | undefined, CirclesError>>;
@@ -401,6 +406,27 @@ export interface JoinOutcome {
     readonly membership: Membership;
 }
 
+// @public
+export interface JoinRequest {
+    // (undocumented)
+    readonly circleId: string;
+    // (undocumented)
+    readonly createdAt: number;
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly role: JoinLinkRole;
+    // (undocumented)
+    readonly userId: string;
+}
+
+// @public (undocumented)
+export interface JoinRequestLimits {
+    readonly maxPendingPerCircle: number;
+    readonly ttlMs: number;
+}
+
 // @public (undocumented)
 export interface Listing<T> {
     // (undocumented)
@@ -522,6 +548,15 @@ export interface RemoveUserOutcome {
     readonly invitationsRemoved: number;
     readonly left: number;
 }
+
+// @public
+export type RequestOutcome = {
+    readonly state: 'requested' | 'waiting';
+    readonly request: JoinRequest;
+} | {
+    readonly state: 'member';
+    readonly membership: Membership;
+};
 
 // @public (undocumented)
 export type Result<T, E> = Ok<T> | Err<E>;

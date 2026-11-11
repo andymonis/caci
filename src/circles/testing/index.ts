@@ -17,7 +17,7 @@ export type { CaseGroup, CircleStoreCase, ConformanceOptions, MakeCircleStore, T
  */
 export function runCircleStoreConformance(makeStore: MakeCircleStore, testApi: TestApi, options: ConformanceOptions = {}): void {
   testApi.describe('circle store conformance', () => {
-    const wanted = options.groups ?? (['core', 'grants', 'joinlinks'] as const);
+    const wanted = options.groups ?? (['core', 'grants', 'joinlinks', 'joinrequests'] as const);
     for (const testCase of circleStoreCases().filter((c) => wanted.includes(c.group ?? 'core'))) {
       testApi.it(testCase.name, async () => {
         const made: CircleStore[] = [];

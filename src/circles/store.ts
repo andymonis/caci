@@ -116,6 +116,27 @@ export interface JoinOutcome {
   readonly joined: boolean;
 }
 
+/** A person's waiting request to join a circle by a link that needs approval (R-023 D13). The role is the link's, copied when asked. */
+export interface JoinRequest {
+  readonly id: string;
+  readonly circleId: string;
+  readonly userId: string;
+  readonly role: JoinLinkRole;
+  readonly createdAt: number;
+  /** Waiting while `now < expiresAt`; after that it has lapsed and nothing can approve it. */
+  readonly expiresAt: number;
+}
+export interface JoinRequestLimits {
+  /** The most waiting requests one circle may hold; lapsed ones never count and are removed when a new one is made. */
+  readonly maxPendingPerCircle: number;
+  /** How long a request waits, in milliseconds. */
+  readonly ttlMs: number;
+}
+/** What asking to join did: a new request, the person's earlier waiting one (nothing counted), or the fact that they are already in. */
+export type RequestOutcome =
+  | { readonly state: 'requested' | 'waiting'; readonly request: JoinRequest }
+  | { readonly state: 'member'; readonly membership: Membership };
+
 export interface GrantLimits {
   /** The most categories one grant may name. */
   readonly maxCategoriesPerGrant: number;
@@ -221,6 +242,28 @@ export interface CircleStore {
    * Every miss is the same `NOT_FOUND`. A link that needs approval is `CONFLICT` and adds nothing (approval cannot be bypassed here).
    */
   joinWithLink(tokenHash: string, userId: string, now: number, limits: AcceptLimits): Promise<Result<JoinOutcome, CirclesError>>;
+
+  /**
+   * Asks to join by a link that needs approval (R-023 D13), atomically: the link must be live (else the one `NOT_FOUND`), a link that
+   * needs no approval is `CONFLICT` (use `joinWithLink`); someone already in the circle is `member` (no request, no use);
+   * someone with a waiting request gets it back as `waiting` (no new request, no use, the expiry unchanged); a circle already holding
+   * `maxPendingPerCircle` waiting requests is `LIMIT_REACHED` (no use); otherwise one request is made at the link's role, waiting for
+   * `ttlMs`, and the use is counted. `CONFLICT` for a request id already used.
+   */
+  requestJoin(tokenHash: string, requestId: string, userId: string, now: number, limits: JoinRequestLimits): Promise<Result<RequestOutcome, CirclesError>>;
+  /** A circle's waiting requests, by request id. */
+  listJoinRequests(circleId: string, now: number, page: CirclePage): Promise<Listing<JoinRequest>>;
+  /** A person's own waiting requests across circles, by request id. */
+  listJoinRequestsBy(userId: string, now: number, page: CirclePage): Promise<Listing<JoinRequest>>;
+  /**
+   * Approves a waiting request of this circle, atomically with adding the membership at the request's role (`joinedAt` is `now`;
+   * the use was counted when it was asked). `NOT_FOUND` for anything else (missing, another circle's, lapsed: all the same).
+   * `LIMIT_REACHED` if the circle is full or the person is in `maxCirclesPerUser` circles, leaving it waiting. Someone who is
+   * by now in the circle keeps their role and the request is closed. Does not need the link: revoking a link leaves its requests.
+   */
+  approveJoinRequest(requestId: string, circleId: string, now: number, limits: AcceptLimits): Promise<Result<Membership, CirclesError>>;
+  /** Refuses a waiting request of this circle. `false` if there is none. The use already counted is not given back. */
+  declineJoinRequest(requestId: string, circleId: string, now: number): Promise<boolean>;
 
   /**
    * A person is gone: remove them from every circle, passing a circle they solely owned to its
