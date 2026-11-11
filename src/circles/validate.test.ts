@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { circlesError, CIRCLES_ERROR_CODES } from './errors.js';
-import { isCircleId, isInvitationId, newCircleId, newInvitationId } from './ids.js';
+import { isCircleId, isInvitationId, isJoinLinkId, isJoinRequestId, isWellFormedJoinToken, newCircleId, newInvitationId, newJoinLinkId, newJoinRequestId, newJoinToken } from './ids.js';
 import { isCircleRole, CIRCLE_ROLES } from './types.js';
-import { parseCircleDescription, parseCircleName, parseCreateCircle, parseInvite, parseRole, parseRoleChange, parseUpdateCircle } from './validate.js';
+import { parseCircleDescription, parseCircleName, parseCreateCircle, parseCreateJoinLink, parseInvite, parseJoinToken, parseRole, parseRoleChange, parseUpdateCircle } from './validate.js';
 
 const bad = (r: { ok: boolean; error?: unknown }): { code: string; field?: string; message: string } => {
   expect(r.ok).toBe(false);
@@ -137,5 +137,47 @@ describe('the inputs', () => {
     expect(bad(parseRoleChange({})).field).toBe('role');
     expect(bad(parseRoleChange({ role: 'observer', userId: 'u1' })).field).toBe('userId');
     expect(bad(parseRoleChange('observer')).field).toBe('body');
+  });
+  it('a join link takes a label and the defaults of R-023: observer, 7 days, one use, approval on', () => {
+    expect(good(parseCreateJoinLink({ label: ' Club ' }))).toEqual({ label: 'Club', role: 'observer', days: 7, uses: 1, approval: true });
+    expect(good(parseCreateJoinLink({ label: 'x', role: 'member', days: 30, uses: 100, approval: false }))).toEqual({ label: 'x', role: 'member', days: 30, uses: 100, approval: false });
+    expect(good(parseCreateJoinLink({ label: 'x', days: 1, uses: 1 }))).toMatchObject({ days: 1, uses: 1 });
+  });
+  it('a join link never offers owner or manager, whatever is asked', () => {
+    for (const role of ['owner', 'manager', 'admin', '', null, 5]) expect(bad(parseCreateJoinLink({ label: 'x', role })).field, String(role)).toBe('role');
+  });
+  it('a join link\'s days and uses are whole numbers within their ranges, at the edges', () => {
+    for (const days of [0, -1, 31, 1.5, '7', null, Number.NaN]) expect(bad(parseCreateJoinLink({ label: 'x', days })).field, `days ${String(days)}`).toBe('days');
+    for (const uses of [0, -1, 101, 2.5, '1', null]) expect(bad(parseCreateJoinLink({ label: 'x', uses })).field, `uses ${String(uses)}`).toBe('uses');
+    expect(bad(parseCreateJoinLink({ label: 'x', approval: 'yes' })).field).toBe('approval');
+    expect(bad(parseCreateJoinLink({ label: 'x', approval: null })).field).toBe('approval');
+  });
+  it('a join link\'s label is 1 to 80 characters, counted as characters, without control characters', () => {
+    for (const label of [undefined, null, 5, '', '   ', 'x'.repeat(81), '\u0001a', 'a\nb']) expect(bad(parseCreateJoinLink({ label })).field, String(label)).toBe('label');
+    expect(good(parseCreateJoinLink({ label: 'x'.repeat(80) })).label).toHaveLength(80);
+    expect(good(parseCreateJoinLink({ label: '😀'.repeat(80) })).label).toBe('😀'.repeat(80));
+  });
+  it('a join link takes only its own fields, and a join takes only a token that is text', () => {
+    expect(bad(parseCreateJoinLink({ label: 'x', circleId: 'c1' })).field).toBe('circleId');
+    expect(bad(parseCreateJoinLink({ label: 'x', token: 'y' })).field).toBe('token');
+    expect(bad(parseCreateJoinLink('x')).field).toBe('body');
+    expect(good(parseJoinToken({ token: 'anything at all' }))).toBe('anything at all');
+    expect(bad(parseJoinToken({ token: 5 })).field).toBe('token');
+    expect(bad(parseJoinToken({})).field).toBe('token');
+    expect(bad(parseJoinToken({ token: 'x', circleId: 'c' })).field).toBe('circleId');
+    expect(bad(parseJoinToken(null)).field).toBe('body');
+  });
+  it('join ids and tokens have exactly the shapes this service makes', () => {
+    expect(isJoinLinkId(newJoinLinkId())).toBe(true);
+    expect(isJoinRequestId(newJoinRequestId())).toBe(true);
+    expect(isJoinLinkId(newJoinRequestId())).toBe(false);
+    expect(isJoinRequestId(newJoinLinkId())).toBe(false);
+    for (const odd of ['', 'j', 'jABCDEFGHIJKLMNOP', 'j0000000000000000x', 5, null]) expect(isJoinLinkId(odd), String(odd)).toBe(false);
+    const token = newJoinToken();
+    expect(token).toMatch(/^cjoin_[A-Za-z0-9_-]{43}$/);
+    expect(isWellFormedJoinToken(token)).toBe(true);
+    expect(newJoinToken()).not.toBe(token);
+    for (const odd of ['', 'cjoin_', `cjoin_${'A'.repeat(42)}`, `cjoin_${'A'.repeat(44)}`, `cpat_${token.slice(6)}`, token.slice(6), `${token} `, `${token}\n`, 5, null, undefined]) expect(isWellFormedJoinToken(odd), String(odd)).toBe(false);
+    expect(isWellFormedJoinToken(`cjoin_${'B'.repeat(43)}`)).toBe(false); // a second spelling of the same bytes
   });
 });

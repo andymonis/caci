@@ -31,7 +31,7 @@ export interface World {
 
 const NAMES = ['ann', 'bob', 'cat', 'dan', 'eve', 'fay', 'gus', 'hal', 'ivy', 'jon'];
 
-export function world(extra: { store?: CircleStore; limits?: CircleControllerInit['limits']; newCircleId?: () => string; newInvitationId?: () => string; people?: readonly string[] } = {}): World {
+export function world(extra: { store?: CircleStore; limits?: CircleControllerInit['limits']; newCircleId?: () => string; newInvitationId?: () => string; people?: readonly string[]; more?: Partial<CircleControllerInit> } = {}): World {
   const store = extra.store ?? createMemoryCircleStore();
   const now = { value: T0 };
   const people = new Map<string, Person>();
@@ -61,6 +61,7 @@ export function world(extra: { store?: CircleStore; limits?: CircleControllerIni
     clock: () => now.value,
     ...(extra.newCircleId === undefined ? {} : { newCircleId: extra.newCircleId }),
     ...(extra.newInvitationId === undefined ? {} : { newInvitationId: extra.newInvitationId }),
+    ...(extra.more ?? {}),
   });
   return {
     controller,

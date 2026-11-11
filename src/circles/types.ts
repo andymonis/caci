@@ -5,6 +5,8 @@ export type CircleRole = (typeof CIRCLE_ROLES)[number];
 export const isCircleRole = (value: unknown): value is CircleRole => typeof value === 'string' && (CIRCLE_ROLES as readonly string[]).includes(value);
 
 export const CIRCLE_NAME_MAX = 80;
+/** A join link's label: the creator's note to themselves (R-023). */
+export const JOIN_LABEL_MAX = 80;
 export const CIRCLE_DESCRIPTION_MAX = 500;
 
 /** A circle as the rest of the system sees it. */

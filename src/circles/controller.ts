@@ -1,11 +1,11 @@
-import { createRegistrationThrottle as createWindowLimiter, type Authenticated, type UserController, type UserStore } from '../users/index.js';
+import { createRegistrationThrottle as createWindowLimiter, hashToken, type Authenticated, type UserController, type UserStore } from '../users/index.js';
 import { authorise } from './authorise.js';
-import { newCircleId, newInvitationId } from './ids.js';
+import { isWellFormedJoinToken, newCircleId, newInvitationId, newJoinLinkId, newJoinRequestId, newJoinToken } from './ids.js';
 import { circlesError, type CirclesError } from './errors.js';
 import { err, ok, type Result } from './result.js';
-import type { CirclePage, CircleStore, CircleSummary, Invitation, Membership } from './store.js';
+import type { CirclePage, CircleStore, CircleSummary, Invitation, JoinLink, Membership } from './store.js';
 import type { Circle, CircleRole } from './types.js';
-import { parseCreateCircle, parseInvite, parseRoleChange, parseUpdateCircle } from './validate.js';
+import { parseCreateCircle, parseCreateJoinLink, parseInvite, parseJoinToken, parseRoleChange, parseUpdateCircle } from './validate.js';
 
 /** A circle as a signed-in member sees it: with their own role and how many people are in it. */
 export interface CircleView {
@@ -49,6 +49,38 @@ export interface MyInvitationView {
   readonly expiresAt: number;
 }
 
+/** A join link as owners and managers see it: never the token (it cannot be recovered), never the hash. */
+export interface JoinLinkView {
+  readonly id: string;
+  readonly role: 'member' | 'observer';
+  readonly label: string;
+  readonly createdBy: { readonly userId: string; readonly displayName?: string };
+  readonly createdAt: number;
+  readonly expiresAt: number;
+  readonly maxUses: number;
+  readonly uses: number;
+  readonly approval: boolean;
+}
+/** A new link: the token is here once and nowhere else. */
+export interface CreatedJoinLink {
+  readonly token: string;
+  readonly link: JoinLinkView;
+}
+/** What someone holding a link may see before joining: the circle's name, the role offered and who made the link; nothing else. */
+export interface JoinPreview {
+  readonly circle: { readonly name: string };
+  readonly role: 'member' | 'observer';
+  readonly createdBy: { readonly displayName?: string };
+}
+/** What joining by a link did. `member` is someone who was already in (their role unchanged, no use counted). */
+export type JoinResult =
+  | { readonly state: 'joined' | 'member'; readonly circle: CircleView }
+  | { readonly state: 'requested' | 'waiting'; readonly circle: { readonly name: string }; readonly role: 'member' | 'observer'; readonly expiresAt: number };
+/** Who is asking, for the throttle on unknown links. */
+export interface JoinContext {
+  readonly clientKey?: string;
+}
+
 export interface PageRequest {
   readonly limit?: number;
   readonly cursor?: string | null;
@@ -69,6 +101,14 @@ export interface CircleControllerLimits {
   readonly invitationsPerHour?: number;
   /** How long an invitation stays open. Default 7. */
   readonly invitationDays?: number;
+  /** How many live join links one circle may have (R-023). Default 20. */
+  readonly maxLiveJoinLinksPerCircle?: number;
+  /** How many join requests one circle may have waiting. Default 20. */
+  readonly maxPendingJoinRequestsPerCircle?: number;
+  /** How long a join request waits for approval. Default 7. */
+  readonly joinRequestDays?: number;
+  /** How many unknown join links one client may try in an hour. Default 30. */
+  readonly joinMissesPerHour?: number;
 }
 
 export interface CircleControllerInit {
@@ -84,6 +124,10 @@ export interface CircleControllerInit {
   readonly newCircleId?: () => string;
   /** Makes invitation ids. Tests only. */
   readonly newInvitationId?: () => string;
+  /** Makes join link ids, join link tokens and join request ids. Tests only. */
+  readonly newJoinLinkId?: () => string;
+  readonly newJoinToken?: () => string;
+  readonly newJoinRequestId?: () => string;
 }
 
 /**
@@ -122,6 +166,23 @@ export interface CircleController {
   decline(token: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
 
   /**
+   * Owners and managers make a join link (R-023): `{ label, role?, days?, uses?, approval? }`, defaults observer, 7 days, one use,
+   * approval on; never `owner` or `manager`. The token is in the answer once and nowhere else.
+   */
+  createJoinLink(token: unknown, circleId: unknown, input: unknown): Promise<Result<CreatedJoinLink, CirclesError>>;
+  /** The circle's live links, without their tokens (owners and managers). */
+  listJoinLinks(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<JoinLinkView>, CirclesError>>;
+  /** Removes one of this circle's links (owners and managers). */
+  revokeJoinLink(token: unknown, circleId: unknown, linkId: unknown): Promise<Result<true, CirclesError>>;
+  /** `{ token }`: the circle's name, the role offered and who made the link. A link that does not work, for any reason, is one `NOT_FOUND`. */
+  previewJoin(token: unknown, input: unknown, context?: JoinContext): Promise<Result<JoinPreview, CirclesError>>;
+  /**
+   * `{ token }`: joins at once (a link that needs no approval) or asks to join (a link that does), as the link says. Someone already in
+   * is told so and costs no use; someone already waiting is told so. A link that does not work is one `NOT_FOUND`.
+   */
+  join(token: unknown, input: unknown, context?: JoinContext): Promise<Result<JoinResult, CirclesError>>;
+
+  /**
    * Owners change anyone else's role to any role; managers only move a `member` or `observer` between those
    * two. Nobody changes their own role. `{ role }`. Returns the person as the roster shows them.
    */
@@ -130,7 +191,7 @@ export interface CircleController {
   removeMember(token: unknown, circleId: unknown, userId: unknown): Promise<Result<true, CirclesError>>;
 }
 
-export const DEFAULT_CIRCLE_LIMITS = Object.freeze({ maxCirclesPerUser: 20, maxMembersPerCircle: 50, maxOpenInvitationsPerCircle: 50, invitationsPerHour: 30, invitationDays: 7, maxBrainScopes: 25 });
+export const DEFAULT_CIRCLE_LIMITS = Object.freeze({ maxCirclesPerUser: 20, maxMembersPerCircle: 50, maxOpenInvitationsPerCircle: 50, invitationsPerHour: 30, invitationDays: 7, maxBrainScopes: 25, maxLiveJoinLinksPerCircle: 20, maxPendingJoinRequestsPerCircle: 20, joinRequestDays: 7, joinMissesPerHour: 30 });
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 export const DEFAULT_PAGE_SIZE = 50;
@@ -140,6 +201,7 @@ const ID_ATTEMPTS = 3;
 const STORAGE = 'the circle service could not complete the request';
 const notFound = (): CirclesError => circlesError('NOT_FOUND', 'no such circle');
 const noMember = (): CirclesError => circlesError('NOT_FOUND', 'no such member');
+const noJoinLink = (): CirclesError => circlesError('NOT_FOUND', 'no such join link');
 const noInvitation = (): CirclesError => circlesError('NOT_FOUND', 'no such invitation');
 const INVITED = Object.freeze({ invited: true as const });
 const forbidden = (): CirclesError => circlesError('FORBIDDEN', 'your role in this circle does not allow that');
@@ -160,10 +222,18 @@ export function createCircleController(init: CircleControllerInit): CircleContro
   const maxInvitations = whole(init.limits?.maxOpenInvitationsPerCircle, DEFAULT_CIRCLE_LIMITS.maxOpenInvitationsPerCircle, 'maxOpenInvitationsPerCircle');
   const perHour = whole(init.limits?.invitationsPerHour, DEFAULT_CIRCLE_LIMITS.invitationsPerHour, 'invitationsPerHour');
   const invitationDays = whole(init.limits?.invitationDays, DEFAULT_CIRCLE_LIMITS.invitationDays, 'invitationDays');
+  const maxLinks = whole(init.limits?.maxLiveJoinLinksPerCircle, DEFAULT_CIRCLE_LIMITS.maxLiveJoinLinksPerCircle, 'maxLiveJoinLinksPerCircle');
+  const maxPendingRequests = whole(init.limits?.maxPendingJoinRequestsPerCircle, DEFAULT_CIRCLE_LIMITS.maxPendingJoinRequestsPerCircle, 'maxPendingJoinRequestsPerCircle');
+  const requestDays = whole(init.limits?.joinRequestDays, DEFAULT_CIRCLE_LIMITS.joinRequestDays, 'joinRequestDays');
+  const joinMisses = whole(init.limits?.joinMissesPerHour, DEFAULT_CIRCLE_LIMITS.joinMissesPerHour, 'joinMissesPerHour');
   const hourly = createWindowLimiter({ max: perHour, windowMs: HOUR_MS });
+  const missed = createWindowLimiter({ max: joinMisses, windowMs: HOUR_MS });
   const clock = init.clock ?? Date.now;
   const makeId = init.newCircleId ?? (() => newCircleId());
   const makeInvitationId = init.newInvitationId ?? (() => newInvitationId());
+  const makeLinkId = init.newJoinLinkId ?? (() => newJoinLinkId());
+  const makeJoinToken = init.newJoinToken ?? (() => newJoinToken());
+  const makeRequestId = init.newJoinRequestId ?? (() => newJoinRequestId());
   const storageFailure = (): CirclesError => circlesError('STORAGE_ERROR', STORAGE);
 
   /** Runs `body`; anything it throws is a storage failure with a fixed message (never the thrown text). */
@@ -215,6 +285,24 @@ export function createCircleController(init: CircleControllerInit): CircleContro
       if (cursor === null) return total;
     }
     return total;
+  }
+
+  async function linkView(link: JoinLink): Promise<JoinLinkView> {
+    const person = await directory.get(link.createdBy);
+    return Object.freeze({ id: link.id, role: link.role, label: link.label, createdBy: Object.freeze({ userId: link.createdBy, ...(person === undefined ? {} : { displayName: person.displayName }) }), createdAt: link.createdAt, expiresAt: link.expiresAt, maxUses: link.maxUses, uses: link.uses, approval: link.approval });
+  }
+  /** One link lookup for preview and join: held back when this client has missed too often, and a miss is counted. */
+  async function lookUp(rawToken: string, context: JoinContext | undefined, now: number): Promise<Result<{ hash: string; link: JoinLink }, CirclesError>> {
+    const key = context?.clientKey ?? '';
+    const wait = missed.check(key, now);
+    if (!wait.allowed) return err(circlesError('THROTTLED', 'too many join links that do not work from this address: try again later', { retryAfterMs: wait.retryAfterMs }));
+    const hash = isWellFormedJoinToken(rawToken) ? hashToken(rawToken) : undefined;
+    const link = hash === undefined ? undefined : await store.getJoinLinkByHash(hash, now);
+    if (hash === undefined || link === undefined) {
+      missed.record(key, now);
+      return err(noJoinLink());
+    }
+    return ok({ hash, link });
   }
 
   const LAST_OWNER = 'a circle must keep an owner: make someone else an owner first, or delete the circle';
@@ -431,6 +519,108 @@ export function createCircleController(init: CircleControllerInit): CircleContro
         if (!who.ok) return who;
         if (typeof invitationId !== 'string' || invitationId === '') return err(noInvitation());
         return (await store.declineInvitation(invitationId, who.value.username, clock())) ? ok(true as const) : err(noInvitation());
+      }),
+
+    createJoinLink: (token, circleId, input) =>
+      guarded(async () => {
+        const m = await member(token, circleId);
+        if (!m.ok) return m;
+        // links offer only member and observer, so the right to invite (at member) is the right to make one
+        if (!authorise(m.value.role, 'invite', { role: 'member' })) return err(forbidden());
+        const parsed = parseCreateJoinLink(input);
+        if (!parsed.ok) return parsed;
+        const now = clock();
+        for (let attempt = 0; attempt < ID_ATTEMPTS; attempt++) {
+          const secret = makeJoinToken();
+          const made = await store.createJoinLink(
+            { id: makeLinkId(), circleId: m.value.circleId, tokenHash: hashToken(secret), role: parsed.value.role, label: parsed.value.label, createdBy: m.value.userId, createdAt: now, expiresAt: now + parsed.value.days * DAY_MS, maxUses: parsed.value.uses, approval: parsed.value.approval },
+            { maxLiveLinksPerCircle: maxLinks },
+            now,
+          );
+          if (made.ok) return ok(Object.freeze({ token: secret, link: await linkView(made.value) }));
+          if (made.error.code !== 'CONFLICT') return made;
+        }
+        return err(storageFailure());
+      }),
+
+    listJoinLinks: (token, circleId, page) =>
+      guarded(async () => {
+        const m = await member(token, circleId);
+        if (!m.ok) return m;
+        if (!authorise(m.value.role, 'invite', { role: 'member' })) return err(forbidden());
+        const p = pageOf(page);
+        if (!p.ok) return p;
+        let listed: { items: readonly JoinLink[]; nextCursor: string | null };
+        try {
+          listed = await store.listJoinLinks(m.value.circleId, clock(), p.value);
+        } catch (cause) {
+          if (cause instanceof RangeError) return err(badCursor());
+          throw cause;
+        }
+        const items: JoinLinkView[] = [];
+        for (const link of listed.items) items.push(await linkView(link));
+        return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor }));
+      }),
+
+    revokeJoinLink: (token, circleId, linkId) =>
+      guarded(async () => {
+        const m = await member(token, circleId);
+        if (!m.ok) return m;
+        if (!authorise(m.value.role, 'revokeInvitation', { role: 'member' })) return err(forbidden());
+        if (typeof linkId !== 'string' || linkId === '') return err(noJoinLink());
+        return (await store.revokeJoinLink(linkId, m.value.circleId, clock())) ? ok(true as const) : err(noJoinLink());
+      }),
+
+    previewJoin: (token, input, context) =>
+      guarded(async () => {
+        const who = await whoIs(token);
+        if (!who.ok) return who;
+        const parsed = parseJoinToken(input);
+        if (!parsed.ok) return parsed;
+        const found = await lookUp(parsed.value, context, clock());
+        if (!found.ok) return found;
+        const circle = await store.getCircle(found.value.link.circleId);
+        if (circle === undefined) return err(noJoinLink());
+        const person = await directory.get(found.value.link.createdBy);
+        return ok(Object.freeze({ circle: Object.freeze({ name: circle.name }), role: found.value.link.role, createdBy: Object.freeze(person === undefined ? {} : { displayName: person.displayName }) }));
+      }),
+
+    join: (token, input, context) =>
+      guarded(async () => {
+        const who = await whoIs(token);
+        if (!who.ok) return who;
+        const parsed = parseJoinToken(input);
+        if (!parsed.ok) return parsed;
+        const now = clock();
+        const found = await lookUp(parsed.value, context, now);
+        if (!found.ok) return found;
+        const { hash, link } = found.value;
+        const showMember = async (membership: Membership, state: 'joined' | 'member'): Promise<Result<JoinResult, CirclesError>> => {
+          const circle = await store.getCircle(membership.circleId);
+          if (circle === undefined) return err(noJoinLink());
+          return ok(Object.freeze({ state, circle: view(circle, membership.role, await countMembers(circle.id)) }));
+        };
+        if (!link.approval) {
+          const joined = await store.joinWithLink(hash, who.value.id, now, { maxCirclesPerUser: maxCircles, maxMembersPerCircle: maxMembers });
+          if (!joined.ok) {
+            if (joined.error.code === 'NOT_FOUND') missed.record(context?.clientKey ?? '', now);
+            return joined.error.code === 'NOT_FOUND' ? err(noJoinLink()) : joined;
+          }
+          return showMember(joined.value.membership, joined.value.joined ? 'joined' : 'member');
+        }
+        for (let attempt = 0; attempt < ID_ATTEMPTS; attempt++) {
+          const asked = await store.requestJoin(hash, makeRequestId(), who.value.id, now, { maxPendingPerCircle: maxPendingRequests, ttlMs: requestDays * DAY_MS });
+          if (!asked.ok) {
+            if (asked.error.code === 'CONFLICT') continue;
+            if (asked.error.code === 'NOT_FOUND') missed.record(context?.clientKey ?? '', now);
+            return asked.error.code === 'NOT_FOUND' ? err(noJoinLink()) : asked;
+          }
+          if (asked.value.state === 'member') return showMember(asked.value.membership, 'member');
+          const circle = await store.getCircle(link.circleId);
+          if (circle === undefined) return err(noJoinLink());
+          return ok(Object.freeze({ state: asked.value.state, circle: Object.freeze({ name: circle.name }), role: asked.value.request.role, expiresAt: asked.value.request.expiresAt }));
+        }
+        return err(storageFailure());
       }),
 
     changeRole: (token, circleId, userId, input) =>

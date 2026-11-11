@@ -1,7 +1,7 @@
 import { parseUsername } from '../users/index.js';
 import { circlesError, type CirclesError } from './errors.js';
 import { err, ok, type Result } from './result.js';
-import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, isCircleRole, type CircleRole } from './types.js';
+import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, isCircleRole, JOIN_LABEL_MAX, type CircleRole } from './types.js';
 
 const invalid = (field: string, message: string): Result<never, CirclesError> => err(circlesError('INVALID_INPUT', message, { field }));
 
@@ -112,4 +112,46 @@ export function parseRoleChange(input: unknown): Result<CircleRole, CirclesError
   const body = strict(input, ['role']);
   if (!body.ok) return body;
   return parseRole(body.value.role);
+}
+
+export interface CreateJoinLinkInput {
+  readonly role: 'member' | 'observer';
+  readonly days: number;
+  readonly uses: number;
+  readonly approval: boolean;
+  readonly label: string;
+}
+/** The longest a link may live, in days (R-023 D4). */
+export const MAX_JOIN_LINK_DAYS = 30;
+/** The most uses a link may allow (R-023 D4). */
+export const MAX_JOIN_LINK_USES = 100;
+/**
+ * `{ label, role?, days?, uses?, approval? }`, nothing else. The label is 1 to 80 characters once trimmed with no control characters;
+ * the role is `member` or `observer` (default `observer`: a link never offers `owner` or `manager`), days 1 to 30 (default 7), uses
+ * 1 to 100 (default 1, one-time) and approval a boolean (default `true`).
+ */
+export function parseCreateJoinLink(input: unknown): Result<CreateJoinLinkInput, CirclesError> {
+  const body = strict(input, ['label', 'role', 'days', 'uses', 'approval']);
+  if (!body.ok) return body;
+  if (typeof body.value.label !== 'string') return invalid('label', 'label must be text');
+  const label = body.value.label.trim();
+  if (label === '' || length(label) > JOIN_LABEL_MAX) return invalid('label', `label must be 1 to ${JOIN_LABEL_MAX} characters`);
+  if (hasControl(label)) return invalid('label', 'label must not contain control characters');
+  const role = body.value.role === undefined ? 'observer' : body.value.role;
+  if (role !== 'member' && role !== 'observer') return invalid('role', 'a join link can only offer member or observer');
+  const days = body.value.days === undefined ? 7 : body.value.days;
+  if (typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > MAX_JOIN_LINK_DAYS) return invalid('days', `days must be a whole number from 1 to ${MAX_JOIN_LINK_DAYS}`);
+  const uses = body.value.uses === undefined ? 1 : body.value.uses;
+  if (typeof uses !== 'number' || !Number.isInteger(uses) || uses < 1 || uses > MAX_JOIN_LINK_USES) return invalid('uses', `uses must be a whole number from 1 to ${MAX_JOIN_LINK_USES}`);
+  const approval = body.value.approval === undefined ? true : body.value.approval;
+  if (typeof approval !== 'boolean') return invalid('approval', 'approval must be true or false');
+  return ok(Object.freeze({ role, days, uses, approval, label }));
+}
+
+/** `{ token }`, nothing else. The token must be text; whether it is a link this service made is for the lookup to say. */
+export function parseJoinToken(input: unknown): Result<string, CirclesError> {
+  const body = strict(input, ['token']);
+  if (!body.ok) return body;
+  if (typeof body.value.token !== 'string') return invalid('token', 'token must be text');
+  return ok(body.value.token);
 }

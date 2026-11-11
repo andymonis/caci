@@ -59,6 +59,7 @@ export interface CircleController {
     changeRole(token: unknown, circleId: unknown, userId: unknown, input: unknown): Promise<Result<MemberView, CirclesError>>;
     // (undocumented)
     create(token: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
+    createJoinLink(token: unknown, circleId: unknown, input: unknown): Promise<Result<CreatedJoinLink, CirclesError>>;
     // (undocumented)
     decline(token: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
     delete(token: unknown, circleId: unknown): Promise<Result<true, CirclesError>>;
@@ -68,13 +69,17 @@ export interface CircleController {
     invite(token: unknown, circleId: unknown, input: unknown): Promise<Result<{
         readonly invited: true;
     }, CirclesError>>;
+    join(token: unknown, input: unknown, context?: JoinContext): Promise<Result<JoinResult, CirclesError>>;
     leave(token: unknown, circleId: unknown): Promise<Result<true, CirclesError>>;
     list(token: unknown, page?: PageRequest): Promise<Result<Page<CircleView>, CirclesError>>;
+    listJoinLinks(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<JoinLinkView>, CirclesError>>;
     // (undocumented)
     members(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<MemberView>, CirclesError>>;
     myInvitations(token: unknown, page?: PageRequest): Promise<Result<Page<MyInvitationView>, CirclesError>>;
+    previewJoin(token: unknown, input: unknown, context?: JoinContext): Promise<Result<JoinPreview, CirclesError>>;
     removeMember(token: unknown, circleId: unknown, userId: unknown): Promise<Result<true, CirclesError>>;
     revokeInvitation(token: unknown, circleId: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
+    revokeJoinLink(token: unknown, circleId: unknown, linkId: unknown): Promise<Result<true, CirclesError>>;
     update(token: unknown, circleId: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
 }
 
@@ -87,6 +92,11 @@ export interface CircleControllerInit {
     readonly limits?: CircleControllerLimits;
     readonly newCircleId?: () => string;
     readonly newInvitationId?: () => string;
+    readonly newJoinLinkId?: () => string;
+    // (undocumented)
+    readonly newJoinRequestId?: () => string;
+    // (undocumented)
+    readonly newJoinToken?: () => string;
     // (undocumented)
     readonly store: CircleStore;
     // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
@@ -97,9 +107,13 @@ export interface CircleControllerInit {
 export interface CircleControllerLimits {
     readonly invitationDays?: number;
     readonly invitationsPerHour?: number;
+    readonly joinMissesPerHour?: number;
+    readonly joinRequestDays?: number;
     readonly maxCirclesPerUser?: number;
+    readonly maxLiveJoinLinksPerCircle?: number;
     readonly maxMembersPerCircle?: number;
     readonly maxOpenInvitationsPerCircle?: number;
+    readonly maxPendingJoinRequestsPerCircle?: number;
 }
 
 // @public (undocumented)
@@ -244,6 +258,28 @@ export interface CreateCircleLimits {
 }
 
 // @public
+export interface CreatedJoinLink {
+    // (undocumented)
+    readonly link: JoinLinkView;
+    // (undocumented)
+    readonly token: string;
+}
+
+// @public (undocumented)
+export interface CreateJoinLinkInput {
+    // (undocumented)
+    readonly approval: boolean;
+    // (undocumented)
+    readonly days: number;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    readonly role: 'member' | 'observer';
+    // (undocumented)
+    readonly uses: number;
+}
+
+// @public
 export function createMemoryCircleStore(): CircleStore;
 
 // @public (undocumented)
@@ -254,6 +290,10 @@ export const DEFAULT_CIRCLE_LIMITS: Readonly<{
     invitationsPerHour: 30;
     invitationDays: 7;
     maxBrainScopes: 25;
+    maxLiveJoinLinksPerCircle: 20;
+    maxPendingJoinRequestsPerCircle: 20;
+    joinRequestDays: 7;
+    joinMissesPerHour: 30;
 }>;
 
 // @public (undocumented)
@@ -346,6 +386,30 @@ export const isCircleRole: (value: unknown) => value is CircleRole;
 // @public (undocumented)
 export const isInvitationId: (value: unknown) => value is string;
 
+// @public (undocumented)
+export const isJoinLinkId: (value: unknown) => value is string;
+
+// @public (undocumented)
+export const isJoinRequestId: (value: unknown) => value is string;
+
+// @public
+export const isWellFormedJoinToken: (value: unknown) => value is string;
+
+// @public
+export const JOIN_LINK_ID_PATTERN: RegExp;
+
+// @public (undocumented)
+export const JOIN_REQUEST_ID_PATTERN: RegExp;
+
+// @public
+export const JOIN_TOKEN_PREFIX = "cjoin_";
+
+// @public
+export interface JoinContext {
+    // (undocumented)
+    readonly clientKey?: string;
+}
+
 // @public
 export interface JoinLink {
     // (undocumented)
@@ -399,11 +463,50 @@ export interface JoinLinkRecord {
 export type JoinLinkRole = 'member' | 'observer';
 
 // @public
+export interface JoinLinkView {
+    // (undocumented)
+    readonly approval: boolean;
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly createdBy: {
+        readonly userId: string;
+        readonly displayName?: string;
+    };
+    // (undocumented)
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    readonly maxUses: number;
+    // (undocumented)
+    readonly role: 'member' | 'observer';
+    // (undocumented)
+    readonly uses: number;
+}
+
+// @public
 export interface JoinOutcome {
     // (undocumented)
     readonly joined: boolean;
     // (undocumented)
     readonly membership: Membership;
+}
+
+// @public
+export interface JoinPreview {
+    // (undocumented)
+    readonly circle: {
+        readonly name: string;
+    };
+    // (undocumented)
+    readonly createdBy: {
+        readonly displayName?: string;
+    };
+    // (undocumented)
+    readonly role: 'member' | 'observer';
 }
 
 // @public
@@ -427,6 +530,19 @@ export interface JoinRequestLimits {
     readonly ttlMs: number;
 }
 
+// @public
+export type JoinResult = {
+    readonly state: 'joined' | 'member';
+    readonly circle: CircleView;
+} | {
+    readonly state: 'requested' | 'waiting';
+    readonly circle: {
+        readonly name: string;
+    };
+    readonly role: 'member' | 'observer';
+    readonly expiresAt: number;
+};
+
 // @public (undocumented)
 export interface Listing<T> {
     // (undocumented)
@@ -436,6 +552,12 @@ export interface Listing<T> {
 
 // @public
 export const MAX_CATEGORY_ID = 256;
+
+// @public
+export const MAX_JOIN_LINK_DAYS = 30;
+
+// @public
+export const MAX_JOIN_LINK_USES = 100;
 
 // @public (undocumented)
 export const MAX_PAGE_SIZE = 100;
@@ -495,6 +617,15 @@ export const newCircleId: (random?: Random) => string;
 // @public (undocumented)
 export const newInvitationId: (random?: Random) => string;
 
+// @public (undocumented)
+export const newJoinLinkId: (random?: Random) => string;
+
+// @public (undocumented)
+export const newJoinRequestId: (random?: Random) => string;
+
+// @public (undocumented)
+export const newJoinToken: (random?: Random) => string;
+
 // @public
 export function normaliseCategories(categories: unknown, max: number): Result<string[], CirclesError>;
 
@@ -530,7 +661,13 @@ export function parseCircleName(raw: unknown): Result<string, CirclesError>;
 export function parseCreateCircle(input: unknown): Result<CreateCircleInput, CirclesError>;
 
 // @public
+export function parseCreateJoinLink(input: unknown): Result<CreateJoinLinkInput, CirclesError>;
+
+// @public
 export function parseInvite(input: unknown): Result<InviteInput, CirclesError>;
+
+// @public
+export function parseJoinToken(input: unknown): Result<string, CirclesError>;
 
 // @public (undocumented)
 export function parseRole(raw: unknown, field?: string): Result<CircleRole, CirclesError>;
