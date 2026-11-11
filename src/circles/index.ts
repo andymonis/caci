@@ -16,4 +16,4 @@ export { MAX_CATEGORY_ID, normaliseCategories } from './grants.js';
 export { createMemoryCircleStore } from './memory-store.js';
 export type { AcceptLimits, CirclePage, CirclePatch, CircleRecord, CircleStore, CircleSummary, CreateCircleLimits, Grant, GrantLimits, Invitation, InvitationRecord, InviteLimits, JoinLink, JoinLinkLimits, JoinLinkRecord, JoinLinkRole, JoinOutcome, JoinRequest, JoinRequestLimits, Listing, Membership, RemoveUserOutcome, RequestOutcome } from './store.js';
 export { createCircleController, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from './controller.js';
-export type { CircleController, CircleControllerInit, CircleControllerLimits, CircleView, CreatedJoinLink, InvitationView, JoinContext, JoinLinkView, JoinPreview, JoinResult, MemberView, MyInvitationView, Page, PageRequest } from './controller.js';
+export type { CircleController, CircleControllerInit, CircleControllerLimits, CircleView, CreatedJoinLink, InvitationView, JoinContext, JoinLinkView, JoinPreview, JoinRequestView, JoinResult, MyJoinRequestView, MemberView, MyInvitationView, Page, PageRequest } from './controller.js';

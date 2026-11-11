@@ -56,12 +56,14 @@ export type CircleAction = (typeof CIRCLE_ACTIONS)[number];
 // @public
 export interface CircleController {
     accept(token: unknown, invitationId: unknown): Promise<Result<CircleView, CirclesError>>;
+    approveJoin(token: unknown, circleId: unknown, requestId: unknown): Promise<Result<MemberView, CirclesError>>;
     changeRole(token: unknown, circleId: unknown, userId: unknown, input: unknown): Promise<Result<MemberView, CirclesError>>;
     // (undocumented)
     create(token: unknown, input: unknown): Promise<Result<CircleView, CirclesError>>;
     createJoinLink(token: unknown, circleId: unknown, input: unknown): Promise<Result<CreatedJoinLink, CirclesError>>;
     // (undocumented)
     decline(token: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
+    declineJoin(token: unknown, circleId: unknown, requestId: unknown): Promise<Result<true, CirclesError>>;
     delete(token: unknown, circleId: unknown): Promise<Result<true, CirclesError>>;
     // (undocumented)
     get(token: unknown, circleId: unknown): Promise<Result<CircleView, CirclesError>>;
@@ -70,12 +72,14 @@ export interface CircleController {
         readonly invited: true;
     }, CirclesError>>;
     join(token: unknown, input: unknown, context?: JoinContext): Promise<Result<JoinResult, CirclesError>>;
+    joinRequests(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<JoinRequestView>, CirclesError>>;
     leave(token: unknown, circleId: unknown): Promise<Result<true, CirclesError>>;
     list(token: unknown, page?: PageRequest): Promise<Result<Page<CircleView>, CirclesError>>;
     listJoinLinks(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<JoinLinkView>, CirclesError>>;
     // (undocumented)
     members(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<MemberView>, CirclesError>>;
     myInvitations(token: unknown, page?: PageRequest): Promise<Result<Page<MyInvitationView>, CirclesError>>;
+    myJoinRequests(token: unknown, page?: PageRequest): Promise<Result<Page<MyJoinRequestView>, CirclesError>>;
     previewJoin(token: unknown, input: unknown, context?: JoinContext): Promise<Result<JoinPreview, CirclesError>>;
     removeMember(token: unknown, circleId: unknown, userId: unknown): Promise<Result<true, CirclesError>>;
     revokeInvitation(token: unknown, circleId: unknown, invitationId: unknown): Promise<Result<true, CirclesError>>;
@@ -531,6 +535,22 @@ export interface JoinRequestLimits {
 }
 
 // @public
+export interface JoinRequestView {
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly person: {
+        readonly displayName?: string;
+    };
+    // (undocumented)
+    readonly role: 'member' | 'observer';
+}
+
+// @public
 export type JoinResult = {
     readonly state: 'joined' | 'member';
     readonly circle: CircleView;
@@ -607,6 +627,22 @@ export interface MyInvitationView {
     };
     // (undocumented)
     readonly role: CircleRole;
+}
+
+// @public
+export interface MyJoinRequestView {
+    // (undocumented)
+    readonly circle: {
+        readonly name: string;
+    };
+    // (undocumented)
+    readonly createdAt: number;
+    // (undocumented)
+    readonly expiresAt: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly role: 'member' | 'observer';
 }
 
 // Warning: (ae-forgotten-export) The symbol "Random" needs to be exported by the entry point index.d.ts

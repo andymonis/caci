@@ -3,7 +3,7 @@ import { authorise } from './authorise.js';
 import { isWellFormedJoinToken, newCircleId, newInvitationId, newJoinLinkId, newJoinRequestId, newJoinToken } from './ids.js';
 import { circlesError, type CirclesError } from './errors.js';
 import { err, ok, type Result } from './result.js';
-import type { CirclePage, CircleStore, CircleSummary, Invitation, JoinLink, Membership } from './store.js';
+import type { CirclePage, CircleStore, CircleSummary, Invitation, JoinLink, JoinRequest, Membership } from './store.js';
 import type { Circle, CircleRole } from './types.js';
 import { parseCreateCircle, parseCreateJoinLink, parseInvite, parseJoinToken, parseRoleChange, parseUpdateCircle } from './validate.js';
 
@@ -76,6 +76,22 @@ export interface JoinPreview {
 export type JoinResult =
   | { readonly state: 'joined' | 'member'; readonly circle: CircleView }
   | { readonly state: 'requested' | 'waiting'; readonly circle: { readonly name: string }; readonly role: 'member' | 'observer'; readonly expiresAt: number };
+/** A waiting request as owners and managers see it: who asked by display name only (they are not a member, so nothing more), the role the link offered and when it lapses. */
+export interface JoinRequestView {
+  readonly id: string;
+  readonly person: { readonly displayName?: string };
+  readonly role: 'member' | 'observer';
+  readonly createdAt: number;
+  readonly expiresAt: number;
+}
+/** A person's own waiting request: the circle's name (no id), the role asked and when it lapses. */
+export interface MyJoinRequestView {
+  readonly id: string;
+  readonly circle: { readonly name: string };
+  readonly role: 'member' | 'observer';
+  readonly createdAt: number;
+  readonly expiresAt: number;
+}
 /** Who is asking, for the throttle on unknown links. */
 export interface JoinContext {
   readonly clientKey?: string;
@@ -182,6 +198,18 @@ export interface CircleController {
    */
   join(token: unknown, input: unknown, context?: JoinContext): Promise<Result<JoinResult, CirclesError>>;
 
+  /** The circle's waiting join requests (owners and managers). */
+  joinRequests(token: unknown, circleId: unknown, page?: PageRequest): Promise<Result<Page<JoinRequestView>, CirclesError>>;
+  /**
+   * Owners and managers approve a waiting request: the person becomes a member at the role the link offered. A full circle, or a person
+   * already in the most circles allowed, is `LIMIT_REACHED` and leaves the request waiting. Returns the new member as the roster shows them.
+   */
+  approveJoin(token: unknown, circleId: unknown, requestId: unknown): Promise<Result<MemberView, CirclesError>>;
+  /** Owners and managers refuse a waiting request. */
+  declineJoin(token: unknown, circleId: unknown, requestId: unknown): Promise<Result<true, CirclesError>>;
+  /** The caller's own waiting requests, across circles. */
+  myJoinRequests(token: unknown, page?: PageRequest): Promise<Result<Page<MyJoinRequestView>, CirclesError>>;
+
   /**
    * Owners change anyone else's role to any role; managers only move a `member` or `observer` between those
    * two. Nobody changes their own role. `{ role }`. Returns the person as the roster shows them.
@@ -201,6 +229,7 @@ const ID_ATTEMPTS = 3;
 const STORAGE = 'the circle service could not complete the request';
 const notFound = (): CirclesError => circlesError('NOT_FOUND', 'no such circle');
 const noMember = (): CirclesError => circlesError('NOT_FOUND', 'no such member');
+const noJoinRequest = (): CirclesError => circlesError('NOT_FOUND', 'no such join request');
 const noJoinLink = (): CirclesError => circlesError('NOT_FOUND', 'no such join link');
 const noInvitation = (): CirclesError => circlesError('NOT_FOUND', 'no such invitation');
 const INVITED = Object.freeze({ invited: true as const });
@@ -621,6 +650,70 @@ export function createCircleController(init: CircleControllerInit): CircleContro
           return ok(Object.freeze({ state: asked.value.state, circle: Object.freeze({ name: circle.name }), role: asked.value.request.role, expiresAt: asked.value.request.expiresAt }));
         }
         return err(storageFailure());
+      }),
+
+    joinRequests: (token, circleId, page) =>
+      guarded(async () => {
+        const m = await member(token, circleId);
+        if (!m.ok) return m;
+        if (!authorise(m.value.role, 'invite', { role: 'member' })) return err(forbidden());
+        const p = pageOf(page);
+        if (!p.ok) return p;
+        let listed: { items: readonly JoinRequest[]; nextCursor: string | null };
+        try {
+          listed = await store.listJoinRequests(m.value.circleId, clock(), p.value);
+        } catch (cause) {
+          if (cause instanceof RangeError) return err(badCursor());
+          throw cause;
+        }
+        const items: JoinRequestView[] = [];
+        for (const r of listed.items) {
+          const person = await directory.get(r.userId);
+          items.push(Object.freeze({ id: r.id, person: Object.freeze(person === undefined ? {} : { displayName: person.displayName }), role: r.role, createdAt: r.createdAt, expiresAt: r.expiresAt }));
+        }
+        return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor }));
+      }),
+
+    approveJoin: (token, circleId, requestId) =>
+      guarded(async () => {
+        const m = await member(token, circleId);
+        if (!m.ok) return m;
+        if (!authorise(m.value.role, 'invite', { role: 'member' })) return err(forbidden());
+        if (typeof requestId !== 'string' || requestId === '') return err(noJoinRequest());
+        const approved = await store.approveJoinRequest(requestId, m.value.circleId, clock(), { maxCirclesPerUser: maxCircles, maxMembersPerCircle: maxMembers });
+        if (!approved.ok) return approved; // the store's own not-found says 'no such join request' (the conformance suite pins it)
+        return ok(await memberView(approved.value));
+      }),
+
+    declineJoin: (token, circleId, requestId) =>
+      guarded(async () => {
+        const m = await member(token, circleId);
+        if (!m.ok) return m;
+        if (!authorise(m.value.role, 'invite', { role: 'member' })) return err(forbidden());
+        if (typeof requestId !== 'string' || requestId === '') return err(noJoinRequest());
+        return (await store.declineJoinRequest(requestId, m.value.circleId, clock())) ? ok(true as const) : err(noJoinRequest());
+      }),
+
+    myJoinRequests: (token, page) =>
+      guarded(async () => {
+        const who = await whoIs(token);
+        if (!who.ok) return who;
+        const p = pageOf(page);
+        if (!p.ok) return p;
+        let listed: { items: readonly JoinRequest[]; nextCursor: string | null };
+        try {
+          listed = await store.listJoinRequestsBy(who.value.id, clock(), p.value);
+        } catch (cause) {
+          if (cause instanceof RangeError) return err(badCursor());
+          throw cause;
+        }
+        const items: MyJoinRequestView[] = [];
+        for (const r of listed.items) {
+          const circle = await store.getCircle(r.circleId);
+          if (circle === undefined) continue;
+          items.push(Object.freeze({ id: r.id, circle: Object.freeze({ name: circle.name }), role: r.role, createdAt: r.createdAt, expiresAt: r.expiresAt }));
+        }
+        return ok(Object.freeze({ items: Object.freeze(items), nextCursor: listed.nextCursor }));
       }),
 
     changeRole: (token, circleId, userId, input) =>

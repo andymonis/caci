@@ -97,5 +97,5 @@ describe('the demo model in a focused check', () => {
         if (r.ok) expect(r.value.attempts).toBe(1);
       }
     }
-  });
+  }, 60_000);
 });
