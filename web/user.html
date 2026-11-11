@@ -26,6 +26,7 @@
 
     <section id="screen-signed-out" hidden>
       <h1>CaCi</h1>
+      <p id="join-signedout-note" class="note" hidden></p>
 
       <section id="signin-section" hidden>
         <h2>Sign in</h2>
@@ -149,6 +150,36 @@
           <button type="button" id="circle-coming-up" class="secondary">Coming up</button>
           <button type="button" id="circle-long-range" class="secondary">Long range</button>
         </form>
+      </section>
+
+      <section id="view-join" hidden>
+        <h2 id="join-heading" tabindex="-1">Join a circle</h2>
+        <p id="join-status" role="status" hidden></p>
+        <p id="join-error" class="error" role="alert" tabindex="-1" hidden></p>
+        <p id="join-miss" class="note" role="status" tabindex="-1" hidden></p>
+
+        <div id="join-preview" hidden>
+          <p id="join-preview-text"></p>
+          <p id="join-warning" class="note"></p>
+          <p>
+            <button type="button" id="join-confirm">Join</button>
+            <button type="button" id="join-cancel" class="secondary">Not now</button>
+          </p>
+        </div>
+
+        <div id="join-result" hidden>
+          <p id="join-result-text" tabindex="-1"></p>
+          <p><a id="join-open-circle" href="#/" hidden>Open the circle</a></p>
+        </div>
+
+        <div id="join-mine" hidden>
+          <h3>Your waiting requests</h3>
+          <p id="join-mine-note" class="note"></p>
+          <p id="join-mine-error" class="error" role="alert" hidden></p>
+          <ul id="join-mine-list" class="plain" hidden></ul>
+        </div>
+
+        <template id="join-mine-template"><li><span data-slot="text"></span></li></template>
       </section>
 
       <section id="view-settings" hidden>

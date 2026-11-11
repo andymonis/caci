@@ -12,6 +12,8 @@ mountUser(
     setHash: (hash) => {
       window.location.hash = hash;
     },
+    // the join link's token is read once and then taken out of the address (without adding a history entry)
+    replaceHash: (hash) => window.history.replaceState(null, '', hash),
     onHashChange: (listener) => window.addEventListener('hashchange', listener),
   },
   (context) => userHooks(document, fetchFn, context),

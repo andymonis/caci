@@ -201,3 +201,28 @@ export function myRequestRow(request) {
     meta: [`You asked to join as: ${roleName(request.role)}`, made === '' ? '' : `asked ${made}`, lapses === '' ? '' : `lapses ${lapses}`].filter((part) => part !== '').join(' · '),
   });
 }
+
+// The join screen of the everyday app (R-023): what a person sees after opening a link they were sent.
+
+export const JOIN_NO_LINK = 'This page needs a join link. Open the link you were sent.';
+export const JOIN_SIGNED_OUT = 'You were sent a link to join a circle. Sign in, or create an account, to carry on.';
+export const JOIN_WARNING = "If you join, you can read what the circle holds, and everyone in it can see your username and display name. An owner or manager may need to approve you first.";
+export const JOIN_MISS = 'This link does not work: it may have been used up, have expired or have been withdrawn. If you already asked to join, your request is listed below.';
+export const JOIN_MINE_NOTE = 'Your waiting requests. You are not told when one is decided: look at the circles in the menu.';
+
+/** What the preview says: the circle by name, the role offered and who made the link. */
+export function joinPreviewWords(preview) {
+  const maker = preview.createdBy && typeof preview.createdBy.displayName === 'string' && preview.createdBy.displayName !== '' ? ` The link was made by ${preview.createdBy.displayName}.` : '';
+  return `You have been invited to join the circle "${preview.circle.name}" as ${roleName(preview.role)}.${maker}`;
+}
+
+/** What each answer to joining says. `expiresAt` is when a waiting request lapses. */
+export function joinResultWords(result) {
+  const name = result.circle.name;
+  const lapses = typeof result.expiresAt === 'number' && formatDate(result.expiresAt) !== '' ? ` It lapses on ${formatDate(result.expiresAt)}.` : '';
+  if (result.state === 'joined') return `You are now a member of "${name}" as ${roleName(result.circle.role)}.`;
+  if (result.state === 'member') return `You are already in "${name}" as ${roleName(result.circle.role)}. Nothing was changed.`;
+  if (result.state === 'requested') return `Your request to join "${name}" as ${roleName(result.role)} has been sent. An owner or manager will decide.${lapses}`;
+  if (result.state === 'waiting') return `Your request to join "${name}" is already waiting for an owner or manager.${lapses}`;
+  return '';
+}

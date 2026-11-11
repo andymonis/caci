@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { circleInvitationRow, circleRow, countText, DELETE_TEXT, LEAVE_TEXT, memberRow, EMPTY_CIRCLES, EMPTY_INVITATIONS, formatDate, headingIdFor, invitationRow, navFor, peopleText, roleName, titleFor, JOIN_CREATED_WORDS, JOIN_NO_LINKS, JOIN_NO_REQUESTS, JOIN_NOTE, joinLinkRow, joinRequestRow, joinUrl, MY_REQUESTS_NONE, MY_REQUESTS_NOTE, myRequestRow } from './circles-view.js';
+import { circleInvitationRow, circleRow, countText, DELETE_TEXT, LEAVE_TEXT, memberRow, EMPTY_CIRCLES, EMPTY_INVITATIONS, formatDate, headingIdFor, invitationRow, navFor, peopleText, roleName, titleFor, JOIN_CREATED_WORDS, JOIN_NO_LINKS, JOIN_NO_REQUESTS, JOIN_NOTE, joinLinkRow, joinRequestRow, joinUrl, MY_REQUESTS_NONE, MY_REQUESTS_NOTE, myRequestRow, JOIN_MINE_NOTE, JOIN_MISS, JOIN_NO_LINK, JOIN_SIGNED_OUT, JOIN_WARNING, joinPreviewWords, joinResultWords } from './circles-view.js';
 import { ROLE_WORDS } from './permissions.js';
 
 const C = 'c0123456789abcdef';
@@ -208,5 +208,33 @@ describe('join links (R-023)', () => {
     const request = { id: 'r0000000000000001', circle: { name: 'Team' }, role: 'member', createdAt: Date.UTC(2026, 0, 2), expiresAt: Date.UTC(2026, 0, 9) };
     expect(myRequestRow(request)).toEqual({ title: 'Team', meta: 'You asked to join as: Member · asked 2026-01-02 · lapses 2026-01-09' });
     expect(myRequestRow({ ...request, createdAt: 'x', expiresAt: 'y' }).meta).toBe('You asked to join as: Member');
+  });
+});
+
+describe('the join screen of the everyday app (R-023)', () => {
+  it('the sentences a person must not miss are there', () => {
+    expect(JOIN_NO_LINK).toBe('This page needs a join link. Open the link you were sent.');
+    expect(JOIN_SIGNED_OUT).toBe('You were sent a link to join a circle. Sign in, or create an account, to carry on.');
+    expect(JOIN_WARNING).toContain('everyone in it can see your username and display name');
+    expect(JOIN_WARNING).toContain('An owner or manager may need to approve you first');
+    expect(JOIN_MISS).toContain('used up');
+    expect(JOIN_MISS).toContain('If you already asked to join, your request is listed below');
+    expect(JOIN_MINE_NOTE).toContain('You are not told when one is decided');
+  });
+
+  it('the preview names the circle, the role and who made the link', () => {
+    expect(joinPreviewWords({ circle: { name: 'Club' }, role: 'observer', createdBy: { displayName: 'Ben B' } })).toBe('You have been invited to join the circle "Club" as Observer. The link was made by Ben B.');
+    for (const createdBy of [{}, { displayName: '' }, undefined, null]) expect(joinPreviewWords({ circle: { name: 'Club' }, role: 'member', createdBy })).toBe('You have been invited to join the circle "Club" as Member.');
+  });
+
+  it('each answer to joining says what happened', () => {
+    const circle = { id: 'c0000000000000001', name: 'Club', role: 'manager' };
+    expect(joinResultWords({ state: 'joined', circle })).toBe('You are now a member of "Club" as Manager.');
+    expect(joinResultWords({ state: 'member', circle })).toBe('You are already in "Club" as Manager. Nothing was changed.');
+    const asked = { circle: { name: 'Club' }, role: 'member', expiresAt: Date.UTC(2026, 0, 9) };
+    expect(joinResultWords({ state: 'requested', ...asked })).toBe('Your request to join "Club" as Member has been sent. An owner or manager will decide. It lapses on 2026-01-09.');
+    expect(joinResultWords({ state: 'waiting', ...asked })).toBe('Your request to join "Club" is already waiting for an owner or manager. It lapses on 2026-01-09.');
+    expect(joinResultWords({ state: 'requested', ...asked, expiresAt: 'x' })).toBe('Your request to join "Club" as Member has been sent. An owner or manager will decide.');
+    expect(joinResultWords({ state: 'other', circle })).toBe('');
   });
 });

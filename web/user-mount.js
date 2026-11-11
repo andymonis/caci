@@ -6,11 +6,13 @@ import { createApiClient } from './api-client.js';
 import { createSettingsSession } from './settings-session.js';
 import { createSession } from './session.js';
 import { isCircleId } from './circles-client.js';
+import { isJoinToken } from './join-client.js';
+import { JOIN_SIGNED_OUT } from './circles-view.js';
 import { FORMS, formFeedback } from './view.js';
 
 const SCREENS = ['loading', 'unreachable', 'signed-out', 'signed-in'];
 const NO_ENV = Object.freeze({ getHash: () => '', setHash: () => {}, onHashChange: () => {} });
-const TITLES = Object.freeze({ home: 'CaCi', settings: 'Settings – CaCi' });
+const TITLES = Object.freeze({ home: 'CaCi', settings: 'Settings – CaCi', join: 'Join a circle – CaCi' });
 const SETTINGS_FORMS = Object.freeze({ profile: Object.freeze(['displayName', 'email']), password: Object.freeze(['currentPassword', 'newPassword']) });
 
 /** The circle an address names (`#/circle/<id>`, the id in its exact shape), else `undefined`. Never decoded. */
@@ -19,8 +21,14 @@ export const circleIdOf = (hash) => {
   const id = hash.slice('#/circle/'.length);
   return isCircleId(id) ? id : undefined;
 };
-/** The address names Settings or a circle only exactly; anything else is Home. Never decoded. */
-export const routeOf = (hash) => (hash === '#/settings' ? 'settings' : circleIdOf(hash) !== undefined ? 'circle' : 'home');
+/** The join link an address carries (`#/join/<token>`, the token in its exact shape), else `undefined`. Never decoded. */
+export const joinTokenOf = (hash) => {
+  if (typeof hash !== 'string' || !hash.startsWith('#/join/')) return undefined;
+  const token = hash.slice('#/join/'.length);
+  return isJoinToken(token) ? token : undefined;
+};
+/** The address names Settings, a circle or a join link only exactly (`#/join` alone is the join screen with its address already cleaned); anything else is Home. Never decoded. */
+export const routeOf = (hash) => (hash === '#/settings' ? 'settings' : circleIdOf(hash) !== undefined ? 'circle' : hash === '#/join' || joinTokenOf(hash) !== undefined ? 'join' : 'home');
 
 export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) {
   const $ = (id) => {
@@ -68,9 +76,10 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) 
   const signedInNotice = $('signed-in-notice');
   const showRegister = $('show-register');
   const showSignin = $('show-signin');
-  const views = { home: $('view-home'), circle: $('view-circle'), settings: $('view-settings') };
+  const views = { home: $('view-home'), circle: $('view-circle'), settings: $('view-settings'), join: $('view-join') };
+  const signedOutJoinNote = $('join-signedout-note');
   const navLinks = { home: $('nav-home'), settings: $('nav-settings') };
-  const headings = { home: $('home-heading'), settings: $('settings-heading') };
+  const headings = { home: $('home-heading'), settings: $('settings-heading'), join: $('join-heading') };
 
   let shown = null; // the screen of the signed-in frame being shown
 
@@ -111,18 +120,24 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) 
       }
       shown = null;
       document.title = 'CaCi';
+      // someone who opened a join link and is not signed in is told why they are being asked to: the link is kept in the address
+      const joining = joinTokenOf(env.getHash()) !== undefined;
+      signedOutJoinNote.textContent = joining ? JOIN_SIGNED_OUT : '';
+      signedOutJoinNote.hidden = !joining;
       return;
     }
+    signedOutJoinNote.textContent = '';
+    signedOutJoinNote.hidden = true;
     const route = routeOf(env.getHash());
-    const param = circleIdOf(env.getHash());
+    const param = circleIdOf(env.getHash()) ?? joinTokenOf(env.getHash());
     for (const name of Object.keys(views)) views[name].hidden = name !== route;
     for (const name of Object.keys(navLinks)) {
       if (name === route) navLinks[name].setAttribute('aria-current', 'page');
       else navLinks[name].removeAttribute('aria-current');
     }
     const key = `${route}:${param ?? ''}`;
-    if (shown === key) return;
-    shown = key;
+    if (shown === key && route !== 'join') return; // a join link is always acted on: it was a new visit even if the address looks the same
+    shown = route === 'join' ? 'join:' : key; // the link is replaced by a plain address as it is taken in
     if (route === 'settings') {
       for (const parts of Object.values(settingsForms)) {
         clearFeedback(parts);
@@ -240,7 +255,7 @@ export function mountUser(document, fetchFn, env = NO_ENV, hooksOrFactory = {}) 
   });
 
   // the hooks may be given ready, or built from what only this module can offer (the one-time re-check of a ended session)
-  hooks = typeof hooksOrFactory === 'function' ? hooksOrFactory({ recheck, go: (hash) => env.setHash(hash) }) : hooksOrFactory;
+  hooks = typeof hooksOrFactory === 'function' ? hooksOrFactory({ recheck, go: (hash) => env.setHash(hash), replace: (hash) => (typeof env.replaceHash === 'function' ? env.replaceHash(hash) : env.setHash(hash)) }) : hooksOrFactory;
   session.subscribe(render);
   env.onHashChange(() => renderRoute(session.getState().screen === 'signed-in', session.getState()));
   render(session.getState());

@@ -91,7 +91,9 @@ button.link { min-height: 2.75rem; padding: 0.25rem 0.25rem; color: var(--accent
 .msg.problem { color: var(--error); background: var(--error-bg); }
 .lines { margin: 0.25rem 0 0; padding-left: 1.25rem; }
 .choices { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
-.choices[hidden], .lines[hidden] { display: none; }
+.choices[hidden], .lines[hidden], .plain[hidden] { display: none; }
+.plain { list-style: none; margin: 0.5rem 0; padding: 0; }
+.plain li { margin: 0.25rem 0; }
 
 /* Agent access (R-022) */
 fieldset.field { border: 0; padding: 0; margin: 0 0 1rem; }
