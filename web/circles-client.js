@@ -29,12 +29,12 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const optionalText = (value) => value === undefined || typeof value === 'string';
 const whole = (value) => Number.isSafeInteger(value) && value >= 0;
 
-function circleOf(json) {
+export function circleOf(json) {
   if (!isObject(json) || !isCircleId(json.id) || typeof json.name !== 'string' || !isRole(json.role) || !whole(json.memberCount) || !whole(json.createdAt) || !whole(json.updatedAt) || !optionalText(json.description)) return undefined;
   return Object.freeze({ id: json.id, name: json.name, ...(json.description === undefined ? {} : { description: json.description }), role: json.role, memberCount: json.memberCount, createdAt: json.createdAt, updatedAt: json.updatedAt });
 }
 
-function memberOf(json) {
+export function memberOf(json) {
   if (!isObject(json) || !isUserId(json.userId) || !isRole(json.role) || !whole(json.joinedAt) || !optionalText(json.username) || !optionalText(json.displayName)) return undefined;
   return Object.freeze({ userId: json.userId, ...(json.username === undefined ? {} : { username: json.username }), ...(json.displayName === undefined ? {} : { displayName: json.displayName }), role: json.role, joinedAt: json.joinedAt });
 }

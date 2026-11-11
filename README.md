@@ -356,7 +356,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these fifty-one, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these fifty-three, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -386,6 +386,8 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `agent-tokens-client.js` | the Agent access part of Settings (R-022): list, make and stop the keys that let the person's own agent read their notes |
 | `agent-access-session.js` | what that part does: the keys, the choices of notes, a new key held in memory once, stopping a key (asks first) |
 | `agent-access-page.js` | draws that part of Settings; shown only when the service has agent access switched on |
+| `join-client.js` | talks to the join link routes (R-023): make, list and withdraw links, preview and join by a link, and list, approve and decline waiting requests; the link's token only ever goes in a request body |
+| `join-links-session.js` | what the Join links and Waiting to join parts of a circle's screen do: make a link (its token held in memory once), withdraw one (asks first), approve or decline a request |
 | `ledger-session.js` | what the change-log screen shows: one brain's entries, newest first, a page at a time; held in memory only |
 | `chat-page.js` | puts the chat on the Home screen: the thread, the update and question boxes, the choice buttons |
 | `chat-view.js` | the words of the chat: which model handles your updates, and the look of each message |
