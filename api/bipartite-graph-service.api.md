@@ -292,6 +292,7 @@ export interface ServiceConfig {
     readonly cookieSecure: boolean;
     readonly dataDir: string;
     readonly invitationDays: number;
+    readonly joinLinks: boolean;
     readonly ledgerDays: number;
     readonly llm: 'demo' | 'anthropic';
     readonly maxBrainScopes: number;

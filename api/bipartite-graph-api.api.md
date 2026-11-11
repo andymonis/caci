@@ -135,6 +135,9 @@ export function createCircleRoutes(options: CircleRoutesOptions): readonly Route
 export function createInvitationRoutes(options: CircleRoutesOptions): readonly Route[];
 
 // @public
+export function createJoinRoutes(options: CircleRoutesOptions): readonly Route[];
+
+// @public
 export function createLedgerRoutes(options: LedgerRoutesOptions): readonly Route[];
 
 // @public

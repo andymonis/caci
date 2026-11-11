@@ -1,7 +1,7 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createAgentTools, createAgentView } from '../agent/index.js';
-import { createAccountRoutes, createAgentTokenRoutes, createApiServer, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
+import { createAccountRoutes, createAgentTokenRoutes, createApiServer, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createJoinRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
 import { createCaciController, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
@@ -167,6 +167,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       directory: users,
       store: circleStore,
       limits: { maxCirclesPerUser: config.maxCirclesPerUser, maxMembersPerCircle: config.maxMembersPerCircle, invitationDays: config.invitationDays },
+      clock,
     }), graphs);
     await reconcile(); // circles made before circle graphs existed get theirs, and graphs of circles that are gone are dropped
     const sharing = createSharing({ users: controller, directory: users, store: circleStore, graphAdapter: graphs });
@@ -180,6 +181,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       ...createStatusRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createCircleRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createInvitationRoutes({ circles, secureCookies: config.cookieSecure }),
+      ...(config.joinLinks ? createJoinRoutes({ circles, secureCookies: config.cookieSecure }) : []),
       ...createSharingRoutes({ sharing, secureCookies: config.cookieSecure }),
       ...mcp,
       ...createWebRoutes({ files: webFiles }),

@@ -27,7 +27,7 @@ export interface CircleApp {
   graphs: ReturnType<typeof createMemoryAdapter>;
 }
 
-export async function startCircleApp(extra: { store?: CircleStore; limits?: Parameters<typeof createCircleController>[0]['limits']; secure?: boolean; more?: (app: { circles: CircleController; now: { value: number }; users: ReturnType<typeof createUserController>; directory: ReturnType<typeof createMemoryUserStore>; store: CircleStore; graphs: ReturnType<typeof createMemoryAdapter> }) => readonly Route[] } = {}): Promise<CircleApp> {
+export async function startCircleApp(extra: { store?: CircleStore; limits?: Parameters<typeof createCircleController>[0]['limits']; secure?: boolean; trustedProxies?: number; more?: (app: { circles: CircleController; now: { value: number }; users: ReturnType<typeof createUserController>; directory: ReturnType<typeof createMemoryUserStore>; store: CircleStore; graphs: ReturnType<typeof createMemoryAdapter> }) => readonly Route[] } = {}): Promise<CircleApp> {
   const now = { value: T0 };
   const userStore = createMemoryUserStore();
   const graphs = createMemoryAdapter();
@@ -43,7 +43,7 @@ export async function startCircleApp(extra: { store?: CircleStore; limits?: Para
   const store = extra.store ?? createMemoryCircleStore();
   const circles = createCircleController({ users, directory: userStore, store, clock: () => now.value, ...(extra.limits === undefined ? {} : { limits: extra.limits }) });
   const secureCookies = extra.secure ?? false;
-  const api = createApiServer({ routes: [...createAccountRoutes({ controller: users, secureCookies }), ...createCircleRoutes({ circles, secureCookies }), ...createInvitationRoutes({ circles, secureCookies }), ...(extra.more?.({ circles, now, users, directory: userStore, store, graphs }) ?? [])] });
+  const api = createApiServer({ ...(extra.trustedProxies === undefined ? {} : { trustedProxies: extra.trustedProxies }), routes: [...createAccountRoutes({ controller: users, secureCookies }), ...createCircleRoutes({ circles, secureCookies }), ...createInvitationRoutes({ circles, secureCookies }), ...(extra.more?.({ circles, now, users, directory: userStore, store, graphs }) ?? [])] });
   const port = await api.listen(0);
   return { api, port, now, store, circles, ids: {}, graphs };
 }
