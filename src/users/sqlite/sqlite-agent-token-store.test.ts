@@ -133,8 +133,8 @@ describe('agent tokens in the database file', () => {
     const path = join(tmp(), 'users.db');
     tokensAt(path).close();
     const db = openDb({ path });
-    expect(USERS_SCHEMA_VERSION).toBe(8);
-    expect(db.pragma('user_version')).toBe(8);
+    expect(USERS_SCHEMA_VERSION).toBe(9);
+    expect(db.pragma('user_version')).toBe(9);
     expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE tbl_name = 'agent_tokens' ORDER BY name").map((r) => r.name)).toEqual(expect.arrayContaining(['agent_tokens', 'agent_tokens_by_expiry', 'agent_tokens_by_user']));
     expect(db.get<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'agent_tokens_end_with_user'")?.name).toBe('agent_tokens_end_with_user');
     db.close();
@@ -151,7 +151,7 @@ describe('agent tokens in the database file', () => {
     const { token } = await created(store);
     expect(await store.resolve(token, T0 + 1)).toBeDefined();
     const after = openDb({ path });
-    expect(after.pragma('user_version')).toBe(8);
+    expect(after.pragma('user_version')).toBe(9);
     expect(after.get<{ username: string }>("SELECT username FROM users WHERE id = 'u0000000000000001'")?.username).toBe('ann');
     after.close();
   });

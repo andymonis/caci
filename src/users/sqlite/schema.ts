@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 8;
+export const USERS_SCHEMA_VERSION = 9;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -267,7 +267,48 @@ const V8: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8]);
+/**
+ * Version 9: join links and join requests (R-023). Only the SHA-256 of a link's token is stored. Both tables belong to their circle
+ * with `ON DELETE CASCADE`. They have no foreign key to `users`, so the stores work without a user row; a trigger removes a person's
+ * waiting requests when their user row goes, whoever deletes it. A request copies the link's role and has no reference to the link,
+ * so revoking a link leaves the requests already made.
+ */
+const V9: Migration = Object.freeze({
+  to: 9,
+  creates: Object.freeze(['circle_join_links', 'circle_join_requests']),
+  sql: Object.freeze([
+    `CREATE TABLE circle_join_links (
+       id TEXT NOT NULL PRIMARY KEY,
+       circle_id TEXT NOT NULL REFERENCES circles (id) ON DELETE CASCADE,
+       token_hash TEXT NOT NULL UNIQUE CHECK (length(token_hash) = 64 AND token_hash NOT GLOB '*[^0-9a-f]*'),
+       role TEXT NOT NULL CHECK (role IN ('member', 'observer')),
+       label TEXT NOT NULL,
+       created_by TEXT NOT NULL,
+       created_at INTEGER NOT NULL,
+       expires_at INTEGER NOT NULL,
+       max_uses INTEGER NOT NULL CHECK (max_uses BETWEEN 1 AND 100),
+       uses INTEGER NOT NULL DEFAULT 0 CHECK (uses >= 0 AND uses <= max_uses),
+       approval INTEGER NOT NULL CHECK (approval IN (0, 1))
+     ) WITHOUT ROWID`,
+    'CREATE INDEX circle_join_links_by_circle ON circle_join_links (circle_id, id)',
+    `CREATE TABLE circle_join_requests (
+       id TEXT NOT NULL PRIMARY KEY,
+       circle_id TEXT NOT NULL REFERENCES circles (id) ON DELETE CASCADE,
+       user_id TEXT NOT NULL,
+       role TEXT NOT NULL CHECK (role IN ('member', 'observer')),
+       created_at INTEGER NOT NULL,
+       expires_at INTEGER NOT NULL,
+       UNIQUE (circle_id, user_id)
+     ) WITHOUT ROWID`,
+    'CREATE INDEX circle_join_requests_by_user ON circle_join_requests (user_id, id)',
+    `CREATE TRIGGER circle_join_requests_end_with_user AFTER DELETE ON users
+     BEGIN
+       DELETE FROM circle_join_requests WHERE user_id = old.id;
+     END`,
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8, V9]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });

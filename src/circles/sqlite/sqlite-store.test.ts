@@ -48,9 +48,7 @@ const codeOf = (fn: () => unknown): string | undefined => {
 };
 
 // The whole circle store contract: on a private in-memory database per test, and again on a real file per test.
-// The `joinlinks` group waits for schema version 9 (R-023, T-318), which removes this restriction.
-const WITHOUT_JOIN_LINKS = ['core', 'grants'] as const;
-runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { dispose: (store) => (store as SqliteCircleStore).close(), groups: WITHOUT_JOIN_LINKS });
+runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { dispose: (store) => (store as SqliteCircleStore).close() });
 {
   const homes = new Map<CircleStore, string>();
   describe('on a file', () => {
@@ -63,7 +61,6 @@ runCircleStoreConformance(() => createSqliteCircleStore(), { describe, it }, { d
       },
       { describe, it },
       {
-        groups: WITHOUT_JOIN_LINKS,
         dispose: (store) => {
           (store as SqliteCircleStore).close();
           const dir = homes.get(store);
@@ -82,8 +79,8 @@ describe('the database', () => {
     const db = openDb({ path });
     expect(db.pragma('application_id')).toBe(USERS_APPLICATION_ID);
     expect(db.pragma('user_version')).toBe(USERS_SCHEMA_VERSION);
-    expect(USERS_SCHEMA_VERSION).toBe(8);
-    expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").map((r) => r.name)).toEqual(['agent_tokens', 'circle_grants', 'circle_invitations', 'circle_members', 'circles', 'ledger', 'sessions', 'users']);
+    expect(USERS_SCHEMA_VERSION).toBe(9);
+    expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").map((r) => r.name)).toEqual(['agent_tokens', 'circle_grants', 'circle_invitations', 'circle_join_links', 'circle_join_requests', 'circle_members', 'circles', 'ledger', 'sessions', 'users']);
     db.close();
   });
 

@@ -1089,6 +1089,23 @@ function joinLinkCases(): readonly CircleStoreCase[] {
       assert.notEqual(await store.getJoinLinkByHash(hashOf(2), NOW), undefined);
       await makeLink(store, 3, 1, { expiresAt: NOW + 5 });
       assert.equal(await store.revokeJoinLink(lid(3), cid(1), NOW + 5), false);
+      await makeLink(store, 4);
+      must(await joinBy(store, 4, 5)); // used up
+      assert.equal(await store.revokeJoinLink(lid(4), cid(1), NOW + 10), false);
+      assert.deepEqual((await linksOf(store)).map((l) => l.id), []);
+    }),
+    J('a hash that is not text is a miss and never throws', async (store) => {
+      await circleWith(store, 1);
+      await makeLink(store, 1, 1, { approval: true });
+      await makeLink(store, 2);
+      for (const odd of [undefined, null, 5, {}, [], ['a'], true]) {
+        const hash = odd as unknown as string;
+        assert.equal(await store.getJoinLinkByHash(hash, NOW), undefined);
+        assert.equal(code(await store.joinWithLink(hash, uid(5), NOW, LIMITS)), 'NOT_FOUND');
+        assert.equal(code(await store.requestJoin(hash, rid('odd'), uid(5), NOW, { maxPendingPerCircle: 20, ttlMs: 100 })), 'NOT_FOUND');
+      }
+      assert.equal(await usesOf(store, 1), 0);
+      assert.equal(await usesOf(store, 2), 0);
     }),
     J('the circle may have only so many live links, and dead ones never count and are cleared', async (store) => {
       await circleWith(store, 1);
