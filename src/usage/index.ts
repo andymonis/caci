@@ -10,3 +10,8 @@ export { aggregateRecords, CIRCLE_ID, checkRange, compareAggregates, copyRecord,
 export type { Err, Ok, Result } from './result.js';
 export type { UsageStore } from './store.js';
 export { createMemoryUsageStore } from './memory-store.js';
+export { costOf, parsePrices, priceOf } from './prices.js';
+export type { ModelPrice, PriceTable } from './prices.js';
+export { buildReport, DELETED_ACCOUNT, GROUP_BYS, invoiceDifference } from './report.js';
+export type { CallCost, GroupBy, Report, ReportGroup, ReportOptions, Spender, Tally } from './report.js';
+export { csvCell, renderReport, reportCsv } from './render.js';

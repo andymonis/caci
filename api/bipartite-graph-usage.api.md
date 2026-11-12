@@ -11,6 +11,21 @@ export function aggregateRecords(records: ReadonlyArray<{
 }>, range: UsageRange): UsageAggregate[];
 
 // @public
+export function buildReport(rows: readonly UsageAggregate[], prices: PriceTable, options: ReportOptions): Report;
+
+// @public (undocumented)
+export interface CallCost {
+    readonly averageCost: number | null;
+    // (undocumented)
+    readonly calls: number;
+    // (undocumented)
+    readonly capability: UsageCapability;
+    // (undocumented)
+    readonly cost: number;
+    readonly pricedCalls: number;
+}
+
+// @public
 export function checkRange(range: UsageRange): void;
 
 // @public (undocumented)
@@ -23,10 +38,24 @@ export function compareAggregates(a: UsageAggregate, b: UsageAggregate): number;
 export function copyRecord(r: UsageRecord): UsageRecord;
 
 // @public
+export function costOf(price: ModelPrice, tokens: {
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly cacheReadTokens: number;
+    readonly cacheCreationTokens: number;
+}): number;
+
+// @public
 export function createMemoryUsageStore(): UsageStore;
 
 // @public
+export function csvCell(value: string | number): string;
+
+// @public
 export const dayOf: (at: number) => string;
+
+// @public
+export const DELETED_ACCOUNT = "deleted account";
 
 // @public (undocumented)
 export type Err<E> = {
@@ -35,10 +64,36 @@ export type Err<E> = {
 };
 
 // @public (undocumented)
+export const GROUP_BYS: readonly ["user", "capability", "model", "circle", "day", "month"];
+
+// @public (undocumented)
+export type GroupBy = (typeof GROUP_BYS)[number];
+
+// @public
+export function invoiceDifference(estimate: number, invoice: number): {
+    readonly estimate: number;
+    readonly invoice: number;
+    readonly difference: number;
+    readonly percent: number | null;
+};
+
+// @public (undocumented)
 export const LATENCY_MAX = 86400000;
 
 // @public (undocumented)
 export const MODEL_MAX = 200;
+
+// @public
+export interface ModelPrice {
+    // (undocumented)
+    readonly cacheRead: number;
+    // (undocumented)
+    readonly cacheWrite: number;
+    // (undocumented)
+    readonly input: number;
+    // (undocumented)
+    readonly output: number;
+}
 
 // @public (undocumented)
 export type Ok<T> = {
@@ -47,7 +102,96 @@ export type Ok<T> = {
 };
 
 // @public
+export function parsePrices(value: unknown): {
+    ok: true;
+    value: PriceTable;
+} | {
+    ok: false;
+    problems: string[];
+};
+
+// @public
+export function priceOf(table: PriceTable, model: string): ModelPrice | undefined;
+
+// @public
+export interface PriceTable {
+    // (undocumented)
+    readonly asOf: string;
+    // (undocumented)
+    readonly currency: string;
+    // (undocumented)
+    readonly models: Readonly<Record<string, ModelPrice>>;
+    // (undocumented)
+    readonly note: string;
+}
+
+// @public
 export function recordProblem(record: unknown): string | undefined;
+
+// @public
+export function renderReport(report: Report, extra?: {
+    readonly period?: string;
+    readonly invoice?: {
+        readonly estimate: number;
+        readonly invoice: number;
+        readonly difference: number;
+        readonly percent: number | null;
+    };
+}): string;
+
+// @public (undocumented)
+export interface Report {
+    // (undocumented)
+    readonly asOf: string;
+    // (undocumented)
+    readonly by: GroupBy;
+    // (undocumented)
+    readonly currency: string;
+    // (undocumented)
+    readonly deletedCost: number;
+    readonly distribution: {
+        readonly people: number;
+        readonly mean: number;
+        readonly median: number;
+        readonly p90: number;
+        readonly max: number;
+        readonly topTenthShare: number;
+    };
+    readonly failedRate: number;
+    // (undocumented)
+    readonly groups: readonly ReportGroup[];
+    // (undocumented)
+    readonly perCall: readonly CallCost[];
+    readonly rejectedRate: number;
+    readonly repairRate: number;
+    // (undocumented)
+    readonly topSpenders: readonly Spender[];
+    // (undocumented)
+    readonly totals: Tally;
+    readonly unpriced: ReadonlyArray<{
+        readonly model: string;
+        readonly attempts: number;
+        readonly inputTokens: number;
+        readonly outputTokens: number;
+    }>;
+}
+
+// @public
+export function reportCsv(report: Report): string;
+
+// @public (undocumented)
+export interface ReportGroup extends Tally {
+    // (undocumented)
+    readonly key: string;
+}
+
+// @public (undocumented)
+export interface ReportOptions {
+    // (undocumented)
+    readonly by: GroupBy;
+    readonly label?: (userId: string) => string | undefined;
+    readonly top?: number;
+}
 
 // @public (undocumented)
 export type Result<T, E> = Ok<T> | Err<E>;
@@ -57,6 +201,41 @@ export const scopeKey: (scope: UsageScope) => string;
 
 // @public (undocumented)
 export function scopeProblem(scope: unknown): string | undefined;
+
+// @public (undocumented)
+export interface Spender {
+    // (undocumented)
+    readonly cost: number;
+    // (undocumented)
+    readonly label: string;
+    readonly share: number;
+    // (undocumented)
+    readonly userId: string;
+}
+
+// @public (undocumented)
+export interface Tally {
+    // (undocumented)
+    readonly attempts: number;
+    // (undocumented)
+    readonly cacheCreationTokens: number;
+    // (undocumented)
+    readonly cacheReadTokens: number;
+    // (undocumented)
+    readonly calls: number;
+    readonly cost: number;
+    // (undocumented)
+    readonly failed: number;
+    // (undocumented)
+    readonly inputTokens: number;
+    // (undocumented)
+    readonly latencyMs: number;
+    // (undocumented)
+    readonly outputTokens: number;
+    // (undocumented)
+    readonly rejected: number;
+    readonly unpricedAttempts: number;
+}
 
 // @public (undocumented)
 export const TOKENS_MAX = 1000000000;
