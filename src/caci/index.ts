@@ -16,3 +16,5 @@ export { DEFAULT_STATUS_CONTEXT_LIMITS } from './status-context.js';
 export { capData, DEFAULT_PAGE, MAX_DATA_CHARS, MAX_PAGE } from './browse.js';
 export type { CategoryItemsPage, CategoryPage, CategoryView, GraphSummary, ItemDetail, ItemView, PageInput } from './browse.js';
 export type { BrainLimits, BrainScope, MineCategory, MineCategoryItemsPage, MineCategoryPage, MineItemDetail, MineSummary } from './brain.js';
+export { createUsageRecorder, recordsFromTrace, USAGE_WARNING } from './usage-recorder.js';
+export type { UsageCall, UsageContext, UsageRecorder, UsageRecorderInit } from './usage-recorder.js';

@@ -213,6 +213,9 @@ export const CHECKS: readonly ["pulse", "coming-up", "long-range"];
 // @public (undocumented)
 export function createCaciController(init: CaciControllerInit): CaciController;
 
+// @public
+export function createUsageRecorder(init: UsageRecorderInit): UsageRecorder;
+
 // @public (undocumented)
 export const DEFAULT_PAGE = 50;
 
@@ -397,6 +400,12 @@ export interface ProposalView {
     readonly text: string;
 }
 
+// Warning: (ae-forgotten-export) The symbol "TraceEvent" needs to be exported by the entry point index.d.ts
+// Warning: (ae-forgotten-export) The symbol "UsageRecord" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function recordsFromTrace(events: readonly TraceEvent[], context: UsageContext, at: number): UsageRecord[];
+
 // @public
 export interface SearchView {
     // (undocumented)
@@ -458,6 +467,48 @@ export interface StatusView {
             readonly id: string;
         }>;
     }>;
+}
+
+// @public (undocumented)
+export const USAGE_WARNING = "usage records could not be saved";
+
+// @public
+export interface UsageCall {
+    // (undocumented)
+    done(): Promise<void>;
+    // (undocumented)
+    readonly trace: (event: TraceEvent) => void;
+}
+
+// @public
+export interface UsageContext {
+    // Warning: (ae-forgotten-export) The symbol "UsageCapability" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly capability: UsageCapability;
+    // Warning: (ae-forgotten-export) The symbol "UsageScope" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly scope: UsageScope;
+    // (undocumented)
+    readonly userId: string;
+}
+
+// @public (undocumented)
+export interface UsageRecorder {
+    // (undocumented)
+    begin(context: UsageContext): UsageCall;
+}
+
+// @public (undocumented)
+export interface UsageRecorderInit {
+    // (undocumented)
+    readonly clock?: () => number;
+    readonly onWarning?: (message: string) => void;
+    // Warning: (ae-forgotten-export) The symbol "UsageStore" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly store: Pick<UsageStore, 'append'>;
 }
 
 // Warning: (ae-forgotten-export) The symbol "PendingProposal" needs to be exported by the entry point index.d.ts
