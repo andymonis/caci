@@ -92,6 +92,8 @@ export interface AgentViewInit {
     //
     // (undocumented)
     readonly tokens: Pick<AgentTokenStore, 'resolve'>;
+    // Warning: (ae-forgotten-export) The symbol "UsageRecorder" needs to be exported by the entry point index.d.ts
+    readonly usage?: UsageRecorder;
     // Warning: (ae-forgotten-export) The symbol "UserStore" needs to be exported by the entry point index.d.ts
     readonly users: Pick<UserStore, 'get'>;
 }

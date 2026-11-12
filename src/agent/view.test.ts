@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { describeGraph } from '../graph_store/index.js';
+import { createUsageRecorder } from '../caci/index.js';
+import { describeGraph, ok } from '../graph_store/index.js';
 import { circleGraphId } from '../scopes/index.js';
 import { userGraphId } from '../users/index.js';
 import { agentWorld, cid, DAY } from './agent.test-util.js';
@@ -229,6 +230,28 @@ describe('the checks tool', () => {
     const t = await w.bearer(ann, [`circle:${club}`], true);
     expect(await w.view.read.status(t, { check: 'pulse', scope: { kind: 'personal' } })).toMatchObject(NO_CIRCLE);
     expect(await w.view.read.status(t, { check: 'pulse', scope: circle(club) })).toMatchObject({ ok: true });
+  });
+
+  it('an agent\'s check is recorded as an agent-check, charged to the token\'s person, with the scope the token read', async () => {
+    const records: unknown[] = [];
+    const traced = {
+      status: async (_input: unknown, options?: { trace?: (event: unknown) => void }) => {
+        options?.trace?.({ type: 'request', attempt: 1, model: 'stub-model', timeoutMs: 1, messages: [] });
+        options?.trace?.({ type: 'response', attempt: 1, output: { kind: 'text', text: '' }, usage: { inputTokens: 40, outputTokens: 8 }, model: 'stub-model', elapsedMs: 9 });
+        options?.trace?.({ type: 'verdict', attempt: 1, accepted: true, problems: [] });
+        return stub.status();
+      },
+    };
+    const usage = createUsageRecorder({ store: { append: async (batch) => (records.push(...batch), ok(undefined)) }, clock: () => 1_700_000_000_000 });
+    const w = agentWorld({ llm: traced as never, checkTexts: { pulse: 'What needs my attention this week?' }, usage });
+    const ann = await w.register('ann');
+    const club = await w.circle(1, ann);
+    const t = await w.bearer(ann, [`circle:${club}`], true);
+    expect(await w.view.read.status(t, { check: 'pulse', scope: circle(club) })).toMatchObject({ ok: true });
+    expect(records).toEqual([{ at: 1_700_000_000_000, userId: ann.id, capability: 'agent-check', scope: { kind: 'circle', circleId: club }, model: 'stub-model', attempt: 1, inputTokens: 40, outputTokens: 8, cacheReadTokens: 0, cacheCreationTokens: 0, result: 'ok', latencyMs: 9 }]);
+    const refused = await w.bearer(ann, [`circle:${club}`], false);
+    expect(await w.view.read.status(refused, { check: 'pulse' })).toMatchObject({ ok: false });
+    expect(records).toHaveLength(1); // a refused check asked no model and records nothing
   });
 
   it('reads only the token\'s scopes when it asks for every brain', async () => {

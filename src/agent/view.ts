@@ -1,5 +1,5 @@
 import type { Controller } from '../app/index.js';
-import { createCaciController, type CaciController, type CaciControllerInit } from '../caci/index.js';
+import { createCaciController, type CaciController, type CaciControllerInit, type UsageRecorder } from '../caci/index.js';
 import type { CircleStore } from '../circles/index.js';
 import { err, ok, type Result, type StorageAdapter } from '../graph_store/index.js';
 import type { Llm } from '../llm/index.js';
@@ -29,6 +29,8 @@ export interface AgentViewInit {
   readonly limits?: CaciControllerInit['limits'];
   readonly maxScopes?: number;
   readonly clock?: () => number;
+  /** Usage metering (R-024): an agent's pulse calls CaCi's model, so it is recorded as an `agent-check`, charged to the token's person. */
+  readonly usage?: UsageRecorder;
 }
 
 export interface AgentView {
@@ -111,6 +113,7 @@ export function createAgentView(init: AgentViewInit): AgentView {
     ...(init.pulseText === undefined ? {} : { pulseText: init.pulseText }),
     ...(init.mode === undefined ? {} : { mode: init.mode }),
     ...(init.limits === undefined ? {} : { limits: init.limits }),
+    ...(init.usage === undefined ? {} : { usage: init.usage, checkCapability: 'agent-check' as const }),
     clock,
   });
 

@@ -2,13 +2,15 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';
 import { write } from '../graph_store/index.js';
 import { createSqliteLedgerStore } from '../ledger/sqlite/index.js';
 import { exportBrain, type BrainExport } from './brain-export.js';
 import { baseConfig } from './service.test-util.js';
 import { startService, type RunningService } from './service.js';
+
+vi.setConfig({ testTimeout: 60_000 }); // each test starts a service and takes snapshots, which is slow when the whole gate runs at once
 
 // R-017 D11, D12: exporting one brain from the data folder, against the real service on real SQLite files over real HTTP.
 

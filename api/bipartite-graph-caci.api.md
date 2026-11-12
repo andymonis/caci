@@ -85,6 +85,7 @@ export interface CaciController {
 export interface CaciControllerInit {
     // Warning: (ae-forgotten-export) The symbol "Controller" needs to be exported by the entry point index.d.ts
     readonly capture: Controller;
+    readonly checkCapability?: 'check' | 'agent-check';
     readonly checkTexts?: Readonly<Partial<Record<Check, string>>>;
     readonly clock?: () => number;
     readonly directory?: {
@@ -108,6 +109,7 @@ export interface CaciControllerInit {
     readonly pulseText?: string;
     // Warning: (ae-forgotten-export) The symbol "ScopeResolver" needs to be exported by the entry point index.d.ts
     readonly scopes?: ScopeResolver;
+    readonly usage?: UsageRecorder;
     // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
     readonly users: Pick<UserController, 'resolve'>;
 }

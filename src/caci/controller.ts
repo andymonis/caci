@@ -7,6 +7,8 @@ import { createBrowser, pageOf, type CategoryItemsPage, type CategoryPage, type 
 import { caciError, type CaciError } from './errors.js';
 import { DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS, searchFacts, type FactHit } from './search.js';
 import { createStatusContext, type StatusContextLimits } from './status-context.js';
+import type { UsageRecorder } from './usage-recorder.js';
+import type { UsageScope } from '../usage/index.js';
 import { capText, newLedgerId, SUMMARY_MAX, TITLE_MAX, type LedgerEntry, type LedgerScope, type LedgerStore } from '../ledger/index.js';
 import type { Horizon, Llm } from '../llm/index.js';
 import { isTimeZone } from '../llm/index.js';
@@ -52,6 +54,13 @@ export interface CaciControllerInit {
   readonly directory?: { get(id: string): Promise<{ readonly username: string; readonly displayName: string } | undefined> };
   /** Told, with one fixed sentence and no note text, when recording a change failed. The change itself stands. A throwing hook is ignored. */
   readonly onLedgerFailure?: (message: string) => void;
+  /**
+   * Usage metering (R-024): every model attempt of a note filed, a status or a check is recorded, charged to the session's user, with
+   * no text. Never changes a call's result. Without it nothing is recorded.
+   */
+  readonly usage?: UsageRecorder;
+  /** What a check (a pulse, coming-up or long-range) is recorded as: `check` for the apps, `agent-check` for an agent's pulse (R-024 D9). Default `check`. */
+  readonly checkCapability?: 'check' | 'agent-check';
 }
 
 /** A proposal as a person is allowed to see it: the preview and what they would be approving, and nothing about the plumbing. */
@@ -584,7 +593,14 @@ export function createCaciController(init: CaciControllerInit): CaciController {
         const context = await statusContext.read(all.value, clock());
         if (!context.ok) return context;
         statusHourly.record(userId, clock()); // the model is about to be asked
-        const answered = await statusLlm.status({ text, entries: context.value.entries, timeZone, ...(horizon === undefined ? {} : { horizon }) });
+        // metering (R-024): a typed request is `status`, a predefined one is a check; a circle scope is the circle's, anything else the person's
+        const call = init.usage?.begin({ userId, capability: check !== undefined || pulse === true ? (init.checkCapability ?? 'check') : 'status', scope: only?.provenance.kind === 'circle' ? { kind: 'circle', circleId: only.provenance.circleId } : { kind: 'personal' } });
+        let answered;
+        try {
+          answered = await statusLlm.status({ text, entries: context.value.entries, timeZone, ...(horizon === undefined ? {} : { horizon }) }, call === undefined ? undefined : { trace: call.trace });
+        } finally {
+          await call?.done();
+        }
         if (!answered.ok) return err({ source: 'llm' as const, error: answered.error });
         const provenance = context.value.provenance;
         const points = answered.value.points.map((p) => {
@@ -836,8 +852,16 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       hourly.record(userId, now);
       const reservation = ++reservations;
       reserved.set(reservation, userId);
+      const usageScope: UsageScope = circle === undefined ? { kind: 'personal' } : { kind: 'circle', circleId: (circle.provenance as { circleId: string }).circleId };
+      const call = init.usage?.begin({ userId, capability: 'categorise', scope: usageScope });
+      const proposeOptions = { ...(circle === undefined ? {} : { stamp: { contributedBy: userId } }), ...(call === undefined ? {} : { categorise: { trace: call.trace } }) };
       try {
-        const made = await capture.propose(graphId, { kind: 'text', text }, circle === undefined ? undefined : { stamp: { contributedBy: userId } });
+        let made;
+        try {
+          made = await capture.propose(graphId, { kind: 'text', text }, Object.keys(proposeOptions).length === 0 ? undefined : proposeOptions);
+        } finally {
+          await call?.done();
+        }
         reserved.delete(reservation);
         if (!made.ok) return made;
         held.set(made.value.id, { userId, expiresAt: made.value.expiresAt, ...(circle === undefined ? {} : { circle }) });
