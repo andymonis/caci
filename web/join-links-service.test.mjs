@@ -21,7 +21,7 @@ afterEach(async () => {
 async function world(joinLinks = true, extra = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'caci-join-web-'));
   dirs.push(dir);
-  const service = await startService({ port: 0, bind: '127.0.0.1', dataDir: dir, allowRegistration: true, cookieSecure: false, trustedProxies: 1, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, statusPerHour: 20, ledgerDays: 90, sessionIdleDays: 7, sessionDays: 30, agentAccess: false, joinLinks, ...extra });
+  const service = await startService({ port: 0, bind: '127.0.0.1', dataDir: dir, allowRegistration: true, cookieSecure: false, trustedProxies: 1, allowInsecure: false, llm: 'demo', proposalsPerHour: 30, maxPendingPerUser: 10, maxCirclesPerUser: 20, maxMembersPerCircle: 50, invitationDays: 7, maxBrainScopes: 25, statusPerHour: 20, ledgerDays: 90, usageDays: 400, sessionIdleDays: 7, sessionDays: 30, agentAccess: false, joinLinks, ...extra });
   running.push(service);
   const people = {};
   for (const name of ['ann', 'bob', 'cat', 'eve', 'fay']) {

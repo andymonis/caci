@@ -159,6 +159,14 @@ describe('the example settings file', () => {
     const enabled = parseServiceConfig({ ...settings, CACI_JOIN_LINKS: 'true', ANTHROPIC_API_KEY: KEY });
     expect(enabled.ok && enabled.value.joinLinks).toBe(true);
   });
+  it('leaves the usage retention at its default: the line is only a comment, and the example with it set is accepted', () => {
+    expect(settings).not.toHaveProperty('CACI_USAGE_DAYS');
+    expect(parseServiceConfig({ ...settings, ANTHROPIC_API_KEY: KEY }).value.usageDays).toBe(400);
+    expect(text).toContain('# CACI_USAGE_DAYS=400');
+    expect(text).toContain('They hold no text');
+    const set = parseServiceConfig({ ...settings, CACI_USAGE_DAYS: '30', ANTHROPIC_API_KEY: KEY });
+    expect(set.ok && set.value.usageDays).toBe(30);
+  });
   it('holds no secret: the key line is empty and nothing looks like a key', () => {
     expect(settings.ANTHROPIC_API_KEY).toBe('');
     expect(text).not.toMatch(/sk-ant-[A-Za-z0-9_-]{8,}/);

@@ -4,7 +4,7 @@ import { EXAMPLE_HOSTS, judgeTailscale, runDoctor, snapshotTime } from './doctor
 const NOW = Date.UTC(2026, 9, 11, 12, 0, 0);
 const PAGE = { status: 200, headers: { 'content-type': 'text/html' } };
 const API = { status: 401, headers: { 'content-type': 'application/json', 'x-content-type-options': 'nosniff', 'cache-control': 'no-store' } };
-const config = (extra = {}) => ({ ok: true, value: { port: 8080, bind: '0.0.0.0', llm: 'anthropic', allowRegistration: false, allowedHosts: ['kitchen.local:8080', '192.168.1.60:8080'], ...extra } });
+const config = (extra = {}) => ({ ok: true, value: { port: 8080, bind: '0.0.0.0', llm: 'anthropic', allowRegistration: false, allowedHosts: ['kitchen.local:8080', '192.168.1.60:8080'], usageDays: 400, ...extra } });
 
 /** Probes for a healthy Pi; each test changes what it is about. */
 function good(over = {}) {
@@ -160,6 +160,14 @@ describe('the settings file', () => {
     expect(on.text).toContain('CACI_JOIN_LINKS=false');
     expect(statusOf(await doctor({ settings: s({ config: config({ joinLinks: false }) }) }), 'Join links')).toBe('pass');
     expect(statusOf(await doctor(), 'Join links')).toBe('pass');
+  });
+  it('usage metering is always on: the line says how long records are kept and where the report is, and never warns', async () => {
+    const r = await doctor({ settings: s({ config: config({ usageDays: 120 }) }) });
+    expect(statusOf(r, 'Usage metering')).toBe('pass');
+    expect(r.text).toContain('kept 120 days');
+    expect(r.text).toContain('npm run usage');
+    expect(r.text).toContain('without any text');
+    expect(statusOf(await doctor(), 'Usage metering')).toBe('pass');
   });
 });
 

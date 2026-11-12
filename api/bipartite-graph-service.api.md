@@ -82,6 +82,9 @@ export interface ConfigError {
 export const DEFAULT_KEEP = 14;
 
 // @public
+export const DEFAULT_PRICES_FILE: string;
+
+// @public
 export function defaultControlsDir(): string;
 
 // @public (undocumented)
@@ -305,6 +308,7 @@ export interface ServiceConfig {
     readonly sessionIdleDays: number;
     readonly statusPerHour: number;
     readonly trustedProxies: number;
+    readonly usageDays: number;
 }
 
 // @public (undocumented)
@@ -332,6 +336,24 @@ export interface ServiceOptions {
 
 // @public
 export function startService(config: ServiceConfig, options?: ServiceOptions): Promise<RunningService>;
+
+// @public (undocumented)
+export const USAGE_USAGE: string;
+
+// Warning: (ae-forgotten-export) The symbol "Env_4" needs to be exported by the entry point index.d.ts
+//
+// @public (undocumented)
+export function usageCommand(args: readonly string[], env: Env_4, io: UsageCommandIo): Promise<0 | 1 | 2>;
+
+// @public (undocumented)
+export interface UsageCommandIo {
+    // (undocumented)
+    readonly now?: () => number;
+    // (undocumented)
+    readonly stderr: (text: string) => void;
+    // (undocumented)
+    readonly stdout: (text: string) => void;
+}
 
 // @public (undocumented)
 export const VARIABLES: readonly string[];

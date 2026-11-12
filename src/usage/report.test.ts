@@ -100,6 +100,14 @@ describe('building the report', () => {
     expect(r.groups[0]?.unpricedAttempts).toBe(1);
   });
 
+  it('shows a username for a person when one is known, the id when not, and the same words for accounts that are gone', () => {
+    const r = report('user');
+    expect(r.groups.map((g) => [g.key, g.label])).toEqual([[U1, 'ann'], [U2, 'bob'], [DELETED_ACCOUNT, DELETED_ACCOUNT]]);
+    expect(buildReport(ROWS, TABLE(), { by: 'user' }).groups.map((g) => g.label)).toEqual([U1, U2, DELETED_ACCOUNT]);
+    expect(report('model').groups.map((g) => g.label)).toEqual([HAIKU, 'demo', 'mystery-model']); // only people get labels
+    expect(buildReport(ROWS, TABLE(), { by: 'user', label: () => 'x' }).groups.at(-1)?.label).toBe(DELETED_ACCOUNT);
+  });
+
   it('groups by call type, model, circle, day and month', () => {
     expect(report('capability').groups.map((g) => [g.key, g.attempts])).toEqual([['categorise', 15], ['status', 3], ['check', 1]]);
     expect(report('model').groups.map((g) => [g.key, g.attempts])).toEqual([[HAIKU, 17], ['demo', 1], ['mystery-model', 1]]);
@@ -234,7 +242,7 @@ describe('showing the report', () => {
     const lines = csv.trimEnd().split('\n');
     expect(lines[0]).toBe('user,calls,attempts,rejected,failed,inputTokens,outputTokens,cacheReadTokens,cacheCreationTokens,latencyMs,costUSD,unpricedAttempts');
     expect(lines).toHaveLength(1 + 3 + 1);
-    expect(lines[1]).toBe(`${U1},11,13,2,0,13000,1300,6000,1000,9000,0.012850,1`);
+    expect(lines[1]).toBe(`ann,11,13,2,0,13000,1300,6000,1000,9000,0.012850,1`);
     expect(lines.at(-1)).toMatch(/^total,17,19,2,1,20500,2050,6000,1000,11000,0\.023350,1$/);
     expect(csvCell('a,b')).toBe('"a,b"');
     expect(csvCell('say "hi"')).toBe('"say ""hi"""');

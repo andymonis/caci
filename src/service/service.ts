@@ -3,9 +3,10 @@ import { join, resolve } from 'node:path';
 import { createAgentTools, createAgentView } from '../agent/index.js';
 import { createAccountRoutes, createAgentTokenRoutes, createApiServer, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createJoinRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
-import { createCaciController, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
+import { createCaciController, createUsageRecorder, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
 import { createSqliteLedgerStore } from '../ledger/sqlite/index.js';
+import { createSqliteUsageStore } from '../usage/sqlite/index.js';
 import { afterAccountDeletion, createScopeResolver, reconcileCircleGraphs, withCircleGraphs, type ReconcileReport, type ScopesResult } from '../scopes/index.js';
 import { createSharing } from '../sharing/index.js';
 import { createSqliteCircleStore } from '../circles/sqlite/index.js';
@@ -129,6 +130,16 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     purging.unref();
     closers.push(() => clearInterval(purging));
 
+    // usage metering (R-024): one record per model attempt, kept CACI_USAGE_DAYS, never any text; a failed save is a warning, never a failed call
+    const usageStore = createSqliteUsageStore({ path: join(dataDir, 'users.db') });
+    closers.push(() => usageStore.close());
+    const usage = createUsageRecorder({ store: usageStore, clock, onWarning: warn });
+    const purgeUsage = (): void => void usageStore.purgeBefore(clock() - config.usageDays * DAY).catch(() => warn('could not remove old usage records'));
+    purgeUsage();
+    const purgingUsage = setInterval(purgeUsage, DAY);
+    purgingUsage.unref();
+    closers.push(() => clearInterval(purgingUsage));
+
     const reconcile = async (): Promise<void> => {
       const result = await reconcileCircleGraphs({ circles: circleStore, graphAdapter: graphs });
       try {
@@ -155,11 +166,12 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       directory: users,
       clock,
       onLedgerFailure: warn,
+      usage,
     });
     // the agent surface (R-022): only when the operator switched it on. It is the same CaCi controller over a token-based lookup,
     // limited to the token's scopes and reading only; its checks have their own hourly allowance of the same size.
     const mcp = agentTokens === undefined ? [] : createMcpRoutes({
-      tools: createAgentTools(createAgentView({ tokens: agentTokens, users, circles: circleStore, graphAdapter: graphs, ledger, directory: users, llm, checkTexts: checks.value, pulseText: checks.value.pulse, mode: config.llm, limits: { statusPerHour: config.statusPerHour }, maxScopes: config.maxBrainScopes, clock })),
+      tools: createAgentTools(createAgentView({ tokens: agentTokens, users, circles: circleStore, graphAdapter: graphs, ledger, directory: users, llm, checkTexts: checks.value, pulseText: checks.value.pulse, mode: config.llm, limits: { statusPerHour: config.statusPerHour }, maxScopes: config.maxBrainScopes, clock, usage })),
       clock,
     });
     const circles = withCircleGraphs(createCircleController({

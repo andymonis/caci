@@ -294,6 +294,7 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_INVITATION_DAYS` | How long an invitation to a circle stays open (1 to 365) | `7` |
 | `CACI_MAX_BRAIN_SCOPES` | Most brains My Brain may combine: your own plus circles (2 to 100) | `25` |
 | `CACI_LEDGER_DAYS` | How long the change log keeps its entries (1 to 3650), see [The current-view brain and its change log](#the-current-view-brain-and-its-change-log) | `90` |
+| `CACI_USAGE_DAYS` | How long model-usage records are kept (1 to 3650), see [Model usage and what it costs](#model-usage-and-what-it-costs) | `400` |
 | `CACI_AGENT_ACCESS` | `true` lets people make personal access keys for their own agent and serves `/mcp` (read only), see [Letting an agent read your brain](#letting-an-agent-read-your-brain) | `false` |
 | `CACI_JOIN_LINKS` | `true` lets owners and managers make join links for a circle (see [Joining a circle by link](#joining-a-circle-by-link)); without it the join routes do not exist | `false` |
 | `CACI_SESSION_IDLE_DAYS` | Days without use after which a login ends (1 to 365, not more than `CACI_SESSION_DAYS`), see [Staying signed in](#staying-signed-in) | `7` |
@@ -939,6 +940,50 @@ In the **back office** (`/admin`), a circle's screen has a **Join links** sectio
 - **The release gates still stand** (pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, a statement of who may use the service): do not use circles with other people's data until they are done.
 - **Not built:** a QR code or share-sheet button, a person withdrawing their own request, links that give more than `observer` or `member`.
 
+## Model usage and what it costs
+
+When the real model is on, every call to it costs the operator money. CaCi therefore **records every model attempt** so the operator can see what each account's calls cost, by account, call type, model, circle and month. It is **reporting only**: nothing is limited, refused or slowed because of it, and there is no screen or route for it, only a command. The design is in `specs/R-024-usage-metering.md`.
+
+### What is recorded
+
+One record per **attempt** (a note that needed a repair is two), saved after the answer is ready, with exactly these fields: `at`, `userId`, `capability`, `scope`, `model`, `attempt`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `result` and `latencyMs`. **There is no field that could hold text**: no note, request, answer, name or fact id, and the store refuses any other field.
+
+- **Who is charged:** the person who asked, always. A note or a status on a circle's brain is charged to the member who made it, and the circle is recorded as the scope.
+- **Call types:** `categorise` (filing a note), `status` (a request the person typed), `check` (a pulse, coming-up or long-range check from the apps) and `agent-check` (an agent's pulse). An agent's own model costs the operator nothing and is not recorded.
+- **Results:** `ok`, `rejected` (the checks refused the answer and a repair followed) or the way the call failed (`timeout`, `rate_limited`, `refused`, `bad_output`, `model_error`, `config`, `cancelled`).
+- **Nothing is recorded** when a request is refused before any model is asked (a bad note, an observer, a circle that is not yours, the hourly limit).
+- **A deleted account** keeps its records, with the person cleared: the report shows them as "deleted account", so the totals survive and nothing identifies anyone.
+- **Retention:** `CACI_USAGE_DAYS` (400 by default); older records are removed at start-up and once a day.
+
+### The report
+
+`npm run usage` reads `users.db` in `CACI_DATA_DIR` directly, like backup and export; it does not rebuild and works while the service runs.
+
+| Option | What it does |
+|---|---|
+| `--month YYYY-MM` | One month (UTC). The default is the current month |
+| `--from YYYY-MM-DD --to YYYY-MM-DD` | A range of days, the last day included |
+| `--by user\|capability\|model\|circle\|day\|month` | How to group (default `user`; people are shown by username) |
+| `--top N` | How many top spenders to list (default 10) |
+| `--csv FILE` | Also write the groups as CSV, to a new file only |
+| `--invoice AMOUNT` | Show the difference between the estimate and an amount from your provider's invoice |
+| `--prices FILE` | Use another price table (default `usage-prices.json` in the project) |
+| `--data-dir DIR` | The data folder (default `CACI_DATA_DIR` or `./data`) |
+
+It prints the cost and tokens per group and in total, the **average cost of one note, status or check** (repairs included), how often a call needed a repair, was refused by the checks or failed, **who the top spenders are and how the spend is spread** (mean, median, 90th percentile, and the share of the top tenth), what deleted accounts cost, and any model with no price.
+
+**Prices.** `usage-prices.json` holds a price per million tokens for each model (input, output, and optionally cache read and write), typed by you from your provider's price page. **It ships with `demo` (free) and Haiku 4.5 only**: a model with no entry is listed as **unpriced**, with its tokens, and is never counted as free. Add the models you use. Prices change, which is why records hold tokens and not money: change the table and the same history is re-costed.
+
+A CSV file is created owner-only, is never allowed to overwrite a file, to be made in a folder that does not exist, or to be written inside the project or data folder; a cell that starts like a spreadsheet formula is made harmless.
+
+### What is not protected, and what is not done
+
+- **It is an estimate.** The provider's invoice is the truth: cache rounding, minimum charges, a renamed model and calls made outside CaCi (evaluations, the lab) are not in it. `--invoice` shows how far apart they are.
+- **A failed request records no tokens**, because the failure carries none (the provider may still have billed a refusal or a cut-off reply). It is counted as a failure with zero tokens.
+- **A restart can lose the last record**, since it is saved just after the answer.
+- **While an account exists, the operator can see how much each username spent.** The records hold no text.
+- **Not built:** a cap, an alert, a screen, a bill to a user, an automatic check against the provider's invoice.
+
 ## Controlling what the model is told
 
 Every message CaCi sends to a language model is made of **three separate parts**: (1) **the request** (what the person typed, or what the system is doing), (2) **the context** (the combined brain context: the existing categories, or the numbered notes a person can read) and (3) **the controls** (the instructions, guardrails and definitions that steer the exchange). The first two are data and come from people and their brains. **The controls are plain text files in the `controls/` folder of the repository**, read once when the service starts, so they can be adjusted and maintained on their own without touching the code. It is specified in `specs/R-012-controllable-llm.md`, which holds its threat table, its residual risks and its acceptance checks.
@@ -1233,6 +1278,12 @@ To try the service away from home without exposing the Pi to the internet, use *
 **The risks:** the identity account behind the tailnet is the front door (step 1); Tailscale's company sees which devices talk to each other and when, but not the content; a lost phone or laptop signed in to the tailnet can reach the Pi until you remove it in the admin console; and the notes still go to Anthropic as before.
 
 **Nothing in this step has been run on a real Pi or tailnet.** After your first try, keep the output of `npm run doctor` and say whether the page opened on mobile data: that is the evidence.
+
+**Seeing what it costs.** `npm run usage` (see [Model usage and what it costs](#model-usage-and-what-it-costs)) reports what the real model has cost, by person, from records that hold no text. Run it as the service account, like the export:
+
+```
+sudo -u caci sh -c 'cd /opt/caci/app && CACI_DATA_DIR=/var/lib/caci npm run usage -- --month 2026-11'
+```
 
 ### Letting an agent read it (optional, off by default)
 

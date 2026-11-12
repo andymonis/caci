@@ -21,3 +21,5 @@ export { EXPORT_USAGE, exportBrainCommand } from './export-command.js';
 export type { ExportCommandIo } from './export-command.js';
 export { scenarioDraft } from './scenario-draft.js';
 export type { ScenarioDraft } from './scenario-draft.js';
+export { DEFAULT_PRICES_FILE, USAGE_USAGE, usageCommand } from './usage-command.js';
+export type { UsageCommandIo } from './usage-command.js';

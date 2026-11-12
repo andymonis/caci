@@ -11,7 +11,7 @@ function table(header: readonly string[], rows: ReadonlyArray<readonly string[]>
   return all.map((r) => r.map((cell, i) => (i === 0 ? cell.padEnd(widths[i] as number) : cell.padStart(widths[i] as number))).join('  ').trimEnd());
 }
 
-const groupRow = (g: ReportGroup): string[] => [g.key, whole(g.calls), whole(g.attempts), whole(g.inputTokens), whole(g.outputTokens), whole(g.cacheReadTokens), money(g.cost) + (g.unpricedAttempts > 0 ? '*' : '')];
+const groupRow = (g: ReportGroup): string[] => [g.label, whole(g.calls), whole(g.attempts), whole(g.inputTokens), whole(g.outputTokens), whole(g.cacheReadTokens), money(g.cost) + (g.unpricedAttempts > 0 ? '*' : '')];
 
 /** The report as plain text for a terminal: one table, the averages, the rates, the spread, what is unpriced and, if given, the invoice. */
 export function renderReport(report: Report, extra: { readonly period?: string; readonly invoice?: { readonly estimate: number; readonly invoice: number; readonly difference: number; readonly percent: number | null } } = {}): string {
@@ -19,7 +19,7 @@ export function renderReport(report: Report, extra: { readonly period?: string; 
   out.push(`Usage report by ${report.by}${extra.period === undefined ? '' : `, ${extra.period}`}`);
   out.push(`Estimated cost in ${report.currency} (prices as of ${report.asOf}). It is an estimate: the provider's invoice is the truth.`);
   out.push('');
-  out.push(...table([report.by, 'calls', 'attempts', 'input', 'output', 'cache read', `cost ${report.currency}`], [...report.groups.map(groupRow), groupRow({ key: 'total', ...report.totals })]));
+  out.push(...table([report.by, 'calls', 'attempts', 'input', 'output', 'cache read', `cost ${report.currency}`], [...report.groups.map(groupRow), groupRow({ key: 'total', label: 'total', ...report.totals })]));
   if (report.totals.unpricedAttempts > 0) out.push('* includes attempts on a model with no price (their tokens are counted, their cost is not)');
   out.push('');
   out.push('Average cost of one call (repairs included):');
@@ -58,6 +58,6 @@ export function csvCell(value: string | number): string {
 /** The report's groups as CSV (one header line, one line per group, a total line), with a final newline. */
 export function reportCsv(report: Report): string {
   const header = [report.by, 'calls', 'attempts', 'rejected', 'failed', 'inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheCreationTokens', 'latencyMs', `cost${report.currency}`, 'unpricedAttempts'];
-  const line = (g: ReportGroup): string => [g.key, g.calls, g.attempts, g.rejected, g.failed, g.inputTokens, g.outputTokens, g.cacheReadTokens, g.cacheCreationTokens, g.latencyMs, g.cost.toFixed(6), g.unpricedAttempts].map(csvCell).join(',');
-  return `${[header.map(csvCell).join(','), ...report.groups.map(line), line({ key: 'total', ...report.totals })].join('\n')}\n`;
+  const line = (g: ReportGroup): string => [g.label, g.calls, g.attempts, g.rejected, g.failed, g.inputTokens, g.outputTokens, g.cacheReadTokens, g.cacheCreationTokens, g.latencyMs, g.cost.toFixed(6), g.unpricedAttempts].map(csvCell).join(',');
+  return `${[header.map(csvCell).join(','), ...report.groups.map(line), line({ key: 'total', label: 'total', ...report.totals })].join('\n')}\n`;
 }

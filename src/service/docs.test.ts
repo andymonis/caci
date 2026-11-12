@@ -6,6 +6,8 @@ import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_L
 import { CACI_ERROR_CODES, caciError, DEFAULT_STATUS_CONTEXT_LIMITS, MAX_SEARCH_RESULTS, MAX_STATUS_REQUEST_CHARS, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CANDIDATE_OPTIONS, DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
 import { createLedgerRoutes } from '../api/index.js';
+import { GROUP_BYS, recordProblem, USAGE_CAPABILITIES, USAGE_RESULTS } from '../usage/index.js';
+import { DEFAULT_PRICES_FILE, USAGE_USAGE } from './usage-command.js';
 import { AGENT_TOKEN_PREFIX, DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, MAX_AGENT_TOKEN_LIFETIME_MS, MAX_AGENT_TOKENS_PER_USER, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
 import { DEFAULT_GRANT_LIMITS } from '../sharing/index.js';
 import { CONTROL_FILES, SETTING_RANGES, SLOT_RULES } from '../llm/index.js';
@@ -846,5 +848,75 @@ describe('the join links section of the README', () => {
       'Nobody is notified',
       'The release gates still stand',
     ]) expect(text, phrase).toContain(phrase);
+  });
+});
+
+const usageSection = section('Model usage and what it costs');
+
+describe('the usage metering section of the README', () => {
+  it('lists exactly the fields a record has, the call types and the results', () => {
+    const fields = [...(usageSection.match(/exactly these fields: ([^.]*)\./)?.[1] ?? '').matchAll(/`(\w+)`/g)].map((m) => m[1] as string);
+    const record = { at: 1, userId: 'u0000000000000001', capability: 'status', scope: { kind: 'personal' }, model: 'm', attempt: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, result: 'ok', latencyMs: 1 };
+    expect(recordProblem(record)).toBeUndefined();
+    expect(fields.sort()).toEqual(Object.keys(record).sort());
+    for (const key of fields) expect(recordProblem({ ...record, [key]: undefined }), key).toBeDefined();
+    expect(recordProblem({ ...record, extra: 1 })).toBeDefined();
+    for (const capability of USAGE_CAPABILITIES) expect(usageSection, capability).toContain(`\`${capability}\``);
+    for (const result of USAGE_RESULTS) expect(usageSection, result).toContain(`\`${result}\``);
+  });
+
+  it('lists exactly the options the command accepts and the ways to group', () => {
+    const documented = [...usageSection.matchAll(/^\| `([^`]+)`/gm)].flatMap((m) => [...(m[1] as string).matchAll(/--[a-z-]+/g)].map((x) => x[0]));
+    const real = [...USAGE_USAGE.matchAll(/--[a-z-]+/g)].map((m) => m[0]);
+    expect([...new Set(documented)].sort()).toEqual([...new Set(real)].sort());
+    expect(documented).toContain('--by');
+    expect(USAGE_USAGE).toContain(GROUP_BYS.join('|'));
+    expect(usageSection).toContain(GROUP_BYS.join('\\|'));
+    expect([...GROUP_BYS]).toHaveLength(6);
+  });
+
+  it('names the price file that exists, the one setting with its default and range, and the specification', () => {
+    expect(usageSection).toContain('`usage-prices.json`');
+    expect(DEFAULT_PRICES_FILE.endsWith('usage-prices.json')).toBe(true);
+    expect(existsSync(DEFAULT_PRICES_FILE)).toBe(true);
+    expect(defaults.ok ? defaults.value.usageDays : undefined).toBe(400);
+    expect(usageSection).toContain('`CACI_USAGE_DAYS` (400 by default)');
+    expect(readme).toMatch(/\| `CACI_USAGE_DAYS` \|[^|]*\| `400` \|/);
+    expect(parseServiceConfig({ CACI_USAGE_DAYS: '3650' }).ok).toBe(true);
+    expect(parseServiceConfig({ CACI_USAGE_DAYS: '3651' }).ok).toBe(false);
+    expect(parseServiceConfig({ CACI_USAGE_DAYS: '0' }).ok).toBe(false);
+    expect(usageSection).toContain('specs/R-024-usage-metering.md');
+    expect(existsSync(new URL('../../specs/R-024-usage-metering.md', import.meta.url))).toBe(true);
+    for (const v of usageSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+  });
+
+  it('says the things a reader must not miss', () => {
+    const text = usageSection.replace(/[*`]+/g, '');
+    for (const phrase of [
+      'every model attempt',
+      'reporting only',
+      'nothing is limited, refused or slowed',
+      'There is no field that could hold text',
+      'the store refuses any other field',
+      'the person who asked, always',
+      'An agent\'s own model costs the operator nothing and is not recorded',
+      'deleted account',
+      'nothing identifies anyone',
+      'It ships with demo (free) and Haiku 4.5 only',
+      'never counted as free',
+      'records hold tokens and not money',
+      'never allowed to overwrite a file',
+      'It is an estimate',
+      'The provider\'s invoice is the truth',
+      'A failed request records no tokens',
+      'A restart can lose the last record',
+      'the operator can see how much each username spent',
+      'Not built: a cap, an alert, a screen, a bill to a user',
+    ]) expect(text, phrase).toContain(phrase);
+  });
+
+  it('the Pi runbook says how to run it as the service account', () => {
+    expect(readme).toContain('CACI_DATA_DIR=/var/lib/caci npm run usage -- --month');
+    expect(readme).toContain('Seeing what it costs');
   });
 });

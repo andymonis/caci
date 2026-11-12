@@ -183,6 +183,7 @@ export function reportCsv(report: Report): string;
 export interface ReportGroup extends Tally {
     // (undocumented)
     readonly key: string;
+    readonly label: string;
 }
 
 // @public (undocumented)

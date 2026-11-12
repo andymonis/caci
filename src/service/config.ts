@@ -48,6 +48,8 @@ export interface ServiceConfig {
   readonly sessionDays: number;
   /** `CACI_LEDGER_DAYS`: how long the change log keeps an entry (R-014), 1 to 3650. Default 90. */
   readonly ledgerDays: number;
+  /** `CACI_USAGE_DAYS`: how long model-usage records are kept (R-024), 1 to 3650. Default 400. */
+  readonly usageDays: number;
 }
 
 /** One thing wrong with the settings: which variable, and what to do. Never the value given. */
@@ -74,6 +76,7 @@ export const VARIABLES: readonly string[] = Object.freeze([
   'CACI_MAX_BRAIN_SCOPES',
   'CACI_STATUS_PER_HOUR',
   'CACI_LEDGER_DAYS',
+  'CACI_USAGE_DAYS',
   'CACI_AGENT_ACCESS',
   'CACI_JOIN_LINKS',
   'CACI_SESSION_IDLE_DAYS',
@@ -147,6 +150,7 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
   const maxBrainScopes = whole('CACI_MAX_BRAIN_SCOPES', 25, 2, 100);
   const statusPerHour = whole('CACI_STATUS_PER_HOUR', 20, 1, 1000);
   const ledgerDays = whole('CACI_LEDGER_DAYS', 90, 1, 3650);
+  const usageDays = whole('CACI_USAGE_DAYS', 400, 1, 3650);
   const agentAccess = flag('CACI_AGENT_ACCESS', false);
   const joinLinks = flag('CACI_JOIN_LINKS', false);
   const sessionIdleDays = whole('CACI_SESSION_IDLE_DAYS', 7, 1, 365);
@@ -177,5 +181,5 @@ export function parseServiceConfig(env: Readonly<Record<string, string | undefin
     bad('CACI_COOKIE_SECURE', 'must be true when CACI_BIND is not a loopback address (put HTTPS in front), or set CACI_ALLOW_INSECURE=true to accept sending session cookies in the clear');
   }
   if (errors.length > 0) return err(errors);
-  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser, maxCirclesPerUser, maxMembersPerCircle, invitationDays, maxBrainScopes, statusPerHour, ledgerDays, sessionIdleDays, sessionDays, agentAccess, joinLinks });
+  return ok({ port, bind, dataDir, allowRegistration, cookieSecure, trustedProxies, ...(allowedHosts === undefined ? {} : { allowedHosts }), allowInsecure, llm, proposalsPerHour, maxPendingPerUser, maxCirclesPerUser, maxMembersPerCircle, invitationDays, maxBrainScopes, statusPerHour, ledgerDays, usageDays, sessionIdleDays, sessionDays, agentAccess, joinLinks });
 }

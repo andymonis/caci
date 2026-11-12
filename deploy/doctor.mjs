@@ -115,6 +115,7 @@ export async function runDoctor({ probes, log }) {
     out.push(c.allowRegistration ? warn('Registration', 'open: anyone who can reach the service can make an account', 'When the family has accounts: CACI_ALLOW_REGISTRATION=false, then sudo systemctl restart caci.') : pass('Registration', 'closed'));
     out.push(c.agentAccess === true ? warn('Agent access', 'on: people can make tokens that let their own agent read their brains (read only); what an agent reads is sent to that agent\'s provider', 'Leave it on only while it is used: CACI_AGENT_ACCESS=false, then sudo systemctl restart caci.') : pass('Agent access', 'off'));
     out.push(c.joinLinks === true ? warn('Join links', 'on: owners and managers can make links that let someone join a circle (observer or member, with approval unless the link says otherwise)', 'Leave it on only while it is used: CACI_JOIN_LINKS=false, then sudo systemctl restart caci.') : pass('Join links', 'off'));
+    out.push(pass('Usage metering', `on: every model call is recorded without any text and kept ${c.usageDays} days; npm run usage shows what it cost`));
     return out;
   });
 

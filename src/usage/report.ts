@@ -25,6 +25,8 @@ export interface Tally {
 
 export interface ReportGroup extends Tally {
   readonly key: string;
+  /** What to show for the key: a username for a person (when known), otherwise the key itself. */
+  readonly label: string;
 }
 
 export interface CallCost {
@@ -142,10 +144,10 @@ export function buildReport(rows: readonly UsageAggregate[], prices: PriceTable,
     } else if (r.userId === null) deletedCost += cost;
     else spend.set(r.userId, (spend.get(r.userId) ?? 0) + cost);
   }
-  const ordered = [...groups.entries()].map(([key, t]): ReportGroup => Object.freeze({ key, ...t }));
+  const labelOf = options.label ?? (() => undefined);
+  const ordered = [...groups.entries()].map(([key, t]): ReportGroup => Object.freeze({ key, label: options.by === 'user' && key !== DELETED_ACCOUNT ? (labelOf(key) ?? key) : key, ...t }));
   ordered.sort((a, b) => (options.by === 'day' || options.by === 'month' ? (a.key < b.key ? -1 : a.key > b.key ? 1 : 0) : b.cost - a.cost || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)));
   const liveTotal = [...spend.values()].reduce((n, c) => n + c, 0);
-  const label = options.label ?? (() => undefined);
   const spenders = [...spend.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
   const costs = [...spend.values()].sort((a, b) => a - b);
   const tenth = Math.ceil(spenders.length / 10);
@@ -163,7 +165,7 @@ export function buildReport(rows: readonly UsageAggregate[], prices: PriceTable,
     repairRate: rate(totals.attempts - totals.calls, totals.calls),
     rejectedRate: rate(totals.rejected, totals.attempts),
     failedRate: rate(totals.failed, totals.attempts),
-    topSpenders: Object.freeze(spenders.slice(0, top).map(([userId, cost]): Spender => Object.freeze({ userId, label: label(userId) ?? userId, cost, share: rate(cost, liveTotal) }))),
+    topSpenders: Object.freeze(spenders.slice(0, top).map(([userId, cost]): Spender => Object.freeze({ userId, label: labelOf(userId) ?? userId, cost, share: rate(cost, liveTotal) }))),
     distribution: Object.freeze({
       people: costs.length,
       mean: rate(liveTotal, costs.length),

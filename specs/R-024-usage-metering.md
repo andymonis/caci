@@ -72,16 +72,16 @@ This spec adds **usage metering**: one small record per model attempt, kept in `
 
 ## Threats and controls
 
-| Threat | Control |
-|--------|---------|
-| The usage table leaks content | D8: no field can hold text; the check refuses other keys; a test searches every record and report for the words used. |
-| A metering fault breaks filing or status | D10: the recorder never throws; a failing store is tested. |
-| A person is identifiable after deleting their account | D11: trigger clears the user id by any route; tested through the user controller and a direct row delete. |
-| The estimate is mistaken for the bill | D14: the report says it is an estimate, lists unpriced models and offers the invoice difference. |
-| A missing price hides spend | D7: unpriced is listed with its tokens, never zero. |
-| A CSV overwrites or exposes a file | New owner-only file, never overwritten, refused inside the project or data folder (as export-brain). |
-| Spend is attributed to the wrong person | D2: the session's user is the only source; there is no parameter to name another. |
-| Unbounded growth | D12 retention. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| The usage table leaks content | D8: no field can hold text; the check refuses other keys; a test searches every record and report for the words used. | `src/usage/testing/cases.ts` — "a record with any field that is not part of it is refused, so no text can be stored"; `src/caci/controller-usage.test.ts` — "records no note text, request, answer or name, only the allowed fields"; `src/usage/sqlite/sqlite-store.test.ts` — "has no column that could hold text"; `src/service/usage-end-to-end.test.ts` — "holds no text: a record has only its fixed columns" |
+| A metering fault breaks filing or status | D10: the recorder never throws; a failing store is tested. | `src/caci/usage-recorder.test.ts` — "a store that refuses the batch gives one fixed warning and changes nothing for the caller"; `src/caci/controller-usage.test.ts` — "a failing store changes nothing the person sees and gives one fixed warning"; `src/service/usage-end-to-end.test.ts` — "a broken usage table never fails a call" |
+| A person is identifiable after deleting their account | D11: trigger clears the user id by any route; tested through the user controller and a direct row delete. | `src/usage/sqlite/sqlite-store.test.ts` — "deleting a user row clears that person on their records and keeps the rest, whoever deletes it"; `src/service/usage-end-to-end.test.ts` — "keeps the records across a restart and drops the person from them when the account is deleted"; `src/service/usage-command.test.ts` — "an account that is gone shows as a deleted account, its totals kept" |
+| The estimate is mistaken for the bill | D14: the report says it is an estimate, lists unpriced models and offers the invoice difference. | `src/usage/report.test.ts` — "says it is an estimate, shows the table and total"; `src/service/usage-command.test.ts` — "prints the invoice difference when asked" |
+| A missing price hides spend | D7: unpriced is listed with its tokens, never zero. | `src/usage/report.test.ts` — "adds up the totals and counts an unpriced model"; `src/service/usage-command.test.ts` — "a model with no price is listed as unpriced and its cost is not counted" |
+| A CSV overwrites or exposes a file | New owner-only file, never overwritten, refused inside the project or data folder (as export-brain). | `src/service/usage-command.test.ts` — "never overwrites, never creates a folder, and refuses a place inside the project or the data folder"; `src/service/usage-command.test.ts` — "writes a new owner-only file with the groups and a total, and says so"; `src/usage/report.test.ts` — "makes a CSV with a header, a line per group and a total, quoting and defusing cells" |
+| Spend is attributed to the wrong person | D2: the session's user is the only source; there is no parameter to name another. | `src/caci/controller-usage.test.ts` — "a circle note is charged to the member who made it, with the circle as the scope"; `src/caci/controller-usage.test.ts` — "a request narrowed to a circle"; `src/service/usage-end-to-end.test.ts` — "records what each person did, charged to the asker, and the totals equal" |
+| Unbounded growth | D12 retention. | `src/service/usage-end-to-end.test.ts` — "removes records older than CACI_USAGE_DAYS at start-up"; `src/usage/testing/cases.ts` — "purging removes records older than the time, strictly, and says how many" |
 
 ## Acceptance criteria
 
@@ -100,13 +100,34 @@ This spec adds **usage metering**: one small record per model attempt, kept in `
 | UM-AC-11 | Given any record, report or CSV, then it contains no note, request, answer, fact id or secret. |
 | UM-AC-12 | Given `--invoice`, then the report shows the estimate, the amount and the difference. |
 
-## Residual risks
+### Where each criterion is checked (T-335)
+
+| ID | Tests |
+|----|-------|
+| UM-AC-01 | `src/caci/usage-recorder.test.ts` — "a repaired call is two records: the first rejected, the second ok, each with its own tokens"; `src/caci/controller-usage.test.ts` — "a note that needed a repair is two records, rejected then ok, and still succeeds" |
+| UM-AC-02 | `src/caci/usage-recorder.test.ts` — "a failed request is one record with no tokens and the error kind"; `src/service/usage-end-to-end.test.ts` — "a call whose model fails is one record with the error kind, and the person gets the usual model error" |
+| UM-AC-03 | `src/caci/controller-usage.test.ts` — "a typed request is a status, a predefined one is a check, each charged to the asker"; `src/service/usage-end-to-end.test.ts` — "is recorded as an agent-check charged to the token" |
+| UM-AC-04 | `src/caci/controller-usage.test.ts` — "a circle note is charged to the member who made it, with the circle as the scope"; `src/usage/testing/cases.ts` — "a person, a call type, a scope, a model and a day each make a separate row" |
+| UM-AC-05 | `src/caci/controller-usage.test.ts` — "a failing store changes nothing the person sees and gives one fixed warning"; `src/caci/usage-recorder.test.ts` — "a store that throws is the same" |
+| UM-AC-06 | `src/usage/sqlite/sqlite-store.test.ts` — "deleting a user row clears that person on their records and keeps the rest, whoever deletes it"; `src/service/usage-command.test.ts` — "an account that is gone shows as a deleted account, its totals kept" |
+| UM-AC-07 | `src/service/usage-command.test.ts` — "a model with no price is listed as unpriced and its cost is not counted"; `src/usage/report.test.ts` — "an average is null when no call of that kind was priced" |
+| UM-AC-08 | `src/service/usage-command.test.ts` — "--month picks that month only, and the default is the month of the clock"; `src/service/usage-command.test.ts` — "writes a new owner-only file with the groups and a total, and says so"; `src/usage/report.test.ts` — "groups by call type, model, circle, day and month" |
+| UM-AC-09 | `src/service/usage-end-to-end.test.ts` — "records what each person did, charged to the asker, and the totals equal"; `src/service/usage-end-to-end.test.ts` — "is recorded as an agent-check charged to the token" |
+| UM-AC-10 | `src/service/usage-end-to-end.test.ts` — "removes records older than CACI_USAGE_DAYS at start-up"; `src/usage/testing/cases.ts` — "purging removes records older than the time, strictly, and says how many" |
+| UM-AC-11 | `src/usage/testing/cases.ts` — "a record with any field that is not part of it is refused, so no text can be stored"; `src/service/usage-end-to-end.test.ts` — "holds no text: a record has only its fixed columns"; `src/caci/controller-usage.test.ts` — "records no note text, request, answer or name, only the allowed fields" |
+| UM-AC-12 | `src/service/usage-command.test.ts` — "prints the invoice difference when asked"; `src/usage/report.test.ts` — "the invoice difference says how far the estimate is from an amount" |
+
+### Residual risks (not covered, with the reason)
 
 1. **An estimate, not a bill**: cache rounding, a provider's minimum charges, a model renamed by the provider and calls made outside CaCi (evaluations, the lab) are not in it.
 2. **A restart can lose the last record**: the append follows the answer, and a crash between them drops it.
 3. **Prices are typed by the operator**: a wrong table gives wrong costs until corrected (and history can be re-costed).
 4. **One account can look cheap or dear by luck of the month**: the report is per month, not a forecast.
 5. **The record of who asked is the user id until deletion**: while the account exists the operator can see how much each username spent.
+6. **The price table ships with only the demo model and Haiku 4.5**: Sonnet 5.5 and Opus 5.5 are unpriced until the operator adds them, and their cost is missing from every total (listed, with their tokens, so it is visible).
+7. **A failed request records no tokens**: the failure carries none, although the provider may have billed a refusal or a cut-off reply, so failures are counted with zero tokens and cost is understated by that much.
+8. **The report is for the operator, not the people**: nobody sees their own usage, and no one can be charged or limited from it (D1).
+9. **Nothing here has been run on a real model through the service**: the figures are checked against the demo model and a stand-in provider, and the cache counts against a fake of the provider's reply.
 
 ## Open questions
 
