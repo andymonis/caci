@@ -129,6 +129,26 @@ describe('status: one repair', () => {
     expect(second?.messages[2]?.content).toContain('7 is not an entry number');
     expect(second?.messages[2]?.content).toContain('Reply again with the corrected JSON object only.');
   });
+  it('cached token counts are summed across both attempts and reach the trace', async () => {
+    const { llm } = setup([
+      reply(BAD, { usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 60, cacheCreationTokens: 10 } }),
+      reply(GOOD, { usage: { inputTokens: 150, outputTokens: 30, cacheReadTokens: 90, cacheCreationTokens: 0 } }),
+    ]);
+    const events: TraceEvent[] = [];
+    const r = await llm.status(INPUT, { trace: (e) => { events.push(e); } });
+    expect(r.ok && r.value.usage).toEqual({ inputTokens: 250, outputTokens: 50, cacheReadTokens: 150, cacheCreationTokens: 10 });
+    const responses = events.filter((e) => e.type === 'response');
+    expect(responses.map((e) => (e.type === 'response' ? e.usage : null))).toEqual([
+      { inputTokens: 100, outputTokens: 20, cacheReadTokens: 60, cacheCreationTokens: 10 },
+      { inputTokens: 150, outputTokens: 30, cacheReadTokens: 90, cacheCreationTokens: 0 },
+    ]);
+  });
+  it('a usage whose cache counts exceed its input is refused as a bad model reply', async () => {
+    const { llm } = setup([reply(GOOD, { usage: { inputTokens: 10, outputTokens: 2, cacheReadTokens: 8, cacheCreationTokens: 8 } })]);
+    const r = await llm.status(INPUT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe('MODEL_ERROR');
+  });
   it('a second rejection is BAD_OUTPUT that says so, and there is no third call', async () => {
     const { client, llm } = setup([reply(BAD), reply(BAD), reply(GOOD)]);
     const r = await llm.status(INPUT);

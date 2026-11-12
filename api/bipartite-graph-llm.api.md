@@ -500,6 +500,10 @@ export interface TemplateRules {
 // @public
 export interface TokenUsage {
     // (undocumented)
+    readonly cacheCreationTokens?: number;
+    // (undocumented)
+    readonly cacheReadTokens?: number;
+    // (undocumented)
     readonly inputTokens: number;
     // (undocumented)
     readonly outputTokens: number;

@@ -31,4 +31,26 @@ describe('token usage', () => {
   ])('%s is %s', (_name, usage, valid) => {
     expect(isValidUsage(usage)).toBe(valid);
   });
+
+  it('adds cache counts when either side has them, and leaves them out when neither does', () => {
+    const plain = { inputTokens: 100, outputTokens: 20 };
+    const cached = { inputTokens: 50, outputTokens: 5, cacheReadTokens: 30, cacheCreationTokens: 4 };
+    expect(addUsage(plain, plain)).toEqual({ inputTokens: 200, outputTokens: 40 });
+    expect(Object.keys(addUsage(plain, plain))).toEqual(['inputTokens', 'outputTokens']);
+    expect(addUsage(plain, cached)).toEqual({ inputTokens: 150, outputTokens: 25, cacheReadTokens: 30, cacheCreationTokens: 4 });
+    expect(addUsage(cached, cached)).toEqual({ inputTokens: 100, outputTokens: 10, cacheReadTokens: 60, cacheCreationTokens: 8 });
+    expect(addUsage({ inputTokens: 5, outputTokens: 1, cacheReadTokens: 2 }, plain)).toEqual({ inputTokens: 105, outputTokens: 21, cacheReadTokens: 2 });
+    expect(Object.isFrozen(addUsage(cached, cached))).toBe(true);
+  });
+
+  it.each([
+    ['cache counts within the input', { inputTokens: 10, outputTokens: 1, cacheReadTokens: 6, cacheCreationTokens: 4 }, true],
+    ['only a read count', { inputTokens: 10, outputTokens: 1, cacheReadTokens: 10 }, true],
+    ['cache counts above the input', { inputTokens: 10, outputTokens: 1, cacheReadTokens: 6, cacheCreationTokens: 5 }, false],
+    ['a negative cache count', { inputTokens: 10, outputTokens: 1, cacheReadTokens: -1 }, false],
+    ['a fractional cache count', { inputTokens: 10, outputTokens: 1, cacheCreationTokens: 0.5 }, false],
+    ['a text cache count', { inputTokens: 10, outputTokens: 1, cacheReadTokens: '3' as unknown as number }, false],
+  ])('%s is %s', (_name, usage, valid) => {
+    expect(isValidUsage(usage)).toBe(valid);
+  });
 });

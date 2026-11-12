@@ -3,6 +3,7 @@ import { err, ok, type JsonValue, type Result } from '../../graph_store/index.js
 import { runWithDeadline } from '../deadline.js';
 import { llmError, type LlmError } from '../errors.js';
 import type { ModelClient, ModelRequest, ModelResponse } from '../model-client.js';
+import type { TokenUsage } from '../usage.js';
 import { ANTHROPIC_KEY_SHAPE, ANTHROPIC_KEY_VARIABLE, readAnthropicKey } from '../api-key.js';
 import { checkRequest } from '../request-check.js';
 import { mapProviderError, redact } from './errors.js';
@@ -63,9 +64,12 @@ export function createAnthropicClient(options: AnthropicClientOptions): ModelCli
         const category = message.stop_details?.category;
         return err(llmError('REFUSED', `the model declined to answer${category == null ? '' : ` (${category})`}`));
       }
-      const usage = {
-        inputTokens: message.usage.input_tokens + (message.usage.cache_creation_input_tokens ?? 0) + (message.usage.cache_read_input_tokens ?? 0),
+      const cacheRead = message.usage.cache_read_input_tokens;
+      const cacheCreation = message.usage.cache_creation_input_tokens;
+      const usage: TokenUsage = {
+        inputTokens: message.usage.input_tokens + (cacheCreation ?? 0) + (cacheRead ?? 0),
         outputTokens: message.usage.output_tokens,
+        ...(cacheRead == null && cacheCreation == null ? {} : { cacheReadTokens: cacheRead ?? 0, cacheCreationTokens: cacheCreation ?? 0 }),
       };
       const text = textOf(message.content as Array<{ type: string; text?: string }>);
       if (schema === undefined) return ok({ model: message.model, output: { kind: 'text', text }, usage });

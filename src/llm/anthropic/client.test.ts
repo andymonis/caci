@@ -120,7 +120,20 @@ describe('the answer', () => {
     const p = fakeProvider(() =>
       jsonResponse(200, { ...messageBody('claude-served-1', 'Hi', { input: 10, output: 4 }), usage: { input_tokens: 10, output_tokens: 4, cache_creation_input_tokens: 5, cache_read_input_tokens: 7 } }),
     );
-    expect(await make(p).complete(request())).toEqual({ ok: true, value: { model: 'claude-served-1', output: { kind: 'text', text: 'Hi' }, usage: { inputTokens: 22, outputTokens: 4 } } });
+    expect(await make(p).complete(request())).toEqual({ ok: true, value: { model: 'claude-served-1', output: { kind: 'text', text: 'Hi' }, usage: { inputTokens: 22, outputTokens: 4, cacheReadTokens: 7, cacheCreationTokens: 5 } } });
+  });
+
+  it('keeps the cache counts apart when the provider gives them, and gives none when it does not', async () => {
+    const only = fakeProvider(() => jsonResponse(200, { ...messageBody('m', 'Hi', { input: 10, output: 4 }), usage: { input_tokens: 10, output_tokens: 4, cache_read_input_tokens: 7 } }));
+    const a = await make(only).complete(request());
+    expect(a.ok && a.value.usage).toEqual({ inputTokens: 17, outputTokens: 4, cacheReadTokens: 7, cacheCreationTokens: 0 });
+    const none = fakeProvider(() => jsonResponse(200, messageBody('m', 'Hi', { input: 10, output: 4 })));
+    const b = await make(none).complete(request());
+    expect(b.ok && b.value.usage).toEqual({ inputTokens: 10, outputTokens: 4 });
+    expect(b.ok && Object.keys(b.value.usage)).toEqual(['inputTokens', 'outputTokens']);
+    const nulls = fakeProvider(() => jsonResponse(200, { ...messageBody('m', 'Hi', { input: 10, output: 4 }), usage: { input_tokens: 10, output_tokens: 4, cache_read_input_tokens: null, cache_creation_input_tokens: null } }));
+    const c = await make(nulls).complete(request());
+    expect(c.ok && Object.keys(c.value.usage)).toEqual(['inputTokens', 'outputTokens']);
   });
 
   it('joins several text blocks and ignores blocks that are not text', async () => {
