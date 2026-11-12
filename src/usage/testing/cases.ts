@@ -255,6 +255,13 @@ export function usageStoreCases(): UsageStoreCase[] {
       },
     },
     {
+      name: 'models are ordered by plain code-unit order, not by UTF-8 bytes',
+      run: async (store) => {
+        must(await store.append([rec({ model: '\uFF5E-model' }), rec({ model: '😀-model' }), rec({ model: 'a-model' })]));
+        assert.deepEqual((await store.aggregate(ALL)).map((r) => r.model), ['a-model', '😀-model', '\uFF5E-model']);
+      },
+    },
+    {
       name: 'clearing a person keeps their records and totals but no longer says whose they are',
       run: async (store) => {
         must(await store.append([rec(), rec({ at: D1 + 1, attempt: 2 }), rec({ userId: U2 })]));

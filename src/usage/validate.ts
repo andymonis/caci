@@ -6,8 +6,8 @@ const KEYS = ['at', 'userId', 'capability', 'scope', 'model', 'attempt', 'inputT
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const whole = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 && v <= max;
-/** A model name: 1 to 200 characters, no spaces or control characters (the same loose rule the model configuration uses). */
-const isModel = (v: unknown): v is string => typeof v === 'string' && [...v].length >= 1 && [...v].length <= MODEL_MAX && !/[\s\p{Cc}]/u.test(v);
+/** A model name: 1 to 200 characters, no spaces, control characters or lone surrogates (the same loose rule the model configuration uses; a lone surrogate would not survive being stored as text). */
+const isModel = (v: unknown): v is string => typeof v === 'string' && [...v].length >= 1 && [...v].length <= MODEL_MAX && !/[\s\p{Cc}\p{Cs}]/u.test(v);
 
 export function scopeProblem(scope: unknown): string | undefined {
   if (!isObject(scope)) return 'scope must be an object';

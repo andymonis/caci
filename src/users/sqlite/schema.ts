@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 9;
+export const USERS_SCHEMA_VERSION = 10;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -308,7 +308,44 @@ const V9: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8, V9]);
+/**
+ * Version 10: usage metering (R-024). One row per model attempt. There is no column that could hold text (D8). `user_id` is null
+ * once the account is gone: a trigger clears it when the user row goes, whoever deletes it, and the rest of the row stays (D11).
+ * The day is not stored: reports group by the UTC date of `at`. A circle scope has the circle's id; a personal one has none.
+ * The table has no foreign key, so the store works without a user row or a circle row.
+ */
+const V10: Migration = Object.freeze({
+  to: 10,
+  creates: Object.freeze(['usage']),
+  sql: Object.freeze([
+    `CREATE TABLE usage (
+       id INTEGER PRIMARY KEY,
+       at INTEGER NOT NULL CHECK (at >= 0),
+       user_id TEXT CHECK (user_id IS NULL OR (length(user_id) = 17 AND substr(user_id, 1, 1) = 'u')),
+       capability TEXT NOT NULL CHECK (capability IN ('categorise', 'status', 'check', 'agent-check')),
+       scope_kind TEXT NOT NULL CHECK (scope_kind IN ('personal', 'circle')),
+       scope_id TEXT NOT NULL,
+       model TEXT NOT NULL CHECK (model <> ''),
+       attempt INTEGER NOT NULL CHECK (attempt IN (1, 2)),
+       input_tokens INTEGER NOT NULL CHECK (input_tokens BETWEEN 0 AND 1000000000),
+       output_tokens INTEGER NOT NULL CHECK (output_tokens BETWEEN 0 AND 1000000000),
+       cache_read_tokens INTEGER NOT NULL CHECK (cache_read_tokens >= 0),
+       cache_creation_tokens INTEGER NOT NULL CHECK (cache_creation_tokens >= 0),
+       result TEXT NOT NULL CHECK (result IN ('ok', 'rejected', 'timeout', 'rate_limited', 'refused', 'bad_output', 'model_error', 'config', 'cancelled')),
+       latency_ms INTEGER NOT NULL CHECK (latency_ms BETWEEN 0 AND 86400000),
+       CHECK (cache_read_tokens + cache_creation_tokens <= input_tokens),
+       CHECK ((scope_kind = 'personal' AND scope_id = '') OR (scope_kind = 'circle' AND scope_id <> ''))
+     )`,
+    'CREATE INDEX usage_by_time ON usage (at)',
+    'CREATE INDEX usage_by_user ON usage (user_id)',
+    `CREATE TRIGGER usage_clears_user AFTER DELETE ON users
+     BEGIN
+       UPDATE usage SET user_id = NULL WHERE user_id = old.id;
+     END`,
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8, V9, V10]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });

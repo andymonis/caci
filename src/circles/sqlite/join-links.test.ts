@@ -46,8 +46,8 @@ const start = async (store: CircleStore): Promise<void> => void (await store.cre
 describe('the schema', () => {
   it('is version 9 with both tables, their indexes and the trigger', () => {
     const { db } = open();
-    expect(USERS_SCHEMA_VERSION).toBe(9);
-    expect(db.pragma('user_version')).toBe(9);
+    expect(USERS_SCHEMA_VERSION).toBe(10);
+    expect(db.pragma('user_version')).toBe(10);
     const names = (type: string): string[] => db.all<{ name: string }>(`SELECT name FROM sqlite_master WHERE type = '${type}' ORDER BY name`).map((r) => r.name);
     expect(names('table')).toEqual(expect.arrayContaining(['circle_join_links', 'circle_join_requests']));
     expect(names('index')).toEqual(expect.arrayContaining(['circle_join_links_by_circle', 'circle_join_requests_by_user']));
@@ -66,7 +66,7 @@ describe('the schema', () => {
     expect(old.pragma('user_version')).toBe(8);
     old.close();
     const { store, db } = open(path);
-    expect(db.pragma('user_version')).toBe(9);
+    expect(db.pragma('user_version')).toBe(10);
     expect((await store.getCircle(cid(1)))?.name).toBe('Old');
     expect((await store.membershipOf(cid(1), uid(1)))?.role).toBe('owner');
     expect((await store.getInvitation(`i${pad(1)}`))?.username).toBe('carol');

@@ -42,6 +42,7 @@ describe('the usage record check', () => {
     expect(recordProblem({ ...good, model: `a${String.fromCharCode(1)}b` })).toBeDefined();
     expect(recordProblem({ ...good, model: `a${String.fromCharCode(127)}b` })).toBeDefined();
     expect(recordProblem({ ...good, model: 'a b' })).toBeDefined();
+    expect(recordProblem({ ...good, model: `a${String.fromCharCode(0xd800)}b` })).toBeDefined();
   });
   it('the model name rule counts characters, not units', () => {
     expect(recordProblem({ ...good, model: '😀'.repeat(200) })).toBeUndefined();

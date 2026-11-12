@@ -172,7 +172,7 @@ export function violations(files: Record<string, string>): string[] {
         problems.push(`${file} imports ${specifier}: the service may use the ledger component only through ledger/index and ledger/sqlite/index`);
       }
       const usageTest = /\.test(?:-util)?\.ts$/.test(file);
-      if (file.startsWith('usage/') && /^(?:graph_store|llm|app|api|service|caci|circles|sharing|scopes|ledger|agent)(?:\/|$)/.test(target)) {
+      if (file.startsWith('usage/') && /^(?:graph_store|llm|app|api|service|caci|circles|sharing|scopes|ledger|agent)(?:\/|$)/.test(target) && !(usageTest && /^(?:graph_store\/adapters\/sqlite|circles\/sqlite|ledger\/sqlite)\/index$/.test(target))) {
         problems.push(`${file} imports ${specifier}: the usage component must not depend on any other component but the users component`);
       }
       if (file.startsWith('usage/') && target.startsWith('users/') && target !== 'users/index' && !((file.startsWith('usage/sqlite/') || usageTest) && target === 'users/sqlite/index') && !(usageTest && target === 'users/sqlite/schema')) {
@@ -273,6 +273,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'api/scopes.test.ts': `import { createScopeResolver } from '../scopes/index.js';`,
         'usage/x.ts': `import { isUserId } from '../users/index.js'; import { y } from './y.js';`,
         'usage/sqlite/store.ts': `import { prepareUsersDatabase } from '../../users/sqlite/index.js'; import { openDb } from '../../sqlite/db.js';`,
+        'usage/sqlite/y.test.ts': `import { createSqliteAdapter } from '../../graph_store/adapters/sqlite/index.js'; import { createSqliteCircleStore } from '../../circles/sqlite/index.js'; import { createSqliteLedgerStore } from '../../ledger/sqlite/index.js';`,
         'usage/x.test.ts': `import { createSqliteUserStore } from '../users/sqlite/index.js'; import { USERS_MIGRATIONS } from '../users/sqlite/schema.js';`,
         'caci/usage.ts': `import { createMemoryUsageStore } from '../usage/index.js';`,
         'service/usage.ts': `import { createSqliteUsageStore } from '../usage/sqlite/index.js'; import { createMemoryUsageStore } from '../usage/index.js';`,
@@ -360,6 +361,7 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the circles component using the service', { 'circles/x.ts': `import { serve } from '../service/index.js';` }],
     ['the users component using the circles component', { 'users/x.ts': `import { createCircleController } from '../circles/index.js';` }],
     ['the usage component using the graph store', { 'usage/x.ts': `import { query } from '../graph_store/index.js';` }],
+    ['production usage code using the graph SQLite adapter', { 'usage/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
     ['the usage component using the LLM component', { 'usage/x.ts': `import { createLlm } from '../llm/index.js';` }],
     ['the usage component using the CaCi controller', { 'usage/x.ts': `import { createCaciController } from '../caci/index.js';` }],
     ['the usage component using the ledger', { 'usage/x.ts': `import { createMemoryLedgerStore } from '../ledger/index.js';` }],
