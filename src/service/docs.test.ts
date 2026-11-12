@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createAgentTools, MAX_TOOL_RESULT_CHARS } from '../agent/index.js';
-import { CIRCLE_STATUS_OF, createAccountRoutes, createAgentTokenRoutes, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
+import { CIRCLE_STATUS_OF, createAccountRoutes, createAgentTokenRoutes, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createJoinRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, mapCaciError, STATUS_OF, WEB_POLICY } from '../api/index.js';
 import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
 import { CACI_ERROR_CODES, caciError, DEFAULT_STATUS_CONTEXT_LIMITS, MAX_SEARCH_RESULTS, MAX_STATUS_REQUEST_CHARS, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CANDIDATE_OPTIONS, DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
@@ -33,7 +33,7 @@ function section(title: string): string {
 const accounts = section('User accounts and the login API');
 const defaults = parseServiceConfig({});
 /** Settings the service reads that the README does not describe yet (emptied by the README task, T-194). */
-const NOT_DOCUMENTED_YET: readonly string[] = ['CACI_JOIN_LINKS']; // read and tested; the README describes it from T-322 (R-023)
+const NOT_DOCUMENTED_YET: readonly string[] = [];
 const DOCUMENTED = [...VARIABLES].filter((v) => !NOT_DOCUMENTED_YET.includes(v));
 
 describe('the user accounts section of the README', () => {
@@ -795,6 +795,56 @@ describe('the agent access section of the README', () => {
       'A key is a bearer credential',
       'Prompt injection reaches your agent, not CaCi',
       'a file_note tool is on the Backlog',
+    ]) expect(text, phrase).toContain(phrase);
+  });
+});
+
+const joinSection = section('Joining a circle by link');
+
+describe('the join links section of the README', () => {
+  it('lists exactly the routes the server has for join links', () => {
+    const real = createJoinRoutes({ circles: {} as never }).map((r) => `${r.method} ${r.path}`);
+    const documented = [...joinSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/[^`]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented.sort()).toEqual([...real].sort());
+    expect(real).toHaveLength(9);
+  });
+
+  it('prints the numbers the code uses and the one setting, off by default', () => {
+    expect(joinSection).toContain('followed by 43 characters');
+    expect(joinSection).toContain(`at most ${DEFAULT_CIRCLE_LIMITS.maxLiveJoinLinksPerCircle} live links`);
+    expect(joinSection).toContain(`at most ${DEFAULT_CIRCLE_LIMITS.maxPendingJoinRequestsPerCircle} waiting requests`);
+    expect(joinSection).toContain(`${DEFAULT_CIRCLE_LIMITS.joinRequestDays} days`);
+    expect(joinSection).toContain(`misses ${DEFAULT_CIRCLE_LIMITS.joinMissesPerHour} times in an hour`);
+    expect(defaults.ok ? defaults.value.joinLinks : undefined).toBe(false);
+    expect(readme).toMatch(/\| `CACI_JOIN_LINKS` \|[^|]*\| `false` \|/);
+    expect(parseServiceConfig({ CACI_JOIN_LINKS: 'true' }).ok).toBe(true);
+    expect(parseServiceConfig({ CACI_JOIN_LINKS: 'yes' }).ok).toBe(false);
+  });
+
+  it('names the specification, and every setting it names exists', () => {
+    expect(joinSection).toContain('specs/R-023-join-links.md');
+    expect(existsSync(new URL('../../specs/R-023-join-links.md', import.meta.url))).toBe(true);
+    for (const v of joinSection.match(/CACI_[A-Z_]+/g) ?? []) expect([...VARIABLES], v).toContain(v);
+  });
+
+  it('says the things a reader must not miss', () => {
+    const text = joinSection.replace(/[*`]+/g, '');
+    for (const phrase of [
+      'It is off unless the operator switches it on',
+      'never owner or manager',
+      'enforced in the store as well as the controller',
+      'One use by default',
+      'each person needs approval by default',
+      'a one-use link is spent by asking',
+      'A link never creates an account',
+      'shown once',
+      'in the fragment, which a browser never sends to the service',
+      'stores only a fingerprint',
+      'never in a query string',
+      'the same answer',
+      'A link is a bearer secret in a chat',
+      'Nobody is notified',
+      'The release gates still stand',
     ]) expect(text, phrase).toContain(phrase);
   });
 });

@@ -151,6 +151,14 @@ describe('the example settings file', () => {
     const enabled = parseServiceConfig({ ...settings, CACI_AGENT_ACCESS: 'true', ANTHROPIC_API_KEY: KEY });
     expect(enabled.ok && enabled.value.agentAccess).toBe(true);
   });
+  it('leaves join links off: the line is only a comment, and the example enabled is accepted', () => {
+    expect(settings).not.toHaveProperty('CACI_JOIN_LINKS');
+    expect(parseServiceConfig({ ...settings, ANTHROPIC_API_KEY: KEY }).value.joinLinks).toBe(false);
+    expect(text).toContain('# CACI_JOIN_LINKS=false');
+    expect(text).toContain('anyone who holds it can ask to join');
+    const enabled = parseServiceConfig({ ...settings, CACI_JOIN_LINKS: 'true', ANTHROPIC_API_KEY: KEY });
+    expect(enabled.ok && enabled.value.joinLinks).toBe(true);
+  });
   it('holds no secret: the key line is empty and nothing looks like a key', () => {
     expect(settings.ANTHROPIC_API_KEY).toBe('');
     expect(text).not.toMatch(/sk-ant-[A-Za-z0-9_-]{8,}/);

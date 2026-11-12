@@ -295,6 +295,7 @@ All settings are environment variables. An unknown `CACI_` name, or a bad value,
 | `CACI_MAX_BRAIN_SCOPES` | Most brains My Brain may combine: your own plus circles (2 to 100) | `25` |
 | `CACI_LEDGER_DAYS` | How long the change log keeps its entries (1 to 3650), see [The current-view brain and its change log](#the-current-view-brain-and-its-change-log) | `90` |
 | `CACI_AGENT_ACCESS` | `true` lets people make personal access keys for their own agent and serves `/mcp` (read only), see [Letting an agent read your brain](#letting-an-agent-read-your-brain) | `false` |
+| `CACI_JOIN_LINKS` | `true` lets owners and managers make join links for a circle (see [Joining a circle by link](#joining-a-circle-by-link)); without it the join routes do not exist | `false` |
 | `CACI_SESSION_IDLE_DAYS` | Days without use after which a login ends (1 to 365, not more than `CACI_SESSION_DAYS`), see [Staying signed in](#staying-signed-in) | `7` |
 | `CACI_SESSION_DAYS` | Days after which a login ends whatever its use, and how long the cookie lives (1 to 365) | `30` |
 | `CACI_STATUS_PER_HOUR` | Status updates one account may ask for in an hour (1 to 1,000), see [Asking for a status update](#asking-for-a-status-update) | `20` |
@@ -889,6 +890,54 @@ A call is resolved the same way the app resolves yours: the key names a person, 
 - **An agent's checks have their own hourly allowance** of the size of `CACI_STATUS_PER_HOUR`, separate from the app's, so a person using both can ask up to twice that many an hour.
 - **Prompt injection reaches your agent, not CaCi.** Because an agent cannot write, the harm it can do through CaCi is limited to reading what its key names.
 - **Not built:** writing through an agent (a `file_note` tool is on the Backlog and would need its own specification), pushing anything to an agent, OAuth for third-party agents, a list of what an agent read, streaming responses.
+
+## Joining a circle by link
+
+A circle's owner or manager can make a **join link** and send it to someone in a chat. The person opens it, signs in (or creates an account first), sees the circle's name and the role on offer, and joins. It is **off unless the operator switches it on** (`CACI_JOIN_LINKS=true`); without it every join route is a plain 404. The design is in `specs/R-023-join-links.md`.
+
+### What a link allows
+
+- **The role is `member` or `observer`, never `owner` or `manager`** (the default is `observer`). This is enforced in the store as well as the controller, so no request can make a link that gives more.
+- **One use by default** (1 to 100 can be chosen), **7 days by default** (1 to 30 can be chosen), and **each person needs approval by default**.
+- With approval on, joining makes a **request**, not a membership: an owner or manager approves or declines it on the circle's screen in the back office. The use is counted when the person asks, so a one-use link is spent by asking, and opening it again is the same miss as for a link that does not exist (the join screen then lists the person's own waiting requests). A request lapses after 7 days, a circle holds at most 20 waiting requests, and a person has at most one waiting request per circle.
+- With approval off, joining adds the person at once at the link's role. Someone already in the circle is told so, keeps their role, and no use is spent.
+- A circle has at most 20 live links; a full circle, or a person already in the most circles allowed, is refused as a limit and no use is spent.
+- Revoking a link removes it; requests already made stay and can still be approved. A link never creates an account: with registration closed, only someone who already has an account can join.
+
+### The token
+
+A link carries a token that looks like `cjoin_` followed by 43 characters. It is shown **once**, when the link is made, in an address of the form `<origin>/#/join/<token>`: the token is in the **fragment**, which a browser never sends to the service, and the page replaces it with `#/join` as soon as it is taken in. The service stores only a fingerprint, so a copy of the database cannot be used as a link. When the token is sent to the service it goes in a request body, never in a query string.
+
+Every kind of miss (made up, malformed, expired, revoked, used up, circle deleted) gets the same answer, and a client that misses 30 times in an hour is held back for the rest of the hour even for a good link.
+
+### The routes
+
+| Route | What it does |
+|---|---|
+| `POST /api/circles/:id/join-links` | Owner or manager. `label`, `role`, `days`, `uses`, `approval` only. Shows the token once |
+| `GET /api/circles/:id/join-links` | Owner or manager. Live links, never a token |
+| `DELETE /api/circles/:id/join-links/:linkId` | Owner or manager. Withdraws a link |
+| `POST /api/join/preview` | Signed in. `{ token }` in the body: the circle's name, the role and who made the link |
+| `POST /api/join` | Signed in. `{ token }` in the body: joined, already a member, requested or waiting |
+| `GET /api/circles/:id/join-requests` | Owner or manager. Who is waiting, by display name only |
+| `POST /api/circles/:id/join-requests/:requestId/approve` | Owner or manager. Makes the person a member at the link's role |
+| `POST /api/circles/:id/join-requests/:requestId/decline` | Owner or manager. Removes the request; the use is not given back |
+| `GET /api/join-requests` | Signed in. Your own waiting requests, with the circle's name |
+
+A stranger and a made-up circle get the same "no such circle" answer from the circle routes, and the platform administrator has no extra reach.
+
+### In the apps
+
+In the **back office** (`/admin`), a circle's screen has a **Join links** section for owners and managers (nothing is requested until **Show join links** is pressed): make a link, see the address once and copy it (**I have copied it** removes it from the page), withdraw a link after being asked, and approve or decline waiting requests. In the **everyday app** (`/`), opening a link shows the circle and the role and asks you to press **Join**; someone who is not signed in is told why they are asked to sign in and the link is used after they do.
+
+### What is not protected, and what is not done
+
+- **A link is a bearer secret in a chat.** Anyone who sees it can use it until it expires, runs out or is revoked. The low role and the limits bound it.
+- **Nobody is notified** of a request or of a join: an owner or manager sees it when they next open the circle screen, and with approval off a leaked link adds someone the organiser did not choose.
+- **The preview shows the circle's name** to anyone holding a live link, by design, and **everyone in a circle sees every member's username and display name**.
+- **The miss counter is in memory, per client address**: a restart forgets it and a household behind one address shares an allowance.
+- **The release gates still stand** (pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, a statement of who may use the service): do not use circles with other people's data until they are done.
+- **Not built:** a QR code or share-sheet button, a person withdrawing their own request, links that give more than `observer` or `member`.
 
 ## Controlling what the model is told
 

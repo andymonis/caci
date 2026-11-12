@@ -153,6 +153,14 @@ describe('the settings file', () => {
     expect(statusOf(await doctor({ settings: s({ config: config({ agentAccess: false }) }) }), 'Agent access')).toBe('pass');
     expect(statusOf(await doctor(), 'Agent access')).toBe('pass'); // not mentioned in the settings: off
   });
+  it('on is a reminder that says what it allows and how to turn it off; off (or unset) passes', async () => {
+    const on = await doctor({ settings: s({ config: config({ joinLinks: true }) }) });
+    expect(statusOf(on, 'Join links')).toBe('warn');
+    expect(on.text).toContain('observer or member');
+    expect(on.text).toContain('CACI_JOIN_LINKS=false');
+    expect(statusOf(await doctor({ settings: s({ config: config({ joinLinks: false }) }) }), 'Join links')).toBe('pass');
+    expect(statusOf(await doctor(), 'Join links')).toBe('pass');
+  });
 });
 
 describe('the data folder', () => {

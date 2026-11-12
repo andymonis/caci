@@ -74,19 +74,19 @@ This spec adds a **join link**: a revocable, expiring, use-limited secret that a
 
 ## Threats and controls
 
-| Threat | Control |
-|--------|---------|
-| A link is passed beyond the group | D4 one-time use and expiry, D13 approval by default, the low role, D4/D15 revocation; the roster shows who joined; an owner can remove anyone. |
-| A link confers power | D4: never `owner` or `manager`; enforced in the store, not only the controller. |
-| Guessing a link | 256 bits, hashed at rest, D11 throttle, D8 one answer for every miss. |
-| The token ends up in logs or referrers | D6: fragment, body not query; the request log keeps no body or query. |
-| Concurrent joins, requests or approvals exceed the limit or the cap | D9 atomic store steps; JL-NFR-01. |
-| Request flooding on a circle | D13: the use is counted at request time, one pending per person, 20 per circle, lapse after 7 days, throttle by client. |
-| An approver approves the wrong person | The request shows the person's display name and the role; the roster and an owner's power to remove anyone remain. |
-| A deleted or demoted creator's links keep working | D15: links belong to the circle; revocable by any owner or manager. |
-| A link used to probe which circles exist | D8: one answer; the preview shows the circle only to a holder of a live link. |
-| Registration closed but links let strangers in | D10: a link never creates an account. |
-| An expired link read from a backup | Hashed; expiry is checked at use. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| A link is passed beyond the group | D4 one-time use and expiry, D13 approval by default, the low role, D4/D15 revocation; the roster shows who joined; an owner can remove anyone. | `src/service/join-links-end-to-end.test.ts` — "a link made with the defaults allows one use and needs approval"; `src/service/join-links-end-to-end.test.ts` — "a request lapses after a week"; `src/service/join-links-end-to-end.test.ts` — "a revoked link no longer works"; `src/circles/controller-join.test.ts` — "a one-use link serves one person" |
+| A link confers power | D4: never `owner` or `manager`; enforced in the store, not only the controller. | `src/circles/controller-join.test.ts` — "refuses a role other than member or observer"; `src/circles/sqlite/join-links.test.ts` — "the database itself refuses a link that offers more than member or observer"; `src/service/join-links-end-to-end.test.ts` — "nobody can make a link for owner or manager" |
+| Guessing a link | 256 bits, hashed at rest, D11 throttle, D8 one answer for every miss. | `src/circles/controller-join.test.ts` — "every kind of miss is the same answer"; `src/circles/controller-join.test.ts` — "holds a client back after too many misses"; `src/api/join-routes.test.ts` — "every kind of miss is the same 404, byte for byte"; `src/circles/sqlite/join-links.test.ts` — "only the hash is in the database and its log" |
+| The token ends up in logs or referrers | D6: fragment, body not query; the request log keeps no body or query. | `src/api/join-routes.test.ts` — "a token in the query string of a join is refused by name"; `src/api/join-routes.test.ts` — "never repeats a token outside the one response that made it"; `web/join-client.test.mjs` — "each call goes to its route by path only, the token only ever in a body"; `web/user-join.test.mjs` — "takes the token out of the address, previews it by body" |
+| Concurrent joins, requests or approvals exceed the limit or the cap | D9 atomic store steps; JL-NFR-01. | `src/service/join-links-end-to-end.test.ts` — "eight people joining at once by a one-use link make exactly one member"; `src/service/join-links-end-to-end.test.ts` — "eight approvals of one request at once add exactly one member"; `src/circles/sqlite/join-links.test.ts` — "four processes joining by a one-use link make exactly one member"; `src/circles/controller-join-requests.test.ts` — "eight approvals of one request at once add exactly one member" |
+| Request flooding on a circle | D13: the use is counted at request time, one pending per person, 20 per circle, lapse after 7 days, throttle by client. | `src/circles/controller-join.test.ts` — "a request waits as long as the setting says, and a circle holds only so many"; `src/circles/controller-join.test.ts` — "asking again says waiting, with the same end time, and counts nothing"; `src/service/join-links-end-to-end.test.ts` — "a person asking by a bad link too often is held back" |
+| An approver approves the wrong person | The request shows the person's display name and the role; the roster and an owner's power to remove anyone remain. | `src/circles/controller-join-requests.test.ts` — "owners and managers see who asked by display name only"; `web/join-links-journey.test.mjs` — "ann makes a link on her page" |
+| A deleted or demoted creator's links keep working | D15: links belong to the circle; revocable by any owner or manager. | `src/circles/controller-join.test.ts` — "a link made by someone who has since gone is still listed"; `src/circles/controller-join.test.ts` — "the role is read afresh: a demoted manager cannot make a link"; `src/service/join-links-end-to-end.test.ts` — "a person deleting their account takes their waiting requests with them" |
+| A link used to probe which circles exist | D8: one answer; the preview shows the circle only to a holder of a live link. | `src/circles/controller-join.test.ts` — "every kind of miss is the same answer"; `web/user-join-journey.test.mjs` — "a link that has been withdrawn is the miss for a newcomer"; `src/api/join-routes.test.ts` — "every kind of miss is the same 404, byte for byte" |
+| Registration closed but links let strangers in | D10: a link never creates an account. | `src/service/join-links-end-to-end.test.ts` — "a link does not create accounts" |
+| An expired link read from a backup | Hashed; expiry is checked at use. | `src/circles/sqlite/join-links.test.ts` — "only the hash is in the database and its log"; `src/service/join-links-end-to-end.test.ts` — "a restart keeps links, uses and waiting requests; the files hold the hash and never the token"; `src/service/join-links-end-to-end.test.ts` — "a request lapses after a week" |
 
 ## Acceptance criteria
 
@@ -111,7 +111,30 @@ This spec adds a **join link**: a revocable, expiring, use-limited secret that a
 | JL-AC-11 | Given registration is closed, then someone with no account cannot create one through a link. |
 | JL-AC-12 | Given the circle is deleted, then its links are gone and the answer is the made-up one. |
 
-## Residual risks
+### Where each criterion is checked (T-322)
+
+| ID | Tests |
+|----|-------|
+| JL-AC-01 | `src/service/join-links-end-to-end.test.ts` — "with join links off (the default) every join route is a plain 404"; `src/service/join-links-end-to-end.test.ts` — "with it on the routes answer" |
+| JL-AC-02 | `src/api/join-routes.test.ts` — "201 with the token once and the link"; `src/circles/sqlite/join-links.test.ts` — "only the hash is in the database and its log"; `src/service/join-links-end-to-end.test.ts` — "a restart keeps links, uses and waiting requests; the files hold the hash" |
+| JL-AC-03 | `src/api/join-routes.test.ts` — "preview: 200 with the circle"; `src/circles/controller-join.test.ts` — "every kind of miss is the same answer"; `src/api/join-routes.test.ts` — "every kind of miss is the same 404, byte for byte" |
+| JL-AC-04 | `src/service/join-links-end-to-end.test.ts` — "a link with approval off joins at once at the role it offers"; `src/circles/controller-join.test.ts` — "adds the person at the link" |
+| JL-AC-05 | `src/service/join-links-end-to-end.test.ts` — "eight people joining at once by a one-use link make exactly one member"; `src/circles/sqlite/join-links.test.ts` — "four processes asking by a one-use approval link make exactly one request" |
+| JL-AC-06 | `src/service/join-links-end-to-end.test.ts` — "nobody can make a link for owner or manager"; `src/circles/controller-join.test.ts` — "refuses a role other than member or observer" |
+| JL-AC-07 | `src/circles/controller-join.test.ts` — "someone already in is told so, keeps their role, and costs no use"; `web/user-join-journey.test.mjs` — "a link that needs no approval joins at once and offers the circle" |
+| JL-AC-08 | `src/circles/controller-join.test.ts` — "a full circle or a person in the most circles allowed gets a limit and the use is not spent"; `src/service/join-links-end-to-end.test.ts` — "a full circle refuses to approve" |
+| JL-AC-09 | `src/service/join-links-end-to-end.test.ts` — "a revoked link no longer works"; `web/join-links-journey.test.mjs` — "withdrawing a link on the page, after the question, makes it a miss for everyone" |
+| JL-AC-10 | `src/circles/controller-join.test.ts` — "a manager may make one; a member and an observer may not"; `src/service/join-links-end-to-end.test.ts` — "owners and managers manage links and requests; members and observers are forbidden"; `src/api/join-routes.test.ts` — "members and observers are 403; a stranger and a made-up circle get the one no-such-circle" |
+| JL-AC-11 | `src/service/join-links-end-to-end.test.ts` — "a link does not create accounts" |
+| JL-AC-12 | `src/service/join-links-end-to-end.test.ts` — "deleting the circle removes its links and requests"; `src/circles/sqlite/join-links.test.ts` — "deleting the circle row removes its links and requests" |
+| JL-AC-13 | `src/circles/controller-join.test.ts` — "has the defaults: observer, 7 days, one use, approval on"; `src/service/join-links-end-to-end.test.ts` — "a link made with the defaults allows one use and needs approval" |
+| JL-AC-14 | `src/circles/controller-join.test.ts` — "makes a waiting request, not a member, and counts the use"; `src/service/join-links-end-to-end.test.ts` — "with uses to spare, clicking the link again while waiting says waiting and counts nothing"; `web/user-join-journey.test.mjs` — "a new person opens a link, is asked to sign up, asks to join, waits" |
+| JL-AC-15 | `src/circles/controller-join-requests.test.ts` — "an owner or a manager makes the person a member at the link"; `src/circles/controller-join-requests.test.ts` — "removes the request, adds nobody, and does not give the use back"; `src/service/join-links-end-to-end.test.ts` — "a request lapses after a week and cannot be approved" |
+| JL-AC-16 | `src/circles/controller-join-requests.test.ts` — "a full circle or a person in the most circles allowed is a limit, the request stays waiting"; `src/api/join-routes.test.ts` — "a full circle is 429 and the request stays waiting" |
+| JL-AC-17 | `src/circles/controller-join-requests.test.ts` — "members and observers cannot see them"; `src/circles/controller-join-requests.test.ts` — "members and observers cannot approve or decline"; `src/api/join-routes.test.ts` — "members, observers are 403 and a stranger gets the one no-such-circle" |
+| JL-AC-18 | `src/circles/controller-join-requests.test.ts` — "eight approvals of one request at once add exactly one member"; `src/service/join-links-end-to-end.test.ts` — "eight approvals of one request at once add exactly one member"; `src/circles/sqlite/join-links.test.ts` — "four processes approving one request add exactly one member" |
+
+### Residual risks (not covered, with the reason)
 
 1. **A link is a bearer secret in a chat**: anyone who sees it can join until it expires, runs out or is revoked. The low role and limits bound it.
 2. **Approval waits for a person who may not look**: nobody is notified of a request (R-020's attention engine is not pursued), so a request waits until an owner or manager opens the circle screen; it lapses after 7 days. With approval off a leaked link adds someone the organiser did not choose.
@@ -119,6 +142,9 @@ This spec adds a **join link**: a revocable, expiring, use-limited secret that a
 4. **Joiners see every member's username and display name** (R-004), and a circle's brain is shared sensitive data until the release gates are met.
 5. **Nobody is told a person joined or asked to**; the organiser sees it when they next look.
 6. **The token is held in page memory** while the person signs in; a reload loses it.
+7. **The token is in the address a person opens** (in the fragment, which is never sent to the service): it can sit in a browser history, a chat preview or a screen shared in the moment; the page replaces it with `#/join` as soon as it is taken in.
+8. **The miss throttle is in memory, per client address**: a restart forgets it, a household behind one address shares an allowance, and a hostile address can use it up for an hour so the others on it see `THROTTLED` for links.
+9. **Nothing here has been run by real people or on the Pi**: the pages were looked at in one browser with the demo setup (T-322 hand check) and the flow is covered by tests, not by use.
 
 ## Open questions
 

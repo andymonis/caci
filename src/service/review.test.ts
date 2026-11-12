@@ -26,6 +26,7 @@ const SPECS = [
   { name: 'R-016', file: 'specs/R-016-user-app.md', minReferences: 60, minThreats: 11, criteria: 18, prefix: 'UP-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 11 },
   { name: 'R-017', file: 'specs/R-017-input-ledger-and-export.md', minReferences: 60, minThreats: 11, criteria: 16, prefix: 'LX-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 12 },
   { name: 'R-018', file: 'specs/R-018-focused-answers.md', minReferences: 25, minThreats: 5, criteria: 8, prefix: 'FA-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
+  { name: 'R-023', file: 'specs/R-023-join-links.md', minReferences: 35, minThreats: 11, criteria: 18, prefix: 'JL-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 9 },
   { name: 'R-022', file: 'specs/R-022-agent-access.md', minReferences: 30, minThreats: 10, criteria: 12, prefix: 'AG-AC-', criteriaHeading: '### Where each criterion is checked', minRisks: 11 },
 ] as const;
 
