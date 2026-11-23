@@ -17,8 +17,6 @@ ANTHROPIC_API_KEY=$(<"$key_file")
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY%$'\n'}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY%$'\r'}
 
-echo "ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
-
 if [[ -z "$ANTHROPIC_API_KEY" ]]; then
 	printf 'Key file is empty: %s\n' "$key_file" >&2
 	return 1
