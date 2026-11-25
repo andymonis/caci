@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { createAgentTools, createAgentView } from '../agent/index.js';
 import { createAccountRoutes, createAgentTokenRoutes, createApiServer, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createFactRoutes, createJoinRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
-import { createCaciController, createUsageRecorder, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
+import { createResolutionCleaner, createCaciController, createUsageRecorder, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
 import { createSqliteLedgerStore } from '../ledger/sqlite/index.js';
 import { createSqliteUsageStore } from '../usage/sqlite/index.js';
@@ -192,6 +192,20 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       clock,
     }), graphs);
     await reconcile(); // circles made before circle graphs existed get theirs, and graphs of circles that are gone are dropped
+    // resolutions of facts that no longer exist are removed (R-025 D16): at start-up, once the circle graphs are in step, then once a day; a run is
+    // bounded and carries on where the last stopped, and a failure is one fixed warning, never a failed start
+    const cleaner = createResolutionCleaner({ resolutions: resolutionStore, graphAdapter: graphs });
+    const cleanResolutions = async (): Promise<void> => {
+      try {
+        await cleaner.run();
+      } catch {
+        warn('could not remove resolutions of facts that no longer exist');
+      }
+    };
+    await cleanResolutions();
+    const cleaning = setInterval(() => void cleanResolutions(), DAY);
+    cleaning.unref();
+    closers.push(() => clearInterval(cleaning));
     const sharing = createSharing({ users: controller, directory: users, store: circleStore, graphAdapter: graphs });
     const routes = [
       ...createAccountRoutes({ controller, secureCookies: config.cookieSecure, cookieMaxAgeSeconds: config.sessionDays * 86_400 }),

@@ -21,3 +21,5 @@ export type { UsageCall, UsageContext, UsageRecorder, UsageRecorderInit } from '
 export { defaultVerbs, MAX_VERB_HELP_CHARS, MAX_VERBS, parseVerbs, VERBS_FILE } from './verbs.js';
 export type { Verb, VerbEffect, Verbs } from './verbs.js';
 export type { FactRef, ResolutionsView, ResolutionView, ResolvedView } from './controller.js';
+export { createResolutionCleaner } from './resolution-clean.js';
+export type { CleanReport, ResolutionCleaner, ResolutionCleanInit } from './resolution-clean.js';

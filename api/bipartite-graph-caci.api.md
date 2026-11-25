@@ -222,7 +222,17 @@ export const CHECK_HORIZON: Readonly<Record<Check, Horizon>>;
 export const CHECKS: readonly ["pulse", "coming-up", "long-range"];
 
 // @public (undocumented)
+export interface CleanReport {
+    readonly checked: number;
+    readonly complete: boolean;
+    readonly removed: number;
+}
+
+// @public (undocumented)
 export function createCaciController(init: CaciControllerInit): CaciController;
+
+// @public (undocumented)
+export function createResolutionCleaner(init: ResolutionCleanInit): ResolutionCleaner;
 
 // @public
 export function createUsageRecorder(init: UsageRecorderInit): UsageRecorder;
@@ -441,6 +451,20 @@ export interface ProposalView {
 //
 // @public
 export function recordsFromTrace(events: readonly TraceEvent[], context: UsageContext, at: number): UsageRecord[];
+
+// @public (undocumented)
+export interface ResolutionCleaner {
+    run(): Promise<CleanReport>;
+}
+
+// @public (undocumented)
+export interface ResolutionCleanInit {
+    // (undocumented)
+    readonly graphAdapter: StorageAdapter;
+    readonly maxFacts?: number;
+    // (undocumented)
+    readonly resolutions: ResolutionStore;
+}
 
 // @public (undocumented)
 export interface ResolutionsView {

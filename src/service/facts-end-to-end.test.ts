@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';
 import { describeGraph } from '../graph_store/index.js';
 import type { ServiceConfig } from './config.js';
@@ -151,6 +151,58 @@ describe('a recurring request, paid and cleared from one person\'s Pulse (VR-AC-
       expect((db.prepare('SELECT count(*) AS n FROM fact_resolutions').get() as { n: number }).n).toBe(0);
     } finally {
       db.close();
+    }
+  });
+});
+
+describe('resolutions of facts that are gone are cleaned (VR-AC-10)', () => {
+  const countRows = async (dir: string): Promise<number> => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(join(dir, 'users.db'));
+    try {
+      return (db.prepare('SELECT count(*) AS n FROM fact_resolutions').get() as { n: number }).n;
+    } finally {
+      db.close();
+    }
+  };
+
+  it('at start-up: a record whose fact was deleted while the service was stopped is removed, and a record of a live fact stays', async () => {
+    const w = await world();
+    const live = await w.post(w.p.ann, 'Pay for this week yoga class by Friday MARK-LIVE');
+    const dead = await w.post(w.p.ann, 'Bring a mat to the next class MARK-DEAD');
+    for (const id of [live, dead]) expect((await w.p.bob.call('POST', '/api/facts/resolve', { scope: w.scope, id, verb: 'clear' })).status).toBe(200);
+    expect(await countRows(w.dir)).toBe(2);
+    await w.service.close();
+    running.splice(running.indexOf(w.service), 1);
+    const adapter = createSqliteAdapter({ path: join(w.dir, 'graphs.db') });
+    try {
+      await adapter.transaction(`circle-${w.circle}`, async (tx) => tx.deleteNodes('item', [dead]));
+    } finally {
+      await adapter.close();
+    }
+    const again = await startService(config(w.dir));
+    running.push(again);
+    expect(await countRows(w.dir)).toBe(1);
+  });
+
+  it('once a day while it runs', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      const w = await world();
+      const { DatabaseSync } = await import('node:sqlite');
+      const db = new DatabaseSync(join(w.dir, 'users.db'));
+      try {
+        // a record of a fact that does not exist, put in behind the service's back
+        db.exec(`INSERT INTO fact_resolutions (user_id, scope_kind, scope_id, fact_id, verb, at) VALUES ('u0000000000000001', 'circle', '${w.circle}', 'never-was', 'pay', 1)`);
+        expect(await countRows(w.dir)).toBe(1);
+        await vi.advanceTimersByTimeAsync(86_400_000);
+        for (let i = 0; i < 50 && (await countRows(w.dir)) > 0; i++) await new Promise((r) => setTimeout(r, 20));
+        expect(await countRows(w.dir)).toBe(0);
+      } finally {
+        db.close();
+      }
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
