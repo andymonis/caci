@@ -10,6 +10,9 @@
 export type AgentReadApi = Pick<CaciController, 'brainScopes' | 'mineSummary' | 'mineCategories' | 'mineCategoryItems' | 'mineItem' | 'summary' | 'categories' | 'categoryItems' | 'item' | 'ledger' | 'source' | 'searchFacts' | 'changes' | 'status'>;
 
 // @public
+export type AgentResolveApi = Pick<CaciController, 'verbs' | 'resolveFact' | 'unresolveFact' | 'resolutions'>;
+
+// @public
 export interface AgentToolInfo {
     // (undocumented)
     readonly description: string;
@@ -52,6 +55,7 @@ export interface AgentView {
     // Warning: (ae-forgotten-export) The symbol "AgentTokenAccess" needs to be exported by the entry point index.d.ts
     access(bearer: unknown): Promise<AgentTokenAccess | undefined>;
     readonly read: AgentReadApi;
+    readonly resolve: AgentResolveApi;
 }
 
 // @public (undocumented)
@@ -88,6 +92,12 @@ export interface AgentViewInit {
     readonly mode?: 'demo' | 'anthropic';
     // (undocumented)
     readonly pulseText?: string;
+    // Warning: (ae-forgotten-export) The symbol "Controller" needs to be exported by the entry point index.d.ts
+    readonly removeFact?: Controller['remove'];
+    // Warning: (ae-forgotten-export) The symbol "ResolutionStore" needs to be exported by the entry point index.d.ts
+    //
+    // (undocumented)
+    readonly resolutions?: ResolutionStore;
     // Warning: (ae-forgotten-export) The symbol "AgentTokenStore" needs to be exported by the entry point index.d.ts
     //
     // (undocumented)
@@ -96,6 +106,8 @@ export interface AgentViewInit {
     readonly usage?: UsageRecorder;
     // Warning: (ae-forgotten-export) The symbol "UserStore" needs to be exported by the entry point index.d.ts
     readonly users: Pick<UserStore, 'get'>;
+    // Warning: (ae-forgotten-export) The symbol "Verbs" needs to be exported by the entry point index.d.ts
+    readonly verbs?: Verbs;
 }
 
 // @public
@@ -106,6 +118,9 @@ export function createAgentView(init: AgentViewInit): AgentView;
 
 // @public
 export const MAX_TOOL_RESULT_CHARS = 100000;
+
+// @public
+export function ownBrainOnly(removeFact: Controller['remove']): Controller['remove'];
 
 // (No @packageDocumentation comment for this package)
 

@@ -29,7 +29,7 @@ export interface AgentWorld {
   /** A note (one item in one category) written straight into a graph. */
   note(graphId: string, itemId: string, title: string, category: string, categoryName?: string): Promise<void>;
   /** A token for a person, as the person would hold it: returns the bearer text. */
-  bearer(user: User, scopes: readonly string[], checks?: boolean, days?: number): Promise<string>;
+  bearer(user: User, scopes: readonly string[], checks?: boolean, days?: number, resolve?: boolean): Promise<string>;
 }
 
 /** Real memory stores and a real user controller, a recording graph adapter, and an agent view over them. */
@@ -99,8 +99,8 @@ export function agentWorld(extra: Partial<AgentViewInit> = {}): AgentWorld {
       } as never);
       if (!r.ok) throw new Error(JSON.stringify(r.error));
     },
-    bearer: async (user, scopes, checks = false, days = 90) => {
-      const r = await tokens.create({ userId: user.id, name: 'test agent', scopes, checks, expiresAt: now.value + days * DAY }, now.value);
+    bearer: async (user, scopes, checks = false, days = 90, resolve = false) => {
+      const r = await tokens.create({ userId: user.id, name: 'test agent', scopes, checks, resolve, expiresAt: now.value + days * DAY }, now.value);
       if (!r.ok) throw new Error(JSON.stringify(r.error));
       return r.value.token;
     },

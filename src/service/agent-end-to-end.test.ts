@@ -293,3 +293,58 @@ describe('the agent surface through the running service (R-022)', () => {
     for (const leak of [...secrets, PW, 'scrypt$', 'passwordHash', 'user-u', 'circle-c', ...members.map((m) => m.userId)]) expect(all.includes(leak), leak.slice(0, 12)).toBe(false);
   });
 });
+
+describe('the verb tools through the running service (R-025 D13, VR-AC-08)', () => {
+  it('a key made with the resolve flag lists, resolves and takes back; one without it is told the tools do not exist', async () => {
+    const w = await world();
+    const found = await (async () => {
+      const t = await w.ann.token({ name: 'Reader', scopes: ['personal', `circle:${w.club}`] });
+      const r = await agent(w.port, t).tool('search_facts', { scope: `circle:${w.club}`, text: 'garden club wednesday' });
+      return r.data.facts[0].id as string;
+    })();
+
+    const plain = agent(w.port, await w.bob.token({ name: 'Plain', scopes: [`circle:${w.club}`] }));
+    const names = (await plain.rpc('tools/list')).json.result.tools.map((t: { name: string }) => t.name);
+    expect(names).not.toContain('resolve_fact');
+    for (const name of ['resolve_fact', 'unresolve_fact', 'resolutions']) {
+      const r = await plain.rpc('tools/call', { name, arguments: { scope: `circle:${w.club}`, id: found, verb: 'pay' } });
+      expect(r.json.error ?? r.json.result?.isError, name).toBeTruthy();
+    }
+    expect((await w.bob.call('GET', '/api/facts/resolutions')).json.items).toEqual([]);
+
+    const resolving = agent(w.port, await w.bob.token({ name: 'Helper', scopes: ['personal', `circle:${w.club}`], resolve: true }));
+    const offered = (await resolving.rpc('tools/list')).json.result.tools.map((t: { name: string }) => t.name);
+    expect(offered).toEqual(['list_brains', 'search_facts', 'get_fact', 'browse', 'changes', 'resolve_fact', 'unresolve_fact', 'resolutions']);
+    const paid = await resolving.tool('resolve_fact', { scope: `circle:${w.club}`, id: found, verb: 'pay' });
+    expect(paid.ok, paid.text).toBe(true);
+    expect(paid.data).toMatchObject({ scope: `circle:${w.club}`, id: found, verb: 'pay' });
+    // the same record the app's own list shows, for bob only
+    expect((await w.bob.call('GET', '/api/facts/resolutions')).json.items).toEqual([expect.objectContaining({ verb: 'pay', fact: { scope: { kind: 'circle', circleId: w.club }, id: found } })]);
+    expect((await w.ann.call('GET', '/api/facts/resolutions')).json.items).toEqual([]);
+    const listed = await resolving.tool('resolutions');
+    expect(listed.data.resolutions).toEqual([expect.objectContaining({ scope: `circle:${w.club}`, id: found, verb: 'pay' })]);
+    // the circle's notes are untouched, and the verb that deletes for everyone is not an agent's
+    expect((await w.ann.call('GET', `/api/graph/item?scope=circle:${w.club}&id=${encodeURIComponent(found)}`)).status).toBeLessThan(500);
+    const removed = await resolving.tool('resolve_fact', { scope: `circle:${w.club}`, id: found, verb: 'remove' });
+    expect(removed.ok).toBe(false);
+    expect(removed.text).toContain('cannot remove');
+    expect((await w.ann.call('POST', '/api/facts/resolve', { scope: { kind: 'circle', circleId: w.club }, id: found, verb: 'clear' })).status).toBe(200);
+    // a brain the key does not list is the same answer a stranger gets
+    const outside = await resolving.tool('resolve_fact', { scope: `circle:${w.secret}`, id: found, verb: 'pay' });
+    expect(outside.ok).toBe(false);
+    expect(outside.text).toContain('no such circle');
+    expect((await resolving.tool('unresolve_fact', { scope: `circle:${w.club}`, id: found })).ok).toBe(true);
+    expect((await w.bob.call('GET', '/api/facts/resolutions')).json.items).toEqual([]);
+  });
+
+  it('a key made before the flag existed, or with it off, stays read-only; the form value must be true or false', async () => {
+    const w = await world();
+    const bad = await w.bob.call('POST', '/api/me/agent-tokens', { name: 'Odd', scopes: ['personal'], resolve: 'yes' });
+    expect(bad.status).toBe(422);
+    expect(bad.json.error.field).toBe('resolve');
+    const made = await w.bob.call('POST', '/api/me/agent-tokens', { name: 'Off', scopes: ['personal'] });
+    expect(made.json.agentToken.resolve).toBe(false);
+    const listed = (await w.bob.call('GET', '/api/me/agent-tokens')).json.items as Array<{ resolve: boolean }>;
+    expect(listed.every((k) => k.resolve === false)).toBe(true);
+  });
+});

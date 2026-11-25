@@ -3,7 +3,11 @@ import type { Result } from '../graph_store/index.js';
 import type { Provenance, Scope } from '../scopes/index.js';
 import type { AgentView } from './view.js';
 
-/** What an agent can ask of the brains (R-022 D9), written once and independent of any transport. Every tool reads, none writes. */
+/**
+ * What an agent can ask of the brains (R-022 D9), written once and independent of any transport. Every tool reads, except the three verb tools
+ * (R-025 D13), which only a token made with the resolve flag is offered: they write the person's own resolution record (and delete a fact in the
+ * person's own brain for `clear`), never a circle's notes.
+ */
 export interface AgentToolInfo {
   readonly name: string;
   readonly title: string;
@@ -42,6 +46,12 @@ const TOOLS: readonly AgentToolInfo[] = Object.freeze([
   { name: 'changes', title: 'Changes since a time', description: 'What changed in one brain after a time, newest first: facts added, replaced or removed, and the words typed. A pull: nothing is sent to you. The change log is kept for a limited time.', inputSchema: { type: 'object', properties: { scope: scopeSchema, since: { type: 'string', maxLength: 40, description: 'An ISO 8601 date or date and time, for example 2026-11-01T09:00:00Z. Only strictly newer changes come back.' }, limit: limitSchema(100, 50), cursor: { type: 'string', maxLength: 1000, description: 'next_cursor from the previous answer.' } }, required: ['scope', 'since'], additionalProperties: false } },
 ]);
 const PULSE: AgentToolInfo = Object.freeze({ name: 'pulse', title: 'Attention check', description: "Ask CaCi's own model for a short, focused check: what needs attention this week ('pulse'), this month ('coming-up') or this year ('long-range'). Silent when nothing does. This spends CaCi's model and counts against the person's hourly allowance.", inputSchema: { type: 'object', properties: { check: { type: 'string', enum: ['pulse', 'coming-up', 'long-range'] }, scope: { type: 'string', description: "Optional: 'personal' or 'circle:<id>'. Left out, every brain this access covers is read." }, time_zone: { type: 'string', maxLength: 64, description: "The person's IANA time zone, for example Europe/London. Default UTC." } }, required: ['check'], additionalProperties: false } });
+
+const RESOLVE_TOOLS: readonly AgentToolInfo[] = Object.freeze([
+  { name: 'resolve_fact', title: 'Mark a fact as dealt with', description: "Apply a verb to one fact for the person, by its exact id (from pulse, get_fact or search_facts): 'clear' means they have dealt with it, 'pay' means they say they paid it outside CaCi (CaCi pays nothing). In a circle this hides the fact from this person's own checks only; others still see it and nothing in the circle changes. In the person's own notes 'clear' deletes the fact. An agent cannot use 'remove'.", inputSchema: { type: 'object', properties: { scope: scopeSchema, id: { type: 'string', maxLength: 256, description: 'The fact id.' }, verb: { type: 'string', maxLength: 20, description: "'clear' (they have dealt with it) or 'pay' (they say they paid it). 'remove' is not available to an agent." } }, required: ['scope', 'id', 'verb'], additionalProperties: false } },
+  { name: 'unresolve_fact', title: 'Take back a resolution', description: "Take back the person's own resolution of a fact, so it appears in their checks again. Harmless when there was none.", inputSchema: { type: 'object', properties: { scope: scopeSchema, id: { type: 'string', maxLength: 256, description: 'The fact id.' } }, required: ['scope', 'id'], additionalProperties: false } },
+  { name: 'resolutions', title: 'List resolutions', description: "The facts the person has dealt with, with the verb and when: ids only, never the facts' words. A 'pay' here is the person's own statement that they paid. Paged: pass next back as after_scope and after_id.", inputSchema: { type: 'object', properties: { limit: limitSchema(100, 50), after_scope: scopeSchema, after_id: { type: 'string', maxLength: 256, description: 'With after_scope: continue after this fact (the next of the previous answer).' } }, additionalProperties: false } },
+]);
 
 const keyOf = (p: Provenance | undefined): string => (p === undefined || p.kind === 'personal' ? 'personal' : `circle:${p.circleId}`);
 const brainOf = (p: Provenance | undefined) => ({ scope: keyOf(p), name: p === undefined || p.kind === 'personal' ? 'Your own notes' : p.circleName });
@@ -98,7 +108,7 @@ function cursorArg(value: unknown): string | undefined {
   return value;
 }
 
-/** The six tools over an agent view. `pulse` is offered only to a token made with the checks flag. */
+/** The tools over an agent view. `pulse` is offered only to a token made with the checks flag, the three verb tools only to one made with the resolve flag. */
 export function createAgentTools(view: AgentView): AgentTools {
   const done = (data: unknown, isError = false): AgentToolResult => {
     const text = JSON.stringify(data);
@@ -170,6 +180,33 @@ export function createAgentTools(view: AgentView): AgentTools {
       return done({ brain: brainOf(r.value.scope), since: iso(r.value.since), changes: r.value.items.map((e) => compact({ at: iso(e.at), action: e.action, kind: e.kind === 'input' ? 'words typed' : e.kind === 'item' ? 'fact' : 'category', id: e.subject, title: e.title, summary: e.summary, words: e.text, by: person(e.by) })), next_cursor: r.value.nextCursor });
     },
 
+    async resolve_fact(bearer, raw) {
+      const a = argsOf(raw, ['scope', 'id', 'verb']);
+      const scope = scopeArg(a.scope, true);
+      const r = unwrap(await view.resolve.resolveFact(bearer, { scope, id: textArg(a.id, 'id', 256), verb: textArg(a.verb, 'verb', 20) }));
+      if (!r.ok) return r.result;
+      return done({ scope: r.value.fact.scope.kind === 'personal' ? 'personal' : `circle:${r.value.fact.scope.circleId}`, id: r.value.fact.id, verb: r.value.verb, result: r.value.result === 'deleted' ? 'the fact was deleted from the notes' : 'hidden from the person\'s own checks' });
+    },
+
+    async unresolve_fact(bearer, raw) {
+      const a = argsOf(raw, ['scope', 'id']);
+      const scope = scopeArg(a.scope, true);
+      const r = unwrap(await view.resolve.unresolveFact(bearer, { scope, id: textArg(a.id, 'id', 256) }));
+      if (!r.ok) return r.result;
+      return done({ id: r.value.fact.id, resolved: false });
+    },
+
+    async resolutions(bearer, raw) {
+      const a = argsOf(raw, ['limit', 'after_scope', 'after_id']);
+      const limit = limitArg(a.limit, 100);
+      if ((a.after_scope === undefined) !== (a.after_id === undefined)) throw new ArgProblem('give after_scope and after_id together');
+      const after = a.after_scope === undefined ? undefined : { scope: scopeArg(a.after_scope, true), id: textArg(a.after_id, 'after_id', 256) };
+      const r = unwrap(await view.resolve.resolutions(bearer, { ...(limit === undefined ? {} : { limit }), ...(after === undefined ? {} : { after }) }));
+      if (!r.ok) return r.result;
+      const keyFor = (f: { scope: { kind: 'personal' } | { kind: 'circle'; circleId: string } }): string => (f.scope.kind === 'personal' ? 'personal' : `circle:${f.scope.circleId}`);
+      return done({ resolutions: r.value.items.map((i) => compact({ scope: keyFor(i.fact), id: i.fact.id, verb: i.verb, at: iso(i.at) })), next: r.value.next === null ? undefined : { after_scope: keyFor(r.value.next), after_id: r.value.next.id } });
+    },
+
     async pulse(bearer, raw) {
       const a = argsOf(raw, ['check', 'scope', 'time_zone']);
       if (a.check !== 'pulse' && a.check !== 'coming-up' && a.check !== 'long-range') throw new ArgProblem("check must be 'pulse', 'coming-up' or 'long-range'");
@@ -186,12 +223,12 @@ export function createAgentTools(view: AgentView): AgentTools {
     async list(bearer: unknown): Promise<readonly AgentToolInfo[] | undefined> {
       const access = await view.access(bearer);
       if (access === undefined) return undefined;
-      return Object.freeze(access.checks ? [...TOOLS, PULSE] : [...TOOLS]);
+      return Object.freeze([...TOOLS, ...(access.checks ? [PULSE] : []), ...(access.resolve ? RESOLVE_TOOLS : [])]);
     },
     async call(bearer: unknown, name: unknown, args: unknown): Promise<AgentToolOutcome> {
       const access = await view.access(bearer);
       if (access === undefined) return { kind: 'unauthenticated' };
-      if (typeof name !== 'string' || !Object.hasOwn(run, name) || (name === 'pulse' && !access.checks)) return { kind: 'unknown-tool' };
+      if (typeof name !== 'string' || !Object.hasOwn(run, name) || (name === 'pulse' && !access.checks) || (RESOLVE_TOOLS.some((t) => t.name === name) && !access.resolve)) return { kind: 'unknown-tool' };
       try {
         return { kind: 'result', result: await (run[name] as (b: string, r: unknown) => Promise<AgentToolResult>)(bearer as string, args) };
       } catch (cause) {

@@ -181,7 +181,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     // the agent surface (R-022): only when the operator switched it on. It is the same CaCi controller over a token-based lookup,
     // limited to the token's scopes and reading only; its checks have their own hourly allowance of the same size.
     const mcp = agentTokens === undefined ? [] : createMcpRoutes({
-      tools: createAgentTools(createAgentView({ tokens: agentTokens, users, circles: circleStore, graphAdapter: graphs, ledger, directory: users, llm, checkTexts: checks.value, pulseText: checks.value.pulse, mode: config.llm, limits: { statusPerHour: config.statusPerHour }, maxScopes: config.maxBrainScopes, clock, usage })),
+      tools: createAgentTools(createAgentView({ tokens: agentTokens, users, circles: circleStore, graphAdapter: graphs, verbs: verbs.value, resolutions: resolutionStore, removeFact: (graphId, id) => capture.remove(graphId, id), ledger, directory: users, llm, checkTexts: checks.value, pulseText: checks.value.pulse, mode: config.llm, limits: { statusPerHour: config.statusPerHour }, maxScopes: config.maxBrainScopes, clock, usage })),
       clock,
     });
     const circles = withCircleGraphs(createCircleController({
