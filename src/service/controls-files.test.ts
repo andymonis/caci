@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validFiles } from '../llm/controls/fixtures.test-util.js';
-import { CHECK_FILES, CHECK_NAMES, defaultControlsDir, loadCheckTexts, loadControlsFolder, loadPulseText, MAX_PULSE_CHARS } from './controls-files.js';
+import { CHECK_FILES, CHECK_NAMES, defaultControlsDir, loadCheckTexts, loadControlsFolder, loadPulseText, loadVerbs, MAX_PULSE_CHARS, MAX_VERBS_BYTES } from './controls-files.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -217,5 +217,36 @@ describe('loading the three check texts (R-018 D10)', () => {
 
   it('loadPulseText still reads only the pulse file', () => {
     expect(loadPulseText(checks({ 'pulse.txt': 'Only this.' }))).toEqual({ ok: true, value: 'Only this.' });
+  });
+});
+
+describe('loading the verbs file (R-025 D9)', () => {
+  const withVerbs = (text: string | Buffer): string => {
+    const dir = folder();
+    writeFileSync(join(dir, 'verbs.json'), text);
+    return dir;
+  };
+  it('reads the shipped file', () => {
+    const r = loadVerbs(defaultControlsDir());
+    expect(r.ok && r.value.list.map((v) => v.name)).toEqual(['clear', 'pay', 'remove']);
+  });
+  it('names the file when it is missing, not ordinary, too big, not UTF-8 or not valid', () => {
+    const none = folder();
+    expect(loadVerbs(none)).toEqual({ ok: false, error: [`verbs.json: is missing in ${none}`] });
+    const asDir = folder();
+    mkdirSync(join(asDir, 'verbs.json'));
+    expect(loadVerbs(asDir)).toEqual({ ok: false, error: ['verbs.json: is not an ordinary file'] });
+    const big = loadVerbs(withVerbs(' '.repeat(MAX_VERBS_BYTES + 1)));
+    expect(!big.ok && big.error[0]).toContain('over the limit');
+    const bad = loadVerbs(withVerbs(Buffer.from([0xff, 0xfe, 0x41])));
+    expect(bad).toEqual({ ok: false, error: ['verbs.json: is not valid UTF-8 text'] });
+    expect(loadVerbs(withVerbs('{"verbs":[]}'))).toEqual({ ok: false, error: ['verbs.json: "verbs" must not be empty'] });
+  });
+  it('does not follow a link', () => {
+    const dir = folder();
+    const target = join(dir, 'real.json');
+    writeFileSync(target, readFileSync(join(defaultControlsDir(), 'verbs.json')));
+    symlinkSync(target, join(dir, 'verbs.json'));
+    expect(loadVerbs(dir)).toEqual({ ok: false, error: ['verbs.json: is not an ordinary file'] });
   });
 });

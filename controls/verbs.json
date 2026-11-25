@@ -1,0 +1,7 @@
+{
+  "verbs": [
+    { "name": "clear", "effect": "clear", "help": "Clear this for me." },
+    { "name": "pay", "effect": "clear", "help": "Mark this as paid." },
+    { "name": "remove", "effect": "remove", "help": "Remove this fact for everyone." }
+  ]
+}

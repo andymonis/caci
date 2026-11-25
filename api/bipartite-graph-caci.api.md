@@ -233,6 +233,9 @@ export const DEFAULT_STATUS_CONTEXT_LIMITS: Readonly<{
     maxConcurrentReads: 4;
 }>;
 
+// @public
+export function defaultVerbs(): Verbs;
+
 // @public (undocumented)
 export interface FactHit {
     readonly at?: number;
@@ -330,6 +333,12 @@ export const MAX_SEARCH_RESULTS = 50;
 export const MAX_STATUS_REQUEST_CHARS = 500;
 
 // @public (undocumented)
+export const MAX_VERB_HELP_CHARS = 80;
+
+// @public (undocumented)
+export const MAX_VERBS = 20;
+
+// @public (undocumented)
 export interface MineCategory extends CategoryView {
     // (undocumented)
     readonly scope: Provenance;
@@ -382,6 +391,9 @@ export interface PageInput {
     // (undocumented)
     readonly limit?: unknown;
 }
+
+// @public
+export function parseVerbs(text: string): Result<Verbs, readonly string[]>;
 
 // @public
 export interface ProposalView {
@@ -512,6 +524,28 @@ export interface UsageRecorderInit {
     // (undocumented)
     readonly store: Pick<UsageStore, 'append'>;
 }
+
+// @public (undocumented)
+export interface Verb {
+    // (undocumented)
+    readonly effect: VerbEffect;
+    readonly help: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export type VerbEffect = 'clear' | 'remove';
+
+// @public
+export interface Verbs {
+    get(name: string): Verb | undefined;
+    // (undocumented)
+    readonly list: readonly Verb[];
+}
+
+// @public (undocumented)
+export const VERBS_FILE = "verbs.json";
 
 // Warning: (ae-forgotten-export) The symbol "PendingProposal" needs to be exported by the entry point index.d.ts
 //

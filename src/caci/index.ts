@@ -18,3 +18,5 @@ export type { CategoryItemsPage, CategoryPage, CategoryView, GraphSummary, ItemD
 export type { BrainLimits, BrainScope, MineCategory, MineCategoryItemsPage, MineCategoryPage, MineItemDetail, MineSummary } from './brain.js';
 export { createUsageRecorder, recordsFromTrace, USAGE_WARNING } from './usage-recorder.js';
 export type { UsageCall, UsageContext, UsageRecorder, UsageRecorderInit } from './usage-recorder.js';
+export { defaultVerbs, MAX_VERB_HELP_CHARS, MAX_VERBS, parseVerbs, VERBS_FILE } from './verbs.js';
+export type { Verb, VerbEffect, Verbs } from './verbs.js';

@@ -2,6 +2,7 @@ import { lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { err, ok, type Result } from '../graph_store/index.js';
+import { parseVerbs, VERBS_FILE, type Verbs } from '../caci/index.js';
 import { CONTROL_FILES, parseControls, type Controls } from '../llm/index.js';
 
 // Reading the controls folder (R-012). The LLM component's controls model is pure and is given the text of the
@@ -130,4 +131,30 @@ export function loadCheckTexts(dir: string): Result<CheckTexts, readonly string[
     else problems.push(...r.error);
   }
   return problems.length > 0 ? err(problems) : ok(Object.freeze({ ...texts }) as CheckTexts);
+}
+
+/** The longest verbs file (R-025 D9): twenty short verbs fit in well under this. */
+export const MAX_VERBS_BYTES = 8_000;
+
+/**
+ * Reads `controls/verbs.json` (R-025 D9): one ordinary file, strict UTF-8, at most 8,000 bytes, checked by `parseVerbs`.
+ * Every problem names the file; never throws.
+ */
+export function loadVerbs(dir: string): Result<Verbs, readonly string[]> {
+  const path = join(dir, VERBS_FILE);
+  let stat;
+  try {
+    stat = lstatSync(path);
+  } catch {
+    return err([`${VERBS_FILE}: is missing in ${dir}`]);
+  }
+  if (!stat.isFile()) return err([`${VERBS_FILE}: is not an ordinary file`]);
+  if (stat.size > MAX_VERBS_BYTES) return err([`${VERBS_FILE}: ${stat.size} bytes, over the limit of ${MAX_VERBS_BYTES}`]);
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(readFileSync(path));
+  } catch {
+    return err([`${VERBS_FILE}: is not valid UTF-8 text`]);
+  }
+  return parseVerbs(text);
 }
