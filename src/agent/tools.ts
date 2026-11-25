@@ -178,7 +178,7 @@ export function createAgentTools(view: AgentView): AgentTools {
       const r = unwrap(await view.read.status(bearer, { check: a.check, ...(scope === undefined ? {} : { scope }), ...(a.time_zone === undefined ? {} : { timeZone: a.time_zone }) }));
       if (!r.ok) return r.result;
       const v = r.value;
-      return done({ headline: v.headline, nothing: v.nothing, points: v.points.map((p) => ({ text: p.text, from: p.sources.map(brainOf), facts: p.facts.map((f) => ({ brain: brainOf(f.scope), id: f.id })) })), generated_at: iso(v.generatedAt), notes_read: v.entriesUsed, notes_left_out: v.entriesLeftOut });
+      return done({ headline: v.headline, nothing: v.nothing, points: v.points.map((p) => ({ text: p.text, from: p.sources.map(brainOf), facts: p.facts.map((f) => ({ brain: brainOf(f.scope), id: f.id })) })), generated_at: iso(v.generatedAt), notes_read: v.entriesUsed, notes_left_out: v.entriesLeftOut, notes_resolved: v.entriesResolved });
     },
   };
 

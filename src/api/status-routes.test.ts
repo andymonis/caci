@@ -87,7 +87,7 @@ describe('POST /api/status', () => {
     const r = await post(a, { text: 'How is Mum with her tablets?', timeZone: 'Europe/London' }, t.ann);
     expect(r.status).toBe(200);
     expect(Object.keys(r.json)).toEqual(['status']);
-    expect(Object.keys(r.json.status).sort()).toEqual(['entriesLeftOut', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
+    expect(Object.keys(r.json.status).sort()).toEqual(['entriesLeftOut', 'entriesResolved', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
     expect(r.json.status.mode).toBe('demo');
     expect(r.json.status.entriesUsed).toBe(2);
     expect(r.json.status.points[0].text).toContain('Mum new tablets');
@@ -208,7 +208,7 @@ describe('POST /api/status with a check (R-018)', () => {
     for (const name of ['pulse', 'coming-up', 'long-range']) {
       const r = await post(a, { check: name }, t.ann);
       expect(r.status, name).toBe(200);
-      expect(Object.keys(r.json.status).sort()).toEqual(['entriesLeftOut', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
+      expect(Object.keys(r.json.status).sort()).toEqual(['entriesLeftOut', 'entriesResolved', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
       expect(r.json.status.nothing).toBe(true); // the note has no date in any window
       expect(r.json.status.points).toEqual([]);
       expect(r.json.status.headline.length).toBeGreaterThan(0);

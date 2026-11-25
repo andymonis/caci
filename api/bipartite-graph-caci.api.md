@@ -111,6 +111,7 @@ export interface CaciControllerInit {
     readonly llm?: Pick<Llm, 'status'>;
     readonly mode?: 'demo' | 'anthropic';
     readonly onLedgerFailure?: (message: string) => void;
+    readonly onResolutionFailure?: (message: string) => void;
     readonly pulseText?: string;
     // Warning: (ae-forgotten-export) The symbol "ResolutionStore" needs to be exported by the entry point index.d.ts
     readonly resolutions?: ResolutionStore;
@@ -497,6 +498,10 @@ export interface SourceView {
     readonly note?: string;
     readonly recorded: boolean;
     readonly replacedLater: boolean;
+    readonly resolvedByYou?: {
+        readonly verb: string;
+        readonly at: number;
+    };
     readonly scope?: Provenance;
     readonly words?: string;
 }
@@ -514,6 +519,7 @@ export interface StatusContextLimits {
 export interface StatusView {
     // (undocumented)
     readonly entriesLeftOut: number;
+    readonly entriesResolved: number;
     readonly entriesUsed: number;
     // (undocumented)
     readonly generatedAt: number;

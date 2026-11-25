@@ -138,7 +138,7 @@ describe('what the view holds', () => {
   it('exactly the headline, points with sources, nothing, the time, the mode and the counts, frozen: no plumbing', async () => {
     const { w } = await story();
     const v = await ask(w, 'ann');
-    expect(Object.keys(v).sort()).toEqual(['entriesLeftOut', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
+    expect(Object.keys(v).sort()).toEqual(['entriesLeftOut', 'entriesResolved', 'entriesUsed', 'generatedAt', 'headline', 'mode', 'nothing', 'points']);
     expect(Object.isFrozen(v) && Object.isFrozen(v.points) && Object.isFrozen(v.points[0]) && Object.isFrozen(v.points[0]?.sources)).toBe(true);
     const json = JSON.stringify(v);
     for (const leak of ['usage', 'inputTokens', 'prompt', 'graphId', 'user-u', 'circle-c', 'contributedBy', 'attempts']) expect(json, leak).not.toContain(leak);

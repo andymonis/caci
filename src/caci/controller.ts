@@ -9,7 +9,7 @@ import type { ResolutionScope, ResolutionStore } from '../resolutions/index.js';
 import { readResolutionsPage, readResolveInput } from './resolve.js';
 import type { Verbs } from './verbs.js';
 import { DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS, searchFacts, type FactHit } from './search.js';
-import { createStatusContext, type StatusContextLimits } from './status-context.js';
+import { createStatusContext, type ResolvedLookup, type StatusContextLimits } from './status-context.js';
 import type { UsageRecorder } from './usage-recorder.js';
 import type { UsageScope } from '../usage/index.js';
 import { capText, newLedgerId, SUMMARY_MAX, TITLE_MAX, type LedgerEntry, type LedgerScope, type LedgerStore } from '../ledger/index.js';
@@ -57,6 +57,8 @@ export interface CaciControllerInit {
   readonly directory?: { get(id: string): Promise<{ readonly username: string; readonly displayName: string } | undefined> };
   /** Told, with one fixed sentence and no note text, when recording a change failed. The change itself stands. A throwing hook is ignored. */
   readonly onLedgerFailure?: (message: string) => void;
+  /** Told, once for each stretch when it cannot be read, with one fixed sentence, that resolved facts could not be looked up (R-025 VR-NFR-03). The answer is made without the filter. */
+  readonly onResolutionFailure?: (message: string) => void;
   /**
    * Usage metering (R-024): every model attempt of a note filed, a status or a check is recorded, charged to the session's user, with
    * no text. Never changes a call's result. Without it nothing is recorded.
@@ -140,6 +142,8 @@ export interface SourceView {
   readonly words?: string;
   /** Plain words when something is not known. */
   readonly note?: string;
+  /** Present when the person asking has resolved this fact (R-025 D11): which verb and when. Only the asker's own record is ever shown. */
+  readonly resolvedByYou?: { readonly verb: string; readonly at: number };
 }
 
 /** What the page is told when the words are no longer there. */
@@ -172,6 +176,8 @@ export interface StatusView {
   /** How many notes the model was shown, and how many it was not (too many for one request: the newest were used). */
   readonly entriesUsed: number;
   readonly entriesLeftOut: number;
+  /** Facts left out because the asker has resolved them (R-025 D11); not part of `entriesLeftOut`. */
+  readonly entriesResolved: number;
 }
 
 /** What approving a proposal reports: which proposal, how many operations were written, and what they were. */
@@ -451,6 +457,22 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     return ok(true);
   }
 
+  /** Warns once per stretch of failure that resolved facts could not be read; a good read ends the stretch. A throwing hook is ignored. */
+  let resolutionsDown = false;
+  function reportResolutions(unavailable: boolean): void {
+    if (!unavailable) {
+      resolutionsDown = false;
+      return;
+    }
+    if (resolutionsDown) return;
+    resolutionsDown = true;
+    try {
+      init.onResolutionFailure?.('resolved facts could not be read, so this answer may include facts you have resolved');
+    } catch {
+      // a hook must never change what happens
+    }
+  }
+
   const noCircle = (): CaciError => caciError('NOT_FOUND', 'no such circle');
   const storage = (): CaciError => ({ source: 'graph', error: { code: 'STORAGE_ERROR', message: 'the service could not complete the request' } as never });
 
@@ -685,8 +707,10 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       try {
         const all = only === undefined ? await readableScopes(token) : ok([only] as readonly ResolvedScope[]);
         if (!all.ok) return all;
-        const context = await statusContext.read(all.value, clock());
+        const lookup: ResolvedLookup | undefined = init.resolutions === undefined ? undefined : async (r, ids) => new Set((await (init.resolutions as ResolutionStore).listFor(userId, r.scope.kind === 'personal' ? { kind: 'personal' } : { kind: 'circle', circleId: r.scope.circleId }, ids)).map((x) => x.factId));
+        const context = await statusContext.read(all.value, clock(), lookup);
         if (!context.ok) return context;
+        reportResolutions(context.value.resolutionsUnavailable);
         statusHourly.record(userId, clock()); // the model is about to be asked
         // metering (R-024): a typed request is `status`, a predefined one is a check; a circle scope is the circle's, anything else the person's
         const call = init.usage?.begin({ userId, capability: check !== undefined || pulse === true ? (init.checkCapability ?? 'check') : 'status', scope: only?.provenance.kind === 'circle' ? { kind: 'circle', circleId: only.provenance.circleId } : { kind: 'personal' } });
@@ -728,6 +752,7 @@ export function createCaciController(init: CaciControllerInit): CaciController {
             mode,
             entriesUsed: context.value.entries.length,
             entriesLeftOut: context.value.entriesLeftOut,
+            entriesResolved: context.value.entriesResolved,
           }),
         );
       } finally {
@@ -922,9 +947,16 @@ export function createCaciController(init: CaciControllerInit): CaciController {
         }
       }
       const recorded = found.input?.text !== undefined;
+      let mine;
+      try {
+        mine = await init.resolutions?.get(me.value.user.id, which.kind === 'personal' ? { kind: 'personal' } : { kind: 'circle', circleId: which.circleId }, id);
+      } catch {
+        mine = undefined;
+      }
       return ok(
         Object.freeze({
           ...(where.provenance === undefined ? {} : { scope: where.provenance }),
+          ...(mine === undefined ? {} : { resolvedByYou: Object.freeze({ verb: mine.verb, at: mine.at }) }),
           fact: Object.freeze({ ...(title === undefined ? {} : { title }), ...(summary === undefined ? {} : { summary }) }),
           current: there,
           replacedLater: found.removed !== undefined,

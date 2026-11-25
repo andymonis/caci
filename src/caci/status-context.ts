@@ -31,12 +31,23 @@ export interface StatusContext {
   readonly provenance: readonly Provenance[];
   /** The graph id of each entry's item, in the same order (never sent to the model; the controller turns it into a fact reference). */
   readonly ids: readonly string[];
-  /** Items read and not used (too old for the budget or beyond the per-scope cap). */
+  /** Items read and not used (too old for the budget or beyond the per-scope cap). Facts the asker has resolved are not counted here. */
   readonly entriesLeftOut: number;
+  /** Facts left out because the asker has resolved them (R-025 D11), counted apart from `entriesLeftOut`. */
+  readonly entriesResolved: number;
+  /** True when the resolved facts could not be looked up, so nothing was left out for that reason (R-025 VR-NFR-03). */
+  readonly resolutionsUnavailable: boolean;
 }
+
+/**
+ * Says which of these fact ids (of one scope) the asker has resolved (R-025). May throw when the answer cannot be had: the context is then
+ * built without the filter and says so. Called with at most 500 ids.
+ */
+export type ResolvedLookup = (scope: ResolvedScope, ids: readonly string[]) => Promise<ReadonlySet<string>>;
 
 const PAGE = 500;
 const BATCH = 50;
+const RESOLVED_BATCH = 500;
 const NAME_CLIP = 60;
 const EXTRA_KEYS = 5;
 const STAMP_KEYS = ['contributedBy', 'contributedAt', 'title', 'summary'] as const;
@@ -99,7 +110,7 @@ export function createStatusContext(adapter: StorageAdapter, limits: StatusConte
   };
 
   /** The newest items of one scope, with the number read (to say how many were left out). */
-  async function candidates(r: ResolvedScope, scopeIndex: number, now: number): Promise<Result<{ items: Candidate[]; read: number }, CaciError>> {
+  async function candidates(r: ResolvedScope, scopeIndex: number, now: number, resolvedLookup?: ResolvedLookup): Promise<Result<{ items: Candidate[]; read: number; resolved: number; unavailable: boolean }, CaciError>> {
     const items: Candidate[] = [];
     let cursor: string | null = null;
     for (let pages = 0; pages < Math.ceil(settings.maxReadPerScope / PAGE) + 1 && items.length < settings.maxReadPerScope; pages++) {
@@ -110,8 +121,22 @@ export function createStatusContext(adapter: StorageAdapter, limits: StatusConte
       if (out.nextCursor === null) break;
       cursor = out.nextCursor;
     }
-    const newest = [...items].sort((a, b) => (b.when ?? -1) - (a.when ?? -1) || byText(a.id, b.id)).slice(0, settings.maxPerScope);
-    return ok({ items: newest, read: items.length });
+    // facts the asker has resolved are left out before the newest are chosen, so they never take a place from one that is still open (R-025 D11)
+    let open = items;
+    let resolved = 0;
+    let unavailable = false;
+    if (resolvedLookup !== undefined && items.length > 0) {
+      try {
+        const done = new Set<string>();
+        for (let at = 0; at < items.length; at += RESOLVED_BATCH) for (const id of await resolvedLookup(r, items.slice(at, at + RESOLVED_BATCH).map((c) => c.id))) done.add(id);
+        open = items.filter((c) => !done.has(c.id));
+        resolved = items.length - open.length;
+      } catch {
+        unavailable = true;
+      }
+    }
+    const newest = [...open].sort((a, b) => (b.when ?? -1) - (a.when ?? -1) || byText(a.id, b.id)).slice(0, settings.maxPerScope);
+    return ok({ items: newest, read: open.length, resolved, unavailable });
   }
 
   /** Category names (or ids) for the given items, from edges read through named seeds. */
@@ -135,11 +160,11 @@ export function createStatusContext(adapter: StorageAdapter, limits: StatusConte
 
   return {
     /** Builds the context from the scopes the person may read right now, in the order given (their own brain first). */
-    async read(readable: readonly ResolvedScope[], now: number): Promise<Result<StatusContext, CaciError>> {
-      const perScope: Array<{ items: Candidate[]; read: number } | undefined> = [];
+    async read(readable: readonly ResolvedScope[], now: number, resolvedLookup?: ResolvedLookup): Promise<Result<StatusContext, CaciError>> {
+      const perScope: Array<{ items: Candidate[]; read: number; resolved: number; unavailable: boolean } | undefined> = [];
       for (let at = 0; at < readable.length; at += settings.maxConcurrentReads) {
         const chunk = readable.slice(at, at + settings.maxConcurrentReads);
-        const results = await Promise.all(chunk.map((r, k) => candidates(r, at + k, now)));
+        const results = await Promise.all(chunk.map((r, k) => candidates(r, at + k, now, resolvedLookup)));
         for (const [k, result] of results.entries()) {
           const r = chunk[k] as ResolvedScope;
           if (result.ok) perScope[at + k] = result.value;
@@ -176,7 +201,7 @@ export function createStatusContext(adapter: StorageAdapter, limits: StatusConte
         provenance.push(scope.provenance);
         ids.push(c.id);
       }
-      return ok(Object.freeze({ entries: Object.freeze(entries), provenance: Object.freeze(provenance), ids: Object.freeze(ids), entriesLeftOut: totalRead - chosen.length }));
+      return ok(Object.freeze({ entries: Object.freeze(entries), provenance: Object.freeze(provenance), ids: Object.freeze(ids), entriesLeftOut: totalRead - chosen.length, entriesResolved: perScope.reduce((n, s) => n + (s?.resolved ?? 0), 0), resolutionsUnavailable: perScope.some((s) => s?.unavailable === true) }));
     },
   };
 }
