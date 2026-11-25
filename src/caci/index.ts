@@ -20,3 +20,4 @@ export { createUsageRecorder, recordsFromTrace, USAGE_WARNING } from './usage-re
 export type { UsageCall, UsageContext, UsageRecorder, UsageRecorderInit } from './usage-recorder.js';
 export { defaultVerbs, MAX_VERB_HELP_CHARS, MAX_VERBS, parseVerbs, VERBS_FILE } from './verbs.js';
 export type { Verb, VerbEffect, Verbs } from './verbs.js';
+export type { FactRef, ResolutionsView, ResolutionView, ResolvedView } from './controller.js';

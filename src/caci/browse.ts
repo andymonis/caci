@@ -117,6 +117,9 @@ export function createBrowser(adapter: StorageAdapter) {
   }
 
   return {
+    /** Whether an item with this id is in the graph (an id too long to exist is simply not there). */
+    hasItem: (graphId: string, id: string): Promise<Result<boolean, CaciError>> => exists(graphId, 'item', id),
+
     async summary(graphId: string): Promise<Result<GraphSummary, CaciError>> {
       const r = await describeGraph(adapter, graphId);
       return r.ok ? ok(Object.freeze({ itemCount: r.value.itemCount, categoryCount: r.value.categoryCount, edgeCount: r.value.edgeCount })) : err({ source: 'graph', error: r.error });

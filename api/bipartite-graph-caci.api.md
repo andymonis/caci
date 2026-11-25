@@ -40,7 +40,7 @@ export interface BrainScope {
 }
 
 // @public
-export const CACI_ERROR_CODES: readonly ["UNAUTHENTICATED", "NOT_FOUND", "EXPIRED", "THROTTLED", "TOO_MANY_PENDING", "INVALID_INPUT"];
+export const CACI_ERROR_CODES: readonly ["UNAUTHENTICATED", "NOT_FOUND", "EXPIRED", "THROTTLED", "TOO_MANY_PENDING", "INVALID_INPUT", "FORBIDDEN", "LIMIT_REACHED"];
 
 // @public (undocumented)
 export interface CaciController {
@@ -69,6 +69,8 @@ export interface CaciController {
     reject(token: unknown, proposalId: unknown): Promise<Result<{
         readonly id: string;
     }, CaciError>>;
+    resolutions(token: unknown, input?: unknown): Promise<Result<ResolutionsView, CaciError>>;
+    resolveFact(token: unknown, input: unknown): Promise<Result<ResolvedView, CaciError>>;
     searchFacts(token: unknown, input: unknown): Promise<Result<SearchView, CaciError>>;
     source(token: unknown, ref: unknown): Promise<Result<SourceView, CaciError>>;
     status(token: unknown, input: {
@@ -79,6 +81,9 @@ export interface CaciController {
         readonly check?: unknown;
     }): Promise<Result<StatusView, CaciError>>;
     summary(token: unknown, scope?: unknown): Promise<Result<GraphSummary, CaciError>>;
+    unresolveFact(token: unknown, input: unknown): Promise<Result<{
+        readonly fact: FactRef;
+    }, CaciError>>;
 }
 
 // @public (undocumented)
@@ -107,11 +112,14 @@ export interface CaciControllerInit {
     readonly mode?: 'demo' | 'anthropic';
     readonly onLedgerFailure?: (message: string) => void;
     readonly pulseText?: string;
+    // Warning: (ae-forgotten-export) The symbol "ResolutionStore" needs to be exported by the entry point index.d.ts
+    readonly resolutions?: ResolutionStore;
     // Warning: (ae-forgotten-export) The symbol "ScopeResolver" needs to be exported by the entry point index.d.ts
     readonly scopes?: ScopeResolver;
     readonly usage?: UsageRecorder;
     // Warning: (ae-forgotten-export) The symbol "UserController" needs to be exported by the entry point index.d.ts
     readonly users: Pick<UserController, 'resolve'>;
+    readonly verbs?: Verbs;
 }
 
 // Warning: (ae-forgotten-export) The symbol "ControllerError" needs to be exported by the entry point index.d.ts
@@ -250,6 +258,19 @@ export interface FactHit {
     readonly summary: string;
     // (undocumented)
     readonly title: string;
+}
+
+// @public
+export interface FactRef {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly scope: {
+        readonly kind: 'personal';
+    } | {
+        readonly kind: 'circle';
+        readonly circleId: string;
+    };
 }
 
 // @public (undocumented)
@@ -419,6 +440,35 @@ export interface ProposalView {
 //
 // @public
 export function recordsFromTrace(events: readonly TraceEvent[], context: UsageContext, at: number): UsageRecord[];
+
+// @public (undocumented)
+export interface ResolutionsView {
+    // (undocumented)
+    readonly items: readonly ResolutionView[];
+    readonly next: FactRef | null;
+}
+
+// @public
+export interface ResolutionView {
+    // (undocumented)
+    readonly at: number;
+    // (undocumented)
+    readonly fact: FactRef;
+    // (undocumented)
+    readonly verb: string;
+}
+
+// @public
+export interface ResolvedView {
+    // (undocumented)
+    readonly effect: 'clear' | 'remove';
+    // (undocumented)
+    readonly fact: FactRef;
+    // (undocumented)
+    readonly result: 'hidden' | 'deleted';
+    // (undocumented)
+    readonly verb: string;
+}
 
 // @public
 export interface SearchView {

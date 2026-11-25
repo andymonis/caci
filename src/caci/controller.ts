@@ -5,6 +5,9 @@ import { parseScope, PERSONAL, type Provenance, type ResolvedScope, type ScopeRe
 import { createBrain, type BrainLimits, type BrainScope, type MineCategoryItemsPage, type MineCategoryPage, type MineItemDetail, type MineSummary } from './brain.js';
 import { createBrowser, pageOf, type CategoryItemsPage, type CategoryPage, type GraphSummary, type ItemDetail, type PageInput } from './browse.js';
 import { caciError, type CaciError } from './errors.js';
+import type { ResolutionScope, ResolutionStore } from '../resolutions/index.js';
+import { readResolutionsPage, readResolveInput } from './resolve.js';
+import type { Verbs } from './verbs.js';
 import { DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS, searchFacts, type FactHit } from './search.js';
 import { createStatusContext, type StatusContextLimits } from './status-context.js';
 import type { UsageRecorder } from './usage-recorder.js';
@@ -61,6 +64,10 @@ export interface CaciControllerInit {
   readonly usage?: UsageRecorder;
   /** What a check (a pulse, coming-up or long-range) is recorded as: `check` for the apps, `agent-check` for an agent's pulse (R-024 D9). Default `check`. */
   readonly checkCapability?: 'check' | 'agent-check';
+  /** The vocabulary of verbs a person can apply to a fact (R-025 D9), read by the service from `controls/verbs.json`. Without it the verb operations are not available. */
+  readonly verbs?: Verbs;
+  /** Each person's private record of the facts they have dealt with (R-025 D16). Without it the verb operations are not available. */
+  readonly resolutions?: ResolutionStore;
 }
 
 /** A proposal as a person is allowed to see it: the preview and what they would be approving, and nothing about the plumbing. */
@@ -176,6 +183,36 @@ export interface ApprovedView {
   readonly tidied?: readonly { readonly id: string; readonly name?: string }[];
 }
 
+/** A fact reference from a stored scope and id. */
+const factRefOf = (scope: ResolutionScope, id: string): FactRef => Object.freeze({ scope: Object.freeze(scope.kind === 'personal' ? { kind: 'personal' as const } : { kind: 'circle' as const, circleId: scope.circleId }), id });
+
+/** A fact as a verb names it: the scope (a circle by id) and the fact's id (R-025 D12). */
+export interface FactRef {
+  readonly scope: { readonly kind: 'personal' } | { readonly kind: 'circle'; readonly circleId: string };
+  readonly id: string;
+}
+
+/** What a verb did (R-025 D10): `hidden` is a resolution recorded for the person only, `deleted` is the fact removed from the brain. */
+export interface ResolvedView {
+  readonly fact: FactRef;
+  readonly verb: string;
+  readonly effect: 'clear' | 'remove';
+  readonly result: 'hidden' | 'deleted';
+}
+
+/** One of the person's own resolutions: ids, the verb and the time, never the fact's words (R-025 VR-NFR-01). */
+export interface ResolutionView {
+  readonly fact: FactRef;
+  readonly verb: string;
+  readonly at: number;
+}
+
+export interface ResolutionsView {
+  readonly items: readonly ResolutionView[];
+  /** Where to continue, or `null` when this was the last page. */
+  readonly next: FactRef | null;
+}
+
 export interface CaciController {
   /**
    * Asks the model how to file a note, for the person the session belongs to, in **their** graph (taken
@@ -237,6 +274,16 @@ export interface CaciController {
   changes(token: unknown, input: unknown): Promise<Result<ChangesView, CaciError>>;
   /** Where one fact came from (R-017): the change log's scope and not-found rules; `ref` is `{ scope?, id }`. */
   source(token: unknown, ref: unknown): Promise<Result<SourceView, CaciError>>;
+  /**
+   * Applies a verb to one fact for the signed-in person (R-025): `{ scope?, id, verb }`, an exact reference, never words. The fact must be
+   * in the person's own brain or a circle they may read, or the answer is the one not-found. The effect is the verb's (`clear` hides a
+   * circle fact for this person only; the deleting effects come with R-025 T-342). Nothing is called outside CaCi.
+   */
+  resolveFact(token: unknown, input: unknown): Promise<Result<ResolvedView, CaciError>>;
+  /** Takes back the person's own resolution of a fact (`{ scope?, id }`); with none it changes nothing and answers the same way. */
+  unresolveFact(token: unknown, input: unknown): Promise<Result<{ readonly fact: FactRef }, CaciError>>;
+  /** One page of the person's own resolutions (`{ limit?, after? }`), in a fixed order. Nobody else's are ever listed. */
+  resolutions(token: unknown, input?: unknown): Promise<Result<ResolutionsView, CaciError>>;
   /** Discards the owner's pending proposal. Nothing is written. */
   reject(token: unknown, proposalId: unknown): Promise<Result<{ readonly id: string }, CaciError>>;
 }
@@ -443,6 +490,24 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     if (scopes === undefined) return err(noCircle());
     const resolved = await scopes.resolve(token, parsed.value, 'read');
     return resolved.ok ? ok({ where: resolved.value, id: (ref as { id?: unknown }).id }) : err(scopeProblem(resolved.error));
+  }
+
+  /**
+   * The brain a verb operation is about: the person's own (when no scope is given, or the personal scope), or one circle they may read,
+   * checked now. A stranger, a non-member and a made-up circle all get the one not-found.
+   */
+  async function factScope(token: unknown, given: unknown): Promise<Result<{ userId: string; graphId: string; scope: ResolutionScope }, CaciError>> {
+    const me = await whoIs(token);
+    if (!me.ok) return me;
+    const userId = me.value.user.id;
+    if (given === undefined) return ok({ userId, graphId: me.value.graphId, scope: Object.freeze({ kind: 'personal' as const }) });
+    const parsed = parseScope(given);
+    if (!parsed.ok) return err(scopeProblem(parsed.error));
+    if (parsed.value.kind === 'personal') return ok({ userId, graphId: me.value.graphId, scope: Object.freeze({ kind: 'personal' as const }) });
+    if (scopes === undefined) return err(noCircle());
+    const resolved = await scopes.resolve(token, parsed.value, 'read');
+    if (!resolved.ok) return err(scopeProblem(resolved.error));
+    return ok({ userId, graphId: resolved.value.graphId, scope: Object.freeze({ kind: 'circle' as const, circleId: parsed.value.circleId }) });
   }
 
   /** A browse result with the circle it came from (nothing is added for the personal brain). */
@@ -716,6 +781,61 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     searchFacts: (token, input) => searchFactsOf(token, input),
 
     changes: (token, input) => changesOf(token, input),
+
+    async resolveFact(token, input) {
+      const me = await whoIs(token);
+      if (!me.ok) return me;
+      const { verbs, resolutions } = init;
+      if (verbs === undefined || resolutions === undefined) return err(caciError('NOT_FOUND', 'verbs are not available'));
+      const read = readResolveInput(input, true);
+      if (!read.ok) return read;
+      const verb = verbs.get(read.value.verb as string);
+      if (verb === undefined) return err(caciError('INVALID_INPUT', `no such verb: the verbs are ${verbs.list.map((v) => v.name).join(', ')}`, { field: 'verb' }));
+      const where = await factScope(token, read.value.scope);
+      if (!where.ok) return where;
+      const there = await browser.hasItem(where.value.graphId, read.value.id);
+      if (!there.ok) return there;
+      if (!there.value) return err(caciError('NOT_FOUND', 'no such fact'));
+      const fact = factRefOf(where.value.scope, read.value.id);
+      if (verb.effect === 'clear' && where.value.scope.kind === 'circle') {
+        const set = await resolutions.set({ userId: where.value.userId, scope: where.value.scope, factId: read.value.id, verb: verb.name, at: clock() });
+        if (!set.ok) return err(set.error.code === 'LIMIT_REACHED' ? caciError('LIMIT_REACHED', 'you have resolved the most facts allowed: take one back first') : set.error.code === 'INVALID_INPUT' ? caciError('INVALID_INPUT', 'that fact cannot be resolved', { field: 'id' }) : storage());
+        return ok(Object.freeze({ fact, verb: verb.name, effect: verb.effect, result: 'hidden' as const }));
+      }
+      return err(caciError('INVALID_INPUT', 'that verb does not apply here yet', { field: 'verb' }));
+    },
+
+    async unresolveFact(token, input) {
+      const me = await whoIs(token);
+      if (!me.ok) return me;
+      if (init.verbs === undefined || init.resolutions === undefined) return err(caciError('NOT_FOUND', 'verbs are not available'));
+      const read = readResolveInput(input, false);
+      if (!read.ok) return read;
+      const where = await factScope(token, read.value.scope);
+      if (!where.ok) return where;
+      try {
+        await init.resolutions.remove(where.value.userId, where.value.scope, read.value.id);
+      } catch (cause) {
+        if (cause instanceof RangeError) return err(caciError('INVALID_INPUT', 'id must be the fact\'s id', { field: 'id' }));
+        return err(storage());
+      }
+      return ok(Object.freeze({ fact: factRefOf(where.value.scope, read.value.id) }));
+    },
+
+    async resolutions(token, input) {
+      const me = await whoIs(token);
+      if (!me.ok) return me;
+      if (init.verbs === undefined || init.resolutions === undefined) return err(caciError('NOT_FOUND', 'verbs are not available'));
+      const page = readResolutionsPage(input);
+      if (!page.ok) return page;
+      try {
+        const listed = await init.resolutions.list(me.value.user.id, { limit: page.value.limit, ...(page.value.after === undefined ? {} : { after: { scope: page.value.after.scope, factId: page.value.after.id } }) });
+        const items = listed.items.map((r) => Object.freeze({ fact: factRefOf(r.scope, r.factId), verb: r.verb, at: r.at }));
+        return ok(Object.freeze({ items: Object.freeze(items), next: listed.hasMore && items.length > 0 ? (items[items.length - 1] as ResolutionView).fact : null }));
+      } catch {
+        return err(storage());
+      }
+    },
 
     async source(token, ref) {
       const me = await whoIs(token);

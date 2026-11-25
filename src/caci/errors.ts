@@ -1,7 +1,7 @@
 import type { AppError, ControllerError } from '../app/index.js';
 
 /** What can go wrong in the CaCi controller's own rules, as a closed set. */
-export const CACI_ERROR_CODES = ['UNAUTHENTICATED', 'NOT_FOUND', 'EXPIRED', 'THROTTLED', 'TOO_MANY_PENDING', 'INVALID_INPUT'] as const;
+export const CACI_ERROR_CODES = ['UNAUTHENTICATED', 'NOT_FOUND', 'EXPIRED', 'THROTTLED', 'TOO_MANY_PENDING', 'INVALID_INPUT', 'FORBIDDEN', 'LIMIT_REACHED'] as const;
 export type CaciErrorCode = (typeof CACI_ERROR_CODES)[number];
 
 export interface CaciOwnError {
