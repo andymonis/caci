@@ -27,7 +27,7 @@ const folder = (change: (files: Record<string, string>) => void = () => {}): str
   change(files);
   const dir = tmp();
   writeControls(dir, files);
-  for (const name of ['pulse.txt', 'coming-up.txt', 'long-range.txt']) writeFileSync(join(dir, name), readFileSync(new URL(`../../controls/${name}`, import.meta.url), 'utf8'));
+  for (const name of ['pulse.txt', 'coming-up.txt', 'long-range.txt', 'verbs.json']) writeFileSync(join(dir, name), readFileSync(new URL(`../../controls/${name}`, import.meta.url), 'utf8'));
   return dir;
 };
 const message = async (promise: Promise<unknown>): Promise<string> => {
@@ -222,5 +222,25 @@ describe('an edited folder is what the model is told (through a stand-in provide
     expect(sent?.user).toBe('EDITED-FRAME-S\n<request>\nHow are things?\n</request>\n<entries>\n(there are no entries)\n</entries>');
     expect(sent?.schema).toContain('EDITED-HEADLINE-WORDS');
     expect(JSON.stringify(seen)).not.toContain(KEY);
+  });
+});
+
+describe('the verbs file (R-025 D9, VR-AC-09)', () => {
+  it('a missing or bad verbs file stops the start, names the file and leaves no data folder behind', async () => {
+    for (const content of [undefined, '{', '{"verbs":[]}', '{"verbs":[{"name":"Pay","effect":"clear","help":"x"}]}']) {
+      const data = join(tmp(), 'data');
+      const dir = folder();
+      rmSync(join(dir, 'verbs.json'));
+      if (content !== undefined) writeFileSync(join(dir, 'verbs.json'), content);
+      const m = await message(startService(baseConfig(data), { controlsDir: dir }));
+      expect(m, String(content)).toContain(`the verbs in ${dir} are not valid`);
+      expect(m).toContain('verbs.json');
+      expect(existsSync(data)).toBe(false);
+    }
+  });
+
+  it('the shipped file lets the service start', async () => {
+    const service = await startService(baseConfig(join(tmp(), 'data')), { controlsDir: folder() });
+    await service.close();
   });
 });

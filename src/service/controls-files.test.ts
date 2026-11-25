@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { validFiles } from '../llm/controls/fixtures.test-util.js';
-import { CHECK_FILES, CHECK_NAMES, defaultControlsDir, loadCheckTexts, loadControlsFolder, loadPulseText, loadVerbs, MAX_PULSE_CHARS, MAX_VERBS_BYTES } from './controls-files.js';
+import { CHECK_FILES, CHECK_NAMES, defaultControlsDir, loadCheckTexts, loadCheckTextsAndVerbs, loadControlsFolder, loadPulseText, loadVerbs, MAX_PULSE_CHARS, MAX_VERBS_BYTES } from './controls-files.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -248,5 +248,18 @@ describe('loading the verbs file (R-025 D9)', () => {
     writeFileSync(target, readFileSync(join(defaultControlsDir(), 'verbs.json')));
     symlinkSync(target, join(dir, 'verbs.json'));
     expect(loadVerbs(dir)).toEqual({ ok: false, error: ['verbs.json: is not an ordinary file'] });
+  });
+});
+
+describe('the doctor check of texts and verbs (R-025 D9)', () => {
+  it('is good with the shipped folder and reports the problems of both files at once', () => {
+    expect(loadCheckTextsAndVerbs(defaultControlsDir()).ok).toBe(true);
+    const dir = folder();
+    for (const name of CHECK_NAMES) writeFileSync(join(dir, CHECK_FILES[name]), 'Fine.');
+    expect(loadCheckTextsAndVerbs(dir)).toEqual({ ok: false, error: [`verbs.json: is missing in ${dir}`] });
+    writeFileSync(join(dir, 'verbs.json'), '{"verbs":[]}');
+    writeFileSync(join(dir, 'pulse.txt'), '');
+    const r = loadCheckTextsAndVerbs(dir);
+    expect(!r.ok && r.error).toEqual(['pulse.txt: is empty', 'verbs.json: "verbs" must not be empty']);
   });
 });

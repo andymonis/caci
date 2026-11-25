@@ -15,7 +15,7 @@ import { createDemoModelClient, createLlm, type ModelClient } from '../llm/index
 import { createUserController } from '../users/index.js';
 import { createSqliteAgentTokenStore, createSqliteSessionStore, createSqliteUserStore } from '../users/sqlite/index.js';
 import type { ServiceConfig } from './config.js';
-import { defaultControlsDir, loadControlsFolder, loadCheckTexts } from './controls-files.js';
+import { defaultControlsDir, loadControlsFolder, loadCheckTexts, loadVerbs } from './controls-files.js';
 import { defaultWebDir, WEB_FILE_SPECS } from './web-app.js';
 import { loadWebFiles } from './web-files.js';
 
@@ -76,6 +76,9 @@ export async function startService(config: ServiceConfig, options: ServiceOption
   // the three check texts (R-016 D21, R-018 D10) are read here too: a bad or missing file stops the start, naming it
   const checks = loadCheckTexts(controlsDir);
   if (!checks.ok) throw new Error(`the check texts in ${controlsDir} are not valid:\n${checks.error.map((p) => `  - ${p}`).join('\n')}`);
+  // the verbs (R-025 D9) too: a missing or bad file stops the start, naming it
+  const verbs = loadVerbs(controlsDir);
+  if (!verbs.ok) throw new Error(`the verbs in ${controlsDir} are not valid:\n${verbs.error.map((p) => `  - ${p}`).join('\n')}`);
   // the controls must allow at least what the API itself accepts, or a valid request would fail inside the LLM component (R-012 D12)
   const { categorise, status } = controls.value;
   const tooLow = [

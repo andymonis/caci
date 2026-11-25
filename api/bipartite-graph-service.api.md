@@ -185,6 +185,9 @@ export const isLoopbackAddress: (bind: string) => boolean;
 // @public
 export function loadCheckTexts(dir: string): Result<CheckTexts, readonly string[]>;
 
+// @public
+export function loadCheckTextsAndVerbs(dir: string): Result<CheckTexts, readonly string[]>;
+
 // Warning: (ae-forgotten-export) The symbol "Controls" needs to be exported by the entry point index.d.ts
 //
 // @public
@@ -193,11 +196,19 @@ export function loadControlsFolder(dir: string): Result<Controls, readonly strin
 // @public
 export function loadPulseText(dir: string): Result<string, readonly string[]>;
 
+// Warning: (ae-forgotten-export) The symbol "Verbs" needs to be exported by the entry point index.d.ts
+//
+// @public
+export function loadVerbs(dir: string): Result<Verbs, readonly string[]>;
+
 // @public (undocumented)
 export const MAX_KEEP = 1000;
 
 // @public
 export const MAX_PULSE_CHARS = 500;
+
+// @public
+export const MAX_VERBS_BYTES = 8000;
 
 // @public
 export function parseServiceConfig(env: Readonly<Record<string, string | undefined>>): Result<ServiceConfig, readonly ConfigError[]>;

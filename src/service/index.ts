@@ -13,7 +13,7 @@ export { restoreData, RESTORE_USAGE } from './restore.js';
 export type { RestoreIo } from './restore.js';
 export { recoverAdmin, USAGE as RECOVER_USAGE } from './recover.js';
 export type { RecoverIo } from './recover.js';
-export { CHECK_FILES, CHECK_NAMES, defaultControlsDir, loadCheckTexts, loadControlsFolder, loadPulseText, MAX_PULSE_CHARS } from './controls-files.js';
+export { CHECK_FILES, CHECK_NAMES, defaultControlsDir, loadCheckTexts, loadCheckTextsAndVerbs, loadControlsFolder, loadPulseText, loadVerbs, MAX_PULSE_CHARS, MAX_VERBS_BYTES } from './controls-files.js';
 export type { CheckName, CheckTexts } from './controls-files.js';
 export { EXPORT_FORMAT, EXPORT_VERSION, exportBrain } from './brain-export.js';
 export type { BrainExport, ExportEntry, ExportFact, ExportResult, ExportTarget } from './brain-export.js';

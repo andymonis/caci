@@ -158,3 +158,14 @@ export function loadVerbs(dir: string): Result<Verbs, readonly string[]> {
   }
   return parseVerbs(text);
 }
+
+/**
+ * The doctor's second controls check: the three check texts and the verbs file, every problem of both reported (R-025 D9).
+ * On success it gives the check texts. Never throws.
+ */
+export function loadCheckTextsAndVerbs(dir: string): Result<CheckTexts, readonly string[]> {
+  const texts = loadCheckTexts(dir);
+  const verbs = loadVerbs(dir);
+  if (texts.ok && verbs.ok) return texts;
+  return err([...(texts.ok ? [] : texts.error), ...(verbs.ok ? [] : verbs.error)]);
+}
