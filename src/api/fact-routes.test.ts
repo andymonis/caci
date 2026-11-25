@@ -195,3 +195,18 @@ describe('GET /api/facts/resolutions', () => {
     expect(await field('?cursor=abc')).toBe('cursor');
   });
 });
+
+describe('GET /api/facts/verbs', () => {
+  it('gives the vocabulary to a signed-in person, refuses a query and a missing cookie, and only GET works', async () => {
+    const { a, t } = await started();
+    const r = await send(a, 'GET', '/api/facts/verbs', t.bob);
+    expect(r.status, r.text).toBe(200);
+    expect(r.json.items.map((v: { name: string }) => v.name)).toEqual(['clear', 'pay', 'remove']);
+    expect(Object.keys(r.json.items[0]).sort()).toEqual(['effect', 'help', 'name']);
+    const q = await send(a, 'GET', '/api/facts/verbs?x=1', t.bob);
+    expect(q.status).toBe(422);
+    expect(q.json.error.field).toBe('x');
+    expect((await send(a, 'GET', '/api/facts/verbs', undefined)).status).toBe(401);
+    expect((await send(a, 'POST', '/api/facts/verbs', t.bob, {})).status).toBe(405);
+  });
+});

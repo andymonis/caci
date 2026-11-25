@@ -84,6 +84,13 @@ export interface CaciController {
     unresolveFact(token: unknown, input: unknown): Promise<Result<{
         readonly fact: FactRef;
     }, CaciError>>;
+    verbs(token: unknown): Promise<Result<{
+        readonly items: readonly {
+            readonly name: string;
+            readonly effect: 'clear' | 'remove';
+            readonly help: string;
+        }[];
+    }, CaciError>>;
 }
 
 // @public (undocumented)

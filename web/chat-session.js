@@ -10,6 +10,9 @@
 //   the facts recorded and any fact replaced (D6). Any problem, refusal or failure records nothing, says why in the service's
 //   words, and rejects the proposal so no place is held.
 // - One request at a time. The thread is in memory only: `reset()` (sign-out, leaving) clears it and drops late answers.
+// - **Verbs** (R-025): text beginning with `/` is a command and is never filed or asked (D17): `/pay 2` applies the verb `pay` to the
+//   fact behind point 2 of the last answer, `/pay` alone to a one-point answer, `/pay 2.1` to the first of several facts a point cites.
+//   The page keeps the answer's fact references in memory only (they go with the answer) and the server never parses a number.
 // - Nothing is written to the browser; nothing the person or CaCi wrote is treated as anything but text.
 
 import { formatTime, withWait } from './capture-view.js';
@@ -42,13 +45,23 @@ export function sourceLines(source) {
 }
 export const SOURCE_NOT_KEPT = 'The words behind this fact are not kept: it was entered before they were recorded, or the change log no longer holds them.';
 
-export function createChatSession({ notes, ledger, onSignedOut, timeZone = browserTimeZone, circle }) {
+/** The slash that starts a command, written as an escape so it is not mistaken for a request path by the guard that lists them. */
+const SLASH = '\u002f';
+const COMMAND = /^\/([a-z0-9-]{1,20})(?:\s+(\d{1,3})(?:\.(\d{1,2}))?)?$/;
+export const NO_VERBS = 'Verbs are not available here.';
+export const NOT_A_COMMAND = 'That is not a command I know. Use a verb and the number of a point in the last answer, for example /pay 2.';
+export const NO_ANSWER = 'There is no answer to apply that to. Ask or press a check first.';
+
+export function createChatSession({ notes, ledger, facts, onSignedOut, timeZone = browserTimeZone, circle }) {
   for (const m of ['mode', 'propose', 'approve', 'reject', 'status', ...(circle === undefined ? [] : ['pulse'])]) if (!notes || typeof notes[m] !== 'function') throw new TypeError(`createChatSession needs a notes client with ${m}()`);
   let epoch = 0;
   let busy = false;
   let counter = 0;
   let mode = { status: 'unknown', value: null, error: null };
   let messages = [];
+  let verbs = { status: 'unknown', items: Object.freeze([]) };
+  /** Points already dealt with, as `messageId:lineIndex:factIndex`: in memory with the answer, gone with it. */
+  const resolved = new Set();
   const place = circle === undefined ? undefined : Object.freeze({ circleId: circle.circleId, circleName: circle.circleName, canCapture: circle.canCapture === true });
   const listeners = new Set();
 
@@ -56,6 +69,8 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
     Object.freeze({
       mode: Object.freeze({ ...mode }),
       messages: Object.freeze([...messages]),
+      verbs: Object.freeze({ status: verbs.status, items: verbs.items }),
+      resolved: Object.freeze([...resolved]),
       busy,
       circle: place,
       canSend: mode.status === 'known' && !busy && (place === undefined || place.canCapture),
@@ -158,6 +173,108 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
     return Object.freeze({ ok: true });
   }
 
+  const isCommand = (text) => typeof text === 'string' && text.trimStart().startsWith(SLASH);
+  const invalid = (message) => Object.freeze({ ok: false, kind: 'invalid', message });
+  const unknownVerb = (name) => `There is no verb "${name}". The verbs are: ${verbs.items.map((v) => `${SLASH}${v.name}`).join(', ')}.`;
+
+  async function ensureVerbs() {
+    if (verbs.status === 'known') return true;
+    if (facts === undefined || typeof facts.verbs !== 'function') return false;
+    const r = await facts.verbs();
+    if (!r.ok) {
+      signedOut(r.error);
+      return false;
+    }
+    verbs = { status: 'known', items: Object.freeze(r.value.items.map((v) => Object.freeze({ ...v }))) };
+    return true;
+  }
+
+  /** Applies one verb to one fact of one line of an answer in the thread, and says what was done. */
+  async function apply(verb, messageId, lineIndex, factIndex, label) {
+    const message = messages.find((m) => m.id === messageId);
+    const fact = message?.lineFacts[lineIndex]?.[factIndex];
+    if (fact === undefined) return invalid('There is nothing for that verb to apply to.');
+    return exclusive(async (mine) => {
+      const r = await facts.resolve(fact, verb.name);
+      if (mine !== epoch) return DROPPED;
+      if (!r.ok) {
+        signedOut(r.error);
+        say('cacci', 'error', words(r.error));
+        return Object.freeze({ ok: false, kind: r.error.kind, message: r.error.message });
+      }
+      resolved.add(`${messageId}:${lineIndex}:${factIndex}`);
+      const done = r.value.result === 'deleted' ? 'the fact was removed' : 'it will stay out of your checks';
+      say('cacci', 'resolved', `${verb.help.replace(/\.$/, '')}: done for point ${label}; ${done}.`);
+      return Object.freeze({ ok: true, result: r.value.result });
+    });
+  }
+
+  /** A line of text starting with `/`: never filed, never asked. Says in the thread what it did, or why it did nothing. */
+  async function command(text) {
+    const typed = text.trim();
+    say('me', 'text', typed);
+    const parsed = COMMAND.exec(typed);
+    if (parsed === null) {
+      say('cacci', 'error', NOT_A_COMMAND);
+      return invalid(NOT_A_COMMAND);
+    }
+    if (!(await ensureVerbs())) {
+      say('cacci', 'error', NO_VERBS);
+      return invalid(NO_VERBS);
+    }
+    const verb = verbs.items.find((v) => v.name === parsed[1]);
+    if (verb === undefined) {
+      const m = unknownVerb(parsed[1]);
+      say('cacci', 'error', m);
+      return invalid(m);
+    }
+    const answer = [...messages].reverse().find((m) => m.kind === 'answer');
+    if (answer === undefined) {
+      say('cacci', 'error', NO_ANSWER);
+      return invalid(NO_ANSWER);
+    }
+    const withFacts = answer.lineFacts.map((f, i) => (f.length > 0 ? i : -1)).filter((i) => i >= 0);
+    let line;
+    if (parsed[2] === undefined) {
+      if (withFacts.length !== 1) {
+        const m = withFacts.length === 0 ? 'Nothing in the last answer has a fact behind it.' : `The last answer has ${withFacts.length} points: say which, for example /${verb.name} ${withFacts[0] + 1}.`;
+        say('cacci', 'error', m);
+        return invalid(m);
+      }
+      line = withFacts[0];
+    } else {
+      line = Number(parsed[2]) - 1;
+      if (line < 0 || line >= answer.lineFacts.length) {
+        const m = `There is no point ${parsed[2]} in the last answer.`;
+        say('cacci', 'error', m);
+        return invalid(m);
+      }
+      if (answer.lineFacts[line].length === 0) {
+        const m = `Point ${parsed[2]} has no fact behind it.`;
+        say('cacci', 'error', m);
+        return invalid(m);
+      }
+    }
+    const behind = answer.lineFacts[line];
+    let factIndex;
+    if (parsed[3] === undefined) {
+      if (behind.length > 1) {
+        const m = `Point ${line + 1} cites ${behind.length} facts: say which, from /${verb.name} ${line + 1}.1 to /${verb.name} ${line + 1}.${behind.length}.`;
+        say('cacci', 'error', m);
+        return invalid(m);
+      }
+      factIndex = 0;
+    } else {
+      factIndex = Number(parsed[3]) - 1;
+      if (factIndex < 0 || factIndex >= behind.length) {
+        const m = `Point ${line + 1} does not cite a fact numbered ${parsed[3]}.`;
+        say('cacci', 'error', m);
+        return invalid(m);
+      }
+    }
+    return apply(verb, answer.id, line, factIndex, behind.length > 1 ? `${line + 1}.${factIndex + 1}` : String(line + 1));
+  }
+
   return Object.freeze({
     getState: snapshot,
     subscribe(listener) {
@@ -169,6 +286,8 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
       epoch += 1;
       busy = false;
       messages = [];
+      resolved.clear();
+      verbs = { status: 'unknown', items: Object.freeze([]) };
       mode = { status: 'unknown', value: null, error: null };
       notify();
     },
@@ -191,6 +310,7 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
     /** An update from the person: recorded against their own brain on Home, or against this circle's brain on a circle's screen. */
     async send(text) {
       if (busy) return BUSY;
+      if (isCommand(text)) return exclusive(() => command(text));
       if (mode.status !== 'known') return NOT_READY;
       if (place !== undefined && !place.canCapture) return READ_ONLY;
       const problem = noteProblem(text);
@@ -202,6 +322,7 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
     /** A question from the person (Home only: a circle's screen has the Pulse instead). */
     async ask(text) {
       if (busy) return BUSY;
+      if (isCommand(text)) return exclusive(() => command(text));
       if (place !== undefined) return Object.freeze({ ok: false, kind: 'invalid', message: 'Use the Pulse button here.' });
       if (mode.status !== 'known') return NOT_READY;
       const t = typeof text === 'string' ? text.trim() : '';
@@ -209,6 +330,26 @@ export function createChatSession({ notes, ledger, onSignedOut, timeZone = brows
       if ([...t].length > 500) return Object.freeze({ ok: false, kind: 'invalid', message: 'A question is at most 500 characters.' });
       say('me', 'text', t);
       return exclusive(async (mine) => present(await notes.status(t, timeZone()), mine));
+    },
+    /** Asks the service for the vocabulary of verbs (once; a second call is free). The buttons are drawn from it. */
+    async loadVerbs() {
+      if (busy) return BUSY;
+      return exclusive(async (mine) => {
+        const ok = await ensureVerbs();
+        return mine !== epoch ? DROPPED : ok ? Object.freeze({ ok: true }) : invalid(NO_VERBS);
+      });
+    },
+    /** Applies a verb (by name) to one fact of one line of an answer: what a button does. The same path as `/verb N`. */
+    async applyVerb(verbName, messageId, lineIndex, factIndex = 0) {
+      if (busy) return BUSY;
+      const verb = verbs.items.find((v) => v.name === verbName);
+      if (verb === undefined || facts === undefined) return invalid(NO_VERBS);
+      const label = (messages.find((m) => m.id === messageId)?.lineFacts[lineIndex]?.length ?? 0) > 1 ? `${lineIndex + 1}.${factIndex + 1}` : String(lineIndex + 1);
+      return apply(verb, messageId, lineIndex, factIndex, label);
+    },
+    /** Whether the fact behind one line of an answer has been dealt with in this thread. */
+    isResolved(messageId, lineIndex, factIndex = 0) {
+      return resolved.has(`${messageId}:${lineIndex}:${factIndex}`);
     },
     /** Whether a line of an answer has facts behind it that can be traced. */
     canShowSource(messageId, lineIndex) {

@@ -208,3 +208,22 @@ describe('the verb operations never touch another person or a graph', () => {
     expect(Object.keys(rows[0] as object).sort()).toEqual(['at', 'factId', 'scope', 'userId', 'verb']);
   });
 });
+
+describe('the vocabulary (R-025 D9)', () => {
+  it('a signed-in person gets the verbs with their effects and help lines, and nothing else', async () => {
+    const { w } = await yoga();
+    const r = must(await w.caci.verbs(w.tokens.bob));
+    expect(r.items).toEqual([
+      { name: 'clear', effect: 'clear', help: 'Clear this for me.' },
+      { name: 'pay', effect: 'clear', help: 'Mark this as paid.' },
+      { name: 'remove', effect: 'remove', help: 'Remove this fact for everyone.' },
+    ]);
+    expect(Object.isFrozen(r.items[0])).toBe(true);
+  });
+  it('needs a session, and is not available without verbs', async () => {
+    const { w } = await yoga();
+    expect(ownErrorOf(await w.caci.verbs('nope'))).toMatchObject({ code: 'UNAUTHENTICATED' });
+    const none = await yoga({ noVerbs: true });
+    expect(ownErrorOf(await none.w.caci.verbs(none.w.tokens.bob))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+});

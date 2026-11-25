@@ -500,7 +500,7 @@ describe('the verbs section of the README (R-025)', () => {
     const real = createFactRoutes({ caci: {} as never }).map((r) => `${r.method} ${r.path}`);
     const documented = [...verbsSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => m[1] as string);
     expect(documented).toEqual(real);
-    expect(real).toEqual(['POST /api/facts/resolve', 'POST /api/facts/unresolve', 'GET /api/facts/resolutions']);
+    expect(real).toEqual(['POST /api/facts/resolve', 'POST /api/facts/unresolve', 'GET /api/facts/verbs', 'GET /api/facts/resolutions']);
     for (const phrase of ['`pay` is a signal', 'never pays', 'only the owner of the brain', 'private', 'at most 2,000', 'entriesResolved', 'resolvedByYou', 'posted each week as a new fact']) expect(verbsSection, phrase).toContain(phrase);
     expect(MAX_RESOLUTIONS_PER_USER).toBe(2000);
     expect(readme).toContain('controls/verbs.json');

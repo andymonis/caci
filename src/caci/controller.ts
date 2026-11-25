@@ -288,6 +288,8 @@ export interface CaciController {
   resolveFact(token: unknown, input: unknown): Promise<Result<ResolvedView, CaciError>>;
   /** Takes back the person's own resolution of a fact (`{ scope?, id }`); with none it changes nothing and answers the same way. */
   unresolveFact(token: unknown, input: unknown): Promise<Result<{ readonly fact: FactRef }, CaciError>>;
+  /** The vocabulary of verbs (R-025 D9): name, effect and help line of each, for a signed-in person, so a screen can offer them. No other file's text and no one's data. */
+  verbs(token: unknown): Promise<Result<{ readonly items: readonly { readonly name: string; readonly effect: 'clear' | 'remove'; readonly help: string }[] }, CaciError>>;
   /** One page of the person's own resolutions (`{ limit?, after? }`), in a fixed order. Nobody else's are ever listed. */
   resolutions(token: unknown, input?: unknown): Promise<Result<ResolutionsView, CaciError>>;
   /** Discards the owner's pending proposal. Nothing is written. */
@@ -864,6 +866,13 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       if (!removed.ok) return removed;
       if (!removed.value) return err(caciError('NOT_FOUND', 'no such fact'));
       return ok(Object.freeze({ fact, verb: verb.name, effect: verb.effect, result: 'deleted' as const }));
+    },
+
+    async verbs(token) {
+      const me = await whoIs(token);
+      if (!me.ok) return me;
+      if (init.verbs === undefined || init.resolutions === undefined) return err(caciError('NOT_FOUND', 'verbs are not available'));
+      return ok(Object.freeze({ items: Object.freeze(init.verbs.list.map((v) => Object.freeze({ name: v.name, effect: v.effect, help: v.help }))) }));
     },
 
     async unresolveFact(token, input) {

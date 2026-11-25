@@ -18,7 +18,7 @@ const invalid = (message: string, field: string): CaciError => ({ source: 'caci'
 
 /**
  * The verb routes of R-025: `POST /api/facts/resolve` with `{ scope?, id, verb }`, `POST /api/facts/unresolve` with `{ scope?, id }`
- * and `GET /api/facts/resolutions?limit&after_scope&after_id` (the caller's own, paged). Session cookie only; none of them can name a
+ * `GET /api/facts/resolutions?limit&after_scope&after_id` (the caller's own, paged) and `GET /api/facts/verbs` (the vocabulary a screen offers). Session cookie only; none of them can name a
  * person, a graph or anything but a fact reference, and the scope is `{ kind: 'personal' }` (the default) or `{ kind: 'circle', circleId }`.
  * A stranger, a non-member and a made-up circle get the same 404. A resolution is private: nothing here lists anyone else's.
  */
@@ -57,6 +57,18 @@ export function createFactRoutes(options: FactRoutesOptions): readonly Route[] {
         const done = await caci.unresolveFact(token, { ...(body.scope === undefined ? {} : { scope: body.scope }), ...(body.id === undefined ? {} : { id: body.id }) });
         return done.ok ? { ok: true, value: { unresolved: done.value } } : done;
       }),
+    },
+    {
+      method: 'GET',
+      path: '/api/facts/verbs',
+      handler: async (ctx): Promise<ApiResponse> => {
+        const token = ctx.cookies[cookieName];
+        if (token === undefined) return respond({ source: 'caci', error: { code: 'UNAUTHENTICATED', message: 'not signed in' } });
+        const stray = Object.keys(ctx.query)[0];
+        if (stray !== undefined) return respond(invalid(`${stray} is not accepted here`, stray));
+        const done = await caci.verbs(token);
+        return done.ok ? { status: 200, body: done.value as unknown as JsonValue } : fail(done.error);
+      },
     },
     {
       method: 'GET',

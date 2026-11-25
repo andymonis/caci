@@ -358,7 +358,7 @@ It is a plain web page, not an installable app: there is no manifest, no service
 
 ### What it is made of
 
-Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these fifty-six, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
+Plain HTML, CSS and JavaScript with **no build step and no dependency**: the files in `web/` are exactly the files the browser gets. The service sends only these fifty-seven, from a fixed list in `src/service/web-app.ts`, and nothing else in the folder:
 
 | File | Does |
 |---|---|
@@ -382,6 +382,7 @@ Plain HTML, CSS and JavaScript with **no build step and no dependency**: the fil
 | `router.js` | which screen the address names; anything unknown is the home screen |
 | `brain-page.js` | puts the Brain screen on the page: the categories, the items in one, one item (read-only) |
 | `brain-view.js` | the words on the Brain screen: row text, the empty brain, the shortened mark |
+| `facts-client.js` | the code that talks to the verb routes: apply a verb to a fact, take it back, list your own |
 | `ledger-client.js` | reads the change log of a brain, read-only |
 | `ledger-page.js` | puts the change-log screen on the page |
 | `ledger-view.js` | the words on the change-log screen |
@@ -955,6 +956,7 @@ After a Pulse or a check you can say you have **dealt with a fact** without gues
 |-------|--------------|
 | `POST /api/facts/resolve` | `{ scope?, id, verb }`: apply a verb to one fact. The scope is `{ kind: 'personal' }` (the default) or `{ kind: 'circle', circleId }`. Answers `{ resolved: { fact, verb, effect, result } }` with `result` `hidden` or `deleted`. Needs the session cookie. |
 | `POST /api/facts/unresolve` | `{ scope?, id }`: take back your own resolution (the same answer when there was none). |
+| `GET /api/facts/verbs` | The vocabulary a screen offers: each verb's `name`, `effect` (`clear` or `remove`) and `help` line, from `controls/verbs.json`. |
 | `GET /api/facts/resolutions` | Your own resolutions, paged: `limit` (1 to 100) and `after_scope` with `after_id` to continue from the `next` of the last page. Ids, verbs and times only. |
 
 Unknown fields and query parameters are refused by name (422), an unknown verb lists the known ones, and the 429 `LIMIT_REACHED` is the 2,000 limit.
