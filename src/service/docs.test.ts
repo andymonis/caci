@@ -5,7 +5,8 @@ import { CIRCLE_STATUS_OF, createAccountRoutes, createAgentTokenRoutes, createMc
 import { CIRCLE_DESCRIPTION_MAX, CIRCLE_NAME_MAX, CIRCLE_ROLES, DEFAULT_CIRCLE_LIMITS, DEFAULT_PAGE_SIZE as CIRCLE_PAGE } from '../circles/index.js';
 import { CACI_ERROR_CODES, caciError, DEFAULT_STATUS_CONTEXT_LIMITS, MAX_SEARCH_RESULTS, MAX_STATUS_REQUEST_CHARS, MAX_DATA_CHARS, MAX_NOTE_CHARS, MAX_PAGE, DEFAULT_PAGE } from '../caci/index.js';
 import { DEFAULT_CANDIDATE_OPTIONS, DEFAULT_CONTROLLER_OPTIONS } from '../app/index.js';
-import { createLedgerRoutes } from '../api/index.js';
+import { createFactRoutes, createLedgerRoutes } from '../api/index.js';
+import { MAX_RESOLUTIONS_PER_USER } from '../resolutions/index.js';
 import { GROUP_BYS, recordProblem, USAGE_CAPABILITIES, USAGE_RESULTS } from '../usage/index.js';
 import { DEFAULT_PRICES_FILE, USAGE_USAGE } from './usage-command.js';
 import { AGENT_TOKEN_PREFIX, DEFAULT_CLIENT_RULE, DEFAULT_USERNAME_RULE, MAX_AGENT_TOKEN_LIFETIME_MS, MAX_AGENT_TOKENS_PER_USER, PASSWORD_MAX, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from '../users/index.js';
@@ -140,7 +141,7 @@ describe('the capturing section of the README', () => {
     const produced = new Set(samples.map((e) => mapCaciError(e as never).status));
     const line = capture.match(/Failures are[^\n]*/)?.[0] ?? '';
     const mentioned = [...line.matchAll(/\b([45]\d\d)\b/g)].map((m) => Number(m[1]));
-    expect(mentioned.sort()).toEqual([401, 404, 409, 410, 422, 429, 500, 502, 503]);
+    expect(mentioned.sort()).toEqual([401, 403, 404, 409, 410, 422, 429, 500, 502, 503]);
     expect([...produced].sort()).toEqual(mentioned.sort());
   });
 
@@ -489,6 +490,20 @@ describe('the controls section of the README', () => {
 
   it('the Pi runbook points at it', () => {
     expect(section('Running on a Raspberry Pi')).toContain('Controlling what the model is told');
+  });
+});
+
+const verbsSection = section('Verbs and resolving a fact');
+
+describe('the verbs section of the README (R-025)', () => {
+  it('lists exactly the routes the server has for facts, and says what the verbs do', () => {
+    const real = createFactRoutes({ caci: {} as never }).map((r) => `${r.method} ${r.path}`);
+    const documented = [...verbsSection.matchAll(/^\| `((?:GET|POST|PATCH|PUT|DELETE) \/api\/[^`]+)` \|/gm)].map((m) => m[1] as string);
+    expect(documented).toEqual(real);
+    expect(real).toEqual(['POST /api/facts/resolve', 'POST /api/facts/unresolve', 'GET /api/facts/resolutions']);
+    for (const phrase of ['`pay` is a signal', 'never pays', 'only the owner of the brain', 'private', 'at most 2,000', 'entriesResolved', 'resolvedByYou', 'posted each week as a new fact']) expect(verbsSection, phrase).toContain(phrase);
+    expect(MAX_RESOLUTIONS_PER_USER).toBe(2000);
+    expect(readme).toContain('controls/verbs.json');
   });
 });
 

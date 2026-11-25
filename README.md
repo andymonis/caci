@@ -545,7 +545,7 @@ All need the session cookie. Ids travel in the query string (`?id=`), never in t
 
 A proposal is `{ id, createdAt, expiresAt, mode, text, summary, operations, rationale? }`: `text` is a plain-text preview, `summary` lists new and reused categories, links and any problems, and `operations` are exactly what you would be approving. It never contains the prompt, the model's raw output, a token count or a cost. Unknown fields and unknown query parameters are refused by name. Item data over 4,096 characters is shortened and flagged.
 
-Failures are `{ error: { code, message } }` with these statuses: 401 not signed in, 404 not found (including a proposal that is not yours: the answer is identical to the one for a made-up id), 409 the write was refused (the proposal stays pending), 410 the proposal expired, 422 bad input, 429 over a limit (with `Retry-After`), 502 the model failed, refused or timed out, 503 the provider is rate limiting (with `Retry-After`), 500 anything else. Messages are fixed per kind: no provider text, path or stack.
+Failures are `{ error: { code, message } }` with these statuses: 401 not signed in, 403 not allowed (only the owner of a brain can remove a fact for everyone), 404 not found (including a proposal that is not yours: the answer is identical to the one for a made-up id), 409 the write was refused (the proposal stays pending), 410 the proposal expired, 422 bad input, 429 over a limit (with `Retry-After`), 502 the model failed, refused or timed out, 503 the provider is rate limiting (with `Retry-After`), 500 anything else. Messages are fixed per kind: no provider text, path or stack.
 
 ### Limits and lifetimes
 
@@ -939,6 +939,25 @@ In the **back office** (`/admin`), a circle's screen has a **Join links** sectio
 - **The miss counter is in memory, per client address**: a restart forgets it and a household behind one address shares an allowance.
 - **The release gates still stand** (pseudonymisation, a data processing agreement and the provider's terms, a lawful basis, a risk assessment, a statement of who may use the service): do not use circles with other people's data until they are done.
 - **Not built:** a QR code or share-sheet button, a person withdrawing their own request, links that give more than `observer` or `member`.
+
+## Verbs and resolving a fact
+
+After a Pulse or a check you can say you have **dealt with a fact** without guessing at English: a short, fixed vocabulary of **verbs** (`/clear`, `/pay`, `/remove`, from `controls/verbs.json`) is applied to an **exact fact reference** (`{ scope, id }`, which every point of a status answer already carries), never to free text. The same operation is behind the chat, buttons, the HTTP routes and the agent tools; none of them is special.
+
+- **`clear`** (`/clear`, `/pay`): in a **circle**, it records a private *resolution* for you and nothing else: your Pulse and checks leave the fact out, everyone else still sees it, and the brain and the change log do not change. In **your own brain** it deletes the fact (the change log keeps what it said), because only you read it.
+- **`remove`**: deletes the fact for everyone, and **only the owner of the brain** may (the circle's owner role, or you in your own brain). A manager, a member and an observer get a 403 after the read check; a stranger gets the same 404 as for a made-up circle.
+- **`pay` is a signal**, not a payment: it records that you say you paid, outside CaCi, through whatever payment system you use. CaCi never pays, calls or holds credentials for anything.
+- A resolution is **private**: it is never in the change log, the Brain, search or any answer to another person. It holds only ids, the verb and the time, never the fact's words. You can **undo** it, a second verb replaces the first, and you may hold at most 2,000. Records for facts that no longer exist are removed when the service starts and once a day, and when you or the circle go.
+- Resolved facts are left out only of **status answers** (the Pulse, the other checks and a typed request); the answer's `entriesResolved` says how many were left out for you, apart from `entriesLeftOut`. The Brain, search and the change log still show them, and the source view says `resolvedByYou`. If the resolutions cannot be read the answer is made without the filter and the service warns once.
+- A **recurring** request (a weekly class) is posted each week as a new fact, so the new one appears fresh while last week's stays cleared for you.
+
+| Route | What it does |
+|-------|--------------|
+| `POST /api/facts/resolve` | `{ scope?, id, verb }`: apply a verb to one fact. The scope is `{ kind: 'personal' }` (the default) or `{ kind: 'circle', circleId }`. Answers `{ resolved: { fact, verb, effect, result } }` with `result` `hidden` or `deleted`. Needs the session cookie. |
+| `POST /api/facts/unresolve` | `{ scope?, id }`: take back your own resolution (the same answer when there was none). |
+| `GET /api/facts/resolutions` | Your own resolutions, paged: `limit` (1 to 100) and `after_scope` with `after_id` to continue from the `next` of the last page. Ids, verbs and times only. |
+
+Unknown fields and query parameters are refused by name (422), an unknown verb lists the known ones, and the 429 `LIMIT_REACHED` is the 2,000 limit.
 
 ## Model usage and what it costs
 

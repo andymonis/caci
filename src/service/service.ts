@@ -1,12 +1,13 @@
 import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createAgentTools, createAgentView } from '../agent/index.js';
-import { createAccountRoutes, createAgentTokenRoutes, createApiServer, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createJoinRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
+import { createAccountRoutes, createAgentTokenRoutes, createApiServer, createMcpRoutes, createBrainRoutes, createCaptureRoutes, createCircleRoutes, createInvitationRoutes, createFactRoutes, createJoinRoutes, createLedgerRoutes, createReadRoutes, createSharingRoutes, createStatusRoutes, createWebRoutes } from '../api/index.js';
 import { createController } from '../app/index.js';
 import { createCaciController, createUsageRecorder, MAX_NOTE_CHARS, MAX_STATUS_REQUEST_CHARS } from '../caci/index.js';
 import { createCircleController } from '../circles/index.js';
 import { createSqliteLedgerStore } from '../ledger/sqlite/index.js';
 import { createSqliteUsageStore } from '../usage/sqlite/index.js';
+import { createSqliteResolutionStore } from '../resolutions/sqlite/index.js';
 import { afterAccountDeletion, createScopeResolver, reconcileCircleGraphs, withCircleGraphs, type ReconcileReport, type ScopesResult } from '../scopes/index.js';
 import { createSharing } from '../sharing/index.js';
 import { createSqliteCircleStore } from '../circles/sqlite/index.js';
@@ -137,6 +138,9 @@ export async function startService(config: ServiceConfig, options: ServiceOption
     const usageStore = createSqliteUsageStore({ path: join(dataDir, 'users.db') });
     closers.push(() => usageStore.close());
     const usage = createUsageRecorder({ store: usageStore, clock, onWarning: warn });
+    // each person's private record of the facts they have resolved (R-025), beside the accounts so a trigger clears it with them
+    const resolutionStore = createSqliteResolutionStore({ path: join(dataDir, 'users.db') });
+    closers.push(() => resolutionStore.close());
     const purgeUsage = (): void => void usageStore.purgeBefore(clock() - config.usageDays * DAY).catch(() => warn('could not remove old usage records'));
     purgeUsage();
     const purgingUsage = setInterval(purgeUsage, DAY);
@@ -170,6 +174,9 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       clock,
       onLedgerFailure: warn,
       usage,
+      verbs: verbs.value,
+      resolutions: resolutionStore,
+      onResolutionFailure: warn,
     });
     // the agent surface (R-022): only when the operator switched it on. It is the same CaCi controller over a token-based lookup,
     // limited to the token's scopes and reading only; its checks have their own hourly allowance of the same size.
@@ -193,6 +200,7 @@ export async function startService(config: ServiceConfig, options: ServiceOption
       ...createReadRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createBrainRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createLedgerRoutes({ caci, secureCookies: config.cookieSecure }),
+      ...createFactRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createStatusRoutes({ caci, secureCookies: config.cookieSecure }),
       ...createCircleRoutes({ circles, secureCookies: config.cookieSecure }),
       ...createInvitationRoutes({ circles, secureCookies: config.cookieSecure }),

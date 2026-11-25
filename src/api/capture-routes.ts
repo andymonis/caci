@@ -46,6 +46,10 @@ export function mapCaciError(error: CaciError, topic: 'note' | 'status' = 'note'
           return fixed(429, 'TOO_MANY_PENDING', 'you have too many proposals waiting: approve or reject one first', seconds(e.retryAfterMs));
         case 'INVALID_INPUT':
           return fixed(422, 'INVALID_INPUT', e.message, e.field === undefined ? {} : { field: e.field });
+        case 'FORBIDDEN':
+          return fixed(403, 'FORBIDDEN', e.message); // the controller's own fixed words: only the owner of a brain can remove a fact for everyone
+        case 'LIMIT_REACHED':
+          return fixed(429, 'LIMIT_REACHED', e.message); // the controller's own fixed words: the most resolutions a person may hold
       }
       return fixed(500, 'INTERNAL_ERROR', 'internal error');
     }

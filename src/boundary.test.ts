@@ -194,7 +194,7 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('resolutions/') && target.startsWith('users/') && target !== 'users/index' && !((file.startsWith('resolutions/sqlite/') || resolutionsTest) && target === 'users/sqlite/index') && !(resolutionsTest && target === 'users/sqlite/schema')) {
         problems.push(`${file} imports ${specifier}: the resolutions component may use the users component only through users/index (its SQLite store and its tests may also use users/sqlite/index, which owns the user database's schema)`);
       }
-      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes|ledger|agent|api|usage)\//.test(file) && /^resolutions(?:\/|$)/.test(target)) {
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes|ledger|agent|api|usage)\//.test(file) && /^resolutions(?:\/|$)/.test(target) && !(/^api\/.*\.test(?:-util)?\.ts$/.test(file) && target === 'resolutions/index')) {
         problems.push(`${file} imports ${specifier}: only the CaCi controller and the service may depend on the resolutions component`);
       }
       if (file.startsWith('caci/') && target.startsWith('resolutions/') && target !== 'resolutions/index') {
@@ -406,6 +406,8 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the resolutions component reaching into the users internals', { 'resolutions/x.ts': `import { x } from '../users/controller.js';` }],
     ['production resolutions code using the SQLite user store entry', { 'resolutions/x.ts': `import { prepareUsersDatabase } from '../users/sqlite/index.js';` }],
     ['the API using the resolutions component', { 'api/x.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';` }],
+    ['an API test reaching into the resolutions internals', { 'api/x.test.ts': `import { x } from '../resolutions/store.js';` }],
+    ['an API test using the resolutions SQLite store', { 'api/x.test.ts': `import { createSqliteResolutionStore } from '../resolutions/sqlite/index.js';` }],
     ['the agent component using the resolutions component', { 'agent/x.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';` }],
     ['the usage component using the resolutions component', { 'usage/x.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';` }],
     ['the circles component using the resolutions component', { 'circles/x.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';` }],
@@ -586,7 +588,8 @@ describe('the resolutions component, in the real tree', () => {
     expect(Object.keys(own).length).toBeGreaterThan(5);
     expect(violations(own)).toEqual([]);
     const others = { ...sourcesUnder(join(srcRoot, 'circles')), ...sourcesUnder(join(srcRoot, 'users')), ...sourcesUnder(join(srcRoot, 'sharing')), ...sourcesUnder(join(srcRoot, 'api')), ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'usage')), ...sourcesUnder(join(srcRoot, 'agent')) };
-    const dependents = Object.entries(others).filter(([, source]) => importsOf(source).some((x) => /(?:^|\/)resolutions\//.test(x))).map(([file]) => file);
+    // an API test may build a controller with the memory store, which is why the route tests need nothing more than the index
+    const dependents = Object.entries(others).filter(([file, source]) => !/^api\/.*\.test\.ts$/.test(file) && importsOf(source).some((x) => /(?:^|\/)resolutions\//.test(x))).map(([file]) => file);
     expect(Object.keys(others).length).toBeGreaterThan(50);
     expect(dependents).toEqual([]);
   });
