@@ -6,13 +6,13 @@ import { createChatSession } from './chat-session.js';
 import { chatModeNotice } from './chat-view.js';
 import { createThreadDrawer } from './thread-view.js';
 
-export function mountChatPage(document, notes, onSignedOut, ledger) {
+export function mountChatPage(document, notes, onSignedOut, ledger, facts, ownsCircle = () => false) {
   const $ = (id) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`the page has no element "${id}"`);
     return element;
   };
-  const chat = createChatSession({ notes, ledger, onSignedOut });
+  const chat = createChatSession({ notes, ledger, facts, onSignedOut });
   const notice = $('chat-notice');
   const modeError = $('chat-mode-error');
   const retry = $('chat-retry');
@@ -28,6 +28,7 @@ export function mountChatPage(document, notes, onSignedOut, ledger) {
   const checks = { pulse: $('check-pulse'), 'coming-up': $('check-coming-up'), 'long-range': $('check-long-range') };
   const msgTemplate = $('msg-template');
   const lineTemplate = $('msg-line-template');
+  const verbTemplate = facts === undefined ? undefined : $('verb-button-template');
 
   const setError = (target, message) => {
     target.textContent = message;
@@ -38,14 +39,19 @@ export function mountChatPage(document, notes, onSignedOut, ledger) {
     const result = await chat.showSource(id, index);
     if (result.ok) drawer.focusLast();
   };
-  const drawer = createThreadDrawer({ thread, msgTemplate, lineTemplate, onShowSource: ledger === undefined ? undefined : showSource });
+  const applyVerb = async (name, id, line, factIndex) => {
+    await chat.applyVerb(name, id, line, factIndex); // its failures are in the thread
+  };
+  const drawer = createThreadDrawer({ thread, msgTemplate, lineTemplate, onShowSource: ledger === undefined ? undefined : showSource, verbTemplate, onVerb: facts === undefined ? undefined : applyVerb });
+  // what the verb buttons need: the service's vocabulary, who may remove (your own brain, or a circle you own), and what is done
+  const verbsFor = (state) => ({ items: state.verbs.items, doneCount: state.resolved.length, canRemove: (fact) => fact.scope.kind === 'personal' || ownsCircle(fact.scope.circleId), isResolved: (id, line, factIndex) => chat.isResolved(id, line, factIndex) });
 
   function render(state) {
     notice.textContent = chatModeNotice(state.mode);
     setError(modeError, state.mode.status === 'error' && typeof state.mode.error === 'string' ? state.mode.error : '');
     retry.hidden = state.mode.status !== 'error';
     retry.disabled = state.busy;
-    drawer.draw(state.messages, state.busy);
+    drawer.draw(state.messages, state.busy, verbsFor(state));
     updateSend.disabled = !state.canSend;
     questionAsk.disabled = !state.canAsk;
     for (const button of Object.values(checks)) button.disabled = !state.canAsk;
@@ -99,7 +105,7 @@ export function mountChatPage(document, notes, onSignedOut, ledger) {
     route(name) {
       if (name !== 'home') return;
       const mode = chat.getState().mode;
-      if (mode.status === 'unknown') void chat.loadMode();
+      if (mode.status === 'unknown') void chat.loadMode().then(() => (facts === undefined ? undefined : chat.loadVerbs()));
     },
     reset() {
       chat.reset();

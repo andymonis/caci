@@ -181,10 +181,7 @@ export function createChatSession({ notes, ledger, facts, onSignedOut, timeZone 
     if (verbs.status === 'known') return true;
     if (facts === undefined || typeof facts.verbs !== 'function') return false;
     const r = await facts.verbs();
-    if (!r.ok) {
-      signedOut(r.error);
-      return false;
-    }
+    if (!r.ok) return false; // the vocabulary is only for the buttons: a failure here ends nothing, the next real request finds a sign-out
     verbs = { status: 'known', items: Object.freeze(r.value.items.map((v) => Object.freeze({ ...v }))) };
     return true;
   }

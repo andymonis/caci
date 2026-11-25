@@ -7,7 +7,7 @@ import { createChatSession } from './chat-session.js';
 import { chatModeNotice, CIRCLE_READ_ONLY, CIRCLE_VISIBLE } from './chat-view.js';
 import { createThreadDrawer } from './thread-view.js';
 
-export function mountCircleChat(document, notes, onSignedOut, ledger) {
+export function mountCircleChat(document, notes, onSignedOut, ledger, facts) {
   const $ = (id) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`the page has no element "${id}"`);
@@ -30,10 +30,17 @@ export function mountCircleChat(document, notes, onSignedOut, ledger) {
     const result = await active.showSource(id, index);
     if (result.ok) drawer.focusLast();
   };
-  const drawer = createThreadDrawer({ thread: $('circle-thread'), msgTemplate: $('msg-template'), lineTemplate: $('msg-line-template'), onShowSource: ledger === undefined ? undefined : showSource });
+  const applyVerb = async (name, id, line, factIndex) => {
+    if (active === undefined) return;
+    await active.applyVerb(name, id, line, factIndex); // its failures are in the thread
+  };
+  const drawer = createThreadDrawer({ thread: $('circle-thread'), msgTemplate: $('msg-template'), lineTemplate: $('msg-line-template'), onShowSource: ledger === undefined ? undefined : showSource, verbTemplate: facts === undefined ? undefined : $('verb-button-template'), onVerb: facts === undefined ? undefined : applyVerb });
+  // only the circle's owner may remove a fact for everyone (the service decides in the end)
+  const verbsFor = (state) => ({ items: state.verbs.items, doneCount: state.resolved.length, canRemove: () => activeRole === 'owner', isResolved: (id, line, factIndex) => active?.isResolved(id, line, factIndex) === true });
 
-  const sessions = new Map(); // circle id -> { session, name, canCapture }
+  const sessions = new Map(); // circle id -> { session, name, canCapture, role }
   let active;
+  let activeRole;
   let unsubscribe;
 
   const setError = (message) => {
@@ -44,9 +51,9 @@ export function mountCircleChat(document, notes, onSignedOut, ledger) {
   function sessionFor(circle) {
     const have = sessions.get(circle.circleId);
     // a renamed circle, or a changed right, starts a fresh thread: the words and the buttons must follow the service
-    if (have && have.name === circle.circleName && have.canCapture === circle.canCapture) return have.session;
-    const session = createChatSession({ notes, ledger, onSignedOut, circle: { circleId: circle.circleId, circleName: circle.circleName, canCapture: circle.canCapture } });
-    sessions.set(circle.circleId, { session, name: circle.circleName, canCapture: circle.canCapture });
+    if (have && have.name === circle.circleName && have.canCapture === circle.canCapture && have.role === circle.role) return have.session;
+    const session = createChatSession({ notes, ledger, facts, onSignedOut, circle: { circleId: circle.circleId, circleName: circle.circleName, canCapture: circle.canCapture } });
+    sessions.set(circle.circleId, { session, name: circle.circleName, canCapture: circle.canCapture, role: circle.role });
     return session;
   }
 
@@ -59,7 +66,7 @@ export function mountCircleChat(document, notes, onSignedOut, ledger) {
     modeError.textContent = state.mode.status === 'error' && typeof state.mode.error === 'string' ? state.mode.error : '';
     modeError.hidden = modeError.textContent === '';
     retry.hidden = state.mode.status !== 'error';
-    drawer.draw(state.messages, state.busy);
+    drawer.draw(state.messages, state.busy, verbsFor(state));
     text.disabled = !canAdd;
     send.disabled = !state.canSend;
     pulse.disabled = !state.canAsk;
@@ -101,18 +108,21 @@ export function mountCircleChat(document, notes, onSignedOut, ledger) {
       const session = sessionFor(circle);
       unsubscribe?.();
       active = session;
+      activeRole = circle.role;
       drawer.clear();
       setError('');
       text.value = '';
       unsubscribe = session.subscribe(render);
       render(session.getState());
-      if (session.getState().mode.status === 'unknown') void session.loadMode();
+      if (session.getState().mode.status === 'unknown') void session.loadMode().then(() => (facts === undefined ? undefined : session.loadVerbs()));
+      else if (facts !== undefined && session.getState().verbs.status === 'unknown') void session.loadVerbs();
     },
     /** Another screen: stop listening (the threads stay while signed in). */
     hide() {
       unsubscribe?.();
       unsubscribe = undefined;
       active = undefined;
+      activeRole = undefined;
     },
     /** Sign-out: every thread and the model are forgotten; answers still on their way are dropped. */
     reset() {

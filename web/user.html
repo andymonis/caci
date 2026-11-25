@@ -128,7 +128,8 @@
         <template id="msg-template"><li class="msg"><p data-slot="text"></p><ul data-slot="lines" class="lines"></ul></li></template>
         <template id="agent-brain-template"><label class="check"><input type="checkbox" data-slot="box"> <span data-slot="label"></span></label></template>
         <template id="agent-row-template"><li class="key"><p><strong data-slot="name"></strong></p><p data-slot="details" class="hint"></p><button type="button" data-slot="revoke" class="secondary">Stop this key</button></li></template>
-        <template id="msg-line-template"><li><span data-slot="text"></span> <button type="button" data-slot="source" class="link" hidden>Show the source</button></li></template>
+        <template id="msg-line-template"><li><span data-slot="number" class="num" hidden></span> <span data-slot="text"></span> <button type="button" data-slot="source" class="link" hidden>Show the source</button> <span data-slot="verbs" class="verbs" hidden></span></li></template>
+        <template id="verb-button-template"><button type="button" data-slot="verb" class="link"></button></template>
       </section>
 
       <section id="view-circle" hidden>

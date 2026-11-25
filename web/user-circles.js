@@ -6,7 +6,7 @@
 
 import { mountCircleChat } from './circle-chat-page.js';
 
-export function mountUserCircles(document, notes, { go, recheck }, ledger) {
+export function mountUserCircles(document, notes, { go, recheck }, ledger, facts) {
   const $ = (id) => {
     const element = document.getElementById(id);
     if (!element) throw new Error(`the page has no element "${id}"`);
@@ -17,7 +17,7 @@ export function mountUserCircles(document, notes, { go, recheck }, ledger) {
   const notice = $('circle-notice');
   const view = $('view-circle');
   const heading = $('circle-heading');
-  const chat = mountCircleChat(document, notes, recheck, ledger);
+  const chat = mountCircleChat(document, notes, recheck, ledger, facts);
 
   let epoch = 0; // each screen change takes a number; only the latest one is allowed to draw
   let circles = []; // [{ circleId, circleName, role, canCapture }] as the service last said

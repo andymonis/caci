@@ -3,7 +3,7 @@
 
 import { messageClass } from './chat-view.js';
 
-export function createThreadDrawer({ thread, msgTemplate, lineTemplate, onShowSource }) {
+export function createThreadDrawer({ thread, msgTemplate, lineTemplate, onShowSource, verbTemplate, onVerb }) {
   const clone = (template) => template.content.firstElementChild.cloneNode(true);
   const slot = (row, name) => {
     const found = row.querySelector(`[data-slot="${name}"]`);
@@ -13,10 +13,16 @@ export function createThreadDrawer({ thread, msgTemplate, lineTemplate, onShowSo
   let drawn = '';
   let drawnRows = [];
   return {
-    /** Draws the messages; the same last message, count and busy state draws nothing again. `busy` disables the Show the source buttons. */
-    draw(messages, busy = false) {
+    /**
+     * Draws the messages; the same last message, count and busy state draws nothing again. `busy` disables the Show the source buttons and
+     * the verb buttons. `verbs` (R-025) is what to offer on a point of an answer: `{ items, canRemove(fact), isResolved(messageId, line, fact) }`,
+     * where `items` are the service's `{ name, effect, help }` and a resolved fact shows as done instead of buttons.
+     */
+    draw(messages, busy = false, verbs = undefined) {
       const last = messages.at(-1);
-      const key = `${messages.length}:${last ? last.id : 0}:${busy ? 'b' : ''}`;
+      const offered = verbs?.items ?? [];
+      const doneCount = verbs?.doneCount ?? 0;
+      const key = `${messages.length}:${last ? last.id : 0}:${busy ? 'b' : ''}:${offered.length}:${doneCount}`;
       if (key === drawn) return;
       drawn = key;
       const rows = messages.map((message) => {
@@ -25,10 +31,40 @@ export function createThreadDrawer({ thread, msgTemplate, lineTemplate, onShowSo
         if (message.kind === 'source') row.setAttribute('tabindex', '-1');
         slot(row, 'text').textContent = message.text;
         const lines = slot(row, 'lines');
+        // an answer's points are numbered when any of them has a fact behind it, so `/pay 2` and the buttons name the same point
+        const numbered = message.kind === 'answer' && (message.lineFacts ?? []).some((facts) => facts.length > 0);
         lines.replaceChildren(
           ...message.lines.map((line, index) => {
             const item = clone(lineTemplate);
             slot(item, 'text').textContent = line;
+            const number = item.querySelector('[data-slot="number"]');
+            if (number) {
+              number.hidden = !numbered;
+              number.textContent = numbered ? `${index + 1}.` : '';
+            }
+            const verbSlot = item.querySelector('[data-slot="verbs"]');
+            const facts = message.kind === 'answer' ? (message.lineFacts?.[index] ?? []) : [];
+            if (verbSlot && verbTemplate && typeof onVerb === 'function' && offered.length > 0 && facts.length > 0) {
+              const buttons = [];
+              let allDone = true;
+              facts.forEach((fact, factIndex) => {
+                if (verbs.isResolved?.(message.id, index, factIndex)) return;
+                allDone = false;
+                const label = facts.length > 1 ? `${index + 1}.${factIndex + 1}` : String(index + 1);
+                for (const verb of offered) {
+                  if (verb.effect === 'remove' && verbs.canRemove?.(fact) !== true) continue; // only an owner may remove a fact for everyone
+                  const button = clone(verbTemplate);
+                  button.textContent = facts.length > 1 ? `${verb.name} ${label}` : verb.name;
+                  button.disabled = busy;
+                  button.setAttribute('aria-label', `${verb.help.replace(/\.$/, '')}: point ${label}`);
+                  button.addEventListener('click', () => onVerb(verb.name, message.id, index, factIndex));
+                  buttons.push(button);
+                }
+              });
+              if (allDone) verbSlot.textContent = 'Done';
+              else verbSlot.replaceChildren(...buttons);
+              verbSlot.hidden = !allDone && buttons.length === 0;
+            }
             const button = item.querySelector('[data-slot="source"]');
             if (button) {
               const traceable = typeof onShowSource === 'function' && message.kind === 'answer' && (message.lineFacts?.[index]?.length ?? 0) > 0;

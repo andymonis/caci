@@ -4,6 +4,7 @@
 import { createAgentTokensClient } from './agent-tokens-client.js';
 import { mountAgentAccess } from './agent-access-page.js';
 import { mountChatPage } from './chat-page.js';
+import { createFactsClient } from './facts-client.js';
 import { createJoinClient } from './join-client.js';
 import { createLedgerClient } from './ledger-client.js';
 import { createNotesClient } from './notes-client.js';
@@ -13,8 +14,10 @@ import { mountUserJoin } from './user-join.js';
 export function userHooks(document, fetchFn, { recheck, go, replace }) {
   const notes = createNotesClient({ fetchFn });
   const ledger = createLedgerClient({ fetchFn });
-  const chat = mountChatPage(document, notes, recheck, ledger);
-  const circles = mountUserCircles(document, notes, { go, recheck }, ledger);
+  const facts = createFactsClient({ fetchFn });
+  let circles; // made below: the Home chat asks it which circles you own, so it can offer 'remove' only where you may
+  const chat = mountChatPage(document, notes, recheck, ledger, facts, (circleId) => (circles?.list() ?? []).some((c) => c.circleId === circleId && c.role === 'owner'));
+  circles = mountUserCircles(document, notes, { go, recheck }, ledger, facts);
   const join = mountUserJoin(document, createJoinClient({ fetchFn }), { go, recheck, replace: replace ?? go });
   const agentAccess = mountAgentAccess(document, { client: createAgentTokensClient({ fetchFn }), circles: () => circles.list(), onSignedOut: recheck });
   return Object.freeze({
