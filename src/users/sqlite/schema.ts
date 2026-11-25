@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 10;
+export const USERS_SCHEMA_VERSION = 11;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -345,7 +345,39 @@ const V10: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8, V9, V10]);
+/**
+ * Version 11: fact resolutions (R-025). One row per person per fact: "I have dealt with this". There is no column that could hold
+ * text from the fact (VR-NFR-01): only ids, the verb and the time. A person's rows go when their user row goes and a circle's rows
+ * go when the circle goes, whoever deletes it, by trigger. The table has no foreign key (the fact lives in another database), so the
+ * store works without a user row or a circle row. The cap of 2,000 per person is enforced by the store, in its write transaction.
+ */
+const V11: Migration = Object.freeze({
+  to: 11,
+  creates: Object.freeze(['fact_resolutions']),
+  sql: Object.freeze([
+    `CREATE TABLE fact_resolutions (
+       user_id TEXT NOT NULL CHECK (length(user_id) = 17 AND substr(user_id, 1, 1) = 'u'),
+       scope_kind TEXT NOT NULL CHECK (scope_kind IN ('personal', 'circle')),
+       scope_id TEXT NOT NULL,
+       fact_id TEXT NOT NULL CHECK (length(fact_id) BETWEEN 1 AND 256),
+       verb TEXT NOT NULL CHECK (length(verb) BETWEEN 1 AND 20 AND verb NOT GLOB '*[^a-z0-9-]*'),
+       at INTEGER NOT NULL CHECK (at >= 0),
+       PRIMARY KEY (user_id, scope_kind, scope_id, fact_id),
+       CHECK ((scope_kind = 'personal' AND scope_id = '') OR (scope_kind = 'circle' AND length(scope_id) = 17 AND substr(scope_id, 1, 1) = 'c'))
+     ) WITHOUT ROWID`,
+    'CREATE INDEX fact_resolutions_by_fact ON fact_resolutions (scope_kind, scope_id, fact_id)',
+    `CREATE TRIGGER fact_resolutions_clear_user AFTER DELETE ON users
+     BEGIN
+       DELETE FROM fact_resolutions WHERE user_id = old.id;
+     END`,
+    `CREATE TRIGGER fact_resolutions_clear_circle AFTER DELETE ON circles
+     BEGIN
+       DELETE FROM fact_resolutions WHERE scope_kind = 'circle' AND scope_id = old.id;
+     END`,
+  ]),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });
