@@ -764,14 +764,17 @@ describe('the agent access section of the README', () => {
   });
 
   it('lists exactly the tools an agent is offered, pulse among them only for a key with the checks flag', async () => {
-    const view = { access: async () => ({ checks: true }), read: {} } as never;
+    const view = { access: async () => ({ checks: true, resolve: true }), read: {} } as never;
     const offered = ((await createAgentTools(view).list('x')) ?? []).map((t) => t.name);
     const documented = [...agentSection.matchAll(/^\| `([a-z_]+)` \|/gm)].map((m) => m[1] as string);
     expect(documented.sort()).toEqual([...offered].sort());
-    expect(offered).toHaveLength(6);
+    expect(offered).toHaveLength(9);
     expect(agentSection).toMatch(/\| `pulse` \| Only for a key made with the checks flag/);
-    const without = (await createAgentTools({ access: async () => ({ checks: false }), read: {} } as never).list('x')) ?? [];
+    expect(agentSection).toMatch(/\| `resolve_fact` \| Only for a key made with the \*\*resolve\*\* flag/);
+    const without = (await createAgentTools({ access: async () => ({ checks: false, resolve: false }), read: {} } as never).list('x')) ?? [];
     expect(without.map((t) => t.name)).not.toContain('pulse');
+    expect(without.map((t) => t.name)).not.toContain('resolve_fact');
+    expect(without).toHaveLength(5);
   });
 
   it('prints the numbers the code uses and the one setting, off by default', () => {

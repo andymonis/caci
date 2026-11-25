@@ -89,43 +89,50 @@ CaCi stays the brain. A verb never makes a payment or calls any outside system: 
 | `pay` | clear | I have paid this outside CaCi. | Mark this as paid. |
 | `remove` | remove | Delete the fact (owner only). | Remove this fact for everyone. |
 
-## Threats and what answers them
+## Threats and controls
 
-| Threat | Answer |
-|--------|--------|
-| A member resolves a fact in a circle they cannot read, or in a made-up circle, to probe it | Reading is the right to resolve; every unreadable case is the one not-found answer, identical for real and made-up ids. |
-| A member removes a shared fact for others | `clear` hides for the caller only; `remove` is owner only; tested for every role. |
-| A resolution hides something important from the person by accident | Reversible (`unresolve`), the Brain still shows the fact, and the source view marks it as resolved. |
-| A mistyped `/verb` is filed as a note | Slash input is never a note (D17); unknown verbs are answered in the thread. |
-| An agent token resolves facts it should not | The `resolve` flag, scope lists, and no write to a circle brain; tested like the read tools. |
-| A typed number points at the wrong fact after the answer changed | The server never parses numbers; the page maps the number to a reference held for that answer only, and a gone fact is reported. |
-| The table grows without bound | Cap per person, daily clean, triggers on account and circle deletion. |
-| One person's resolution visible to another | Private by construction: no route, log or answer includes another person's resolutions. |
+| Threat | Control | Covered by |
+|--------|---------|------------|
+| A member resolves a fact in a circle they cannot read, or in a made-up circle, to probe it | Reading is the right to resolve; every unreadable case is the one not-found answer, identical for real and made-up ids, over HTTP too. | `src/api/fact-routes.test.ts` — "a stranger, a non-member and a made-up circle get byte-identical 404s (VR-AC-04)"; `src/caci/controller-resolve.test.ts` — "a stranger, a non-member and a made-up circle get byte-identical answers (VR-AC-04)" |
+| A member removes a shared fact for others | `clear` hides for the caller only; `remove` is owner only, checked after the read right, for every role. | `src/caci/controller-resolve-delete.test.ts` — "a manager, a member and an observer are forbidden, and nothing changes"; `src/api/fact-routes.test.ts` — "an observer may resolve for themselves; a member may not remove; the owner may" |
+| A resolution hides something important from the person by accident | Reversible (`unresolve`), the Brain and search still show the fact, and the source view marks it as resolved by you. | `src/caci/controller-resolve-status.test.ts` — "the resolver sees resolvedByYou; anyone else sees nothing of it; the Brain and search are unchanged"; `src/caci/controller-resolve-status.test.ts` — "taking the resolution back brings the fact into the checks again (VR-AC-05)" |
+| A mistyped `/verb` is filed as a note | Slash input is never a note (D17); an unknown verb or number is answered in the thread and nothing is filed or asked. | `web/chat-verbs.test.mjs` — "on Home, through Send and through Ask: nothing is proposed, approved or asked"; `web/chat-verbs-page.test.mjs` — "a mistyped verb is answered in the thread and nothing is filed or asked again" |
+| An agent token resolves facts it should not | The `resolve` flag (off for every existing key), the token's scope list, no `remove`, and a delete only in a graph named for a person. | `src/agent/tools-resolve.test.ts` — "a token without the flag is told the tool does not exist, for every verb tool, and nothing is written"; `src/agent/tools-resolve.test.ts` — "the verb remove is refused for an agent, in every brain, and nothing is deleted"; `src/agent/tools-resolve.test.ts` — "reaches only a graph named for a person" |
+| A typed number points at the wrong fact after the answer changed | The server never parses numbers; the page maps the number to a reference held for that answer only, and a gone fact is reported. | `web/chat-verbs.test.mjs` — "a point citing several facts asks which, and N.M picks one"; `web/chat-verbs.test.mjs` — "a fact that has gone says to ask again, and marks nothing as done" |
+| The table grows without bound | Cap per person, a bounded daily clean that carries on where it stopped, triggers on account and circle deletion. | `src/resolutions/testing/cases.ts` — "a person may hold 2,000 records; one more is LIMIT_REACHED, but replacing one is still fine"; `src/resolutions/conformance.test.ts` — "is caught by at least one case"; `src/caci/resolution-clean.test.ts` — "is bounded, and the next run carries on where the last stopped, so every fact is reached" |
+| One person's resolution visible to another | Private by construction: every read takes the user id; no route, log or answer includes another person's records. | `src/resolutions/testing/cases.ts` — "a person never reads another person"; `src/caci/controller-resolve.test.ts` — "a resolution record holds no text from the fact" |
+| A failing store breaks a status answer | The context is built without the filter, with one fixed warning per stretch, and the answer is unchanged otherwise. | `src/caci/controller-resolve-status.test.ts` — "builds the context without the filter and warns once for the stretch" |
+| A bad verbs file changes behaviour silently | Strict validation at start-up and in the doctor; a bad file stops the start naming it. | `src/caci/verbs.test.ts` — "refuses a bad name, effect or help and reports every problem at once"; `src/service/controls.test.ts` — "a missing or bad verbs file stops the start, names the file and leaves no data folder behind" |
 
-## Acceptance checks
+### Where each criterion is checked
 
-| ID | Check |
+| ID | Tests |
 |----|-------|
-| VR-AC-01 | A member clears a circle fact: their next Pulse omits it, another member's Pulse still shows it, and the graph and the change log are identical before and after. |
-| VR-AC-02 | A member and an observer cannot remove a circle fact; the owner can, and the change log records the removal. |
-| VR-AC-03 | `/clear` in the person's own brain deletes the fact and its emptied category and the change log shows it. |
-| VR-AC-04 | A stranger, a non-member and a made-up circle or id get byte-identical answers on resolve, unresolve and the resolutions list. |
-| VR-AC-05 | `unresolve` makes the fact appear in the person's checks again. |
-| VR-AC-06 | The status context leaves out resolved entries only for the resolver, and a recording adapter shows no write primitive on the status path. |
-| VR-AC-07 | The chat treats `/` input as a command, files nothing for an unknown verb, maps `/pay 2` to the second point's fact, and asks which when a point cites several. |
-| VR-AC-08 | An agent with the `resolve` flag can list resolutions and resolve a fact in a listed scope; one without the flag, or outside the scope, cannot. |
-| VR-AC-09 | A bad `controls/verbs.json` stops the service naming the file; the shipped file passes the doctor. |
-| VR-AC-10 | Deleting an account or a circle removes the related resolutions; a fact replaced or deleted has its resolutions cleaned. |
-| VR-AC-11 | A person at 2,000 resolutions gets `LIMIT_REACHED`; a store failure never fails a status answer. |
-| VR-AC-12 | An end-to-end journey on the real service: owner posts the weekly yoga fact, a member pays it with `/pay 1`, their Pulse no longer shows it, another member's still does, the owner posts next week's fact and it appears fresh. |
+| VR-AC-01 | `src/caci/controller-resolve-delete.test.ts` — "leaves the fact and the change log alone (VR-AC-01)"; `src/service/facts-end-to-end.test.ts` — "the weekly yoga story" |
+| VR-AC-02 | `src/caci/controller-resolve-delete.test.ts` — "a manager, a member and an observer are forbidden, and nothing changes"; `src/caci/controller-resolve-delete.test.ts` — "the owner deletes the fact for everyone; the change log records it and others" |
+| VR-AC-03 | `src/caci/controller-resolve-delete.test.ts` — "deletes the fact and the category it leaves empty, and the change log shows both" |
+| VR-AC-04 | `src/api/fact-routes.test.ts` — "a stranger, a non-member and a made-up circle get byte-identical 404s (VR-AC-04)"; `web/facts-service.test.mjs` — "resolves for you only, lists your own, takes it back, and a stranger and a made-up circle read the same" |
+| VR-AC-05 | `src/caci/controller-resolve-status.test.ts` — "taking the resolution back brings the fact into the checks again (VR-AC-05)" |
+| VR-AC-06 | `src/caci/controller-resolve-status.test.ts` — "the status path still writes nothing, resolutions included"; `src/caci/controller-resolve-status.test.ts` — "works for the other checks and a typed request too, and for the combined view" |
+| VR-AC-07 | `web/chat-verbs.test.mjs` — "/pay 1 applies the verb to the fact of point 1 of the last answer, by its exact reference"; `web/chat-verbs.test.mjs` — "a point citing several facts asks which, and N.M picks one"; `web/chat-verbs.test.mjs` — "an unknown verb lists the known ones; a malformed command says how to write one" |
+| VR-AC-08 | `src/agent/tools-resolve.test.ts` — "hides a circle fact for the person only and changes nothing in the circle (VR-AC-08)"; `src/service/agent-end-to-end.test.ts` — "a key made with the resolve flag lists, resolves and takes back; one without it is told the tools do not exist" |
+| VR-AC-09 | `src/caci/verbs.test.ts` — "the shipped three verbs match the default vocabulary"; `src/service/controls.test.ts` — "the shipped file lets the service start" |
+| VR-AC-10 | `src/caci/resolution-clean.test.ts` — "removes nothing on a doubt: a graph that cannot be read ends the run with a failure and everything stays"; `src/resolutions/sqlite/sqlite-store.test.ts` — "a circle deleted through the circle store takes its records too" |
+| VR-AC-11 | `src/caci/controller-resolve.test.ts` — "LIMIT_REACHED at 2,000 and a store failure is a storage error, with nothing written"; `src/caci/controller-resolve-status.test.ts` — "a throwing warning hook changes nothing" |
+| VR-AC-12 | `src/service/facts-end-to-end.test.ts` — "the weekly yoga story"; `web/verbs-journey.test.mjs` — "a member pays this week from the Pulse, it leaves their view only, the owner removes it for everyone, next week appears fresh" |
 
-## Residual risks (to be completed with the review)
+### Residual risks (not covered, with the reason)
 
-1. Recurring requests depend on someone posting each week's fact (D8); forgetting means no reminder, by design.
-2. A resolution cannot tell the owner who has paid; the payment system is the record.
-3. A resolution hides the fact from checks, so a wrongly resolved fact can be missed until undone.
-4. The `pay` signal is only as good as the agent or person acting on it; CaCi does not verify any payment.
-5. Resolved facts remain in the brain and in browse until the owner removes them.
+1. **Recurring requests depend on someone posting each week's fact** (D8): forgetting means no reminder, by design.
+2. **A resolution cannot tell the owner who has paid**: the payment system is the record.
+3. **A resolution hides the fact from checks**, so a wrongly resolved fact can be missed until undone; there is no chat command for undo yet (HTTP and the agent tool have one).
+4. **The `pay` signal is only as good as the agent or person acting on it**; CaCi does not verify any payment.
+5. **Resolved facts remain in the brain and in browse** until the owner removes them.
+6. **A point that cites several facts shows no fact text**: the person must choose by number (`2.1`, `2.2`) without seeing which is which, because the page holds only references.
+7. **An agent with the resolve flag and the personal scope can delete facts in the person's own brain** (`clear` in your own brain deletes, D6); the form says so in plain words, and the flag is off by default.
+8. **A resolution in a circle the person has since left stays until the daily clean or the circle goes**; it is private to them and holds no words.
+9. **The vocabulary route is an addition to the three routes of VR-FR-09** (`GET /api/facts/verbs`), so a screen can draw buttons for a customised `controls/verbs.json`.
+10. **The Chrome hand check was not done by the agent**: it is an owner-run check (see STATE.md).
 
 ## Build order (outline; tasks to be written with `/plan` once this is confirmed)
 

@@ -866,6 +866,9 @@ Every tool takes a `scope`: `personal` or `circle:<id>` (`list_brains` shows wha
 | `browse` | The categories of a brain with their counts, or the facts in one category, a page at a time |
 | `changes` | What changed in a brain after a time (an ISO 8601 date or date and time), newest first: facts added, replaced or removed, and the words typed; a pull, nothing is pushed |
 | `pulse` | Only for a key made with the checks flag: CaCi's own short, focused check (`pulse` this week, `coming-up` this month, `long-range` this year), silent when nothing needs attention |
+| `resolve_fact` | Only for a key made with the **resolve** flag: apply the verb `clear` or `pay` to one fact for you, by its exact id. In a circle it hides the fact from your own checks only; in your own notes `clear` deletes it. An agent can never use `remove`, and never changes a circle's notes. |
+| `unresolve_fact` | Only with the resolve flag: take back your own resolution of a fact (harmless when there was none). |
+| `resolutions` | Only with the resolve flag: the facts you have dealt with, as ids, verbs and times (a `pay` is your own statement that you paid), within the key's brains. |
 
 Results are capped (`limit` is at most 50 or 100, and a result over 100,000 characters is refused with advice to ask for less). The keys of internal records (a person's id, a graph id) are never in a result; who entered a fact is a username and display name.
 
@@ -960,6 +963,10 @@ After a Pulse or a check you can say you have **dealt with a fact** without gues
 | `GET /api/facts/resolutions` | Your own resolutions, paged: `limit` (1 to 100) and `after_scope` with `after_id` to continue from the `next` of the last page. Ids, verbs and times only. |
 
 Unknown fields and query parameters are refused by name (422), an unknown verb lists the known ones, and the 429 `LIMIT_REACHED` is the 2,000 limit.
+
+### Verbs for agents, and what is not built (R-025)
+
+An access key made with **"Also let it mark facts as dealt with for you"** (the `resolve` flag, off by default and off for every key made before it existed) is offered the three verb tools above. They write only your own private resolution record, or delete a fact in your own notes for `clear`; they never edit a circle's notes, `remove` is refused for an agent, and they are limited to the brains the key lists exactly as the read tools are. CaCi never acts on a `pay` signal itself: an agent or tool that does is yours. **Not built:** repeat rules or occurrence dates (a recurring request is posted each week as a new fact), notifications, a payment or any outbound call, per-person verbs, resolving several facts at once, an undo command in the chat (use the HTTP route or the agent tool), verbs on the Brain screen, and a count of who has paid for the owner.
 
 ## Model usage and what it costs
 
