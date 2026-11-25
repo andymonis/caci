@@ -2,7 +2,7 @@
 
 Nov 23, 2026 · @Andy
 
-**Status: draft for the owner's review, not yet planned as tasks.** D1 to D8 are the owner's (2026-11-23, from a discussion of Pulse results that are hard to confirm as done). The rest are proposed and stand unless changed.
+**Status: confirmed 2026-11-25 (the owner asked for the build to start with D1 to D18 as written; planned as milestone R1, T-336 to T-351).** D1 to D8 are the owner's (2026-11-23, from a discussion of Pulse results that are hard to confirm as done). D9 to D18 were proposed and stand.
 
 ## Overview
 

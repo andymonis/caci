@@ -67,7 +67,7 @@ _Each requirement gets an id and a testable acceptance criterion._
 | R-022 | [Agent Access: the Brain as a Source an Agent Can Use — Specification](specs/R-022-agent-access.md) |
 | R-023 | [Joining a Circle by Link — Specification](specs/R-023-join-links.md) |
 | R-024 | [Usage Metering — Specification](specs/R-024-usage-metering.md) |
-| R-025 | [Verbs and Fact Resolution — Specification](specs/R-025-verbs-and-resolution.md) (draft, awaiting review) |
+| R-025 | [Verbs and Fact Resolution — Specification](specs/R-025-verbs-and-resolution.md) (confirmed 2026-11-25; milestone R1, T-336 to T-351) |
 
 ## 6. Constraints & decisions
 - **Stack:** TypeScript (strict, ESM), Node 22+, npm. Platform constraints are NFR-01 to NFR-03 in the R-001 spec.
