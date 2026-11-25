@@ -2,7 +2,7 @@ import type { Db } from '../../sqlite/db.js';
 import { prepareSchema, type Migration, type PrepareResult } from '../../sqlite/prepare.js';
 
 /** The schema version this component writes, recorded with `PRAGMA user_version`. */
-export const USERS_SCHEMA_VERSION = 11;
+export const USERS_SCHEMA_VERSION = 12;
 
 /** "CaUs": says "this is a CaCi user database" in the file header, so it is never mistaken for the graph database (or any other). */
 export const USERS_APPLICATION_ID = 0x43615573;
@@ -377,7 +377,16 @@ const V11: Migration = Object.freeze({
   ]),
 });
 
-export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11]);
+/**
+ * Version 12: the agent token's resolve flag (R-025 D13). A token made before this has the flag off, so nothing an agent may do
+ * changes for an existing key: it can still only read. The flag allows the three verb tools and nothing that edits a circle brain.
+ */
+const V12: Migration = Object.freeze({
+  to: 12,
+  sql: Object.freeze(['ALTER TABLE agent_tokens ADD COLUMN resolve INTEGER NOT NULL DEFAULT 0 CHECK (resolve IN (0, 1))']),
+});
+
+export const USERS_MIGRATIONS: readonly Migration[] = Object.freeze([V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12]);
 
 export function prepareUsersDatabase(db: Db): PrepareResult {
   return prepareSchema(db, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS, foreignCode: 'NOT_A_USERS_DATABASE' });

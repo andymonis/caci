@@ -18,9 +18,27 @@ describe('createAgentToken', () => {
     const { user, token } = await signedIn(w, 'ann');
     const made = await must<{ token: string; agentToken: Record<string, unknown> }>(make(w, token, { scopes: ['personal', CIRCLE], checks: true }));
     expect(made.token).toMatch(/^cpat_[A-Za-z0-9_-]{43}$/);
-    expect(made.agentToken).toEqual({ id: expect.stringMatching(/^t[a-z0-9]{16}$/), name: 'My agent', scopes: ['personal', CIRCLE], checks: true, createdAt: T0, expiresAt: T0 + 90 * DAY, lastUsedAt: null });
+    expect(made.agentToken).toEqual({ id: expect.stringMatching(/^t[a-z0-9]{16}$/), name: 'My agent', scopes: ['personal', CIRCLE], checks: true, resolve: false, createdAt: T0, expiresAt: T0 + 90 * DAY, lastUsedAt: null });
     expect(JSON.stringify(made.agentToken)).not.toContain(user.id); // the person's own id is not in the view
     expect(await w.agentTokens.resolve(made.token, T0 + 1)).toMatchObject({ userId: user.id, scopes: ['personal', CIRCLE], checks: true });
+  });
+
+  it('has the resolve flag off unless it is asked for, and refuses anything but true or false (R-025 D13)', async () => {
+    const w = world();
+    const { user, token } = await signedIn(w, 'ann');
+    const plain = await must<{ token: string; agentToken: Record<string, unknown> }>(make(w, token, { scopes: ['personal'] }));
+    expect(plain.agentToken.resolve).toBe(false);
+    expect(await w.agentTokens.resolve(plain.token, T0 + 1)).toMatchObject({ resolve: false });
+    const asked = await must<{ token: string; agentToken: Record<string, unknown> }>(make(w, token, { scopes: ['personal'], resolve: true }));
+    expect(asked.agentToken.resolve).toBe(true);
+    expect(await w.agentTokens.resolve(asked.token, T0 + 1)).toMatchObject({ userId: user.id, resolve: true });
+    for (const bad of ['yes', 1, null, [], {}]) {
+      const r = await make(w, token, { scopes: ['personal'], resolve: bad });
+      expect(r.ok, String(bad)).toBe(false);
+      if (!r.ok) expect(r.error.field).toBe('resolve');
+    }
+    const listed = await w.controller.listAgentTokens(token);
+    expect(listed.ok && listed.value.items.map((k) => k.resolve).sort()).toEqual([false, true]);
   });
 
   it('has the checks flag off unless it is asked for', async () => {

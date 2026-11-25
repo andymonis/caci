@@ -251,6 +251,9 @@
               <label for="agent-checks"><input id="agent-checks" name="checks" type="checkbox" autocomplete="off"> Also let it ask CaCi for short attention checks (uses CaCi's model and your hourly allowance)</label>
             </div>
             <div class="field">
+              <label for="agent-resolve"><input id="agent-resolve" name="resolve" type="checkbox" autocomplete="off"> Also let it mark facts as dealt with for you (it can hide a fact from your own checks and, in your own notes only, delete it; it can never change a circle's notes for anyone else)</label>
+            </div>
+            <div class="field">
               <label for="agent-days">How long should it last?</label>
               <select id="agent-days" name="days" aria-describedby="agent-days-error">
                 <option value="30">30 days</option>

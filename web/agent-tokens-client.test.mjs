@@ -22,10 +22,24 @@ describe('list', () => {
     const { client, calls } = fake({ status: 200, body: { items: [view(), view({ id: 't0000000000000002', name: 'Second', scopes: ['personal'], checks: true, lastUsedAt: 1_700_000_100_000, extra: 'ignored' })] } });
     const r = await client.list();
     expect(r.ok && r.value.items).toHaveLength(2);
-    expect(r.ok && r.value.items[1]).toEqual({ id: 't0000000000000002', name: 'Second', scopes: ['personal'], checks: true, createdAt: 1_700_000_000_000, expiresAt: 1_707_776_000_000, lastUsedAt: 1_700_000_100_000 });
+    expect(r.ok && r.value.items[1]).toEqual({ id: 't0000000000000002', name: 'Second', scopes: ['personal'], checks: true, resolve: false, createdAt: 1_700_000_000_000, expiresAt: 1_707_776_000_000, lastUsedAt: 1_700_000_100_000 });
     expect(Object.isFrozen(r.ok && r.value.items)).toBe(true);
     expect(calls[0]).toMatchObject({ path: '/api/me/agent-tokens', init: { method: 'GET', credentials: 'same-origin' } });
     expect(calls[0].init.body).toBeUndefined();
+  });
+
+  it('keeps the resolve flag only when it is exactly true, and sends it only when asked for (R-025 D13)', async () => {
+    const { client, calls } = fake({ status: 200, body: { items: [view({ resolve: true }), view({ id: 't0000000000000002', resolve: 'yes' }), view({ id: 't0000000000000003' })] } });
+    const r = await client.list();
+    expect(r.ok && r.value.items.map((k) => k.resolve)).toEqual([true, false, false]);
+    const made = fake({ status: 201, body: { token: `cpat_${'A'.repeat(43)}`, agentToken: view({ resolve: true }) } });
+    await made.client.create({ name: 'Mine', scopes: ['personal'], checks: false, resolve: true, days: 30 });
+    expect(JSON.parse(made.calls[0].init.body)).toEqual({ name: 'Mine', scopes: ['personal'], checks: false, resolve: true, days: 30 });
+    const plain = fake({ status: 201, body: { token: `cpat_${'A'.repeat(43)}`, agentToken: view() } });
+    await plain.client.create({ name: 'Mine', scopes: ['personal'], checks: false, resolve: false, days: 30 });
+    expect(JSON.parse(plain.calls[0].init.body)).toEqual({ name: 'Mine', scopes: ['personal'], checks: false, days: 30 });
+    expect((await made.client.create({ name: 'Mine', scopes: ['personal'], checks: false, resolve: 'yes', days: 30 })).error).toMatchObject({ kind: 'invalid', field: 'resolve' });
+    void calls;
   });
 
   it('refuses a page with anything wrongly shaped, as a server problem', async () => {

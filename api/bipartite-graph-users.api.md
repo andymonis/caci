@@ -29,6 +29,8 @@ export interface AgentTokenAccess {
     // (undocumented)
     readonly checks: boolean;
     // (undocumented)
+    readonly resolve: boolean;
+    // (undocumented)
     readonly scopes: readonly string[];
     // (undocumented)
     readonly tokenId: string;
@@ -58,6 +60,8 @@ export interface AgentTokenInfo {
     // (undocumented)
     readonly name: string;
     // (undocumented)
+    readonly resolve: boolean;
+    // (undocumented)
     readonly scopes: readonly string[];
     // (undocumented)
     readonly userId: string;
@@ -68,6 +72,7 @@ export interface AgentTokenInput {
     readonly checks: boolean;
     readonly expiresAt: number;
     readonly name: string;
+    readonly resolve?: boolean;
     readonly scopes: readonly string[];
     // (undocumented)
     readonly userId: string;
@@ -121,6 +126,7 @@ export interface CreateAgentTokenInput {
     readonly days?: unknown;
     // (undocumented)
     readonly name?: unknown;
+    readonly resolve?: unknown;
     // (undocumented)
     readonly scopes?: unknown;
 }

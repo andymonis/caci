@@ -41,7 +41,7 @@ export function createAgentTokenRoutes(options: AgentTokenRoutesOptions): readon
     {
       method: 'POST',
       path: '/api/me/agent-tokens',
-      handler: signedIn(['name', 'scopes', 'checks', 'days'], async (_ctx, token, body) => {
+      handler: signedIn(['name', 'scopes', 'checks', 'resolve', 'days'], async (_ctx, token, body) => {
         const made = await controller.createAgentToken(token, body);
         return made.ok ? { status: 201, body: { token: made.value.token, agentToken: asJson(made.value.agentToken) } } : errorResponse(made.error);
       }),

@@ -31,6 +31,11 @@ export interface AgentTokenInput {
   readonly scopes: readonly string[];
   /** May the agent also call the tools that spend CaCi's model (R-022 D10)? */
   readonly checks: boolean;
+  /**
+   * May the agent resolve facts for the person (R-025 D13)? Off unless asked for. It never lets a token edit a circle brain: it allows only the
+   * three verb tools, which write the person's own resolution record (or delete a fact in their own brain).
+   */
+  readonly resolve?: boolean;
   /** Milliseconds since 1970: later than now, and at most 365 days on. */
   readonly expiresAt: number;
 }
@@ -42,6 +47,7 @@ export interface AgentTokenInfo {
   readonly name: string;
   readonly scopes: readonly string[];
   readonly checks: boolean;
+  readonly resolve: boolean;
   readonly createdAt: number;
   readonly expiresAt: number;
   readonly lastUsedAt: number | null;
@@ -53,6 +59,7 @@ export interface AgentTokenAccess {
   readonly userId: string;
   readonly scopes: readonly string[];
   readonly checks: boolean;
+  readonly resolve: boolean;
 }
 
 export interface AgentTokenCreated {
@@ -124,9 +131,10 @@ export function checkAgentTokenInput(input: AgentTokenInput, now: number): Resul
     seen.add(scope);
   }
   if (typeof input.checks !== 'boolean') return bad('checks', 'checks must be true or false');
+  if (input.resolve !== undefined && typeof input.resolve !== 'boolean') return bad('resolve', 'resolve must be true or false');
   if (!Number.isSafeInteger(input.expiresAt) || input.expiresAt <= now) return bad('expiresAt', 'the token must expire in the future');
   if (input.expiresAt - now > MAX_AGENT_TOKEN_LIFETIME_MS) return bad('expiresAt', 'a token may last at most 365 days');
-  return ok(Object.freeze({ userId: input.userId, name, scopes: Object.freeze([...input.scopes]), checks: input.checks, expiresAt: input.expiresAt }));
+  return ok(Object.freeze({ userId: input.userId, name, scopes: Object.freeze([...input.scopes]), checks: input.checks, resolve: input.resolve === true, expiresAt: input.expiresAt }));
 }
 
 export function tooManyAgentTokens(): UsersError {

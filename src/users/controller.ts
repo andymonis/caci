@@ -61,6 +61,8 @@ export interface CreateAgentTokenInput {
   readonly name?: unknown;
   readonly scopes?: unknown;
   readonly checks?: unknown;
+  /** May the agent resolve facts for the person (R-025 D13)? Default off. */
+  readonly resolve?: unknown;
   /** 1 to 365. Default 90. */
   readonly days?: unknown;
 }
@@ -149,7 +151,7 @@ export interface UserController {
 
 const STORAGE_MESSAGE = 'the user service could not complete the request';
 const DAY_MS = 86_400_000;
-const agentView = (info: AgentTokenInfo): AgentTokenView => Object.freeze({ id: info.id, name: info.name, scopes: info.scopes, checks: info.checks, createdAt: info.createdAt, expiresAt: info.expiresAt, lastUsedAt: info.lastUsedAt });
+const agentView = (info: AgentTokenInfo): AgentTokenView => Object.freeze({ id: info.id, name: info.name, scopes: info.scopes, checks: info.checks, resolve: info.resolve, createdAt: info.createdAt, expiresAt: info.expiresAt, lastUsedAt: info.lastUsedAt });
 const unauthenticated = (): UsersError => usersError('UNAUTHENTICATED', 'invalid username or password');
 const storageError = (): UsersError => usersError('STORAGE_ERROR', STORAGE_MESSAGE);
 
@@ -477,12 +479,12 @@ export function createUserController(init: UserControllerInit): UserController {
         if (agentTokens === undefined) return err(usersError('NOT_FOUND', 'agent access is not available'));
         if (typeof input !== 'object' || input === null || Array.isArray(input)) return err(usersError('INVALID_INPUT', 'a token needs a name and scopes', { field: 'token' }));
         for (const key of Object.keys(input)) {
-          if (!['name', 'scopes', 'checks', 'days'].includes(key)) return err(usersError('INVALID_INPUT', `${key.slice(0, 40)} is not accepted here`, { field: 'token' }));
+          if (!['name', 'scopes', 'checks', 'resolve', 'days'].includes(key)) return err(usersError('INVALID_INPUT', `${key.slice(0, 40)} is not accepted here`, { field: 'token' }));
         }
         const days = input.days === undefined ? 90 : input.days;
         if (typeof days !== 'number' || !Number.isInteger(days) || days < 1 || days > 365) return err(usersError('INVALID_INPUT', 'days must be a whole number from 1 to 365', { field: 'days' }));
         const now = clock();
-        const made = await agentTokens.create({ userId: me.value.user.id, name: input.name as string, scopes: input.scopes as string[], checks: (input.checks === undefined ? false : input.checks) as boolean, expiresAt: now + days * DAY_MS }, now);
+        const made = await agentTokens.create({ userId: me.value.user.id, name: input.name as string, scopes: input.scopes as string[], checks: (input.checks === undefined ? false : input.checks) as boolean, resolve: (input.resolve === undefined ? false : input.resolve) as boolean, expiresAt: now + days * DAY_MS }, now);
         if (!made.ok) return made;
         return ok({ token: made.value.token, agentToken: agentView(made.value.info) });
       }),

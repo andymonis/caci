@@ -133,8 +133,8 @@ describe('agent tokens in the database file', () => {
     const path = join(tmp(), 'users.db');
     tokensAt(path).close();
     const db = openDb({ path });
-    expect(USERS_SCHEMA_VERSION).toBe(11);
-    expect(db.pragma('user_version')).toBe(11);
+    expect(USERS_SCHEMA_VERSION).toBe(12);
+    expect(db.pragma('user_version')).toBe(12);
     expect(db.all<{ name: string }>("SELECT name FROM sqlite_master WHERE tbl_name = 'agent_tokens' ORDER BY name").map((r) => r.name)).toEqual(expect.arrayContaining(['agent_tokens', 'agent_tokens_by_expiry', 'agent_tokens_by_user']));
     expect(db.get<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'agent_tokens_end_with_user'")?.name).toBe('agent_tokens_end_with_user');
     db.close();
@@ -151,9 +151,29 @@ describe('agent tokens in the database file', () => {
     const { token } = await created(store);
     expect(await store.resolve(token, T0 + 1)).toBeDefined();
     const after = openDb({ path });
-    expect(after.pragma('user_version')).toBe(11);
+    expect(after.pragma('user_version')).toBe(12);
     expect(after.get<{ username: string }>("SELECT username FROM users WHERE id = 'u0000000000000001'")?.username).toBe('ann');
     after.close();
+  });
+
+  it('a key made before the resolve flag existed keeps working, with the flag off, and the database refuses a value that is not 0 or 1 (R-025 D13)', async () => {
+    const path = join(tmp(), 'users.db');
+    const old = openDb({ path });
+    prepareSchema(old, { applicationId: USERS_APPLICATION_ID, migrations: USERS_MIGRATIONS.slice(0, 11), foreignCode: 'NOT_A_USERS_DATABASE' });
+    const token = `cpat_${'A'.repeat(43)}`;
+    old.run('INSERT INTO agent_tokens (token_hash, id, user_id, name, scopes, checks, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', hashAgentToken(token), 't0000000000000001', 'u0000000000000001', 'old key', '["personal"]', 1, T0, T0 + DAY);
+    expect(old.pragma('user_version')).toBe(11);
+    old.close();
+    const store = tokensAt(path);
+    expect(await store.resolve(token, T0 + 1)).toEqual({ tokenId: 't0000000000000001', userId: 'u0000000000000001', scopes: ['personal'], checks: true, resolve: false });
+    expect((await store.list('u0000000000000001', T0 + 1)).map((i) => i.resolve)).toEqual([false]);
+    const db = openDb({ path });
+    stores.push(db);
+    expect(db.pragma('user_version')).toBe(12);
+    expect(() => db.run('UPDATE agent_tokens SET resolve = 2')).toThrow();
+    expect(() => db.run('UPDATE agent_tokens SET resolve = NULL')).toThrow();
+    db.run('UPDATE agent_tokens SET resolve = 1');
+    expect((await store.resolve(token, T0 + 2))?.resolve).toBe(true);
   });
 
   it('the database itself refuses a bad scopes value, a past expiry, an empty name and a repeated id', () => {

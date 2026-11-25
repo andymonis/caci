@@ -25,7 +25,7 @@ function viewOf(raw) {
   if (!isObject(raw) || typeof raw.id !== 'string' || !ID.test(raw.id) || typeof raw.name !== 'string' || raw.name === '') return undefined;
   if (!Array.isArray(raw.scopes) || raw.scopes.length === 0 || raw.scopes.length > SCOPES_MAX || !raw.scopes.every(validScope)) return undefined;
   if (typeof raw.checks !== 'boolean' || !whole(raw.createdAt) || !whole(raw.expiresAt) || !(raw.lastUsedAt === null || whole(raw.lastUsedAt))) return undefined;
-  return Object.freeze({ id: raw.id, name: raw.name, scopes: Object.freeze([...raw.scopes]), checks: raw.checks, createdAt: raw.createdAt, expiresAt: raw.expiresAt, lastUsedAt: raw.lastUsedAt });
+  return Object.freeze({ id: raw.id, name: raw.name, scopes: Object.freeze([...raw.scopes]), checks: raw.checks, resolve: raw.resolve === true, createdAt: raw.createdAt, expiresAt: raw.expiresAt, lastUsedAt: raw.lastUsedAt });
 }
 function listOf(json) {
   if (!isObject(json) || !Array.isArray(json.items)) return undefined;
@@ -50,7 +50,7 @@ function errorFor(status, json, retryAfter) {
   if (status === 404) return { kind: 'unavailable', message: UNAVAILABLE };
   if (status === 409) return { kind: 'limit', message: cleanMessage(error.message, 'You already have the most access keys allowed: stop one first.') };
   if (status === 422) {
-    const field = ['name', 'scopes', 'checks', 'days'].find((f) => f === error.field);
+    const field = ['name', 'scopes', 'checks', 'resolve', 'days'].find((f) => f === error.field);
     return { kind: 'invalid', message: cleanMessage(error.message, 'Please check what you asked for.'), ...(field === undefined ? {} : { field }) };
   }
   if (status === 429) return { kind: 'throttled', message: cleanMessage(error.message, 'Too many requests. Try again later.'), ...(seconds === undefined ? {} : { retryAfterSeconds: seconds }) };
@@ -63,7 +63,7 @@ export function createAgentTokensClient({ fetchFn }) {
   return Object.freeze({
     /** The person's live access keys, newest first. `unavailable` when the service has agent access off. */
     list: () => send('GET', '/api/me/agent-tokens', undefined, listOf, errorFor),
-    /** Makes a key: `{ name, scopes: ['personal', 'circle:<id>'...], checks, days }`. The key itself is in the answer once. */
+    /** Makes a key: `{ name, scopes: ['personal', 'circle:<id>'...], checks, resolve?, days }` (`resolve` is sent only when true). The key itself is in the answer once. */
     create(input) {
       const bad = (field, message) => Promise.resolve(fail({ kind: 'invalid', field, message }));
       if (!isObject(input)) return bad('name', 'Give the key a name.');
@@ -73,7 +73,8 @@ export function createAgentTokensClient({ fetchFn }) {
       if (input.scopes.length > SCOPES_MAX || !input.scopes.every(validScope) || new Set(input.scopes).size !== input.scopes.length) return bad('scopes', 'Those notes cannot be chosen.');
       if (typeof input.checks !== 'boolean') return bad('checks', 'Say whether it may ask for attention checks.');
       if (!Number.isInteger(input.days) || input.days < 1 || input.days > 365) return bad('days', 'Choose how long the key lasts: 1 to 365 days.');
-      return send('POST', '/api/me/agent-tokens', { name, scopes: [...input.scopes], checks: input.checks, days: input.days }, madeOf, errorFor);
+      if (input.resolve !== undefined && typeof input.resolve !== 'boolean') return bad('resolve', 'Say whether it may mark facts as dealt with.');
+      return send('POST', '/api/me/agent-tokens', { name, scopes: [...input.scopes], checks: input.checks, ...(input.resolve === true ? { resolve: true } : {}), days: input.days }, madeOf, errorFor);
     },
     /** Stops one key by its id. */
     revoke: (id) => (typeof id === 'string' && ID.test(id) ? send('DELETE', `/api/me/agent-tokens/${id}`, undefined, () => true, revokeError) : Promise.resolve(fail({ kind: 'not-found', message: GONE }))),

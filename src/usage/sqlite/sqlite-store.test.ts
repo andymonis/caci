@@ -72,13 +72,13 @@ runUsageStoreConformance(() => createSqliteUsageStore(), { describe, it }, { dis
 }
 
 describe('the schema', () => {
-  it('is version 11 with the table, its indexes and the trigger', () => {
+  it('is version 12 with the table, its indexes and the trigger', () => {
     const dir = tmp();
     openAt(join(dir, 'users.db'));
     const db = openDb({ path: join(dir, 'users.db') });
     stores.push(db);
-    expect(USERS_SCHEMA_VERSION).toBe(11);
-    expect(db.pragma('user_version')).toBe(11);
+    expect(USERS_SCHEMA_VERSION).toBe(12);
+    expect(db.pragma('user_version')).toBe(12);
     expect(db.pragma('application_id')).toBe(USERS_APPLICATION_ID);
     const names = (type: string): string[] => db.all<{ name: string }>('SELECT name FROM sqlite_master WHERE type = ? ORDER BY name', type).map((r) => r.name);
     expect(names('table')).toContain('usage');
@@ -109,7 +109,7 @@ describe('the schema', () => {
     expect(await attempts(store)).toBe(0);
     const db = openDb({ path });
     stores.push(db);
-    expect(db.pragma('user_version')).toBe(11);
+    expect(db.pragma('user_version')).toBe(12);
     for (const table of ['users', 'circles', 'ledger']) expect(db.get<{ n: number }>(`SELECT count(*) AS n FROM ${table}`)?.n, table).toBe(1);
   });
 

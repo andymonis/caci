@@ -21,6 +21,7 @@ interface Row {
   name: string;
   scopes: string;
   checks: number;
+  resolve: number;
   created_at: number;
   expires_at: number;
   last_used_at: number | null;
@@ -33,6 +34,7 @@ const info = (row: Row): AgentTokenInfo =>
     name: row.name,
     scopes: Object.freeze(JSON.parse(row.scopes) as string[]),
     checks: Number(row.checks) === 1,
+    resolve: Number(row.resolve) === 1,
     createdAt: Number(row.created_at),
     expiresAt: Number(row.expires_at),
     lastUsedAt: row.last_used_at === null ? null : Number(row.last_used_at),
@@ -52,7 +54,7 @@ export function createSqliteAgentTokenStore(options: SqliteAgentTokenStoreOption
     db.close();
     throw cause;
   }
-  const COLUMNS = 'id, user_id, name, scopes, checks, created_at, expires_at, last_used_at';
+  const COLUMNS = 'id, user_id, name, scopes, checks, resolve, created_at, expires_at, last_used_at';
 
   return {
     create: async (input, now) => {
@@ -69,13 +71,13 @@ export function createSqliteAgentTokenStore(options: SqliteAgentTokenStoreOption
           db.commit();
           return err(tooManyAgentTokens());
         }
-        db.run('INSERT INTO agent_tokens (token_hash, id, user_id, name, scopes, checks, created_at, expires_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)', hashAgentToken(token), id, v.userId, v.name, JSON.stringify(v.scopes), v.checks ? 1 : 0, now, v.expiresAt);
+        db.run('INSERT INTO agent_tokens (token_hash, id, user_id, name, scopes, checks, resolve, created_at, expires_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)', hashAgentToken(token), id, v.userId, v.name, JSON.stringify(v.scopes), v.checks ? 1 : 0, v.resolve === true ? 1 : 0, now, v.expiresAt);
         db.commit();
       } catch (cause) {
         if (db.inTransaction) db.rollback();
         throw cause;
       }
-      return ok({ token, info: info({ id, user_id: v.userId, name: v.name, scopes: JSON.stringify(v.scopes), checks: v.checks ? 1 : 0, created_at: now, expires_at: v.expiresAt, last_used_at: null }) });
+      return ok({ token, info: info({ id, user_id: v.userId, name: v.name, scopes: JSON.stringify(v.scopes), checks: v.checks ? 1 : 0, resolve: v.resolve === true ? 1 : 0, created_at: now, expires_at: v.expiresAt, last_used_at: null }) });
     },
 
     resolve: async (token, now) => {
@@ -88,7 +90,7 @@ export function createSqliteAgentTokenStore(options: SqliteAgentTokenStoreOption
         return undefined;
       }
       if (row.last_used_at === null || now - Number(row.last_used_at) >= AGENT_TOKEN_RENEW_MS) db.run('UPDATE agent_tokens SET last_used_at = ? WHERE token_hash = ?', now, hash);
-      return Object.freeze({ tokenId: row.id, userId: row.user_id, scopes: Object.freeze(JSON.parse(row.scopes) as string[]), checks: Number(row.checks) === 1 });
+      return Object.freeze({ tokenId: row.id, userId: row.user_id, scopes: Object.freeze(JSON.parse(row.scopes) as string[]), checks: Number(row.checks) === 1, resolve: Number(row.resolve) === 1 });
     },
 
     list: async (userId, now) => Object.freeze(db.all<Row>(`SELECT ${COLUMNS} FROM agent_tokens WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC, id DESC`, userId, now).map(info)),

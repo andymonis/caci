@@ -26,7 +26,7 @@ export function createMemoryAgentTokenStore(options: AgentTokenOptions = {}): Ag
       let id = newAgentTokenId(options.randomBytes);
       while ([...rows.values()].some((r) => r.info.id === id)) id = newAgentTokenId(options.randomBytes);
       const v = checked.value;
-      const info: AgentTokenInfo = { id, userId: v.userId, name: v.name, scopes: v.scopes, checks: v.checks, createdAt: now, expiresAt: v.expiresAt, lastUsedAt: null };
+      const info: AgentTokenInfo = { id, userId: v.userId, name: v.name, scopes: v.scopes, checks: v.checks, resolve: v.resolve === true, createdAt: now, expiresAt: v.expiresAt, lastUsedAt: null };
       const row: Row = { info, lastUsedAt: null };
       rows.set(hashAgentToken(token), row);
       return ok({ token, info: copy(row) });
@@ -42,7 +42,7 @@ export function createMemoryAgentTokenStore(options: AgentTokenOptions = {}): Ag
         return undefined;
       }
       if (row.lastUsedAt === null || now - row.lastUsedAt >= AGENT_TOKEN_RENEW_MS) row.lastUsedAt = now;
-      return Object.freeze({ tokenId: row.info.id, userId: row.info.userId, scopes: Object.freeze([...row.info.scopes]), checks: row.info.checks });
+      return Object.freeze({ tokenId: row.info.id, userId: row.info.userId, scopes: Object.freeze([...row.info.scopes]), checks: row.info.checks, resolve: row.info.resolve });
     },
 
     list: async (userId, now) =>

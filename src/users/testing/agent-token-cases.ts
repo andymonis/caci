@@ -56,8 +56,25 @@ export function agentTokenCases(): readonly AgentTokenCase[] {
       run: async (store) => {
         const a = await made(store, { scopes: ['personal'], checks: false });
         const b = await made(store, { userId: 'u0000000000000002', scopes: [CIRCLE_A, CIRCLE_B], checks: true });
-        assert.deepEqual(await store.resolve(a.token, T0 + 1), { tokenId: a.info.id, userId: 'u0000000000000001', scopes: ['personal'], checks: false });
-        assert.deepEqual(await store.resolve(b.token, T0 + 1), { tokenId: b.info.id, userId: 'u0000000000000002', scopes: [CIRCLE_A, CIRCLE_B], checks: true });
+        assert.deepEqual(await store.resolve(a.token, T0 + 1), { tokenId: a.info.id, userId: 'u0000000000000001', scopes: ['personal'], checks: false, resolve: false });
+        assert.deepEqual(await store.resolve(b.token, T0 + 1), { tokenId: b.info.id, userId: 'u0000000000000002', scopes: [CIRCLE_A, CIRCLE_B], checks: true, resolve: false });
+      },
+    },
+    {
+      name: 'the resolve flag is off unless asked for, is kept with the token, shows in a list, and must be true or false (R-025 D13)',
+      run: async (store) => {
+        const plain = await made(store, {});
+        const asked = await made(store, { resolve: true });
+        assert.equal(plain.info.resolve, false);
+        assert.equal(asked.info.resolve, true);
+        assert.deepEqual((await store.resolve(plain.token, T0 + 1))?.resolve, false);
+        assert.deepEqual((await store.resolve(asked.token, T0 + 1))?.resolve, true);
+        assert.deepEqual((await store.list('u0000000000000001', T0 + 1)).map((i) => i.resolve).sort(), [false, true]);
+        for (const bad of ['yes', 1, null]) {
+          const r = await store.create(input({ resolve: bad as unknown as boolean }), T0);
+          assert.equal(r.ok, false, String(bad));
+          if (!r.ok) assert.equal(r.error.field, 'resolve');
+        }
       },
     },
     {

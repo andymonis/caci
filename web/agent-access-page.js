@@ -17,7 +17,7 @@ export const REVOKE_QUESTION = (name) => `Stop "${name}"? Whatever uses this key
 export function keyDetails(key, labels) {
   const reads = key.scopes.map((s) => labels.get(s) ?? (s === 'personal' ? 'My own notes' : 'A circle you were in')).join(', ');
   const used = key.lastUsedAt === null ? 'Not used yet.' : `Last used ${formatTime(key.lastUsedAt)}.`;
-  return `Can read: ${reads}. ${key.checks ? 'May also ask CaCi for attention checks. ' : ''}Ends ${formatDate(key.expiresAt)}. ${used}`;
+  return `Can read: ${reads}. ${key.checks ? 'May also ask CaCi for attention checks. ' : ''}${key.resolve === true ? 'May also mark facts as dealt with for you. ' : ''}Ends ${formatDate(key.expiresAt)}. ${used}`;
 }
 
 export function mountAgentAccess(document, { client, circles, onSignedOut }) {
@@ -42,6 +42,7 @@ export function mountAgentAccess(document, { client, circles, onSignedOut }) {
   const brainsError = $('agent-brains-error');
   const brainTemplate = $('agent-brain-template');
   const checksBox = $('agent-checks');
+  const resolveBox = $('agent-resolve');
   const daysSelect = $('agent-days');
   const daysError = $('agent-days-error');
   const submit = $('agent-submit');
@@ -137,10 +138,11 @@ export function mountAgentAccess(document, { client, circles, onSignedOut }) {
     event.preventDefault();
     for (const e of [nameError, brainsError, daysError]) show(e, '');
     nameInput.removeAttribute('aria-invalid');
-    const result = await session.create({ name: nameInput.value, scopes: chosenScopes(), checks: checksBox.checked === true, days: Number(daysSelect.value) });
+    const result = await session.create({ name: nameInput.value, scopes: chosenScopes(), checks: checksBox.checked === true, resolve: resolveBox.checked === true, days: Number(daysSelect.value) });
     if (result.ok) {
       nameInput.value = '';
       checksBox.checked = false;
+      resolveBox.checked = false;
       for (const b of boxes) b.box.checked = false;
       createdToken.focus();
       return;
@@ -150,7 +152,7 @@ export function mountAgentAccess(document, { client, circles, onSignedOut }) {
       show(nameError, result.message);
       nameInput.setAttribute('aria-invalid', 'true');
       nameInput.focus();
-    } else if (where === 'scopes' || where === 'checks') {
+    } else if (where === 'scopes' || where === 'checks' || where === 'resolve') {
       show(brainsError, result.message);
       boxes[0]?.box.focus();
     } else if (where === 'days') {
