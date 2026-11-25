@@ -187,6 +187,22 @@ export function violations(files: Record<string, string>): string[] {
       if (file.startsWith('service/') && target.startsWith('usage/') && !/^usage\/(?:index|sqlite\/index)$/.test(target)) {
         problems.push(`${file} imports ${specifier}: the service may use the usage component only through usage/index and usage/sqlite/index`);
       }
+      const resolutionsTest = /\.test(?:-util)?\.ts$/.test(file);
+      if (file.startsWith('resolutions/') && /^(?:graph_store|llm|app|api|service|caci|circles|sharing|scopes|ledger|agent|usage)(?:\/|$)/.test(target) && !(resolutionsTest && /^(?:graph_store\/adapters\/sqlite|circles\/sqlite|ledger\/sqlite)\/index$/.test(target))) {
+        problems.push(`${file} imports ${specifier}: the resolutions component must not depend on any other component but the users component`);
+      }
+      if (file.startsWith('resolutions/') && target.startsWith('users/') && target !== 'users/index' && !((file.startsWith('resolutions/sqlite/') || resolutionsTest) && target === 'users/sqlite/index') && !(resolutionsTest && target === 'users/sqlite/schema')) {
+        problems.push(`${file} imports ${specifier}: the resolutions component may use the users component only through users/index (its SQLite store and its tests may also use users/sqlite/index, which owns the user database's schema)`);
+      }
+      if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes|ledger|agent|api|usage)\//.test(file) && /^resolutions(?:\/|$)/.test(target)) {
+        problems.push(`${file} imports ${specifier}: only the CaCi controller and the service may depend on the resolutions component`);
+      }
+      if (file.startsWith('caci/') && target.startsWith('resolutions/') && target !== 'resolutions/index') {
+        problems.push(`${file} imports ${specifier}: the CaCi controller may use the resolutions component only through resolutions/index`);
+      }
+      if (file.startsWith('service/') && target.startsWith('resolutions/') && !/^resolutions\/(?:index|sqlite\/index)$/.test(target)) {
+        problems.push(`${file} imports ${specifier}: the service may use the resolutions component only through resolutions/index and resolutions/sqlite/index`);
+      }
       const agentTest = /\.test(?:-util)?\.ts$/.test(file);
       if (file.startsWith('agent/') && /^(?:api|service|sqlite)(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: the agent component must not depend on the API, the service or the SQLite wrapper`);
@@ -203,7 +219,7 @@ export function violations(files: Record<string, string>): string[] {
       if (/^(?:graph_store|llm|app|sqlite|users|circles|sharing|scopes|ledger|agent|usage)\//.test(file) && /^api(?:\/|$)/.test(target)) {
         problems.push(`${file} imports ${specifier}: nothing may depend on the API`);
       }
-      if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/') || file.startsWith('circles/') || file.startsWith('ledger/') || file.startsWith('usage/') || (file.startsWith('service/') && target === 'sqlite/snapshot'))) {
+      if (target.startsWith('sqlite/') && !(file.startsWith('sqlite/') || file.startsWith('graph_store/') || file.startsWith('users/') || file.startsWith('circles/') || file.startsWith('ledger/') || file.startsWith('usage/') || file.startsWith('resolutions/') || (file.startsWith('service/') && target === 'sqlite/snapshot'))) {
         problems.push(`${file} imports ${specifier}: only the graph store, the users component and the circles component may use the shared SQLite driver wrapper (the service may also use its snapshot module)`);
       }
       if (file.startsWith('sqlite/') && !target.startsWith('sqlite/')) {
@@ -276,6 +292,10 @@ describe('the checker itself (so the real check below cannot pass by accident)',
         'usage/sqlite/y.test.ts': `import { createSqliteAdapter } from '../../graph_store/adapters/sqlite/index.js'; import { createSqliteCircleStore } from '../../circles/sqlite/index.js'; import { createSqliteLedgerStore } from '../../ledger/sqlite/index.js';`,
         'usage/x.test.ts': `import { createSqliteUserStore } from '../users/sqlite/index.js'; import { USERS_MIGRATIONS } from '../users/sqlite/schema.js';`,
         'caci/usage.ts': `import { createMemoryUsageStore } from '../usage/index.js';`,
+        'resolutions/x.ts': `import { isUserId } from '../users/index.js'; import { y } from './y.js';`,
+        'resolutions/sqlite/store.ts': `import { prepareUsersDatabase } from '../../users/sqlite/index.js'; import { openDb } from '../../sqlite/db.js';`,
+        'caci/resolutions.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';`,
+        'service/resolutions.ts': `import { createSqliteResolutionStore } from '../resolutions/sqlite/index.js'; import { createMemoryResolutionStore } from '../resolutions/index.js';`,
         'service/usage.ts': `import { createSqliteUsageStore } from '../usage/sqlite/index.js'; import { createMemoryUsageStore } from '../usage/index.js';`,
         'ledger/x.ts': `import { newUserId } from '../users/index.js'; import { openDb } from '../sqlite/db.js'; import { y } from './y.js';`,
         'ledger/sqlite/store.ts': `import { prepareUsersDatabase } from '../../users/sqlite/index.js'; import { openDb } from '../../sqlite/db.js';`,
@@ -377,6 +397,22 @@ describe('the checker itself (so the real check below cannot pass by accident)',
     ['the CaCi controller using the usage SQLite store', { 'caci/x.ts': `import { createSqliteUsageStore } from '../usage/sqlite/index.js';` }],
     ['the service reaching into the usage internals', { 'service/x.ts': `import { x } from '../usage/store.js';` }],
     ['the usage component depending on the service', { 'usage/x.ts': `import { serve } from '../service/index.js';` }],
+    ['the resolutions component using the graph store', { 'resolutions/x.ts': `import { query } from '../graph_store/index.js';` }],
+    ['production resolutions code using the graph SQLite adapter', { 'resolutions/x.ts': `import { createSqliteAdapter } from '../graph_store/adapters/sqlite/index.js';` }],
+    ['the resolutions component using the usage component', { 'resolutions/x.ts': `import { createMemoryUsageStore } from '../usage/index.js';` }],
+    ['the resolutions component using the CaCi controller', { 'resolutions/x.ts': `import { createCaciController } from '../caci/index.js';` }],
+    ['the resolutions component using the circles component', { 'resolutions/x.ts': `import { createMemoryCircleStore } from '../circles/index.js';` }],
+    ['the resolutions component using the API', { 'resolutions/x.ts': `import { createApiServer } from '../api/index.js';` }],
+    ['the resolutions component reaching into the users internals', { 'resolutions/x.ts': `import { x } from '../users/controller.js';` }],
+    ['production resolutions code using the SQLite user store entry', { 'resolutions/x.ts': `import { prepareUsersDatabase } from '../users/sqlite/index.js';` }],
+    ['the API using the resolutions component', { 'api/x.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';` }],
+    ['the agent component using the resolutions component', { 'agent/x.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';` }],
+    ['the usage component using the resolutions component', { 'usage/x.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';` }],
+    ['the circles component using the resolutions component', { 'circles/x.ts': `import { createMemoryResolutionStore } from '../resolutions/index.js';` }],
+    ['the CaCi controller reaching into the resolutions internals', { 'caci/x.ts': `import { x } from '../resolutions/store.js';` }],
+    ['the CaCi controller using the resolutions SQLite store', { 'caci/x.ts': `import { createSqliteResolutionStore } from '../resolutions/sqlite/index.js';` }],
+    ['the service reaching into the resolutions internals', { 'service/x.ts': `import { x } from '../resolutions/store.js';` }],
+    ['the resolutions component depending on the service', { 'resolutions/x.ts': `import { serve } from '../service/index.js';` }],
     ['the ledger component using the graph store', { 'ledger/x.ts': `import { query } from '../graph_store/index.js';` }],
     ['production ledger code using the circles SQLite store', { 'ledger/x.ts': `import { createSqliteCircleStore } from '../circles/sqlite/index.js';` }],
     ['production ledger code reaching into the users schema', { 'ledger/sqlite/x.ts': `import { USERS_MIGRATIONS } from '../../users/sqlite/schema.js';` }],
@@ -544,6 +580,18 @@ describe('the usage component, in the real tree', () => {
   });
 });
 
+describe('the resolutions component, in the real tree', () => {
+  it('uses only the users index (and its SQLite store, the user database schema), and nothing depends on it but the CaCi controller and the service', () => {
+    const own = sourcesUnder(join(srcRoot, 'resolutions'));
+    expect(Object.keys(own).length).toBeGreaterThan(5);
+    expect(violations(own)).toEqual([]);
+    const others = { ...sourcesUnder(join(srcRoot, 'circles')), ...sourcesUnder(join(srcRoot, 'users')), ...sourcesUnder(join(srcRoot, 'sharing')), ...sourcesUnder(join(srcRoot, 'api')), ...sourcesUnder(join(srcRoot, 'graph_store')), ...sourcesUnder(join(srcRoot, 'usage')), ...sourcesUnder(join(srcRoot, 'agent')) };
+    const dependents = Object.entries(others).filter(([, source]) => importsOf(source).some((x) => /(?:^|\/)resolutions\//.test(x))).map(([file]) => file);
+    expect(Object.keys(others).length).toBeGreaterThan(50);
+    expect(dependents).toEqual([]);
+  });
+});
+
 describe('the provider SDK', () => {
   // `@anthropic-ai/sdk` is an optional dependency used by one entry point. Nothing else may import it,
   // so the graph store, the rest of the LLM component and the application work without it.
@@ -595,7 +643,7 @@ describe('no ambient input', () => {
     }
   });
 
-  it.each(['llm', 'app', 'sharing', 'scopes', 'ledger', 'agent', 'usage'])('keeps the %s component free of environment and file access', (component) => {
+  it.each(['llm', 'app', 'sharing', 'scopes', 'ledger', 'agent', 'usage', 'resolutions'])('keeps the %s component free of environment and file access', (component) => {
     const files = sourcesUnder(join(srcRoot, component));
     const offenders = Object.entries(files)
       .filter(([file]) => !file.endsWith('.test.ts') && !file.endsWith('.test-util.ts'))
