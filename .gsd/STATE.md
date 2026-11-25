@@ -2,8 +2,8 @@
 
 **Milestone:** X1 usage metering complete (T-328 to T-335). Every earlier milestone in `spec.md` is complete: P1, U1, C1, C2, W1 to W3, S1, S2, D1, Q1, K1, B1, V1, F1, N1, N2, L2, L3, T1, G2, G3, H1 Part A.
 **Current task:** none.
-**Next (needs the owner):** G1 relevant category context (R-021, T-299 to T-304) waits for the owner to confirm R-021's decisions. H1 Parts B and C (T-282 to T-292) are not being pursued since the 2026-11-06 direction change (CaCi is the brain, not a reminder engine); R-020 is withdrawn; R-019 (a better long-term view for an agent surface) is linked in `spec.md` but not planned.
-**Last updated:** 2026-11-23
+**Next (needs the owner):** R1 verbs and fact resolution (R-025, T-336 to T-351, planned 2026-11-25) starts with T-336, the owner's review of the committed draft spec (D11 and D12 first). G1 relevant category context (R-021, T-299 to T-304) waits for the owner to confirm R-021's decisions. H1 Parts B and C (T-282 to T-292) are not being pursued since the 2026-11-06 direction change (CaCi is the brain, not a reminder engine); R-020 is withdrawn; R-019 (a better long-term view for an agent surface) is linked in `spec.md` but not planned.
+**Last updated:** 2026-11-25
 
 ## Position
 CaCi (package `bipartite-graph`; TypeScript, Node 22.13+, SQLite via `node:sqlite`) is a bipartite graph store plus the layers above it: LLM capabilities (`categorise`, `status`, controlled by text files in `controls/`), the capture and CaCi controllers, users, circles, scopes, sharing, ledger, usage metering, an agent (MCP, read-only) surface, an HTTP API, the service (wiring, CLI commands) and two plain-JS web apps (`/` everyday app, `/admin` back office). It runs on the owner's Raspberry Pi for the owner and family. `npm run gate` (tsc, eslint, vitest, API Extractor on every entry point) is green: 317 files, about 9,690 tests at X1's close.
