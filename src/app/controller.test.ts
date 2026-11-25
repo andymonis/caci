@@ -292,10 +292,10 @@ describe('proposals expire and are limited in number', () => {
 describe('createController', () => {
   const base = { adapter: createMemoryAdapter(), llm: createLlm({ controls: SHIPPED_CONTROLS, client: createScriptedModelClient([]) }) };
 
-  it('returns a frozen object with propose, approve, reject and get', () => {
+  it('returns a frozen object with propose, approve, reject, get and remove', () => {
     const c = createController(base);
     expect(Object.isFrozen(c)).toBe(true);
-    expect(Object.keys(c).sort()).toEqual(['approve', 'get', 'propose', 'reject']);
+    expect(Object.keys(c).sort()).toEqual(['approve', 'get', 'propose', 'reject', 'remove']);
   });
 
   it.each([

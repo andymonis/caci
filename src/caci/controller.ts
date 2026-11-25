@@ -277,7 +277,7 @@ export interface CaciController {
   /**
    * Applies a verb to one fact for the signed-in person (R-025): `{ scope?, id, verb }`, an exact reference, never words. The fact must be
    * in the person's own brain or a circle they may read, or the answer is the one not-found. The effect is the verb's (`clear` hides a
-   * circle fact for this person only; the deleting effects come with R-025 T-342). Nothing is called outside CaCi.
+   * circle fact for this person only and deletes it in the person's own brain; `remove` deletes it for everyone and is the brain owner's alone). Nothing is called outside CaCi.
    */
   resolveFact(token: unknown, input: unknown): Promise<Result<ResolvedView, CaciError>>;
   /** Takes back the person's own resolution of a fact (`{ scope?, id }`); with none it changes nothing and answers the same way. */
@@ -421,6 +421,36 @@ export function createCaciController(init: CaciControllerInit): CaciController {
     }
   }
 
+  /** Deletes one fact for a person (R-025 D10) through the capture controller's write path, then records the removal in the change log and drops everyone's resolutions of it. */
+  async function deleteFact(where: { userId: string; graphId: string; scope: ResolutionScope }, id: string, verb: string): Promise<Result<boolean, CaciError>> {
+    const done = await capture.remove(where.graphId, id);
+    if (!done.ok) return done;
+    if (done.value === null) return ok(false);
+    const { item, tidied } = done.value;
+    try {
+      await init.resolutions?.removeFact(where.scope, id);
+    } catch {
+      // the daily clean removes what this could not
+    }
+    const ledger = init.ledger;
+    if (ledger !== undefined) {
+      try {
+        const scope: LedgerScope = where.scope.kind === 'circle' ? { kind: 'circle', circleId: where.scope.circleId } : { kind: 'personal', userId: where.userId };
+        const at = clock();
+        const proposalId = `verb-${verb}-${newLedgerId()}`;
+        const parts: Array<Omit<LedgerEntry, 'id' | 'at' | 'scope' | 'actor' | 'proposalId'>> = [
+          ...tidied.map((c) => ({ action: 'removed' as const, kind: 'category' as const, subject: c.id, ...(c.name === undefined ? {} : { title: capText(c.name, TITLE_MAX) }) })),
+          { action: 'removed' as const, kind: 'item' as const, subject: item.id, ...(item.title === undefined ? {} : { title: capText(item.title, TITLE_MAX) }), ...(item.summary === undefined ? {} : { summary: capText(item.summary, SUMMARY_MAX) }) },
+        ];
+        const result = await ledger.append(parts.map((p, i) => ({ id: newLedgerId(), at: at + i, scope, actor: where.userId, proposalId, ...p })));
+        if (!result.ok) reportLedger();
+      } catch {
+        reportLedger();
+      }
+    }
+    return ok(true);
+  }
+
   const noCircle = (): CaciError => caciError('NOT_FOUND', 'no such circle');
   const storage = (): CaciError => ({ source: 'graph', error: { code: 'STORAGE_ERROR', message: 'the service could not complete the request' } as never });
 
@@ -496,18 +526,18 @@ export function createCaciController(init: CaciControllerInit): CaciController {
    * The brain a verb operation is about: the person's own (when no scope is given, or the personal scope), or one circle they may read,
    * checked now. A stranger, a non-member and a made-up circle all get the one not-found.
    */
-  async function factScope(token: unknown, given: unknown): Promise<Result<{ userId: string; graphId: string; scope: ResolutionScope }, CaciError>> {
+  async function factScope(token: unknown, given: unknown): Promise<Result<{ userId: string; graphId: string; scope: ResolutionScope; owner: boolean }, CaciError>> {
     const me = await whoIs(token);
     if (!me.ok) return me;
     const userId = me.value.user.id;
-    if (given === undefined) return ok({ userId, graphId: me.value.graphId, scope: Object.freeze({ kind: 'personal' as const }) });
+    if (given === undefined) return ok({ userId, graphId: me.value.graphId, scope: Object.freeze({ kind: 'personal' as const }), owner: true });
     const parsed = parseScope(given);
     if (!parsed.ok) return err(scopeProblem(parsed.error));
-    if (parsed.value.kind === 'personal') return ok({ userId, graphId: me.value.graphId, scope: Object.freeze({ kind: 'personal' as const }) });
+    if (parsed.value.kind === 'personal') return ok({ userId, graphId: me.value.graphId, scope: Object.freeze({ kind: 'personal' as const }), owner: true });
     if (scopes === undefined) return err(noCircle());
     const resolved = await scopes.resolve(token, parsed.value, 'read');
     if (!resolved.ok) return err(scopeProblem(resolved.error));
-    return ok({ userId, graphId: resolved.value.graphId, scope: Object.freeze({ kind: 'circle' as const, circleId: parsed.value.circleId }) });
+    return ok({ userId, graphId: resolved.value.graphId, scope: Object.freeze({ kind: 'circle' as const, circleId: parsed.value.circleId }), owner: resolved.value.role === 'owner' });
   }
 
   /** A browse result with the circle it came from (nothing is added for the personal brain). */
@@ -793,6 +823,8 @@ export function createCaciController(init: CaciControllerInit): CaciController {
       if (verb === undefined) return err(caciError('INVALID_INPUT', `no such verb: the verbs are ${verbs.list.map((v) => v.name).join(', ')}`, { field: 'verb' }));
       const where = await factScope(token, read.value.scope);
       if (!where.ok) return where;
+      // only the owner of a brain may delete a fact for everyone (R-025 D5): checked after the read right, so a stranger still gets not-found
+      if (verb.effect === 'remove' && !where.value.owner) return err(caciError('FORBIDDEN', 'only the owner of this brain can remove a fact for everyone'));
       const there = await browser.hasItem(where.value.graphId, read.value.id);
       if (!there.ok) return there;
       if (!there.value) return err(caciError('NOT_FOUND', 'no such fact'));
@@ -802,7 +834,11 @@ export function createCaciController(init: CaciControllerInit): CaciController {
         if (!set.ok) return err(set.error.code === 'LIMIT_REACHED' ? caciError('LIMIT_REACHED', 'you have resolved the most facts allowed: take one back first') : set.error.code === 'INVALID_INPUT' ? caciError('INVALID_INPUT', 'that fact cannot be resolved', { field: 'id' }) : storage());
         return ok(Object.freeze({ fact, verb: verb.name, effect: verb.effect, result: 'hidden' as const }));
       }
-      return err(caciError('INVALID_INPUT', 'that verb does not apply here yet', { field: 'verb' }));
+      // `clear` in your own brain, and `remove` for an owner: the fact is deleted (a circle fact's resolutions go with it)
+      const removed = await deleteFact(where.value, read.value.id, verb.name);
+      if (!removed.ok) return removed;
+      if (!removed.value) return err(caciError('NOT_FOUND', 'no such fact'));
+      return ok(Object.freeze({ fact, verb: verb.name, effect: verb.effect, result: 'deleted' as const }));
     },
 
     async unresolveFact(token, input) {

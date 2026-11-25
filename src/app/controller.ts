@@ -86,6 +86,17 @@ export interface Controller {
   reject(proposalId: string): Result<PendingProposal, ControllerError>;
   /** A held proposal, unless it is unknown or has expired. */
   get(proposalId: string): PendingProposal | undefined;
+  /**
+   * Deletes one fact (an item) from a graph on a person's say-so, not a model's (R-025 D10): the item and its links go in one write, then
+   * categories it leaves empty are tidied as for a replacement. `null` when there is no such item. A failed write changes nothing.
+   */
+  remove(graphId: string, itemId: string): Promise<Result<Removed | null, ControllerError>>;
+}
+
+/** What `remove` deleted: the fact (its title and summary as they were, for the change log) and the categories tidied away. */
+export interface Removed {
+  readonly item: { readonly id: string; readonly title?: string; readonly summary?: string };
+  readonly tidied: readonly TidiedCategory[];
 }
 
 export const DEFAULT_CONTROLLER_OPTIONS = Object.freeze({ ttlMs: 15 * 60_000, maxPending: 100, maxCategories: 500 });
@@ -281,5 +292,33 @@ export function createController(init: ControllerInit): Controller {
     return taken.state === 'found' ? ok(taken.proposal) : unavailable(taken.state, String(proposalId));
   }
 
-  return Object.freeze({ propose, approve, reject, get: (proposalId: string) => store.get(proposalId) });
+  async function remove(graphId: string, itemId: string): Promise<Result<Removed | null, ControllerError>> {
+    try {
+      const found = await query(adapter, { version: 1, graphId, from: { partition: 'item', ids: [itemId] }, traverse: { depth: 0 }, return: { shape: 'nodes', includeData: true } }, graphOptions);
+      if (!found.ok) return graph(found.error);
+      if (!('nodes' in found.value)) return app(appError('UNEXPECTED', 'a fact listing did not return nodes'));
+      const node = found.value.nodes.find((n) => n.partition === 'item' && n.id === itemId);
+      if (node === undefined) return ok(null);
+      let affected: TidiedCategory[] = [];
+      const before = await categoriesOf(graphId, [itemId]).catch(() => undefined);
+      if (before?.ok === true) affected = before.value;
+      else warn('could not read which categories the removed fact was in, so empty categories will not be tidied');
+      const written = await write(adapter, { version: 1, kind: 'mutation', graphId, createIfMissing: false, ops: [{ op: 'deleteNode', partition: 'item', id: itemId }] }, graphOptions);
+      if (!written.ok) return graph(written.error);
+      let tidied: TidiedCategory[] = [];
+      if (affected.length > 0) {
+        try {
+          tidied = await tidy(graphId, affected);
+        } catch {
+          warn('could not tidy the categories left empty by a removal; they will stay until the next replacement or by hand');
+        }
+      }
+      const data = node.data as Record<string, unknown> | undefined;
+      return ok(Object.freeze({ item: Object.freeze({ id: itemId, ...(typeof data?.title === 'string' ? { title: data.title } : {}), ...(typeof data?.summary === 'string' ? { summary: data.summary } : {}) }), tidied: Object.freeze(tidied) }));
+    } catch {
+      return app(appError('UNEXPECTED', 'remove failed unexpectedly'));
+    }
+  }
+
+  return Object.freeze({ propose, approve, reject, get: (proposalId: string) => store.get(proposalId), remove });
 }

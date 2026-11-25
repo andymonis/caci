@@ -74,6 +74,7 @@ export interface Controller {
     // Warning: (ae-forgotten-export) The symbol "Result" needs to be exported by the entry point index.d.ts
     propose(graphId: string, input: unknown, options?: ProposeOptions): Promise<Result<PendingProposal, ControllerError>>;
     reject(proposalId: string): Result<PendingProposal, ControllerError>;
+    remove(graphId: string, itemId: string): Promise<Result<Removed | null, ControllerError>>;
 }
 
 // @public
@@ -279,6 +280,18 @@ export function rankCandidates(note: string, items: Iterable<ItemRow>, options?:
 
 // @public
 export function readCandidates(adapter: StorageAdapter, graphId: string, note: string, options?: CandidateOptions, graphOptions?: GraphOptions): Promise<Result<Candidate[], GraphError>>;
+
+// @public
+export interface Removed {
+    // (undocumented)
+    readonly item: {
+        readonly id: string;
+        readonly title?: string;
+        readonly summary?: string;
+    };
+    // (undocumented)
+    readonly tidied: readonly TidiedCategory[];
+}
 
 // @public
 export interface RemovedItem {
